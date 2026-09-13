@@ -1,0 +1,31 @@
+{
+  "name": "btg-lms-frontend",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm api:types && vue-tsc --noEmit && vite build",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "api:types": "openapi-typescript api/openapi.yaml -o frontend/src/api/generated.ts"
+  },
+  "dependencies": {
+    "reka-ui": "2.10.4",
+    "vue": "3.5.42",
+    "vue-i18n": "11.4.10",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "@testing-library/vue": "8.1.0",
+    "@vitejs/plugin-vue": "6.0.8",
+    "jsdom": "30.0.1",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "vite": "8.2.2",
+    "vitest": "5.0.0",
+    "vue-tsc": "3.3.11"
+  }
+}

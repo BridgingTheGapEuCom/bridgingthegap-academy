@@ -1,0 +1,48 @@
+openapi: 3.1.0
+info:
+  title: BTG LMS application health API
+  version: 0.1.0
+  description: Initial operational contract. No LMS business API is defined yet.
+paths:
+  /health/live:
+    get:
+      operationId: getLiveness
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /health/ready:
+    get:
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Critical dependencies and schema are ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Not ready
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    Problem:
+      type: object
+      required: [type, title, status, instance, request_id]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        instance: { type: string }
+        request_id: { type: string }

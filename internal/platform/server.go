@@ -1,0 +1,146 @@
+package platform
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/web"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+type requestIDKey struct{}
+
+func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
+	pool, err := postgres.OpenPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	if err := postgres.SchemaCheck(ctx, pool); err != nil {
+		return err
+	}
+	registry := prometheus.NewRegistry()
+	requests := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "btg_http_requests_total", Help: "HTTP requests by route, method, and status class."}, []string{"route", "method", "status_class"})
+	latency := prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "btg_http_request_duration_seconds", Help: "HTTP request duration by route and method.", Buckets: prometheus.DefBuckets}, []string{"route", "method"})
+	registry.MustRegister(requests, latency)
+	metricsListener, err := net.Listen("tcp", cfg.MetricsAddr)
+	if err != nil {
+		return err
+	}
+	defer metricsListener.Close()
+	metricsServer := &http.Server{Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = metricsServer.Serve(metricsListener) }()
+
+	router := newRouter(pool, log, requests, latency)
+	server := &http.Server{Addr: cfg.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second}
+	serverErr := make(chan error, 1)
+	go func() { serverErr <- server.ListenAndServe() }()
+	log.Info("server listening", "address", cfg.HTTPAddr, "metrics_address", cfg.MetricsAddr)
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = metricsServer.Shutdown(shutdownCtx)
+		return server.Shutdown(shutdownCtx)
+	case err := <-serverErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+}
+
+func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.CounterVec, latency *prometheus.HistogramVec) http.Handler {
+	r := chi.NewRouter()
+	r.Use(correlationID)
+	r.Use(observe(log, requests, latency))
+	r.Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
+	})
+	r.Get("/health/ready", func(w http.ResponseWriter, req *http.Request) {
+		checkCtx, cancel := context.WithTimeout(req.Context(), 3*time.Second)
+		defer cancel()
+		if err := pool.Ping(checkCtx); err != nil {
+			problem(w, req, http.StatusServiceUnavailable, "PostgreSQL unavailable")
+			return
+		}
+		if err := postgres.SchemaCheck(checkCtx, pool); err != nil {
+			problem(w, req, http.StatusServiceUnavailable, "Schema unavailable")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	})
+	r.Handle("/api/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		problem(w, req, http.StatusNotFound, "Not found")
+	}))
+	r.Get("/*", web.Serve)
+	return r
+}
+
+func correlationID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var bytes [16]byte
+		if _, err := rand.Read(bytes[:]); err != nil {
+			http.Error(w, "request ID unavailable", http.StatusInternalServerError)
+			return
+		}
+		id := hex.EncodeToString(bytes[:])
+		w.Header().Set("X-Request-ID", id)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestIDKey{}, id)))
+	})
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func observe(log *slog.Logger, requests *prometheus.CounterVec, latency *prometheus.HistogramVec) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			wrapped := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+			next.ServeHTTP(wrapped, r)
+			route := chi.RouteContext(r.Context()).RoutePattern()
+			if route == "" {
+				route = "unmatched"
+			}
+			statusClass := string(rune('0'+wrapped.status/100)) + "xx"
+			requests.WithLabelValues(route, r.Method, statusClass).Inc()
+			latency.WithLabelValues(route, r.Method).Observe(time.Since(start).Seconds())
+			log.Info("http request", "request_id", r.Context().Value(requestIDKey{}), "method", r.Method, "route", route, "status", wrapped.status, "duration_ms", time.Since(start).Milliseconds())
+		})
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+
+func problem(w http.ResponseWriter, r *http.Request, status int, title string) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"type": "about:blank", "title": title, "status": status,
+		"instance": strings.TrimSpace(r.URL.Path), "request_id": r.Context().Value(requestIDKey{}),
+	})
+}
