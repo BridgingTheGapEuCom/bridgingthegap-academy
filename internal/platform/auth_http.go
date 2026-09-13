@@ -41,15 +41,23 @@ type authHTTP struct {
 	loginWork    *loginWorkGuard
 	loginMetrics *prometheus.CounterVec
 	loginRejects *prometheus.CounterVec
+	authorizer   identity.Authorizer
+	authzMetrics *prometheus.CounterVec
 	cookieSecure bool
 	now          func() time.Time
 }
 
 type resolvedSessionKey struct{}
+type authenticatedActorKey struct{}
 
 func currentResolvedSession(ctx context.Context) (identity.ResolvedSession, bool) {
 	session, ok := ctx.Value(resolvedSessionKey{}).(identity.ResolvedSession)
 	return session, ok && session.SessionID() != "" && session.UserID() != ""
+}
+
+func currentAuthenticatedActor(ctx context.Context) (identity.AuthenticatedActor, bool) {
+	actor, ok := ctx.Value(authenticatedActorKey{}).(identity.AuthenticatedActor)
+	return actor, ok && actor.UserID() != "" && actor.SessionID() != ""
 }
 
 func trustedOperationID(ctx context.Context) string {
@@ -92,7 +100,14 @@ func (h *authHTTP) resolveSession(required bool) func(http.Handler) http.Handler
 				problem(w, r, http.StatusInternalServerError, "Internal server error")
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), resolvedSessionKey{}, current)))
+			actor, err := identity.ActorFromResolvedSession(current)
+			if err != nil {
+				problem(w, r, http.StatusInternalServerError, "Internal server error")
+				return
+			}
+			trusted := context.WithValue(r.Context(), resolvedSessionKey{}, current)
+			trusted = context.WithValue(trusted, authenticatedActorKey{}, actor)
+			next.ServeHTTP(w, r.WithContext(trusted))
 		})
 	}
 }

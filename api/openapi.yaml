@@ -70,6 +70,25 @@ paths:
           $ref: '#/components/responses/Problem'
         '500':
           $ref: '#/components/responses/Problem'
+  /api/admin/status:
+    get:
+      operationId: getAdministratorStatus
+      description: Read-only proof of the instance.manage capability. Each request resolves the current session and active global role before authorization. No Administration mutation is exposed.
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Current actor may manage the instance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatus'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '500':
+          $ref: '#/components/responses/Problem'
   /health/live:
     get:
       operationId: getLiveness
@@ -136,6 +155,12 @@ components:
         csrf_token:
           type: string
           description: Session-bound synchronizer token. Keep in memory and send as X-CSRF-Token on cookie-authenticated POST, PUT, PATCH, and DELETE requests. Not an authentication credential.
+    AdminStatus:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, const: ok }
     Health:
       type: object
       required: [status]

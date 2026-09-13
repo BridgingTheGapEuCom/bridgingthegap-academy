@@ -54,6 +54,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read-only proof of the instance.manage capability. Each request resolves the current session and active global role before authorization. No Administration mutation is exposed. */
+        get: operations["getAdministratorStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -104,6 +121,10 @@ export interface components {
             expires_at: string;
             /** @description Session-bound synchronizer token. Keep in memory and send as X-CSRF-Token on cookie-authenticated POST, PUT, PATCH, and DELETE requests. Not an authentication credential. */
             csrf_token: string;
+        };
+        AdminStatus: {
+            /** @constant */
+            status: "ok";
         };
         Health: {
             status: string;
@@ -219,6 +240,29 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAdministratorStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current actor may manage the instance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStatus"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

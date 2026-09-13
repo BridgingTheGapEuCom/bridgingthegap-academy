@@ -42,7 +42,8 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	latency := prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "btg_http_request_duration_seconds", Help: "HTTP request duration by route and method.", Buckets: prometheus.DefBuckets}, []string{"route", "method"})
 	loginAttempts := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "btg_login_attempts_total", Help: "Validated login attempts by coarse outcome."}, []string{"outcome"})
 	loginRejections := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "btg_login_rejections_total", Help: "Login admission rejections by coarse reason."}, []string{"reason"})
-	registry.MustRegister(requests, latency, loginAttempts, loginRejections)
+	authorizationDecisions := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "btg_authorization_decisions_total", Help: "Authorization decisions by static capability and coarse outcome."}, []string{"capability", "outcome"})
+	registry.MustRegister(requests, latency, loginAttempts, loginRejections, authorizationDecisions)
 	metricsListener, err := net.Listen("tcp", cfg.MetricsAddr)
 	if err != nil {
 		return err
@@ -60,6 +61,8 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		loginWork:    newLoginWorkGuard(maxConcurrentLogins),
 		loginMetrics: loginAttempts,
 		loginRejects: loginRejections,
+		authorizer:   identity.NewAuthorizationService(identitypostgres.New(pool)),
+		authzMetrics: authorizationDecisions,
 		cookieSecure: !cfg.DevelopmentHTTP,
 		now:          time.Now,
 	}
@@ -113,6 +116,7 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				// per-request resolution and unsafe-method CSRF are inherited.
 				protected.Use(auth.authenticated)
 				protected.Get("/auth/session", auth.handleSession)
+				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
 			})
 			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				problem(w, req, http.StatusNotFound, "Not found")
