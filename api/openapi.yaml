@@ -7,7 +7,7 @@ paths:
   /api/auth/login:
     post:
       operationId: loginWithPassword
-      description: Authenticate a local password and set the opaque HttpOnly session cookie. CSRF protection follows in M1.4b.
+      description: Authenticate a local password and set the opaque HttpOnly session cookie. A trusted same-origin Origin header is required; the response includes a separate session-bound CSRF token. The response is not cacheable.
       requestBody:
         required: true
         content:
@@ -25,15 +25,23 @@ paths:
           $ref: '#/components/responses/Problem'
         '401':
           $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
         '500':
           $ref: '#/components/responses/Problem'
   /api/auth/logout:
     post:
       operationId: logoutCurrentSession
-      description: Revoke the resolved current session and clear the cookie. Absent or invalid cookies are cleared with the same successful response. CSRF protection follows in M1.4b.
+      description: Revoke the resolved current session and clear the cookie. A valid session requires its X-CSRF-Token header and a trusted same-origin Origin. Absent or invalid sessions may clear the cookie without a CSRF token, but Origin is still required. The response is not cacheable.
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
       responses:
         '204':
           description: Logged out; session cookie cleared
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
         '500':
           $ref: '#/components/responses/Problem'
   /api/auth/session:
@@ -43,7 +51,7 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: Current authenticated session
+          description: Current authenticated session and its synchronizer CSRF token; response is not cacheable
           content:
             application/json:
               schema:
@@ -79,6 +87,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 components:
+  parameters:
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Required when a valid btg_session cookie is present. Use the csrf_token from a no-store login or current-session response. This token is not an authentication credential.
+      schema: { type: string }
   securitySchemes:
     SessionCookie:
       type: apiKey
@@ -103,11 +118,14 @@ components:
     AuthenticatedSession:
       type: object
       additionalProperties: false
-      required: [authenticated, user_id, expires_at]
+      required: [authenticated, user_id, expires_at, csrf_token]
       properties:
         authenticated: { type: boolean, const: true }
         user_id: { type: string, format: uuid }
         expires_at: { type: string, format: date-time }
+        csrf_token:
+          type: string
+          description: Session-bound synchronizer token. Keep in memory and send as X-CSRF-Token on cookie-authenticated POST, PUT, PATCH, and DELETE requests. Not an authentication credential.
     Health:
       type: object
       required: [status]

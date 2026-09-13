@@ -23,3 +23,7 @@ func (IdentitySession) Format(s fmt.State, _ rune) {
 func (CreateSessionParams) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("CreateSessionParams{[REDACTED]}"))
 }
+
+func (InitializeSessionCSRFTokenParams) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("InitializeSessionCSRFTokenParams{[REDACTED]}"))
+}

@@ -34,6 +34,7 @@ type LoginResult struct {
 	UserID          identity.UserID
 	SessionID       identity.SessionID
 	Token           identity.RawSessionToken
+	CSRFToken       identity.CSRFToken
 	ExpiresAt       time.Time
 	Method          identity.AuthenticationMethod
 	AuthenticatedAt time.Time
@@ -75,7 +76,7 @@ func (o LoginOrchestrator) LoginWithPassword(ctx context.Context, email string, 
 		if createErr != nil {
 			return createErr
 		}
-		if created.SessionID == "" || created.UserID != actor.UserID || created.Token.Value() == "" {
+		if created.SessionID == "" || created.UserID != actor.UserID || created.Token.Value() == "" || created.CSRFToken.Value() == "" {
 			return ErrLoginUnavailable
 		}
 		return tx.AppendAudit(ctx, audit.Event{
@@ -92,7 +93,7 @@ func (o LoginOrchestrator) LoginWithPassword(ctx context.Context, email string, 
 	if err != nil {
 		return LoginResult{}, ErrLoginUnavailable
 	}
-	return LoginResult{UserID: actor.UserID, SessionID: created.SessionID, Token: created.Token, ExpiresAt: created.ExpiresAt, Method: actor.Method, AuthenticatedAt: actor.AuthenticatedAt, OperationID: operationID}, nil
+	return LoginResult{UserID: actor.UserID, SessionID: created.SessionID, Token: created.Token, CSRFToken: created.CSRFToken, ExpiresAt: created.ExpiresAt, Method: actor.Method, AuthenticatedAt: actor.AuthenticatedAt, OperationID: operationID}, nil
 }
 
 // Logout requires a trusted current session returned by session resolution.

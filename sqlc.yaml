@@ -9,7 +9,9 @@ sql:
         out: internal/modules/infrastructure/db/sqlc
         sql_package: pgx/v5
   - engine: postgresql
-    schema: internal/modules/infrastructure/postgres/db/migrations/00002_identity.sql
+    schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00002_identity.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00005_session_csrf.sql
     queries: internal/modules/identity/db/query
     gen:
       go:

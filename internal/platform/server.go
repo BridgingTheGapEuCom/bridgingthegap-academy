@@ -25,6 +25,10 @@ import (
 type requestIDKey struct{}
 
 func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
+	origins, err := newOriginPolicy(cfg)
+	if err != nil {
+		return err
+	}
 	pool, err := postgres.OpenPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
@@ -48,6 +52,8 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	auth := &authHTTP{
 		login:        NewPostgresLoginOrchestrator(pool, nil, nil),
 		sessions:     identity.NewSessionService(identitypostgres.New(pool), nil, nil),
+		csrf:         identity.NewSessionCSRFService(identitypostgres.New(pool), nil),
+		origins:      origins,
 		cookieSecure: !cfg.DevelopmentHTTP,
 		now:          time.Now,
 	}
@@ -91,13 +97,27 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 	if auth != nil {
-		r.Post("/api/auth/login", auth.handleLogin)
-		r.With(auth.resolveSession(false)).Post("/api/auth/logout", auth.handleLogout)
-		r.With(auth.resolveSession(true)).Get("/api/auth/session", auth.handleSession)
+		r.Route("/api", func(api chi.Router) {
+			api.Use(auth.noStore)
+			api.Use(auth.enforceOrigin)
+			api.Post("/auth/login", auth.handleLogin)
+			api.With(auth.resolveSession(false), auth.csrfProtection).Post("/auth/logout", auth.handleLogout)
+			api.Group(func(protected chi.Router) {
+				// Future cookie-authenticated APIs belong in this group: both
+				// per-request resolution and unsafe-method CSRF are inherited.
+				protected.Use(auth.authenticated)
+				protected.Get("/auth/session", auth.handleSession)
+			})
+			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				problem(w, req, http.StatusNotFound, "Not found")
+			}))
+		})
 	}
-	r.Handle("/api/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		problem(w, req, http.StatusNotFound, "Not found")
-	}))
+	if auth == nil {
+		r.Handle("/api/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			problem(w, req, http.StatusNotFound, "Not found")
+		}))
+	}
 	r.Get("/*", web.Serve)
 	return r
 }

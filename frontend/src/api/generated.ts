@@ -13,7 +13,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Authenticate a local password and set the opaque HttpOnly session cookie. CSRF protection follows in M1.4b. */
+        /** @description Authenticate a local password and set the opaque HttpOnly session cookie. A trusted same-origin Origin header is required; the response includes a separate session-bound CSRF token. The response is not cacheable. */
         post: operations["loginWithPassword"];
         delete?: never;
         options?: never;
@@ -30,7 +30,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Revoke the resolved current session and clear the cookie. Absent or invalid cookies are cleared with the same successful response. CSRF protection follows in M1.4b. */
+        /** @description Revoke the resolved current session and clear the cookie. A valid session requires its X-CSRF-Token header and a trusted same-origin Origin. Absent or invalid sessions may clear the cookie without a CSRF token, but Origin is still required. The response is not cacheable. */
         post: operations["logoutCurrentSession"];
         delete?: never;
         options?: never;
@@ -102,6 +102,8 @@ export interface components {
             user_id: string;
             /** Format: date-time */
             expires_at: string;
+            /** @description Session-bound synchronizer token. Keep in memory and send as X-CSRF-Token on cookie-authenticated POST, PUT, PATCH, and DELETE requests. Not an authentication credential. */
+            csrf_token: string;
         };
         Health: {
             status: string;
@@ -125,7 +127,10 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        /** @description Required when a valid btg_session cookie is present. Use the csrf_token from a no-store login or current-session response. This token is not an authentication credential. */
+        CSRFToken: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -156,13 +161,17 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };
     logoutCurrentSession: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Required when a valid btg_session cookie is present. Use the csrf_token from a no-store login or current-session response. This token is not an authentication credential. */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -175,6 +184,8 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };
@@ -187,7 +198,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current authenticated session */
+            /** @description Current authenticated session and its synchronizer CSRF token; response is not cacheable */
             200: {
                 headers: {
                     [name: string]: unknown;

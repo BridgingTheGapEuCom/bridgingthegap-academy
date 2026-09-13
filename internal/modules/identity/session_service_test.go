@@ -33,6 +33,8 @@ type sessionRepositoryFake struct {
 	lookupCount    int
 	createCount    int
 	createdDigests []SessionTokenDigest
+	csrfTokens     map[SessionID]CSRFToken
+	csrfReads      int
 }
 
 func newSessionFixture() (*sessionRepositoryFake, *sessionClock, SessionService) {
@@ -42,7 +44,7 @@ func newSessionFixture() (*sessionRepositoryFake, *sessionClock, SessionService)
 			sessionTestUser:      {ID: sessionTestUser, Status: UserActive},
 			otherSessionTestUser: {ID: otherSessionTestUser, Status: UserActive},
 		},
-		sessions: make(map[string]Session), now: clock.now,
+		sessions: make(map[string]Session), csrfTokens: make(map[SessionID]CSRFToken), now: clock.now,
 	}
 	service := NewSessionService(repository, nil, clock.now)
 	return repository, clock, service
@@ -58,7 +60,7 @@ func (f *sessionRepositoryFake) GetUser(_ context.Context, id UserID) (User, err
 	}
 	return user, nil
 }
-func (f *sessionRepositoryFake) CreateSession(_ context.Context, userID UserID, digest SessionTokenDigest, expires time.Time) (Session, error) {
+func (f *sessionRepositoryFake) CreateSession(_ context.Context, userID UserID, digest SessionTokenDigest, expires time.Time, csrf CSRFToken) (Session, error) {
 	if f.createErr != nil {
 		return Session{}, f.createErr
 	}
@@ -66,7 +68,24 @@ func (f *sessionRepositoryFake) CreateSession(_ context.Context, userID UserID, 
 	f.createdDigests = append(f.createdDigests, digest)
 	session := Session{ID: SessionID(fmt.Sprintf("session-%d", f.createCount)), UserID: userID, TokenDigest: digest, CreatedAt: f.now(), LastSeenAt: f.now(), ExpiresAt: expires}
 	f.sessions[string(digest.Bytes())] = session
+	f.csrfTokens[session.ID] = csrf
 	return session, nil
+}
+func (f *sessionRepositoryFake) GetSessionCSRFToken(_ context.Context, id SessionID) (CSRFToken, error) {
+	f.csrfReads++
+	session, err := f.GetSessionByID(context.Background(), id)
+	if err != nil || session.RevokedAt != nil {
+		return CSRFToken{}, ErrNotFound
+	}
+	return f.csrfTokens[id], nil
+}
+func (f *sessionRepositoryFake) InitializeSessionCSRFToken(_ context.Context, id SessionID, candidate CSRFToken) (CSRFToken, error) {
+	session, err := f.GetSessionByID(context.Background(), id)
+	if err != nil || session.RevokedAt != nil || f.csrfTokens[id].Value() != "" {
+		return CSRFToken{}, ErrNotFound
+	}
+	f.csrfTokens[id] = candidate
+	return candidate, nil
 }
 func (f *sessionRepositoryFake) GetSessionByDigest(_ context.Context, digest SessionTokenDigest) (Session, error) {
 	f.lookupCount++
@@ -130,7 +149,7 @@ func TestSessionTokenGenerationAndDigest(t *testing.T) {
 	}
 	// A deterministic source proves each creation consumes fresh 32-byte input
 	// without making the test depend on a statistical comparison.
-	service.random = bytes.NewReader(append(bytes.Repeat([]byte{1}, 32), bytes.Repeat([]byte{2}, 32)...))
+	service.random = bytes.NewReader(bytes.Join([][]byte{bytes.Repeat([]byte{1}, 32), bytes.Repeat([]byte{2}, 32), bytes.Repeat([]byte{3}, 32), bytes.Repeat([]byte{4}, 32)}, nil))
 	ctx := context.Background()
 	first, err := service.CreateSession(ctx, sessionTestUser)
 	if err != nil {
@@ -191,6 +210,11 @@ func TestSessionCreationRequiresActiveUserAndOperationalFailuresStayDistinct(t *
 	service.random = bytes.NewReader(nil)
 	if _, err := service.CreateSession(context.Background(), sessionTestUser); err != ErrSessionUnavailable {
 		t.Fatalf("random-source failure did not fail closed: %v", err)
+	}
+	repository, _, service := newSessionFixture()
+	service.random = bytes.NewReader(bytes.Repeat([]byte{1}, 64))
+	if result, err := service.CreateSession(context.Background(), sessionTestUser); err != ErrSessionUnavailable || result != (CreatedSession{}) || repository.createCount != 0 {
+		t.Fatal("CSRF token equal to bearer token was accepted")
 	}
 }
 

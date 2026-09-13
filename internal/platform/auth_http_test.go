@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -51,12 +52,42 @@ func (f *authResolverFake) ResolveSession(_ context.Context, _ string) (identity
 	return f.current, f.err
 }
 
+type authCSRFFake struct{ token identity.CSRFToken }
+
+func (f authCSRFFake) TokenForSession(context.Context, identity.ResolvedSession) (identity.CSRFToken, error) {
+	return f.token, nil
+}
+
+func (f authCSRFFake) Validate(_ context.Context, _ identity.ResolvedSession, supplied string) error {
+	if supplied != f.token.Value() {
+		return identity.ErrInvalidCSRFToken
+	}
+	return nil
+}
+
+func authTestCSRFToken() identity.CSRFToken {
+	token, _ := identity.NewCSRFToken(strings.Repeat("A", 43))
+	return token
+}
+
 func authTestRouter(auth *authHTTP) http.Handler {
+	if auth.origins.allowed == nil {
+		auth.origins = originPolicy{allowed: []origin{{scheme: "https", host: "academy.example.com", port: 443}}}
+	}
+	if auth.csrf == nil {
+		auth.csrf = authCSRFFake{token: authTestCSRFToken()}
+	}
 	return newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewCounterVec(prometheus.CounterOpts{Name: "auth_test_requests_total"}, []string{"route", "method", "status_class"}), prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "auth_test_duration_seconds"}, []string{"route", "method"}), auth)
 }
 
-func authRequest(router http.Handler, method, path, body string, cookie *http.Cookie) *httptest.ResponseRecorder {
+func authRequest(router http.Handler, method, path, body string, cookie *http.Cookie, csrf ...string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
+	if mutatingMethod(method) {
+		r.Header.Set("Origin", "https://academy.example.com")
+	}
+	if len(csrf) > 0 {
+		r.Header.Set("X-CSRF-Token", csrf[0])
+	}
 	if body != "" {
 		r.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
@@ -71,10 +102,11 @@ func authRequest(router http.Handler, method, path, body string, cookie *http.Co
 func TestHTTPLoginCookiePolicyAndTrustedOperationID(t *testing.T) {
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	for _, secure := range []bool{true, false} {
-		login := &authLoginFake{result: LoginResult{UserID: loginTestUser, Token: mustRawToken(), ExpiresAt: at.Add(time.Hour)}}
+		login := &authLoginFake{result: LoginResult{UserID: loginTestUser, Token: mustRawToken(), CSRFToken: authTestCSRFToken(), ExpiresAt: at.Add(time.Hour)}}
 		router := authTestRouter(&authHTTP{login: login, cookieSecure: secure, now: func() time.Time { return at }})
 		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"admin@example.com","password":"private passphrase"}`))
 		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Origin", "https://academy.example.com")
 		request.Header.Set("X-Request-ID", "00000000-0000-0000-0000-000000000999")
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)
@@ -178,7 +210,7 @@ func TestHTTPCurrentSessionMiddlewareAndLogout(t *testing.T) {
 	resolver := &authResolverFake{current: current}
 	login := &authLoginFake{}
 	router := authTestRouter(&authHTTP{login: login, sessions: resolver, cookieSecure: true})
-	response := authRequest(router, http.MethodPost, "/api/auth/logout", `{"session_id":"00000000-0000-0000-0000-000000000999"}`, valid)
+	response := authRequest(router, http.MethodPost, "/api/auth/logout", `{"session_id":"00000000-0000-0000-0000-000000000999"}`, valid, authTestCSRFToken().Value())
 	if response.Code != http.StatusNoContent || login.logoutCalls != 1 || login.logoutID != current.SessionID() || len(response.Result().Cookies()) != 1 || response.Result().Cookies()[0].MaxAge != -1 {
 		t.Fatal("logout did not use only the resolved current session")
 	}
@@ -186,8 +218,59 @@ func TestHTTPCurrentSessionMiddlewareAndLogout(t *testing.T) {
 		t.Fatal("logout operation ID was not server generated")
 	}
 	login.err = errors.New("private storage detail")
-	response = authRequest(router, http.MethodPost, "/api/auth/logout", "", valid)
+	response = authRequest(router, http.MethodPost, "/api/auth/logout", "", valid, authTestCSRFToken().Value())
 	if response.Code != http.StatusInternalServerError || strings.Contains(response.Body.String(), "private") || len(response.Result().Cookies()) != 0 {
 		t.Fatal("failed logout cleared cookie or leaked storage error")
+	}
+}
+
+func TestCSRFProtectionAppliesToEveryUnsafeMethod(t *testing.T) {
+	current := loginTestCurrent(t)
+	resolver := &authResolverFake{current: current}
+	token := authTestCSRFToken().Value()
+	auth := &authHTTP{sessions: resolver, csrf: authCSRFFake{token: authTestCSRFToken()}, origins: originPolicy{allowed: []origin{{scheme: "https", host: "academy.example.com", port: 443}}}}
+	router := chi.NewRouter()
+	router.Use(correlationID)
+	router.Use(auth.enforceOrigin)
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		router.With(auth.authenticated).Method(method, "/protected", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions} {
+		if got := authRequest(router, method, "/protected", "", cookie); got.Code != http.StatusNoContent {
+			t.Fatalf("safe method %s required CSRF: %d", method, got.Code)
+		}
+	}
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		if got := authRequest(router, method, "/protected", "", cookie); got.Code != http.StatusForbidden {
+			t.Fatalf("unsafe method %s accepted missing CSRF: %d", method, got.Code)
+		}
+		if got := authRequest(router, method, "/protected", "", cookie, strings.Repeat("B", 43)); got.Code != http.StatusForbidden || strings.Contains(got.Body.String(), token) {
+			t.Fatalf("unsafe method %s accepted wrong CSRF or leaked token", method)
+		}
+		if got := authRequest(router, method, "/protected", "", cookie, token); got.Code != http.StatusNoContent {
+			t.Fatalf("unsafe method %s rejected valid CSRF: %d", method, got.Code)
+		}
+	}
+}
+
+func TestLogoutRequiresCSRFOnlyForResolvedSession(t *testing.T) {
+	current := loginTestCurrent(t)
+	resolver := &authResolverFake{current: current}
+	login := &authLoginFake{}
+	router := authTestRouter(&authHTTP{login: login, sessions: resolver})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
+	for _, supplied := range []string{"", "malformed", strings.Repeat("B", 43)} {
+		response := authRequest(router, http.MethodPost, "/api/auth/logout", "", cookie, supplied)
+		if response.Code != http.StatusForbidden || login.logoutCalls != 0 || len(response.Result().Cookies()) != 0 || response.Header().Get("Cache-Control") != "no-store" || response.Header().Get("X-Request-ID") == "" {
+			t.Fatal("logout mutation passed without session-bound CSRF")
+		}
+	}
+	if response := authRequest(router, http.MethodPost, "/api/auth/logout", "", cookie, authTestCSRFToken().Value()); response.Code != http.StatusNoContent || login.logoutCalls != 1 {
+		t.Fatal("logout rejected valid session-bound CSRF")
+	}
+	resolver.err = identity.ErrInvalidSession
+	if response := authRequest(router, http.MethodPost, "/api/auth/logout", "", cookie); response.Code != http.StatusNoContent || login.logoutCalls != 1 {
+		t.Fatal("invalid-session logout performed server mutation or required CSRF")
 	}
 }

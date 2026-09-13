@@ -34,6 +34,8 @@ type IdentitySession struct {
 	LastSeenAt  pgtype.Timestamptz
 	ExpiresAt   pgtype.Timestamptz
 	RevokedAt   pgtype.Timestamptz
+	// Sensitive session-bound synchronizer token; never log or expose outside CSRF delivery/validation
+	CsrfToken pgtype.Text
 }
 
 type IdentityUser struct {

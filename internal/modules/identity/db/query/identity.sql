@@ -46,8 +46,16 @@ UPDATE identity.global_role_assignments SET revoked_at = now()
 WHERE user_id = $1 AND role = $2 AND revoked_at IS NULL RETURNING *;
 
 -- name: CreateSession :one
-INSERT INTO identity.sessions (user_id, token_digest, expires_at)
-VALUES ($1, $2, $3) RETURNING *;
+INSERT INTO identity.sessions (user_id, token_digest, expires_at, csrf_token)
+VALUES ($1, $2, $3, $4) RETURNING *;
+
+-- name: GetSessionCSRFToken :one
+SELECT csrf_token FROM identity.sessions WHERE id = $1 AND revoked_at IS NULL;
+
+-- name: InitializeSessionCSRFToken :one
+UPDATE identity.sessions SET csrf_token = $2
+WHERE id = $1 AND csrf_token IS NULL AND revoked_at IS NULL
+RETURNING csrf_token;
 
 -- name: GetSessionByDigest :one
 SELECT * FROM identity.sessions WHERE token_digest = $1;

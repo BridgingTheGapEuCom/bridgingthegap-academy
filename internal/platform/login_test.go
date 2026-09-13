@@ -106,7 +106,8 @@ func (f *completedWorkFake) GetAuditByOperationID(_ context.Context, operationID
 func newLoginFixture() (*loginAuthenticatorFake, *completedTransactionFake, LoginOrchestrator) {
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	authenticator := &loginAuthenticatorFake{actor: identity.AuthenticatedIdentity{UserID: loginTestUser, Method: identity.AuthenticationMethodLocalPassword, AuthenticatedAt: at}}
-	transactions := &completedTransactionFake{created: identity.CreatedSession{Token: mustRawToken(), SessionID: loginTestSession, UserID: loginTestUser, IssuedAt: at, ExpiresAt: at.Add(time.Hour)}}
+	csrfToken, _ := identity.NewCSRFToken(strings.Repeat("A", 43))
+	transactions := &completedTransactionFake{created: identity.CreatedSession{Token: mustRawToken(), CSRFToken: csrfToken, SessionID: loginTestSession, UserID: loginTestUser, IssuedAt: at, ExpiresAt: at.Add(time.Hour)}}
 	return authenticator, transactions, NewLoginOrchestrator(authenticator, transactions)
 }
 
@@ -129,7 +130,7 @@ type loginSessionRepositoryFake struct {
 func (r *loginSessionRepositoryFake) GetUser(context.Context, identity.UserID) (identity.User, error) {
 	return identity.User{ID: loginTestUser, Status: identity.UserActive}, nil
 }
-func (r *loginSessionRepositoryFake) CreateSession(_ context.Context, userID identity.UserID, digest identity.SessionTokenDigest, expires time.Time) (identity.Session, error) {
+func (r *loginSessionRepositoryFake) CreateSession(_ context.Context, userID identity.UserID, digest identity.SessionTokenDigest, expires time.Time, _ identity.CSRFToken) (identity.Session, error) {
 	r.session = identity.Session{ID: loginTestSession, UserID: userID, TokenDigest: digest, CreatedAt: r.at, LastSeenAt: r.at, ExpiresAt: expires}
 	return r.session, nil
 }
@@ -181,7 +182,7 @@ func TestLoginOrchestratorSuccessIsCompletedOnlyAfterAuditCommit(t *testing.T) {
 	if event.Action != audit.LocalPasswordLoginCompleted || event.ActorKind != "USER" || event.ActorUserID != string(loginTestUser) || event.ResourceType != "IDENTITY_SESSION" || event.ResourceID != string(loginTestSession) || event.AuthenticationMethod != string(identity.AuthenticationMethodLocalPassword) || event.OperationID != loginTestOperation || event.Outcome != "SUCCESS" {
 		t.Fatalf("completed login audit fact is wrong: %+v", event)
 	}
-	if strings.Contains(fmt.Sprintf("%+v", event), result.Token.Value()) || strings.Contains(fmt.Sprintf("%+v", event), "correct horse battery staple") || strings.Contains(fmt.Sprintf("%+v", result), result.Token.Value()) {
+	if strings.Contains(fmt.Sprintf("%+v", event), result.Token.Value()) || strings.Contains(fmt.Sprintf("%+v", event), result.CSRFToken.Value()) || strings.Contains(fmt.Sprintf("%+v", event), "correct horse battery staple") || strings.Contains(fmt.Sprintf("%+v", result), result.Token.Value()) || strings.Contains(fmt.Sprintf("%+v", result), result.CSRFToken.Value()) {
 		t.Fatal("login audit/result formatting leaked a bearer secret")
 	}
 	if strings.Trim(string(password), "\x00") != "" {

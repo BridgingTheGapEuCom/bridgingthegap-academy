@@ -51,7 +51,7 @@ func testSessionLifecycle(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if len(storedDigest) != sha256.Size || !bytes.Equal(storedDigest, wantDigest[:]) || bytes.Equal(storedDigest, []byte(first.Token.Value())) || storedUserID != string(user.ID) {
 		t.Fatal("persisted session contains an incorrect digest or owner")
 	}
-	if _, err := repository.CreateSession(ctx, other.ID, mustSessionDigest(t, storedDigest), now.Add(time.Hour)); !errors.Is(err, identity.ErrConflict) {
+	if _, err := repository.CreateSession(ctx, other.ID, mustSessionDigest(t, storedDigest), now.Add(time.Hour), testCSRFToken(t)); !errors.Is(err, identity.ErrConflict) {
 		t.Fatalf("duplicate digest was not rejected: %v", err)
 	}
 	resolved, err := service.ResolveSession(ctx, first.Token.Value())

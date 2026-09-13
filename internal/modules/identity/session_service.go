@@ -36,6 +36,7 @@ func (t RawSessionToken) Format(s fmt.State, verb rune) { _, _ = s.Write([]byte(
 // persistence model or resolved-session result contains the bearer token.
 type CreatedSession struct {
 	Token     RawSessionToken
+	CSRFToken CSRFToken
 	SessionID SessionID
 	UserID    UserID
 	IssuedAt  time.Time
@@ -60,7 +61,7 @@ func (s ResolvedSession) ExpiresAt() time.Time { return s.expiresAt }
 // needed by the transport-independent session service.
 type SessionLifecycleRepository interface {
 	GetUser(context.Context, UserID) (User, error)
-	CreateSession(context.Context, UserID, SessionTokenDigest, time.Time) (Session, error)
+	CreateSession(context.Context, UserID, SessionTokenDigest, time.Time, CSRFToken) (Session, error)
 	GetSessionByDigest(context.Context, SessionTokenDigest) (Session, error)
 	GetSessionByID(context.Context, SessionID) (Session, error)
 	RevokeSession(context.Context, SessionID) (Session, error)
@@ -132,9 +133,16 @@ func (s SessionService) CreateSession(ctx context.Context, userID UserID) (Creat
 		return CreatedSession{}, ErrSessionUnavailable
 	}
 	token := RawSessionToken{value: base64.RawURLEncoding.EncodeToString(bytes)}
+	csrfToken, err := randomCSRFToken(s.random)
+	if err != nil {
+		return CreatedSession{}, ErrSessionUnavailable
+	}
+	if csrfToken.Value() == token.value {
+		return CreatedSession{}, ErrSessionUnavailable
+	}
 	sum := sha256.Sum256([]byte(token.value))
 	digest, _ := NewSessionTokenDigest(sum[:]) // SHA-256 always returns 32 bytes.
-	session, err := s.repository.CreateSession(ctx, userID, digest, s.now().UTC().Add(DefaultAbsoluteSessionLifetime))
+	session, err := s.repository.CreateSession(ctx, userID, digest, s.now().UTC().Add(DefaultAbsoluteSessionLifetime), csrfToken)
 	if err != nil {
 		return CreatedSession{}, ErrSessionUnavailable
 	}
@@ -142,7 +150,7 @@ func (s SessionService) CreateSession(ctx context.Context, userID UserID) (Creat
 		s.observe(ctx, SessionPersistenceCorrupt, userID, session.ID, 0)
 		return CreatedSession{}, ErrCorruptSession
 	}
-	return CreatedSession{Token: token, SessionID: session.ID, UserID: userID, IssuedAt: session.CreatedAt, ExpiresAt: session.ExpiresAt}, nil
+	return CreatedSession{Token: token, CSRFToken: csrfToken, SessionID: session.ID, UserID: userID, IssuedAt: session.CreatedAt, ExpiresAt: session.ExpiresAt}, nil
 }
 
 func (s SessionService) ResolveSession(ctx context.Context, rawToken string) (ResolvedSession, error) {

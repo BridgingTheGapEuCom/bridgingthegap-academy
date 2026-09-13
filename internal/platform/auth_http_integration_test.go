@@ -18,6 +18,7 @@ import (
 	auditpostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/audit/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -26,12 +27,13 @@ func testHTTPAuthTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	now := time.Now().UTC()
 	repository := identitypostgres.New(pool)
 	service := NewPostgresLoginOrchestrator(pool, nil, func() time.Time { return now })
-	auth := &authHTTP{login: service, sessions: identity.NewSessionService(repository, nil, func() time.Time { return now }), cookieSecure: true, now: func() time.Time { return now }}
+	auth := &authHTTP{login: service, sessions: identity.NewSessionService(repository, nil, func() time.Time { return now }), csrf: identity.NewSessionCSRFService(repository, func() time.Time { return now }), cookieSecure: true, now: func() time.Time { return now }}
 	router := authTestRouter(auth)
 	password := "correct horse battery staple"
 	loginBody := `{"email":" ADMIN@Example.com ","password":"` + password + `"}`
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(loginBody))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", "https://academy.example.com")
 	request.Header.Set("X-Request-ID", "00000000-0000-0000-0000-000000000999")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -43,7 +45,7 @@ func testHTTPAuthTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 		t.Fatal("HTTP login exposed a secret or set an insecure cookie")
 	}
 	var body authenticatedSessionResponse
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || !body.Authenticated || body.UserID == "" || body.ExpiresAt.IsZero() {
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || !body.Authenticated || body.UserID == "" || body.ExpiresAt.IsZero() || body.CSRFToken == "" || response.Header().Get("Cache-Control") != "no-store" || strings.Contains(response.Header().Get("Set-Cookie"), body.CSRFToken) {
 		t.Fatal("HTTP login response is incomplete")
 	}
 	parsedRequestID, err := uuid.Parse(response.Header().Get("X-Request-ID"))
@@ -54,6 +56,14 @@ func testHTTPAuthTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	if current.Code != http.StatusOK || !bytes.Contains(current.Body.Bytes(), []byte(string(body.UserID))) || strings.Contains(current.Body.String(), cookie.Value) {
 		t.Fatal("current-session endpoint did not resolve the cookie")
 	}
+	var currentBody authenticatedSessionResponse
+	if err := json.Unmarshal(current.Body.Bytes(), &currentBody); err != nil || currentBody.CSRFToken != body.CSRFToken || current.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("current-session response did not deliver stable no-store CSRF token")
+	}
+	resolvedFirst, err := auth.sessions.ResolveSession(ctx, cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
 	issuedNow := now
 	now = body.ExpiresAt
 	if got := authRequest(router, http.MethodGet, "/api/auth/session", "", cookie); got.Code != http.StatusUnauthorized {
@@ -61,8 +71,9 @@ func testHTTPAuthTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	}
 	now = issuedNow
 	var digest []byte
+	var storedCSRF string
 	var sessionID string
-	if err := pool.QueryRow(ctx, "SELECT id, token_digest FROM identity.sessions WHERE user_id = $1 AND token_digest = $2", body.UserID, sha256Digest(cookie.Value)).Scan(&sessionID, &digest); err != nil || len(digest) != sha256.Size || bytes.Equal(digest, []byte(cookie.Value)) {
+	if err := pool.QueryRow(ctx, "SELECT id, token_digest, csrf_token FROM identity.sessions WHERE user_id = $1 AND token_digest = $2", body.UserID, sha256Digest(cookie.Value)).Scan(&sessionID, &digest, &storedCSRF); err != nil || len(digest) != sha256.Size || bytes.Equal(digest, []byte(cookie.Value)) || storedCSRF != body.CSRFToken {
 		t.Fatalf("session digest was not persisted correctly: %v", err)
 	}
 	loginEvents, err := auditpostgres.New(pool).ListForResource(ctx, "IDENTITY_SESSION", sessionID)
@@ -104,18 +115,33 @@ func testHTTPAuthTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	}
 	otherCookie := second.Result().Cookies()[0]
 	var secondBody authenticatedSessionResponse
-	if err := json.Unmarshal(second.Body.Bytes(), &secondBody); err != nil {
+	if err := json.Unmarshal(second.Body.Bytes(), &secondBody); err != nil || secondBody.CSRFToken == body.CSRFToken {
 		t.Fatal(err)
 	}
-	logout := authRequest(router, http.MethodPost, "/api/auth/logout", `{"session_id":"00000000-0000-0000-0000-000000000999"}`, cookie)
+	for _, rejected := range []string{"", "malformed", secondBody.CSRFToken} {
+		attempt := authRequest(router, http.MethodPost, "/api/auth/logout", "", cookie, rejected)
+		if attempt.Code != http.StatusForbidden || len(attempt.Result().Cookies()) != 0 || strings.Contains(attempt.Body.String(), body.CSRFToken) {
+			t.Fatal("valid session logout accepted missing, malformed, or cross-session CSRF")
+		}
+		if got := authRequest(router, http.MethodGet, "/api/auth/session", "", cookie); got.Code != http.StatusOK {
+			t.Fatal("CSRF rejection revoked session")
+		}
+	}
+	logout := authRequest(router, http.MethodPost, "/api/auth/logout", `{"session_id":"00000000-0000-0000-0000-000000000999"}`, cookie, body.CSRFToken)
 	if logout.Code != http.StatusNoContent || len(logout.Result().Cookies()) != 1 || logout.Result().Cookies()[0].MaxAge != -1 {
 		t.Fatal("HTTP logout did not clear the current cookie")
 	}
 	if got := authRequest(router, http.MethodGet, "/api/auth/session", "", cookie); got.Code != http.StatusUnauthorized {
 		t.Fatal("logged-out cookie still resolves")
 	}
+	if err := auth.csrf.Validate(ctx, resolvedFirst, body.CSRFToken); err != identity.ErrInvalidSession {
+		t.Fatal("revoked session retained CSRF validation")
+	}
 	if got := authRequest(router, http.MethodGet, "/api/auth/session", "", otherCookie); got.Code != http.StatusOK {
 		t.Fatal("logout revoked another session")
+	}
+	if got := authRequest(router, http.MethodPost, "/api/auth/logout", "", otherCookie, body.CSRFToken); got.Code != http.StatusForbidden {
+		t.Fatal("old session CSRF token validated for another session")
 	}
 	if got := authRequest(router, http.MethodPost, "/api/auth/logout", "", cookie); got.Code != http.StatusNoContent {
 		t.Fatal("already-invalid logout was not idempotent")
@@ -128,17 +154,55 @@ func testHTTPAuthTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	if err := pool.QueryRow(ctx, "SELECT string_agg(row_to_json(e)::text, ' ') FROM audit.events e WHERE resource_type = 'IDENTITY_SESSION' AND resource_id = $1", sessionID).Scan(&auditJSON); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(auditJSON, cookie.Value) || strings.Contains(auditJSON, password) || strings.Contains(auditJSON, fmt.Sprintf("%x", digest)) {
+	if strings.Contains(auditJSON, cookie.Value) || strings.Contains(auditJSON, password) || strings.Contains(auditJSON, fmt.Sprintf("%x", digest)) || strings.Contains(auditJSON, body.CSRFToken) || strings.Contains(auditJSON, secondBody.CSRFToken) {
 		t.Fatal("HTTP audit record contains credential or bearer material")
+	}
+	protected := chi.NewRouter()
+	protected.Use(correlationID)
+	protected.Use(auth.enforceOrigin)
+	reached := 0
+	protected.With(auth.authenticated).Post("/protected", func(w http.ResponseWriter, _ *http.Request) {
+		reached++
+		w.WriteHeader(http.StatusNoContent)
+	})
+	if got := authRequest(protected, http.MethodPost, "/protected", "", otherCookie, secondBody.CSRFToken); got.Code != http.StatusNoContent || reached != 1 {
+		t.Fatal("valid PostgreSQL-backed CSRF request did not reach protected handler")
 	}
 	if _, err := repository.UpdateUserStatus(ctx, body.UserID, identity.UserSuspended); err != nil {
 		t.Fatal(err)
+	}
+	if got := authRequest(protected, http.MethodPost, "/protected", "", otherCookie, secondBody.CSRFToken); got.Code != http.StatusUnauthorized || reached != 1 {
+		t.Fatal("suspended user reached protected mutation with old CSRF token")
 	}
 	if got := authRequest(router, http.MethodGet, "/api/auth/session", "", otherCookie); got.Code != http.StatusUnauthorized {
 		t.Fatal("suspended user's cookie remained valid")
 	}
 	if _, err := repository.UpdateUserStatus(ctx, body.UserID, identity.UserActive); err != nil {
 		t.Fatal(err)
+	}
+	// A session created before the CSRF migration has a NULL token. A safe
+	// current-session GET provisions it once, without rotating on later GETs.
+	legacyRaw := mustRawToken().Value()
+	var legacySessionID string
+	if err := pool.QueryRow(ctx, "INSERT INTO identity.sessions (user_id, token_digest, expires_at) VALUES ($1, $2, $3) RETURNING id", body.UserID, sha256Digest(legacyRaw), time.Now().Add(24*time.Hour)).Scan(&legacySessionID); err != nil {
+		t.Fatal(err)
+	}
+	legacyCookie := &http.Cookie{Name: sessionCookieName, Value: legacyRaw}
+	var legacyToken string
+	for range 2 {
+		got := authRequest(router, http.MethodGet, "/api/auth/session", "", legacyCookie)
+		var legacyBody authenticatedSessionResponse
+		if got.Code != http.StatusOK || json.Unmarshal(got.Body.Bytes(), &legacyBody) != nil || legacyBody.CSRFToken == "" {
+			t.Fatal("legacy session could not provision CSRF token")
+		}
+		if legacyToken != "" && legacyBody.CSRFToken != legacyToken {
+			t.Fatal("legacy CSRF token rotated on repeated GET")
+		}
+		legacyToken = legacyBody.CSRFToken
+	}
+	var persistedLegacy string
+	if err := pool.QueryRow(ctx, "SELECT csrf_token FROM identity.sessions WHERE id = $1", legacySessionID).Scan(&persistedLegacy); err != nil || persistedLegacy != legacyToken {
+		t.Fatal("legacy session CSRF token was not persisted")
 	}
 	now = secondBody.ExpiresAt
 	if got := authRequest(router, http.MethodGet, "/api/auth/session", "", otherCookie); got.Code != http.StatusUnauthorized {

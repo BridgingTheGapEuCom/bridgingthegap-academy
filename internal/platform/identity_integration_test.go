@@ -131,11 +131,11 @@ func testIdentityPersistence(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	digest2, _ := identity.NewSessionTokenDigest([]byte("22222222222222222222222222222222"))
 	digest3, _ := identity.NewSessionTokenDigest([]byte("33333333333333333333333333333333"))
 	expiry := time.Now().UTC().Add(time.Hour)
-	session1, err := r.CreateSession(ctx, first.ID, digest1, expiry)
+	session1, err := r.CreateSession(ctx, first.ID, digest1, expiry, testCSRFToken(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	session2, err := r.CreateSession(ctx, first.ID, digest2, expiry)
+	session2, err := r.CreateSession(ctx, first.ID, digest2, expiry, testCSRFToken(t))
 	if err != nil || session1.ID == session2.ID {
 		t.Fatalf("multiple sessions failed: %v", err)
 	}
@@ -146,7 +146,7 @@ func testIdentityPersistence(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	if strings.Contains(fmt.Sprintf("%+v", byDigest), "11111111111111111111111111111111") {
 		t.Fatal("session formatting revealed digest")
 	}
-	if _, err := r.CreateSession(ctx, second.ID, digest1, expiry); !errors.Is(err, identity.ErrConflict) {
+	if _, err := r.CreateSession(ctx, second.ID, digest1, expiry, testCSRFToken(t)); !errors.Is(err, identity.ErrConflict) {
 		t.Fatalf("duplicate token digest accepted: %v", err)
 	}
 	revokedSession, err := r.RevokeSession(ctx, session1.ID)
@@ -175,7 +175,7 @@ func testIdentityPersistence(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	if _, err := r.CreateLocalPasswordCredential(ctx, identity.UserID(missingID), hash); !errors.Is(err, identity.ErrNotFound) {
 		t.Fatalf("credential foreign key not enforced: %v", err)
 	}
-	if _, err := r.CreateSession(ctx, identity.UserID(missingID), digest3, expiry); !errors.Is(err, identity.ErrNotFound) {
+	if _, err := r.CreateSession(ctx, identity.UserID(missingID), digest3, expiry, testCSRFToken(t)); !errors.Is(err, identity.ErrNotFound) {
 		t.Fatalf("session foreign key not enforced: %v", err)
 	}
 	if _, err := pool.Exec(ctx, "INSERT INTO identity.global_role_assignments (user_id, role) VALUES ($1, 'COURSE_AUTHOR')", first.ID); err == nil {
@@ -184,4 +184,13 @@ func testIdentityPersistence(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	if _, err := pool.Exec(ctx, "INSERT INTO identity.sessions (user_id, token_digest, expires_at) VALUES ($1, $2, $3)", second.ID, []byte("short"), expiry); err == nil {
 		t.Fatal("database accepted short session digest")
 	}
+}
+
+func testCSRFToken(t *testing.T) identity.CSRFToken {
+	t.Helper()
+	token, err := identity.NewCSRFToken(strings.Repeat("A", 43))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
 }

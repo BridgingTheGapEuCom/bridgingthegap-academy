@@ -23,6 +23,7 @@ var _ identity.PasswordCredentialRepository = (*Repository)(nil)
 var _ identity.GlobalRoleRepository = (*Repository)(nil)
 var _ identity.SessionRepository = (*Repository)(nil)
 var _ identity.SessionLifecycleRepository = (*Repository)(nil)
+var _ identity.SessionCSRFRepository = (*Repository)(nil)
 
 func New(db sqlc.DBTX) *Repository { return &Repository{q: sqlc.New(db)} }
 
@@ -286,16 +287,47 @@ func (r *Repository) RevokeGlobalRole(ctx context.Context, userID identity.UserI
 	}
 	return mapRole(row)
 }
-func (r *Repository) CreateSession(ctx context.Context, userID identity.UserID, digest identity.SessionTokenDigest, expiresAt time.Time) (identity.Session, error) {
+func (r *Repository) CreateSession(ctx context.Context, userID identity.UserID, digest identity.SessionTokenDigest, expiresAt time.Time, csrfToken identity.CSRFToken) (identity.Session, error) {
 	key, err := uuid(string(userID))
 	if err != nil {
 		return identity.Session{}, err
 	}
-	row, err := r.q.CreateSession(ctx, sqlc.CreateSessionParams{UserID: key, TokenDigest: digest.Bytes(), ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true}})
+	if _, err := identity.NewCSRFToken(csrfToken.Value()); err != nil {
+		return identity.Session{}, err
+	}
+	row, err := r.q.CreateSession(ctx, sqlc.CreateSessionParams{UserID: key, TokenDigest: digest.Bytes(), ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true}, CsrfToken: pgtype.Text{String: csrfToken.Value(), Valid: true}})
 	if err != nil {
 		return identity.Session{}, storageError(err)
 	}
 	return mapSession(row)
+}
+func (r *Repository) GetSessionCSRFToken(ctx context.Context, id identity.SessionID) (identity.CSRFToken, error) {
+	key, err := uuid(string(id))
+	if err != nil {
+		return identity.CSRFToken{}, err
+	}
+	row, err := r.q.GetSessionCSRFToken(ctx, key)
+	if err != nil {
+		return identity.CSRFToken{}, storageError(err)
+	}
+	if !row.Valid {
+		return identity.CSRFToken{}, nil
+	}
+	return identity.NewCSRFToken(row.String)
+}
+func (r *Repository) InitializeSessionCSRFToken(ctx context.Context, id identity.SessionID, token identity.CSRFToken) (identity.CSRFToken, error) {
+	key, err := uuid(string(id))
+	if err != nil {
+		return identity.CSRFToken{}, err
+	}
+	if _, err := identity.NewCSRFToken(token.Value()); err != nil {
+		return identity.CSRFToken{}, err
+	}
+	row, err := r.q.InitializeSessionCSRFToken(ctx, sqlc.InitializeSessionCSRFTokenParams{ID: key, CsrfToken: pgtype.Text{String: token.Value(), Valid: true}})
+	if err != nil {
+		return identity.CSRFToken{}, storageError(err)
+	}
+	return identity.NewCSRFToken(row.String)
 }
 func (r *Repository) GetSessionByDigest(ctx context.Context, digest identity.SessionTokenDigest) (identity.Session, error) {
 	row, err := r.q.GetSessionByDigest(ctx, digest.Bytes())

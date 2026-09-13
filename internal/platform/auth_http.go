@@ -24,9 +24,16 @@ type sessionResolver interface {
 	ResolveSession(context.Context, string) (identity.ResolvedSession, error)
 }
 
+type sessionCSRF interface {
+	TokenForSession(context.Context, identity.ResolvedSession) (identity.CSRFToken, error)
+	Validate(context.Context, identity.ResolvedSession, string) error
+}
+
 type authHTTP struct {
 	login        loginLogoutService
 	sessions     sessionResolver
+	csrf         sessionCSRF
+	origins      originPolicy
 	cookieSecure bool
 	now          func() time.Time
 }
@@ -109,6 +116,68 @@ type authenticatedSessionResponse struct {
 	Authenticated bool            `json:"authenticated"`
 	UserID        identity.UserID `json:"user_id"`
 	ExpiresAt     time.Time       `json:"expires_at"`
+	CSRFToken     string          `json:"csrf_token"`
+}
+
+func (h *authHTTP) noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (h *authHTTP) enforceOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !h.origins.allowsRequest(r) {
+			problem(w, r, http.StatusForbidden, "Forbidden")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Mount this after session resolution on every cookie-authenticated route.
+// Safe methods pass without a token; mutations require the session-bound one.
+func (h *authHTTP) csrfProtection(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !mutatingMethod(r.Method) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		current, ok := currentResolvedSession(r.Context())
+		if !ok {
+			// Optional logout with no valid session has no server-side mutation.
+			next.ServeHTTP(w, r)
+			return
+		}
+		if h.csrf == nil {
+			problem(w, r, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		values := r.Header.Values("X-CSRF-Token")
+		if len(values) != 1 {
+			problem(w, r, http.StatusForbidden, "Forbidden")
+			return
+		}
+		err := h.csrf.Validate(r.Context(), current, values[0])
+		if errors.Is(err, identity.ErrInvalidCSRFToken) {
+			problem(w, r, http.StatusForbidden, "Forbidden")
+			return
+		}
+		if errors.Is(err, identity.ErrInvalidSession) {
+			problem(w, r, http.StatusUnauthorized, "Unauthenticated")
+			return
+		}
+		if err != nil {
+			problem(w, r, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (h *authHTTP) authenticated(next http.Handler) http.Handler {
+	return h.resolveSession(true)(h.csrfProtection(next))
 }
 
 func (h *authHTTP) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -142,12 +211,12 @@ func (h *authHTTP) handleLogin(w http.ResponseWriter, r *http.Request) {
 		problem(w, r, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
-	if err != nil || result.UserID == "" || result.Token.Value() == "" || !result.ExpiresAt.After(h.now()) {
+	if err != nil || result.UserID == "" || result.Token.Value() == "" || result.CSRFToken.Value() == "" || !result.ExpiresAt.After(h.now()) {
 		problem(w, r, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	setSessionCookie(w, result.Token.Value(), result.ExpiresAt, h.cookieSecure, h.now())
-	writeJSON(w, http.StatusOK, authenticatedSessionResponse{Authenticated: true, UserID: result.UserID, ExpiresAt: result.ExpiresAt})
+	writeJSON(w, http.StatusOK, authenticatedSessionResponse{Authenticated: true, UserID: result.UserID, ExpiresAt: result.ExpiresAt, CSRFToken: result.CSRFToken.Value()})
 }
 
 func (h *authHTTP) handleSession(w http.ResponseWriter, r *http.Request) {
@@ -156,7 +225,20 @@ func (h *authHTTP) handleSession(w http.ResponseWriter, r *http.Request) {
 		problem(w, r, http.StatusUnauthorized, "Unauthenticated")
 		return
 	}
-	writeJSON(w, http.StatusOK, authenticatedSessionResponse{Authenticated: true, UserID: current.UserID(), ExpiresAt: current.ExpiresAt()})
+	if h.csrf == nil {
+		problem(w, r, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	token, err := h.csrf.TokenForSession(r.Context(), current)
+	if errors.Is(err, identity.ErrInvalidSession) {
+		problem(w, r, http.StatusUnauthorized, "Unauthenticated")
+		return
+	}
+	if err != nil || token.Value() == "" {
+		problem(w, r, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	writeJSON(w, http.StatusOK, authenticatedSessionResponse{Authenticated: true, UserID: current.UserID(), ExpiresAt: current.ExpiresAt(), CSRFToken: token.Value()})
 }
 
 func (h *authHTTP) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -176,8 +258,7 @@ func (h *authHTTP) handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// SameSite=Lax suits the same-origin Vue application. M1.4b must still add
-// explicit CSRF protection around state-changing cookie-authenticated routes.
+// SameSite=Lax remains defense in depth beside Origin and session-bound CSRF.
 func setSessionCookie(w http.ResponseWriter, token string, expiry time.Time, secure bool, now time.Time) {
 	seconds := int(expiry.Sub(now).Seconds())
 	if seconds < 1 {

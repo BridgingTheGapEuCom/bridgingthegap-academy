@@ -59,18 +59,24 @@ func (q *Queries) CreateLocalPasswordCredential(ctx context.Context, arg CreateL
 }
 
 const createSession = `-- name: CreateSession :one
-INSERT INTO identity.sessions (user_id, token_digest, expires_at)
-VALUES ($1, $2, $3) RETURNING id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at
+INSERT INTO identity.sessions (user_id, token_digest, expires_at, csrf_token)
+VALUES ($1, $2, $3, $4) RETURNING id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at, csrf_token
 `
 
 type CreateSessionParams struct {
 	UserID      pgtype.UUID
 	TokenDigest []byte
 	ExpiresAt   pgtype.Timestamptz
+	CsrfToken   pgtype.Text
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (IdentitySession, error) {
-	row := q.db.QueryRow(ctx, createSession, arg.UserID, arg.TokenDigest, arg.ExpiresAt)
+	row := q.db.QueryRow(ctx, createSession,
+		arg.UserID,
+		arg.TokenDigest,
+		arg.ExpiresAt,
+		arg.CsrfToken,
+	)
 	var i IdentitySession
 	err := row.Scan(
 		&i.ID,
@@ -80,6 +86,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (I
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.CsrfToken,
 	)
 	return i, err
 }
@@ -168,7 +175,7 @@ func (q *Queries) GetPrimaryUserEmail(ctx context.Context, userID pgtype.UUID) (
 }
 
 const getSessionByDigest = `-- name: GetSessionByDigest :one
-SELECT id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at FROM identity.sessions WHERE token_digest = $1
+SELECT id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at, csrf_token FROM identity.sessions WHERE token_digest = $1
 `
 
 func (q *Queries) GetSessionByDigest(ctx context.Context, tokenDigest []byte) (IdentitySession, error) {
@@ -182,12 +189,13 @@ func (q *Queries) GetSessionByDigest(ctx context.Context, tokenDigest []byte) (I
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.CsrfToken,
 	)
 	return i, err
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at FROM identity.sessions WHERE id = $1
+SELECT id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at, csrf_token FROM identity.sessions WHERE id = $1
 `
 
 func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (IdentitySession, error) {
@@ -201,8 +209,20 @@ func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (IdentityS
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.CsrfToken,
 	)
 	return i, err
+}
+
+const getSessionCSRFToken = `-- name: GetSessionCSRFToken :one
+SELECT csrf_token FROM identity.sessions WHERE id = $1 AND revoked_at IS NULL
+`
+
+func (q *Queries) GetSessionCSRFToken(ctx context.Context, id pgtype.UUID) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getSessionCSRFToken, id)
+	var csrf_token pgtype.Text
+	err := row.Scan(&csrf_token)
+	return csrf_token, err
 }
 
 const getUser = `-- name: GetUser :one
@@ -254,6 +274,24 @@ func (q *Queries) HasActiveGlobalRole(ctx context.Context, arg HasActiveGlobalRo
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const initializeSessionCSRFToken = `-- name: InitializeSessionCSRFToken :one
+UPDATE identity.sessions SET csrf_token = $2
+WHERE id = $1 AND csrf_token IS NULL AND revoked_at IS NULL
+RETURNING csrf_token
+`
+
+type InitializeSessionCSRFTokenParams struct {
+	ID        pgtype.UUID
+	CsrfToken pgtype.Text
+}
+
+func (q *Queries) InitializeSessionCSRFToken(ctx context.Context, arg InitializeSessionCSRFTokenParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, initializeSessionCSRFToken, arg.ID, arg.CsrfToken)
+	var csrf_token pgtype.Text
+	err := row.Scan(&csrf_token)
+	return csrf_token, err
 }
 
 const listActiveGlobalRoles = `-- name: ListActiveGlobalRoles :many
@@ -358,7 +396,7 @@ func (q *Queries) RevokeGlobalRole(ctx context.Context, arg RevokeGlobalRolePara
 }
 
 const revokeSession = `-- name: RevokeSession :one
-UPDATE identity.sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at
+UPDATE identity.sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at, csrf_token
 `
 
 func (q *Queries) RevokeSession(ctx context.Context, id pgtype.UUID) (IdentitySession, error) {
@@ -372,6 +410,7 @@ func (q *Queries) RevokeSession(ctx context.Context, id pgtype.UUID) (IdentitySe
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.CsrfToken,
 	)
 	return i, err
 }
@@ -389,7 +428,7 @@ func (q *Queries) RevokeUserSessions(ctx context.Context, userID pgtype.UUID) (i
 }
 
 const updateSessionLastSeen = `-- name: UpdateSessionLastSeen :one
-UPDATE identity.sessions SET last_seen_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at
+UPDATE identity.sessions SET last_seen_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at, csrf_token
 `
 
 func (q *Queries) UpdateSessionLastSeen(ctx context.Context, id pgtype.UUID) (IdentitySession, error) {
@@ -403,6 +442,7 @@ func (q *Queries) UpdateSessionLastSeen(ctx context.Context, id pgtype.UUID) (Id
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.CsrfToken,
 	)
 	return i, err
 }

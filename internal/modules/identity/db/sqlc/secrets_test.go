@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestGeneratedSensitiveTypesRedactFormatting(t *testing.T) {
@@ -14,8 +16,9 @@ func TestGeneratedSensitiveTypesRedactFormatting(t *testing.T) {
 		IdentityLocalPasswordCredential{PasswordHash: secret},
 		CreateLocalPasswordCredentialParams{PasswordHash: secret},
 		ReplaceLocalPasswordHashParams{PasswordHash: secret},
-		IdentitySession{TokenDigest: []byte(secret)},
-		CreateSessionParams{TokenDigest: []byte(secret)},
+		IdentitySession{TokenDigest: []byte(secret), CsrfToken: pgtype.Text{String: secret, Valid: true}},
+		CreateSessionParams{TokenDigest: []byte(secret), CsrfToken: pgtype.Text{String: secret, Valid: true}},
+		InitializeSessionCSRFTokenParams{CsrfToken: pgtype.Text{String: secret, Valid: true}},
 	} {
 		for _, format := range []string{"%v", "%+v", "%#v"} {
 			printed := fmt.Sprintf(format, value)

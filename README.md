@@ -53,9 +53,13 @@ The internal login operation authenticates a local password, then creates the se
 
 ## HTTP session transport
 
-`POST /api/auth/login` accepts JSON `email` and `password`, sets an opaque `btg_session` cookie, and returns only `authenticated`, `user_id`, and `expires_at`. `GET /api/auth/session` resolves that cookie against current server-side state and returns the same minimal response or a Problem Details `401`. `POST /api/auth/logout` revokes the resolved current session and clears the cookie; an absent, expired, or revoked cookie is cleared with `204 No Content`. Operational failures return Problem Details `500` without clearing the cookie.
+`POST /api/auth/login` accepts JSON `email` and `password`, sets an opaque `btg_session` cookie, and returns `authenticated`, `user_id`, `expires_at`, and a separate `csrf_token`. `GET /api/auth/session` resolves the cookie against current server-side state and returns the same fields or a Problem Details `401`. Both responses use `Cache-Control: no-store`. `POST /api/auth/logout` revokes the resolved current session and clears the cookie; a valid session requires its token in `X-CSRF-Token`. An absent, expired, or revoked cookie can be cleared with `204 No Content` without a CSRF token because no server-side session is changed. Operational failures return Problem Details `500` without clearing the cookie.
 
-The cookie is host-only, `HttpOnly`, `Path=/`, and `SameSite=Lax`, with expiry and Max-Age derived from the server-side session expiry. Production mode is the default and always sets `Secure`; serve it behind HTTPS. The `.env.example` explicitly selects `BTG_LMS_MODE=development` and binds HTTP to loopback, where the cookie may omit `Secure`. Client `X-Request-ID` headers are ignored: trusted middleware generates a fresh random request/operation ID. SameSite is not a complete CSRF defense. Login/logout browser transport is not security-complete until M1.4b adds CSRF protection; M1.4c adds login rate limiting.
+The auth cookie is host-only, `HttpOnly`, `Path=/`, and `SameSite=Lax`, with expiry and Max-Age derived from the server-side session expiry. Production mode is the default and always sets `Secure`; serve it behind HTTPS. The `.env.example` explicitly selects `BTG_LMS_MODE=development` and binds HTTP to loopback, where the cookie may omit `Secure`. Client `X-Request-ID` headers are ignored: trusted middleware generates a fresh random request/operation ID.
+
+CSRF uses a session-bound synchronizer token: each new session gets an independent 32-byte random token stored as sensitive Identity session state. The token is deliberately separate from the HttpOnly auth cookie and is never an authentication credential. The future Vue client should keep `csrf_token` in memory, fetch `/api/auth/session` after reload, send it as `X-CSRF-Token` on authenticated `POST`, `PUT`, `PATCH`, and `DELETE` requests, and discard it after logout; do not use localStorage or sessionStorage. A pre-M1.4b session gets a token once on its next current-session GET. Revocation and expiry make the token unusable. SameSite remains defense in depth, and CORS is not used as CSRF protection.
+
+All mutating API requests, including login, require a single exact trusted `Origin`; missing, cross-origin, or lookalike origins receive Problem Details `403`. Login uses this pre-auth Origin check rather than an anonymous server-side session. `BTG_LMS_PUBLIC_ORIGIN` is the canonical HTTPS browser origin in production; development accepts only its configured loopback HTTP origin and the loopback Go address. Host and forwarded headers never define trust. Login rate limiting remains for M1.4c.
 
 ## Build and generation
 
@@ -81,6 +85,7 @@ The Compose file starts PostgreSQL by default; the application is behind the `ap
 ```sh
 docker compose up -d db
 docker compose run --rm --no-deps app migrate
+export BTG_LMS_PUBLIC_ORIGIN=https://academy.example.com # replace with your actual browser origin
 docker compose --profile app up -d app
 curl http://localhost:8080/health/ready
 ```

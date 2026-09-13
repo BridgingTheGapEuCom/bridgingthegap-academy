@@ -12,13 +12,15 @@ type Config struct {
 	HTTPAddr        string
 	MetricsAddr     string
 	DevelopmentHTTP bool
+	PublicOrigin    string
 }
 
 func LoadConfig() (Config, error) {
 	cfg := Config{
-		DatabaseURL: os.Getenv("BTG_LMS_DATABASE_URL"),
-		HTTPAddr:    envOr("BTG_LMS_HTTP_ADDR", ":8080"),
-		MetricsAddr: envOr("BTG_LMS_METRICS_ADDR", "127.0.0.1:9090"),
+		DatabaseURL:  os.Getenv("BTG_LMS_DATABASE_URL"),
+		HTTPAddr:     envOr("BTG_LMS_HTTP_ADDR", ":8080"),
+		MetricsAddr:  envOr("BTG_LMS_METRICS_ADDR", "127.0.0.1:9090"),
+		PublicOrigin: os.Getenv("BTG_LMS_PUBLIC_ORIGIN"),
 	}
 	switch envOr("BTG_LMS_MODE", "production") {
 	case "production":

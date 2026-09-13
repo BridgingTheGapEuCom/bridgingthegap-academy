@@ -19,6 +19,7 @@ services:
     environment:
       BTG_LMS_DATABASE_URL: postgres://btg:btg_dev_password@db:5432/btg_lms?sslmode=disable
       BTG_LMS_HTTP_ADDR: :8080
+      BTG_LMS_PUBLIC_ORIGIN: ${BTG_LMS_PUBLIC_ORIGIN:-}
     ports:
       - "8080:8080"
     depends_on:
