@@ -85,8 +85,11 @@ func (h Argon2idHasher) HashPassword(plaintext []byte) (PasswordHash, error) {
 }
 
 func (h Argon2idHasher) VerifyPassword(encoded PasswordHash, plaintext []byte) (bool, error) {
-	if err := ValidatePassword(plaintext); err != nil {
-		return false, err
+	// Verification must accept short legacy inputs so every ordinary failed
+	// attempt still performs the encoded Argon2id work. HashPassword owns the
+	// current creation policy; the caller caps oversized authentication input.
+	if len(plaintext) > MaximumPasswordBytes {
+		return false, ErrInvalidPassword
 	}
 	parameters, salt, expected, err := parseArgon2idHash(encoded.Value())
 	if err != nil {

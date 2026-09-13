@@ -1,6 +1,6 @@
 # Bridging the Gap LMS
 
-An open-source, accessibility-first learning platform for structured, self-paced education. M1.2 adds local administrator bootstrap only; there are no authentication flows, LMS business workflows, or public `/api/v1` operations.
+An open-source, accessibility-first learning platform for structured, self-paced education. M1.3a adds an internal local-password authentication service; there are no login endpoints, sessions created by authentication, LMS business workflows, or public `/api/v1` operations.
 
 The architecture source of truth is [BTG_LMS_Architecture_Decision_Baseline_v5.docx](BTG_LMS_Architecture_Decision_Baseline_v5.docx), especially sections 32–33. [Module boundaries](docs/architecture-boundaries.md) documents the Go package owners and enforced dependency rules.
 
