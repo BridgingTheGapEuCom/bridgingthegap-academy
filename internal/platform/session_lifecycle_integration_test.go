@@ -55,7 +55,7 @@ func testSessionLifecycle(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 		t.Fatalf("duplicate digest was not rejected: %v", err)
 	}
 	resolved, err := service.ResolveSession(ctx, first.Token.Value())
-	if err != nil || resolved.SessionID != first.SessionID || resolved.UserID != user.ID {
+	if err != nil || resolved.SessionID() != first.SessionID || resolved.UserID() != user.ID {
 		t.Fatalf("valid session did not resolve: %v", err)
 	}
 	if err := service.RevokeSession(ctx, first.SessionID); err != nil {

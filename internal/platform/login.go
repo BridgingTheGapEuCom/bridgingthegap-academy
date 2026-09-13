@@ -21,7 +21,7 @@ type LocalPasswordAuthenticator interface {
 // its Audit append. The PostgreSQL implementation uses one database transaction.
 type CompletedSessionTransaction interface {
 	CreateSession(context.Context, identity.UserID) (identity.CreatedSession, error)
-	RevokeResolvedSession(context.Context, identity.ResolvedSession) error
+	RevokeResolvedSession(context.Context, identity.ResolvedSession) (bool, error)
 	AppendAudit(context.Context, audit.Event) error
 	GetAuditByOperationID(context.Context, string) (audit.Event, error)
 }
@@ -98,12 +98,12 @@ func (o LoginOrchestrator) LoginWithPassword(ctx context.Context, email string, 
 // Logout requires a trusted current session returned by session resolution.
 // Authorization of that context belongs to the later transport boundary.
 // A retry with the same operation ID reuses its completed Audit fact only if
-// the user and session match. A new operation ID may record another logout.
+// the user and session match. Already-revoked sessions create no new fact.
 func (o LoginOrchestrator) Logout(ctx context.Context, current identity.ResolvedSession, operationID string) error {
 	if o.transactions == nil {
 		return ErrLogoutUnavailable
 	}
-	if current.SessionID == "" || current.UserID == "" {
+	if current.SessionID() == "" || current.UserID() == "" {
 		return identity.ErrInvalidSession
 	}
 	operationID, err := completedOperationID(operationID)
@@ -111,12 +111,13 @@ func (o LoginOrchestrator) Logout(ctx context.Context, current identity.Resolved
 		return ErrLogoutUnavailable
 	}
 	err = o.transactions.InCompletedSessionTransaction(ctx, func(tx CompletedSessionTransaction) error {
-		if err := tx.RevokeResolvedSession(ctx, current); err != nil {
+		changed, err := tx.RevokeResolvedSession(ctx, current)
+		if err != nil {
 			return err
 		}
 		existing, err := tx.GetAuditByOperationID(ctx, operationID)
 		if err == nil {
-			if existing.Action == audit.SessionLogoutCompleted && existing.ActorUserID == string(current.UserID) && existing.ResourceType == "IDENTITY_SESSION" && existing.ResourceID == string(current.SessionID) && existing.Outcome == "SUCCESS" {
+			if existing.Action == audit.SessionLogoutCompleted && existing.ActorUserID == string(current.UserID()) && existing.ResourceType == "IDENTITY_SESSION" && existing.ResourceID == string(current.SessionID()) && existing.Outcome == "SUCCESS" {
 				return nil
 			}
 			return ErrLogoutUnavailable
@@ -124,12 +125,15 @@ func (o LoginOrchestrator) Logout(ctx context.Context, current identity.Resolved
 		if !errors.Is(err, audit.ErrNotFound) {
 			return err
 		}
+		if !changed {
+			return nil
+		}
 		return tx.AppendAudit(ctx, audit.Event{
 			Action:       audit.SessionLogoutCompleted,
 			ActorKind:    "USER",
-			ActorUserID:  string(current.UserID),
+			ActorUserID:  string(current.UserID()),
 			ResourceType: "IDENTITY_SESSION",
-			ResourceID:   string(current.SessionID),
+			ResourceID:   string(current.SessionID()),
 			Outcome:      "SUCCESS",
 			OperationID:  operationID,
 		})

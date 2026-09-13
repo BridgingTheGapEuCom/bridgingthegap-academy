@@ -202,7 +202,7 @@ func TestSessionResolutionUsesClockAndOneGenericInvalidError(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolved, err := service.ResolveSession(ctx, created.Token.Value())
-	if err != nil || resolved.UserID != sessionTestUser || resolved.SessionID != created.SessionID || !resolved.ExpiresAt.Equal(created.ExpiresAt) {
+	if err != nil || resolved.UserID() != sessionTestUser || resolved.SessionID() != created.SessionID || !resolved.ExpiresAt().Equal(created.ExpiresAt) {
 		t.Fatalf("valid session did not resolve: %v", err)
 	}
 	if _, ok := reflect.TypeOf(resolved).FieldByName("TokenDigest"); ok {
@@ -215,13 +215,13 @@ func TestSessionResolutionUsesClockAndOneGenericInvalidError(t *testing.T) {
 		t.Fatal("resolved result exposed token")
 	}
 
-	for _, bad := range []string{"", "not-a-token", strings.Repeat("a", 44), base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0}, 32))} {
+	for _, bad := range []string{"", "not-a-token", strings.Repeat("a", 44), strings.Repeat("a", 10_000), base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0}, 32))} {
 		before := repository.lookupCount
 		_, err := service.ResolveSession(ctx, bad)
 		if err != ErrInvalidSession {
 			t.Fatalf("malformed or unknown token was distinguishable: %v", err)
 		}
-		if bad == "" || bad == "not-a-token" || len(bad) == 44 {
+		if len(bad) != base64.RawURLEncoding.EncodedLen(sessionTokenBytes) {
 			if repository.lookupCount != before {
 				t.Fatal("malformed token reached persistence")
 			}
@@ -327,18 +327,18 @@ func TestRevokeResolvedSessionChecksOwnerBeforeMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrongOwner := ResolvedSession{SessionID: created.SessionID, UserID: otherSessionTestUser}
-	if err := service.RevokeResolvedSession(ctx, wrongOwner); err != ErrInvalidSession {
+	wrongOwner := ResolvedSession{sessionID: created.SessionID, userID: otherSessionTestUser}
+	if changed, err := service.RevokeResolvedSession(ctx, wrongOwner); changed || err != ErrInvalidSession {
 		t.Fatalf("mismatched owner was accepted: %v", err)
 	}
 	if _, err := service.ResolveSession(ctx, created.Token.Value()); err != nil {
 		t.Fatalf("owner mismatch changed the session: %v", err)
 	}
-	current := ResolvedSession{SessionID: created.SessionID, UserID: sessionTestUser}
-	if err := service.RevokeResolvedSession(ctx, current); err != nil {
+	current := ResolvedSession{sessionID: created.SessionID, userID: sessionTestUser}
+	if changed, err := service.RevokeResolvedSession(ctx, current); !changed || err != nil {
 		t.Fatal(err)
 	}
-	if err := service.RevokeResolvedSession(ctx, current); err != nil {
+	if changed, err := service.RevokeResolvedSession(ctx, current); changed || err != nil {
 		t.Fatalf("repeat revocation failed: %v", err)
 	}
 	if _, err := service.ResolveSession(ctx, created.Token.Value()); err != ErrInvalidSession {

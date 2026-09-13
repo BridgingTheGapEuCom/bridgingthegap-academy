@@ -105,9 +105,11 @@ func (r terminalPasswordReader) ReadPassword(prompt string) ([]byte, error) {
 	}
 	password, err := term.ReadPassword(int(r.input.Fd()))
 	if _, writeErr := fmt.Fprintln(r.output); err == nil && writeErr != nil {
+		clear(password)
 		return nil, errors.New("write password prompt")
 	}
 	if err != nil {
+		clear(password)
 		return nil, errors.New("read password")
 	}
 	return password, nil
@@ -127,18 +129,18 @@ func runAdminCreate(ctx context.Context, args []string, passwords passwordReader
 		return errors.New("invalid email")
 	}
 	password, err := passwords.ReadPassword("Password: ")
+	defer clear(password)
 	if err != nil {
 		if errors.Is(err, errPasswordTerminalRequired) {
 			return errPasswordTerminalRequired
 		}
 		return errors.New("unable to read password")
 	}
-	defer clear(password)
 	confirmation, err := passwords.ReadPassword("Confirm password: ")
+	defer clear(confirmation)
 	if err != nil {
 		return errors.New("unable to read password")
 	}
-	defer clear(confirmation)
 	if len(password) != len(confirmation) || subtle.ConstantTimeCompare(password, confirmation) != 1 {
 		return errPasswordConfirmationMismatch
 	}

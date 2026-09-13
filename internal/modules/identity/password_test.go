@@ -30,7 +30,7 @@ func TestArgon2idHashAndVerify(t *testing.T) {
 		t.Fatal("identical passwords received identical salts")
 	}
 	if !strings.HasPrefix(first.Value(), "$argon2id$v=19$m=8192,t=1,p=1$") {
-		t.Fatalf("unexpected PHC encoding: %q", first.Value())
+		t.Fatal("unexpected PHC encoding")
 	}
 	if strings.Contains(first.Value(), string(password)) {
 		t.Fatal("encoded hash contains plaintext password")
@@ -52,7 +52,7 @@ func TestDefaultArgon2idHasherUsesDocumentedParameters(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(hash.Value(), "$argon2id$v=19$m=65536,t=3,p=1$") {
-		t.Fatalf("default hash does not preserve documented parameters: %q", hash.Value())
+		t.Fatal("default hash does not preserve documented parameters")
 	}
 }
 
@@ -82,7 +82,7 @@ func TestArgon2idVerifyRejectsMalformedEncodings(t *testing.T) {
 	} {
 		hash, _ := NewPasswordHash(encoded)
 		if _, err := hasher.VerifyPassword(hash, []byte("correct horse battery staple")); !errors.Is(err, ErrMalformedPasswordHash) {
-			t.Fatalf("malformed encoding %q returned %v", encoded, err)
+			t.Fatalf("malformed encoding was accepted: %v", err)
 		}
 	}
 }
@@ -95,6 +95,41 @@ func TestArgon2idParameterValidation(t *testing.T) {
 	} {
 		if _, err := NewArgon2idHasher(parameters); !errors.Is(err, ErrMalformedPasswordHash) {
 			t.Fatalf("invalid parameters accepted: %+v", parameters)
+		}
+	}
+}
+
+func TestArgon2idVerifierRejectsOversizedStoredWorkBeforeDerivation(t *testing.T) {
+	hasher := testPasswordHasher(t)
+	legitimate, err := hasher.HashPassword([]byte("correct horse battery staple"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(legitimate.Value(), "$")
+	for _, params := range []string{
+		"m=131073,t=1,p=1",
+		"m=8192,t=5,p=1",
+		"m=8192,t=1,p=5",
+	} {
+		parts[3] = params
+		malicious, _ := NewPasswordHash(strings.Join(parts, "$"))
+		if _, err := hasher.VerifyPassword(malicious, []byte("short")); !errors.Is(err, ErrMalformedPasswordHash) {
+			t.Fatalf("excessive stored Argon2 parameters were accepted: %v", err)
+		}
+	}
+	oversized, _ := NewPasswordHash(legitimate.Value() + strings.Repeat("A", maximumEncodedHashBytes))
+	if _, err := hasher.VerifyPassword(oversized, []byte("short")); !errors.Is(err, ErrMalformedPasswordHash) {
+		t.Fatalf("oversized PHC input was accepted: %v", err)
+	}
+	if _, err := hasher.VerifyPassword(legitimate, []byte("short")); err != nil {
+		t.Fatalf("valid stored hash no longer accepts short verification input: %v", err)
+	}
+	for _, params := range []Argon2idParameters{
+		{MemoryKiB: maximumArgon2MemoryKiB + 1, Iterations: 1, Parallelism: 1, SaltLength: 16, KeyLength: 32},
+		{MemoryKiB: 8192, Iterations: maximumArgon2Iterations + 1, Parallelism: 1, SaltLength: 16, KeyLength: 32},
+	} {
+		if _, err := NewArgon2idHasher(params); !errors.Is(err, ErrMalformedPasswordHash) {
+			t.Fatalf("hasher could create unverifiable excessive parameters: %v", err)
 		}
 	}
 }

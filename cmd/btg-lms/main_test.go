@@ -93,3 +93,38 @@ func TestTerminalPasswordReaderRejectsNonterminalInput(t *testing.T) {
 		t.Fatalf("pipe input was accepted as an interactive terminal: %v", err)
 	}
 }
+
+type failingPasswordReader struct {
+	values [][]byte
+	failAt int
+	calls  int
+}
+
+func (r *failingPasswordReader) ReadPassword(string) ([]byte, error) {
+	r.calls++
+	value := r.values[r.calls-1]
+	if r.calls == r.failAt {
+		return value, errors.New("private read failure")
+	}
+	return value, nil
+}
+
+func TestAdminCreateClearsPasswordBytesOnReaderFailure(t *testing.T) {
+	for _, failAt := range []int{1, 2} {
+		first := []byte("correct horse battery staple")
+		second := []byte("correct horse battery staple")
+		reader := &failingPasswordReader{values: [][]byte{first, second}, failAt: failAt}
+		err := runAdminCreate(context.Background(), []string{"create", "--email", "admin@example.com"}, reader, &bytes.Buffer{}, func(context.Context, string, []byte) (identity.User, error) {
+			t.Fatal("persistence was called after password read failed")
+			return identity.User{}, nil
+		})
+		if err == nil || strings.Contains(err.Error(), "private read failure") {
+			t.Fatalf("password reader error was exposed: %v", err)
+		}
+		for _, value := range reader.values[:reader.calls] {
+			if !bytes.Equal(value, make([]byte, len(value))) {
+				t.Fatal("password bytes from failed read were retained")
+			}
+		}
+	}
+}

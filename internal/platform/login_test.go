@@ -1,9 +1,11 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -72,14 +74,17 @@ func (f *completedWorkFake) CreateSession(_ context.Context, userID identity.Use
 	f.runner.lastCreateUser = userID
 	return f.runner.created, f.runner.createErr
 }
-func (f *completedWorkFake) RevokeResolvedSession(_ context.Context, current identity.ResolvedSession) error {
-	sessionID := current.SessionID
+func (f *completedWorkFake) RevokeResolvedSession(_ context.Context, current identity.ResolvedSession) (bool, error) {
+	sessionID := current.SessionID()
 	f.runner.lastRevoke = sessionID
 	if f.runner.revokeErr != nil {
-		return f.runner.revokeErr
+		return false, f.runner.revokeErr
+	}
+	if f.runner.revoked[sessionID] {
+		return false, nil
 	}
 	f.revoked = append(f.revoked, sessionID)
-	return nil
+	return true, nil
 }
 func (f *completedWorkFake) AppendAudit(_ context.Context, event audit.Event) error {
 	f.runner.lastAttempt = event
@@ -116,18 +121,28 @@ func mustRawToken() identity.RawSessionToken {
 	return created.Token
 }
 
-type loginSessionRepositoryFake struct{ at time.Time }
+type loginSessionRepositoryFake struct {
+	at      time.Time
+	session identity.Session
+}
 
 func (r *loginSessionRepositoryFake) GetUser(context.Context, identity.UserID) (identity.User, error) {
 	return identity.User{ID: loginTestUser, Status: identity.UserActive}, nil
 }
 func (r *loginSessionRepositoryFake) CreateSession(_ context.Context, userID identity.UserID, digest identity.SessionTokenDigest, expires time.Time) (identity.Session, error) {
-	return identity.Session{ID: loginTestSession, UserID: userID, TokenDigest: digest, CreatedAt: r.at, LastSeenAt: r.at, ExpiresAt: expires}, nil
+	r.session = identity.Session{ID: loginTestSession, UserID: userID, TokenDigest: digest, CreatedAt: r.at, LastSeenAt: r.at, ExpiresAt: expires}
+	return r.session, nil
 }
-func (r *loginSessionRepositoryFake) GetSessionByDigest(context.Context, identity.SessionTokenDigest) (identity.Session, error) {
+func (r *loginSessionRepositoryFake) GetSessionByDigest(_ context.Context, digest identity.SessionTokenDigest) (identity.Session, error) {
+	if bytes.Equal(r.session.TokenDigest.Bytes(), digest.Bytes()) {
+		return r.session, nil
+	}
 	return identity.Session{}, identity.ErrNotFound
 }
-func (r *loginSessionRepositoryFake) GetSessionByID(context.Context, identity.SessionID) (identity.Session, error) {
+func (r *loginSessionRepositoryFake) GetSessionByID(_ context.Context, id identity.SessionID) (identity.Session, error) {
+	if r.session.ID == id {
+		return r.session, nil
+	}
 	return identity.Session{}, identity.ErrNotFound
 }
 func (r *loginSessionRepositoryFake) RevokeSession(context.Context, identity.SessionID) (identity.Session, error) {
@@ -135,6 +150,21 @@ func (r *loginSessionRepositoryFake) RevokeSession(context.Context, identity.Ses
 }
 func (r *loginSessionRepositoryFake) RevokeUserSessions(context.Context, identity.UserID) (int64, error) {
 	return 0, nil
+}
+
+func loginTestCurrent(t *testing.T) identity.ResolvedSession {
+	t.Helper()
+	repository := &loginSessionRepositoryFake{at: time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)}
+	service := identity.NewSessionService(repository, nil, func() time.Time { return repository.at })
+	created, err := service.CreateSession(context.Background(), loginTestUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := service.ResolveSession(context.Background(), created.Token.Value())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return current
 }
 
 func TestLoginOrchestratorSuccessIsCompletedOnlyAfterAuditCommit(t *testing.T) {
@@ -204,9 +234,14 @@ func TestLoginOrchestratorRollsBackOnSessionAuditOrCommitFailure(t *testing.T) {
 	}
 }
 
-func TestLogoutOrchestratorRevokesOnlyCurrentSessionAndAuditsEachCompletion(t *testing.T) {
+func TestLogoutOrchestratorRevokesOnlyCurrentSessionAndAuditsOneCompletion(t *testing.T) {
 	_, transactions, service := newLoginFixture()
-	current := identity.ResolvedSession{SessionID: loginTestSession, UserID: loginTestUser}
+	current := loginTestCurrent(t)
+	for field := range reflect.TypeOf(current).NumField() {
+		if reflect.TypeOf(current).Field(field).IsExported() {
+			t.Fatal("trusted session context has externally writable fields")
+		}
+	}
 	transactions.revoked = map[identity.SessionID]bool{loginTestOtherSession: false}
 	if err := service.Logout(context.Background(), current, loginTestOperation); err != nil {
 		t.Fatal(err)
@@ -218,10 +253,10 @@ func TestLogoutOrchestratorRevokesOnlyCurrentSessionAndAuditsEachCompletion(t *t
 	if event.Action != audit.SessionLogoutCompleted || event.ActorUserID != string(loginTestUser) || event.ResourceID != string(loginTestSession) || event.OperationID != loginTestOperation || event.AuthenticationMethod != "" {
 		t.Fatalf("logout audit fact is wrong: %+v", event)
 	}
-	if err := service.Logout(context.Background(), current, "00000000-0000-0000-0000-000000000005"); err != nil || len(transactions.committed) != 2 {
+	if err := service.Logout(context.Background(), current, "00000000-0000-0000-0000-000000000005"); err != nil || len(transactions.committed) != 1 {
 		t.Fatalf("repeated logout was not safe: %v", err)
 	}
-	if err := service.Logout(context.Background(), current, loginTestOperation); err != nil || len(transactions.committed) != 2 {
+	if err := service.Logout(context.Background(), current, loginTestOperation); err != nil || len(transactions.committed) != 1 {
 		t.Fatalf("retry with same operation ID was not idempotent: %v", err)
 	}
 	if transactions.committed[0].OperationID != loginTestOperation {
@@ -245,7 +280,7 @@ func TestLogoutOrchestratorRollsBackWhenRevocationOrAuditFails(t *testing.T) {
 			_, transactions, service := newLoginFixture()
 			transactions.revoked = make(map[identity.SessionID]bool)
 			scenario.setup(transactions)
-			err := service.Logout(context.Background(), identity.ResolvedSession{SessionID: loginTestSession, UserID: loginTestUser}, loginTestOperation)
+			err := service.Logout(context.Background(), loginTestCurrent(t), loginTestOperation)
 			if err != ErrLogoutUnavailable || transactions.revoked[loginTestSession] || len(transactions.committed) != 0 || strings.Contains(err.Error(), "private") {
 				t.Fatalf("failed logout was not rolled back: %v", err)
 			}
@@ -254,10 +289,13 @@ func TestLogoutOrchestratorRollsBackWhenRevocationOrAuditFails(t *testing.T) {
 }
 
 func TestLogoutRejectsOperationIDOwnedByAnotherSession(t *testing.T) {
-	_, transactions, service := newLoginFixture()
-	transactions.committed = []audit.Event{{Action: audit.SessionLogoutCompleted, ActorUserID: string(loginTestUser), ResourceType: "IDENTITY_SESSION", ResourceID: string(loginTestOtherSession), Outcome: "SUCCESS", OperationID: loginTestOperation}}
-	err := service.Logout(context.Background(), identity.ResolvedSession{SessionID: loginTestSession, UserID: loginTestUser}, loginTestOperation)
-	if err != ErrLogoutUnavailable || transactions.revoked[loginTestSession] || len(transactions.committed) != 1 {
-		t.Fatalf("operation ID collision changed another logout: %v", err)
+	for _, alreadyRevoked := range []bool{false, true} {
+		_, transactions, service := newLoginFixture()
+		transactions.revoked = map[identity.SessionID]bool{loginTestSession: alreadyRevoked}
+		transactions.committed = []audit.Event{{Action: audit.SessionLogoutCompleted, ActorUserID: string(loginTestUser), ResourceType: "IDENTITY_SESSION", ResourceID: string(loginTestOtherSession), Outcome: "SUCCESS", OperationID: loginTestOperation}}
+		err := service.Logout(context.Background(), loginTestCurrent(t), loginTestOperation)
+		if err != ErrLogoutUnavailable || transactions.revoked[loginTestSession] != alreadyRevoked || len(transactions.committed) != 1 {
+			t.Fatalf("operation ID collision changed another logout (already revoked=%t): %v", alreadyRevoked, err)
+		}
 	}
 }

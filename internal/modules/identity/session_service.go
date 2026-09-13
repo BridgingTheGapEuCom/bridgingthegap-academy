@@ -43,11 +43,18 @@ type CreatedSession struct {
 }
 
 type ResolvedSession struct {
-	SessionID SessionID
-	UserID    UserID
-	IssuedAt  time.Time
-	ExpiresAt time.Time
+	sessionID SessionID
+	userID    UserID
+	issuedAt  time.Time
+	expiresAt time.Time
 }
+
+// Only ResolveSession can construct a non-empty context. Callers can inspect
+// its identity but cannot forge or alter it before passing it to logout.
+func (s ResolvedSession) SessionID() SessionID { return s.sessionID }
+func (s ResolvedSession) UserID() UserID       { return s.userID }
+func (s ResolvedSession) IssuedAt() time.Time  { return s.issuedAt }
+func (s ResolvedSession) ExpiresAt() time.Time { return s.expiresAt }
 
 // SessionLifecycleRepository is the focused slice of Identity persistence
 // needed by the transport-independent session service.
@@ -180,7 +187,7 @@ func (s SessionService) ResolveSession(ctx context.Context, rawToken string) (Re
 	if user.Status == UserSuspended {
 		return ResolvedSession{}, ErrInvalidSession
 	}
-	return ResolvedSession{SessionID: session.ID, UserID: session.UserID, IssuedAt: session.CreatedAt, ExpiresAt: session.ExpiresAt}, nil
+	return ResolvedSession{sessionID: session.ID, userID: session.UserID, issuedAt: session.CreatedAt, expiresAt: session.ExpiresAt}, nil
 }
 
 // RevokeSession is repeatable: an already-revoked or absent session is a no-op.
@@ -189,26 +196,38 @@ func (s SessionService) RevokeSession(ctx context.Context, sessionID SessionID) 
 	return s.revokeSession(ctx, sessionID)
 }
 
-// RevokeResolvedSession checks that the row being revoked belongs to the
-// trusted current-session context before changing it.
-func (s SessionService) RevokeResolvedSession(ctx context.Context, current ResolvedSession) error {
-	if current.UserID == "" || current.SessionID == "" {
-		return ErrInvalidSession
+// RevokeResolvedSession checks ownership and reports whether this call
+// actually revoked the row, so completed logout is audited only once.
+func (s SessionService) RevokeResolvedSession(ctx context.Context, current ResolvedSession) (bool, error) {
+	if current.userID == "" || current.sessionID == "" {
+		return false, ErrInvalidSession
 	}
 	if s.repository == nil {
-		return ErrSessionUnavailable
+		return false, ErrSessionUnavailable
 	}
-	session, err := s.repository.GetSessionByID(ctx, current.SessionID)
+	session, err := s.repository.GetSessionByID(ctx, current.sessionID)
 	if errors.Is(err, ErrNotFound) {
-		return ErrInvalidSession
+		return false, ErrInvalidSession
 	}
 	if err != nil {
-		return ErrSessionUnavailable
+		return false, ErrSessionUnavailable
 	}
-	if session.ID != current.SessionID || session.UserID != current.UserID {
-		return ErrInvalidSession
+	if session.ID != current.sessionID || session.UserID != current.userID {
+		return false, ErrInvalidSession
 	}
-	return s.revokeSession(ctx, current.SessionID)
+	session, err = s.repository.RevokeSession(ctx, current.sessionID)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, ErrSessionUnavailable
+	}
+	if session.ID != current.sessionID || session.UserID != current.userID || session.RevokedAt == nil {
+		s.observe(ctx, SessionPersistenceCorrupt, current.userID, current.sessionID, 0)
+		return false, ErrCorruptSession
+	}
+	s.observe(ctx, SessionRevoked, current.userID, current.sessionID, 1)
+	return true, nil
 }
 
 func (s SessionService) revokeSession(ctx context.Context, sessionID SessionID) error {

@@ -22,6 +22,10 @@ type AdministratorBootstrapOptions struct {
 }
 
 func BootstrapAdministrator(ctx context.Context, pool *pgxpool.Pool, email string, password []byte, options AdministratorBootstrapOptions) (identity.User, error) {
+	defer clear(password)
+	if pool == nil {
+		return identity.User{}, ErrAdministratorBootstrapUnavailable
+	}
 	operationID := options.OperationID
 	if operationID == "" {
 		generated, err := uuid.NewRandom()

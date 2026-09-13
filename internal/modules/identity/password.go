@@ -16,6 +16,13 @@ import (
 const (
 	MinimumPasswordLength = 12
 	MaximumPasswordBytes  = 1024
+	// These verification ceilings are deliberately close to the interactive
+	// defaults (64 MiB, three passes, one lane). A corrupt stored PHC string
+	// must not be able to demand excessive Argon2 work from a login attempt.
+	maximumArgon2MemoryKiB   = 128 * 1024
+	maximumArgon2Iterations  = 4
+	maximumArgon2Parallelism = 4
+	maximumEncodedHashBytes  = 512
 )
 
 var ErrInvalidPassword = errors.New("password must be at least 12 characters and no more than 1024 bytes")
@@ -100,13 +107,16 @@ func (h Argon2idHasher) VerifyPassword(encoded PasswordHash, plaintext []byte) (
 }
 
 func validateArgon2idParameters(parameters Argon2idParameters) error {
-	if parameters.MemoryKiB < 8 || parameters.MemoryKiB > 512*1024 || parameters.Iterations == 0 || parameters.Iterations > 10 || parameters.Parallelism == 0 || parameters.Parallelism > 16 || parameters.MemoryKiB < 8*uint32(parameters.Parallelism) || parameters.SaltLength < 16 || parameters.SaltLength > 64 || parameters.KeyLength < 16 || parameters.KeyLength > 64 {
+	if parameters.MemoryKiB < 8 || parameters.MemoryKiB > maximumArgon2MemoryKiB || parameters.Iterations == 0 || parameters.Iterations > maximumArgon2Iterations || parameters.Parallelism == 0 || parameters.Parallelism > maximumArgon2Parallelism || parameters.MemoryKiB < 8*uint32(parameters.Parallelism) || parameters.SaltLength < 16 || parameters.SaltLength > 64 || parameters.KeyLength < 16 || parameters.KeyLength > 64 {
 		return ErrMalformedPasswordHash
 	}
 	return nil
 }
 
 func parseArgon2idHash(encoded string) (Argon2idParameters, []byte, []byte, error) {
+	if len(encoded) > maximumEncodedHashBytes {
+		return Argon2idParameters{}, nil, nil, ErrMalformedPasswordHash
+	}
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" || parts[2] != "v=19" {
 		return Argon2idParameters{}, nil, nil, ErrMalformedPasswordHash

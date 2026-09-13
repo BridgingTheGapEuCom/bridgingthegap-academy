@@ -32,7 +32,7 @@ func testCompletedLoginLogout(t *testing.T, ctx context.Context, pool *pgxpool.P
 		t.Fatalf("bootstrapped account did not complete login: %v", err)
 	}
 	current, err := sessions.ResolveSession(ctx, login.Token.Value())
-	if err != nil || current.SessionID != login.SessionID {
+	if err != nil || current.SessionID() != login.SessionID {
 		t.Fatalf("completed-login bearer token did not resolve: %v", err)
 	}
 	events, err := auditpostgres.New(pool).ListForResource(ctx, "IDENTITY_SESSION", string(login.SessionID))
@@ -98,18 +98,6 @@ func testCompletedLoginLogout(t *testing.T, ctx context.Context, pool *pgxpool.P
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherUser, err := repository.CreateUser(ctx, identity.UserActive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wrongOwner := current
-	wrongOwner.UserID = otherUser.ID
-	if err := service.Logout(ctx, wrongOwner, "00000000-0000-0000-0000-000000000105"); err != identity.ErrInvalidSession {
-		t.Fatalf("mismatched session owner was accepted: %v", err)
-	}
-	if _, err := sessions.ResolveSession(ctx, login.Token.Value()); err != nil {
-		t.Fatalf("owner mismatch revoked session despite rollback: %v", err)
-	}
 	if err := service.Logout(ctx, current, operationID); err != ErrLogoutUnavailable {
 		t.Fatalf("late logout audit failure was not operational: %v", err)
 	}
@@ -132,7 +120,7 @@ func testCompletedLoginLogout(t *testing.T, ctx context.Context, pool *pgxpool.P
 		t.Fatalf("same-operation retry failed: %v", err)
 	}
 	events, err = auditpostgres.New(pool).ListForResource(ctx, "IDENTITY_SESSION", string(login.SessionID))
-	if err != nil || len(events) != 3 || events[0].Action != audit.SessionLogoutCompleted || events[1].Action != audit.SessionLogoutCompleted || events[2].Action != audit.LocalPasswordLoginCompleted {
+	if err != nil || len(events) != 2 || events[0].Action != audit.SessionLogoutCompleted || events[1].Action != audit.LocalPasswordLoginCompleted {
 		t.Fatalf("logout audit facts missing: %+v err=%v", events, err)
 	}
 	for _, event := range events {
@@ -150,6 +138,28 @@ func testCompletedLoginLogout(t *testing.T, ctx context.Context, pool *pgxpool.P
 	}
 	if _, err := sessions.ResolveSession(ctx, concurrent.Token.Value()); err != nil {
 		t.Fatalf("other session stopped resolving after repeated logout: %v", err)
+	}
+	// Two completed-logout attempts may race on the same session row. PostgreSQL
+	// serializes the conditional UPDATE; only the winner records completion.
+	otherCurrent, err := sessions.ResolveSession(ctx, concurrent.Token.Value())
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcomes := make(chan error, 2)
+	for _, operation := range []string{"00000000-0000-0000-0000-000000000107", "00000000-0000-0000-0000-000000000108"} {
+		go func(id string) { outcomes <- service.Logout(ctx, otherCurrent, id) }(operation)
+	}
+	for range 2 {
+		if err := <-outcomes; err != nil {
+			t.Fatalf("concurrent logout failed: %v", err)
+		}
+	}
+	if _, err := sessions.ResolveSession(ctx, concurrent.Token.Value()); err != identity.ErrInvalidSession {
+		t.Fatalf("concurrently logged-out session still resolves: %v", err)
+	}
+	otherEvents, err := auditpostgres.New(pool).ListForResource(ctx, "IDENTITY_SESSION", string(concurrent.SessionID))
+	if err != nil || len(otherEvents) != 2 || otherEvents[0].Action != audit.SessionLogoutCompleted || otherEvents[1].Action != audit.LocalPasswordLoginCompleted {
+		t.Fatalf("concurrent logout did not record exactly one completion: %+v err=%v", otherEvents, err)
 	}
 	if err := service.Logout(ctx, identity.ResolvedSession{}, ""); !errors.Is(err, identity.ErrInvalidSession) {
 		t.Fatalf("empty trusted context accepted: %v", err)

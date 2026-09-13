@@ -61,7 +61,7 @@ func (t postgresCompletedSessionTransaction) CreateSession(ctx context.Context, 
 	return t.sessions.CreateSession(ctx, userID)
 }
 
-func (t postgresCompletedSessionTransaction) RevokeResolvedSession(ctx context.Context, current identity.ResolvedSession) error {
+func (t postgresCompletedSessionTransaction) RevokeResolvedSession(ctx context.Context, current identity.ResolvedSession) (bool, error) {
 	return t.sessions.RevokeResolvedSession(ctx, current)
 }
 
