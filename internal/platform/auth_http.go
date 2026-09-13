@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"mime"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const sessionCookieName = "btg_session"
@@ -34,6 +37,10 @@ type authHTTP struct {
 	sessions     sessionResolver
 	csrf         sessionCSRF
 	origins      originPolicy
+	loginSources *loginSourceLimiter
+	loginWork    *loginWorkGuard
+	loginMetrics *prometheus.CounterVec
+	loginRejects *prometheus.CounterVec
 	cookieSecure bool
 	now          func() time.Time
 }
@@ -206,17 +213,53 @@ func (h *authHTTP) handleLogin(w http.ResponseWriter, r *http.Request) {
 	password := []byte(input.Password)
 	input.Password = ""
 	defer clear(password)
+	if h.loginSources == nil || h.loginWork == nil {
+		h.recordLoginOutcome("unavailable")
+		problem(w, r, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	allowed, retryAfter := h.loginSources.Allow(r.RemoteAddr)
+	if !allowed {
+		if retryAfter > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retryAfter.Seconds()))))
+		}
+		h.recordLoginRejection("source_rate")
+		problem(w, r, http.StatusTooManyRequests, "Too many requests")
+		return
+	}
+	if !h.loginWork.TryAcquire() {
+		h.recordLoginRejection("work_saturated")
+		problem(w, r, http.StatusTooManyRequests, "Too many requests")
+		return
+	}
+	defer h.loginWork.Release()
 	result, err := h.login.LoginWithPassword(r.Context(), input.Email, password, operationID)
 	if errors.Is(err, identity.ErrInvalidCredentials) {
+		h.recordLoginOutcome("invalid_credentials")
 		problem(w, r, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 	if err != nil || result.UserID == "" || result.Token.Value() == "" || result.CSRFToken.Value() == "" || !result.ExpiresAt.After(h.now()) {
+		h.recordLoginOutcome("unavailable")
 		problem(w, r, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	h.recordLoginOutcome("success")
 	setSessionCookie(w, result.Token.Value(), result.ExpiresAt, h.cookieSecure, h.now())
 	writeJSON(w, http.StatusOK, authenticatedSessionResponse{Authenticated: true, UserID: result.UserID, ExpiresAt: result.ExpiresAt, CSRFToken: result.CSRFToken.Value()})
+}
+
+func (h *authHTTP) recordLoginOutcome(outcome string) {
+	if h.loginMetrics != nil {
+		h.loginMetrics.WithLabelValues(outcome).Inc()
+	}
+}
+
+func (h *authHTTP) recordLoginRejection(reason string) {
+	h.recordLoginOutcome("rate_limited")
+	if h.loginRejects != nil {
+		h.loginRejects.WithLabelValues(reason).Inc()
+	}
 }
 
 func (h *authHTTP) handleSession(w http.ResponseWriter, r *http.Request) {

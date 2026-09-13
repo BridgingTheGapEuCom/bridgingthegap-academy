@@ -13,7 +13,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Authenticate a local password and set the opaque HttpOnly session cookie. A trusted same-origin Origin header is required; the response includes a separate session-bound CSRF token. The response is not cacheable. */
+        /** @description Authenticate a local password and set the opaque HttpOnly session cookie. A trusted same-origin Origin header is required; the response includes a separate session-bound CSRF token. Source rate limiting and bounded concurrent authentication work may reject requests before password verification. The response is not cacheable. */
         post: operations["loginWithPassword"];
         delete?: never;
         options?: never;
@@ -162,6 +162,17 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            /** @description Source login rate exceeded or authentication work saturated. Retry-After is provided when source refill time is known. */
+            429: {
+                headers: {
+                    /** @description Whole seconds until the source bucket can admit another attempt; absent for other admission failures. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             500: components["responses"]["Problem"];
         };
     };

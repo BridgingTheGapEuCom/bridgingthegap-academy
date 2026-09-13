@@ -77,6 +77,12 @@ func authTestRouter(auth *authHTTP) http.Handler {
 	if auth.csrf == nil {
 		auth.csrf = authCSRFFake{token: authTestCSRFToken()}
 	}
+	if auth.loginSources == nil {
+		auth.loginSources = newLoginSourceLimiter(defaultLoginRatePolicy, nil)
+	}
+	if auth.loginWork == nil {
+		auth.loginWork = newLoginWorkGuard(maxConcurrentLogins)
+	}
 	return newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewCounterVec(prometheus.CounterOpts{Name: "auth_test_requests_total"}, []string{"route", "method", "status_class"}), prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "auth_test_duration_seconds"}, []string{"route", "method"}), auth)
 }
 

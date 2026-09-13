@@ -40,7 +40,9 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	registry := prometheus.NewRegistry()
 	requests := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "btg_http_requests_total", Help: "HTTP requests by route, method, and status class."}, []string{"route", "method", "status_class"})
 	latency := prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "btg_http_request_duration_seconds", Help: "HTTP request duration by route and method.", Buckets: prometheus.DefBuckets}, []string{"route", "method"})
-	registry.MustRegister(requests, latency)
+	loginAttempts := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "btg_login_attempts_total", Help: "Validated login attempts by coarse outcome."}, []string{"outcome"})
+	loginRejections := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "btg_login_rejections_total", Help: "Login admission rejections by coarse reason."}, []string{"reason"})
+	registry.MustRegister(requests, latency, loginAttempts, loginRejections)
 	metricsListener, err := net.Listen("tcp", cfg.MetricsAddr)
 	if err != nil {
 		return err
@@ -54,6 +56,10 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		sessions:     identity.NewSessionService(identitypostgres.New(pool), nil, nil),
 		csrf:         identity.NewSessionCSRFService(identitypostgres.New(pool), nil),
 		origins:      origins,
+		loginSources: newLoginSourceLimiter(defaultLoginRatePolicy, nil),
+		loginWork:    newLoginWorkGuard(maxConcurrentLogins),
+		loginMetrics: loginAttempts,
+		loginRejects: loginRejections,
 		cookieSecure: !cfg.DevelopmentHTTP,
 		now:          time.Now,
 	}
