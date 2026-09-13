@@ -22,7 +22,7 @@ jobs:
       - run: pnpm api:types
       - run: git add -N frontend/src/api/generated.ts && git diff --exit-code -- frontend/src/api/generated.ts
       - run: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
-      - run: git add -N internal/modules/infrastructure/db/sqlc && git diff --exit-code -- internal/modules/infrastructure/db/sqlc
+      - run: git add -N internal/modules/infrastructure/db/sqlc internal/modules/identity/db/sqlc && git diff --exit-code -- internal/modules/infrastructure/db/sqlc internal/modules/identity/db/sqlc
       - run: pnpm build
       - run: git diff --exit-code -- internal/web/dist
       - run: go run ./tools/archcheck

@@ -39,7 +39,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer metricsListener.Close()
+	defer func() { _ = metricsListener.Close() }()
 	metricsServer := &http.Server{Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = metricsServer.Serve(metricsListener) }()
 

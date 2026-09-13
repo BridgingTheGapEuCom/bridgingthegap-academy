@@ -34,4 +34,5 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	if err := postgres.SchemaCheck(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("identity persistence", func(t *testing.T) { testIdentityPersistence(t, ctx, pool) })
 }

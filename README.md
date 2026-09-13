@@ -1,6 +1,6 @@
 # Bridging the Gap LMS
 
-An open-source, accessibility-first learning platform for structured, self-paced education. M0 is an application skeleton: it has no LMS business workflows or public `/api/v1` operations.
+An open-source, accessibility-first learning platform for structured, self-paced education. M1.1 adds Identity persistence only; there are no authentication flows, LMS business workflows, or public `/api/v1` operations.
 
 The architecture source of truth is [BTG_LMS_Architecture_Decision_Baseline_v5.docx](BTG_LMS_Architecture_Decision_Baseline_v5.docx), especially sections 32–33. [Module boundaries](docs/architecture-boundaries.md) documents the Go package owners and enforced dependency rules.
 
@@ -37,7 +37,7 @@ Open `http://localhost:5173` for the development frontend. Vite proxies `/health
 
 ## Build and generation
 
-`make build` runs the Vite build and then produces the single `./btg-lms` executable. Run `./btg-lms version`, `./btg-lms doctor`, or `./btg-lms serve` after exporting `.env` as above. To refresh sqlc Go code and OpenAPI TypeScript types, run `make generate`. The first sqlc query is the PostgreSQL connectivity check; domain tables and queries have not been added.
+`make build` runs the Vite build and then produces the single `./btg-lms` executable. Run `./btg-lms version`, `./btg-lms doctor`, or `./btg-lms serve` after exporting `.env` as above. To refresh sqlc Go code and OpenAPI TypeScript types, run `make generate`. Identity owns its SQL queries and generated persistence package; the PostgreSQL connectivity query remains in Infrastructure.
 
 `internal/web/dist` is committed because Go embeds it, including its hashed CSS and JavaScript assets. Run `pnpm build` after frontend changes; CI checks that generated assets and contract types match their sources.
 

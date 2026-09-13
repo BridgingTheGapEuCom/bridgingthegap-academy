@@ -12,4 +12,4 @@ Short package names map to the baseline's capability names: `learning` is Learni
 - Domain modules do not import Infrastructure adapters. Provider contracts will live with their consumers when their exact interfaces are designed.
 - SQL query files under an owner's `db/query` folder may write only tables assigned to it in `docs/table-owners.json`. Add each table to that manifest when its first migration lands.
 
-The checker is deliberately conservative about SQL writes and rejects writes to unregistered tables. New shared tables, ownership transfers, and cross-module transaction contracts require an explicit architecture decision before adjusting its rule. The initial schema contains no domain tables yet.
+The checker is deliberately conservative about SQL writes and rejects writes to unregistered tables. New shared tables, ownership transfers, and cross-module transaction contracts require an explicit architecture decision before adjusting its rule. Identity owns the tables in the `identity` PostgreSQL schema; Goose applies its migration through the existing ordered migration directory.

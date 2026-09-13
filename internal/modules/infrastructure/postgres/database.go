@@ -13,7 +13,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-const schemaVersion int64 = 1
+const schemaVersion int64 = 2
 
 func OpenPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -48,7 +48,7 @@ func Migrate(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return fmt.Errorf("open PostgreSQL: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := goose.SetDialect("postgres"); err != nil {
 		return err
 	}

@@ -1,1 +1,7 @@
-{}
+{
+  "identity.users": "identity",
+  "identity.user_emails": "identity",
+  "identity.local_password_credentials": "identity",
+  "identity.global_role_assignments": "identity",
+  "identity.sessions": "identity"
+}
