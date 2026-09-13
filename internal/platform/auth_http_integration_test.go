@@ -109,11 +109,16 @@ func testHTTPAuthTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	if got := authRequest(router, http.MethodGet, "/api/auth/session", "", unknown); got.Code != http.StatusUnauthorized {
 		t.Fatal("unknown cookie was accepted")
 	}
-	second := authRequest(router, http.MethodPost, "/api/auth/login", loginBody, nil)
+	// A browser that already has an authenticated cookie gets a fresh session
+	// and synchronizer token; the supplied cookie cannot fix the new identity.
+	second := authRequest(router, http.MethodPost, "/api/auth/login", loginBody, cookie)
 	if second.Code != http.StatusOK {
 		t.Fatal("second concurrent session could not be created")
 	}
 	otherCookie := second.Result().Cookies()[0]
+	if otherCookie.Value == cookie.Value {
+		t.Fatal("login reused the pre-existing browser session token")
+	}
 	var secondBody authenticatedSessionResponse
 	if err := json.Unmarshal(second.Body.Bytes(), &secondBody); err != nil || secondBody.CSRFToken == body.CSRFToken {
 		t.Fatal(err)
@@ -203,6 +208,59 @@ func testHTTPAuthTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	var persistedLegacy string
 	if err := pool.QueryRow(ctx, "SELECT csrf_token FROM identity.sessions WHERE id = $1", legacySessionID).Scan(&persistedLegacy); err != nil || persistedLegacy != legacyToken {
 		t.Fatal("legacy session CSRF token was not persisted")
+	}
+	// A context resolved before a status/expiry change must not be able to
+	// provision or read CSRF state after that change.
+	staleRaw := mustRawToken().Value()
+	var staleID string
+	if err := pool.QueryRow(ctx, "INSERT INTO identity.sessions (user_id, token_digest, expires_at) VALUES ($1, $2, $3) RETURNING id", body.UserID, sha256Digest(staleRaw), time.Now().Add(time.Hour)).Scan(&staleID); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := auth.sessions.ResolveSession(ctx, staleRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.UpdateUserStatus(ctx, body.UserID, identity.UserSuspended); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := auth.csrf.TokenForSession(ctx, stale); err != identity.ErrInvalidSession {
+		t.Fatal("suspended user's stale context provisioned CSRF state")
+	}
+	var unprovisioned *string
+	if err := pool.QueryRow(ctx, "SELECT csrf_token FROM identity.sessions WHERE id = $1", staleID).Scan(&unprovisioned); err != nil || unprovisioned != nil {
+		t.Fatal("suspended session received a CSRF token")
+	}
+	if _, err := repository.UpdateUserStatus(ctx, body.UserID, identity.UserActive); err != nil {
+		t.Fatal(err)
+	}
+	startProvision := make(chan struct{})
+	provisioned := make(chan identity.CSRFToken, 4)
+	provisionErrors := make(chan error, 4)
+	for range 4 {
+		go func() {
+			<-startProvision
+			token, err := auth.csrf.TokenForSession(ctx, stale)
+			provisioned <- token
+			provisionErrors <- err
+		}()
+	}
+	close(startProvision)
+	var oneToken string
+	for range 4 {
+		token, err := <-provisioned, <-provisionErrors
+		if err != nil || token.Value() == "" || oneToken != "" && token.Value() != oneToken {
+			t.Fatal("concurrent legacy CSRF provisioning returned inconsistent tokens")
+		}
+		oneToken = token.Value()
+	}
+	if _, err := pool.Exec(ctx, "UPDATE identity.sessions SET created_at = now() - interval '2 seconds', expires_at = now() - interval '1 second' WHERE id = $1", staleID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := auth.csrf.TokenForSession(ctx, stale); err != identity.ErrInvalidSession {
+		t.Fatal("expired session's stale context provisioned CSRF state")
+	}
+	if err := auth.csrf.Validate(ctx, stale, oneToken); err != identity.ErrInvalidSession {
+		t.Fatal("expired session's stale context validated its old CSRF token")
 	}
 	now = secondBody.ExpiresAt
 	if got := authRequest(router, http.MethodGet, "/api/auth/session", "", otherCookie); got.Code != http.StatusUnauthorized {

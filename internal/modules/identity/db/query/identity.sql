@@ -50,12 +50,16 @@ INSERT INTO identity.sessions (user_id, token_digest, expires_at, csrf_token)
 VALUES ($1, $2, $3, $4) RETURNING *;
 
 -- name: GetSessionCSRFToken :one
-SELECT csrf_token FROM identity.sessions WHERE id = $1 AND revoked_at IS NULL;
+SELECT s.csrf_token FROM identity.sessions s
+JOIN identity.users u ON u.id = s.user_id
+WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'ACTIVE';
 
 -- name: InitializeSessionCSRFToken :one
-UPDATE identity.sessions SET csrf_token = $2
-WHERE id = $1 AND csrf_token IS NULL AND revoked_at IS NULL
-RETURNING csrf_token;
+UPDATE identity.sessions s SET csrf_token = $2
+FROM identity.users u
+WHERE s.id = $1 AND s.user_id = u.id AND s.csrf_token IS NULL
+  AND s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'ACTIVE'
+RETURNING s.csrf_token;
 
 -- name: GetSessionByDigest :one
 SELECT * FROM identity.sessions WHERE token_digest = $1;

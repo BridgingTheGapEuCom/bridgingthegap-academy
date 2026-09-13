@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -41,5 +42,30 @@ func TestUnimplementedAPIUsesProblemDetails(t *testing.T) {
 	}
 	if body.RequestID == "" || body.RequestID != w.Header().Get("X-Request-ID") {
 		t.Fatal("problem correlation ID does not match response header")
+	}
+}
+
+func TestHTTPMetricsBoundClientSuppliedMethodLabels(t *testing.T) {
+	requests := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_bounded_requests_total"}, []string{"route", "method", "status_class"})
+	latency := prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "test_bounded_duration_seconds"}, []string{"route", "method"})
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(requests, latency)
+	router := newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), requests, latency, nil)
+	for i := range 100 {
+		router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("ATTACK"+strconv.Itoa(i), "/health/live", nil))
+	}
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if len(family.GetMetric()) != 1 {
+			t.Fatal("client-supplied HTTP methods created unbounded metric series")
+		}
+		for _, label := range family.GetMetric()[0].GetLabel() {
+			if label.GetName() == "method" && label.GetValue() != "OTHER" {
+				t.Fatal("unrecognized HTTP method was used as a metric label")
+			}
+		}
 	}
 }

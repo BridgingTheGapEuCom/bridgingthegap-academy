@@ -17,6 +17,8 @@ import (
 
 const sessionCookieName = "btg_session"
 const maxLoginBodyBytes = 8 * 1024
+const maxCookieHeaderBytes = 8 * 1024
+const maxSessionCookieValueBytes = 128
 
 type loginLogoutService interface {
 	LoginWithPassword(context.Context, string, []byte, string) (LoginResult, error)
@@ -115,6 +117,13 @@ func (h *authHTTP) resolveSession(required bool) func(http.Handler) http.Handler
 // Duplicate names are treated as invalid rather than selecting an arbitrary
 // cookie when a browser sends cookies with different Domain/Path scopes.
 func uniqueSessionCookie(r *http.Request) (string, bool) {
+	cookieBytes := 0
+	for _, header := range r.Header.Values("Cookie") {
+		if len(header) > maxCookieHeaderBytes-cookieBytes {
+			return "", false
+		}
+		cookieBytes += len(header)
+	}
 	var value string
 	found := false
 	for _, cookie := range r.Cookies() {
@@ -122,6 +131,9 @@ func uniqueSessionCookie(r *http.Request) (string, bool) {
 			continue
 		}
 		if found {
+			return "", false
+		}
+		if len(cookie.Value) > maxSessionCookieValueBytes {
 			return "", false
 		}
 		value, found = cookie.Value, true
@@ -144,6 +156,8 @@ type authenticatedSessionResponse struct {
 func (h *authHTTP) noStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
 }

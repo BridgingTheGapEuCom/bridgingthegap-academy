@@ -8,7 +8,7 @@ COPY api ./api
 COPY tsconfig.json vite.config.ts ./
 RUN pnpm build
 
-FROM golang:1.25-alpine AS backend
+FROM golang:1.25.14-alpine AS backend
 WORKDIR /src
 ARG VERSION=dev
 COPY go.mod go.sum ./

@@ -24,6 +24,14 @@ import (
 
 type requestIDKey struct{}
 
+// Bound cookies and other request headers before net/http allocates the
+// default 1 MiB header budget for each connection.
+const maxRequestHeaderBytes = 16 * 1024
+
+// Login parses a bounded body before source-rate admission. A total read
+// deadline prevents clients from holding those pre-admission reads forever.
+const maxRequestReadDuration = 10 * time.Second
+
 func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	origins, err := newOriginPolicy(cfg)
 	if err != nil {
@@ -49,7 +57,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		return err
 	}
 	defer func() { _ = metricsListener.Close() }()
-	metricsServer := &http.Server{Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), ReadHeaderTimeout: 5 * time.Second}
+	metricsServer := &http.Server{Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: maxRequestHeaderBytes}
 	go func() { _ = metricsServer.Serve(metricsListener) }()
 
 	auth := &authHTTP{
@@ -67,7 +75,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		now:          time.Now,
 	}
 	router := newRouter(pool, log, requests, latency, auth)
-	server := &http.Server{Addr: cfg.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Addr: cfg.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: maxRequestReadDuration, MaxHeaderBytes: maxRequestHeaderBytes}
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.ListenAndServe() }()
 	log.Info("server listening", "address", cfg.HTTPAddr, "metrics_address", cfg.MetricsAddr)
@@ -155,6 +163,15 @@ func (w *statusWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+func observedMethod(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return method
+	default:
+		return "OTHER"
+	}
+}
+
 func observe(log *slog.Logger, requests *prometheus.CounterVec, latency *prometheus.HistogramVec) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -165,10 +182,11 @@ func observe(log *slog.Logger, requests *prometheus.CounterVec, latency *prometh
 			if route == "" {
 				route = "unmatched"
 			}
+			method := observedMethod(r.Method)
 			statusClass := string(rune('0'+wrapped.status/100)) + "xx"
-			requests.WithLabelValues(route, r.Method, statusClass).Inc()
-			latency.WithLabelValues(route, r.Method).Observe(time.Since(start).Seconds())
-			log.Info("http request", "request_id", r.Context().Value(requestIDKey{}), "method", r.Method, "route", route, "status", wrapped.status, "duration_ms", time.Since(start).Milliseconds())
+			requests.WithLabelValues(route, method, statusClass).Inc()
+			latency.WithLabelValues(route, method).Observe(time.Since(start).Seconds())
+			log.Info("http request", "request_id", r.Context().Value(requestIDKey{}), "method", method, "route", route, "status", wrapped.status, "duration_ms", time.Since(start).Milliseconds())
 		})
 	}
 }
