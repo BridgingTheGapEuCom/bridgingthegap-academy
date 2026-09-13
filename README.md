@@ -1,6 +1,6 @@
 # Bridging the Gap LMS
 
-An open-source, accessibility-first learning platform for structured, self-paced education. M1.1 adds Identity persistence only; there are no authentication flows, LMS business workflows, or public `/api/v1` operations.
+An open-source, accessibility-first learning platform for structured, self-paced education. M1.2 adds local administrator bootstrap only; there are no authentication flows, LMS business workflows, or public `/api/v1` operations.
 
 The architecture source of truth is [BTG_LMS_Architecture_Decision_Baseline_v5.docx](BTG_LMS_Architecture_Decision_Baseline_v5.docx), especially sections 32–33. [Module boundaries](docs/architecture-boundaries.md) documents the Go package owners and enforced dependency rules.
 
@@ -34,6 +34,16 @@ pnpm dev
 ```
 
 Open `http://localhost:5173` for the development frontend. Vite proxies `/health` to the Go server at `http://localhost:8080`. The Go server also serves the embedded production frontend at `http://localhost:8080`. `/health/live` checks the process; `/health/ready` checks PostgreSQL and schema compatibility. Prometheus metrics bind to `127.0.0.1:9090` by default. Server startup checks the schema but never applies migrations automatically.
+
+## Initial administrator
+
+After applying migrations, create an administrator from an interactive terminal:
+
+```sh
+go run ./cmd/btg-lms admin create --email admin@example.com
+```
+
+The command prompts twice for a non-echoed password. It rejects non-interactive standard input and does not accept a password argument, so passwords do not enter shell history or process listings. Passwords must be at least 12 characters and at most 1024 bytes. Credentials use Argon2id with 64 MiB memory, three iterations, one lane, a random 16-byte salt, and a 32-byte derived key; each encoded hash stores its own parameters for future upgrades.
 
 ## Build and generation
 

@@ -1,4 +1,5 @@
 {
+  "audit.events": "audit",
   "identity.users": "identity",
   "identity.user_emails": "identity",
   "identity.local_password_credentials": "identity",

@@ -35,4 +35,5 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Run("identity persistence", func(t *testing.T) { testIdentityPersistence(t, ctx, pool) })
+	t.Run("administrator bootstrap", func(t *testing.T) { testAdministratorBootstrap(t, ctx, pool) })
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository implements Identity-owned contracts using only Identity tables.
@@ -24,7 +23,7 @@ var _ identity.PasswordCredentialRepository = (*Repository)(nil)
 var _ identity.GlobalRoleRepository = (*Repository)(nil)
 var _ identity.SessionRepository = (*Repository)(nil)
 
-func New(pool *pgxpool.Pool) *Repository { return &Repository{q: sqlc.New(pool)} }
+func New(db sqlc.DBTX) *Repository { return &Repository{q: sqlc.New(db)} }
 
 func uuid(value string) (pgtype.UUID, error) {
 	var id pgtype.UUID

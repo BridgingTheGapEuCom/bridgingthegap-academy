@@ -4,4 +4,6 @@ test-results/
 .env
 .env.*.local
 btg-lms
+!cmd/btg-lms/
+!cmd/btg-lms/*.go
 coverage/
