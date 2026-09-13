@@ -37,4 +37,5 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("identity persistence", func(t *testing.T) { testIdentityPersistence(t, ctx, pool) })
 	t.Run("administrator bootstrap", func(t *testing.T) { testAdministratorBootstrap(t, ctx, pool) })
 	t.Run("password authentication", func(t *testing.T) { testPasswordAuthentication(t, ctx, pool) })
+	t.Run("session lifecycle", func(t *testing.T) { testSessionLifecycle(t, ctx, pool) })
 }

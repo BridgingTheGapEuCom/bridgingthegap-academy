@@ -22,6 +22,7 @@ var _ identity.EmailRepository = (*Repository)(nil)
 var _ identity.PasswordCredentialRepository = (*Repository)(nil)
 var _ identity.GlobalRoleRepository = (*Repository)(nil)
 var _ identity.SessionRepository = (*Repository)(nil)
+var _ identity.SessionLifecycleRepository = (*Repository)(nil)
 
 func New(db sqlc.DBTX) *Repository { return &Repository{q: sqlc.New(db)} }
 

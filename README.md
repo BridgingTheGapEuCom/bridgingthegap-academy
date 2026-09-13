@@ -1,6 +1,6 @@
 # Bridging the Gap LMS
 
-An open-source, accessibility-first learning platform for structured, self-paced education. M1.3a adds an internal local-password authentication service; there are no login endpoints, sessions created by authentication, LMS business workflows, or public `/api/v1` operations.
+An open-source, accessibility-first learning platform for structured, self-paced education. M1.3b adds an internal session lifecycle service; there are no login endpoints, cookies, LMS business workflows, or public `/api/v1` operations.
 
 The architecture source of truth is [BTG_LMS_Architecture_Decision_Baseline_v5.docx](BTG_LMS_Architecture_Decision_Baseline_v5.docx), especially sections 32–33. [Module boundaries](docs/architecture-boundaries.md) documents the Go package owners and enforced dependency rules.
 
@@ -44,6 +44,10 @@ go run ./cmd/btg-lms admin create --email admin@example.com
 ```
 
 The command prompts twice for a non-echoed password. It rejects non-interactive standard input and does not accept a password argument, so passwords do not enter shell history or process listings. Passwords must be at least 12 characters and at most 1024 bytes. Credentials use Argon2id with 64 MiB memory, three iterations, one lane, a random 16-byte salt, and a 32-byte derived key; each encoded hash stores its own parameters for future upgrades.
+
+## Internal session lifecycle
+
+Identity can create and resolve server-side sessions without an HTTP transport. Each new session uses a fresh 32-byte random bearer token encoded as URL-safe base64; PostgreSQL stores only its SHA-256 digest. Sessions expire seven days after creation. Resolution checks expiry, revocation, and current user status, so suspending a user invalidates existing sessions. There is no idle timeout or automatic `last_seen_at` refresh yet. The Identity security observer signals explicit revocation and corrupt state; completed-login audit belongs to a later login orchestration milestone. Authentication method and authorization roles are not stored in sessions at this stage.
 
 ## Build and generation
 
