@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	HTTPAddr    string
-	MetricsAddr string
+	DatabaseURL     string
+	HTTPAddr        string
+	MetricsAddr     string
+	DevelopmentHTTP bool
 }
 
 func LoadConfig() (Config, error) {
@@ -18,6 +19,17 @@ func LoadConfig() (Config, error) {
 		DatabaseURL: os.Getenv("BTG_LMS_DATABASE_URL"),
 		HTTPAddr:    envOr("BTG_LMS_HTTP_ADDR", ":8080"),
 		MetricsAddr: envOr("BTG_LMS_METRICS_ADDR", "127.0.0.1:9090"),
+	}
+	switch envOr("BTG_LMS_MODE", "production") {
+	case "production":
+	case "development":
+		host, _, err := net.SplitHostPort(cfg.HTTPAddr)
+		if err != nil || host != "localhost" && (net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback()) {
+			return Config{}, errors.New("development HTTP must bind to a loopback address")
+		}
+		cfg.DevelopmentHTTP = true
+	default:
+		return Config{}, errors.New("BTG_LMS_MODE must be production or development")
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("BTG_LMS_DATABASE_URL is required")

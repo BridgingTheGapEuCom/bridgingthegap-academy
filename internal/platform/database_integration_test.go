@@ -39,4 +39,5 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("password authentication", func(t *testing.T) { testPasswordAuthentication(t, ctx, pool) })
 	t.Run("session lifecycle", func(t *testing.T) { testSessionLifecycle(t, ctx, pool) })
 	t.Run("completed login and logout", func(t *testing.T) { testCompletedLoginLogout(t, ctx, pool) })
+	t.Run("HTTP session transport", func(t *testing.T) { testHTTPAuthTransport(t, ctx, pool) })
 }

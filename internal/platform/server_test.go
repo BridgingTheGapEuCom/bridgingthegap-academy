@@ -12,7 +12,7 @@ import (
 )
 
 func TestLivenessAndCorrelationID(t *testing.T) {
-	r := newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_requests_total"}, []string{"route", "method", "status_class"}), prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "test_duration_seconds"}, []string{"route", "method"}))
+	r := newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_requests_total"}, []string{"route", "method", "status_class"}), prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "test_duration_seconds"}, []string{"route", "method"}), nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health/live", nil))
 	if w.Code != http.StatusOK {
@@ -27,7 +27,7 @@ func TestLivenessAndCorrelationID(t *testing.T) {
 }
 
 func TestUnimplementedAPIUsesProblemDetails(t *testing.T) {
-	r := newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_requests_total"}, []string{"route", "method", "status_class"}), prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "test_duration_seconds"}, []string{"route", "method"}))
+	r := newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_requests_total"}, []string{"route", "method", "status_class"}), prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "test_duration_seconds"}, []string{"route", "method"}), nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/courses", nil))
 	if w.Code != http.StatusNotFound || w.Header().Get("Content-Type") != "application/problem+json" {

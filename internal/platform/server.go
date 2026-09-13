@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
+	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/web"
 	"github.com/go-chi/chi/v5"
@@ -43,7 +45,13 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	metricsServer := &http.Server{Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = metricsServer.Serve(metricsListener) }()
 
-	router := newRouter(pool, log, requests, latency)
+	auth := &authHTTP{
+		login:        NewPostgresLoginOrchestrator(pool, nil, nil),
+		sessions:     identity.NewSessionService(identitypostgres.New(pool), nil, nil),
+		cookieSecure: !cfg.DevelopmentHTTP,
+		now:          time.Now,
+	}
+	router := newRouter(pool, log, requests, latency, auth)
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second}
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.ListenAndServe() }()
@@ -62,7 +70,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	}
 }
 
-func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.CounterVec, latency *prometheus.HistogramVec) http.Handler {
+func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.CounterVec, latency *prometheus.HistogramVec, auth *authHTTP) http.Handler {
 	r := chi.NewRouter()
 	r.Use(correlationID)
 	r.Use(observe(log, requests, latency))
@@ -82,6 +90,11 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
+	if auth != nil {
+		r.Post("/api/auth/login", auth.handleLogin)
+		r.With(auth.resolveSession(false)).Post("/api/auth/logout", auth.handleLogout)
+		r.With(auth.resolveSession(true)).Get("/api/auth/session", auth.handleSession)
+	}
 	r.Handle("/api/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		problem(w, req, http.StatusNotFound, "Not found")
 	}))

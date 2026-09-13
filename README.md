@@ -1,6 +1,6 @@
 # Bridging the Gap LMS
 
-An open-source, accessibility-first learning platform for structured, self-paced education. M1.3c adds internal login/logout orchestration; there are no login endpoints, cookies, LMS business workflows, or public `/api/v1` operations.
+An open-source, accessibility-first learning platform for structured, self-paced education. M1.4a exposes HTTP login, logout, and current-session APIs. No LMS business workflows or frontend authentication UI exist yet.
 
 The architecture source of truth is [BTG_LMS_Architecture_Decision_Baseline_v5.docx](BTG_LMS_Architecture_Decision_Baseline_v5.docx), especially sections 32–33. [Module boundaries](docs/architecture-boundaries.md) documents the Go package owners and enforced dependency rules.
 
@@ -33,7 +33,7 @@ In a second terminal, start Vite:
 pnpm dev
 ```
 
-Open `http://localhost:5173` for the development frontend. Vite proxies `/health` to the Go server at `http://localhost:8080`. The Go server also serves the embedded production frontend at `http://localhost:8080`. `/health/live` checks the process; `/health/ready` checks PostgreSQL and schema compatibility. Prometheus metrics bind to `127.0.0.1:9090` by default. Server startup checks the schema but never applies migrations automatically.
+Open `http://localhost:5173` for the development frontend. Vite proxies `/health` and `/api` to the Go server at `http://localhost:8080`. The Go server also serves the embedded production frontend at `http://localhost:8080`. `/health/live` checks the process; `/health/ready` checks PostgreSQL and schema compatibility. Prometheus metrics bind to `127.0.0.1:9090` by default. Server startup checks the schema but never applies migrations automatically.
 
 ## Initial administrator
 
@@ -49,7 +49,13 @@ The command prompts twice for a non-echoed password. It rejects non-interactive 
 
 Identity can create and resolve server-side sessions without an HTTP transport. Each new session uses a fresh 32-byte random bearer token encoded as URL-safe base64; PostgreSQL stores only its SHA-256 digest. Sessions expire seven days after creation. Resolution checks expiry, revocation, and current user status, so suspending a user invalidates existing sessions. There is no idle timeout or automatic `last_seen_at` refresh yet. The Identity security observer signals explicit revocation and corrupt state. Authentication method and authorization roles are not stored in sessions at this stage.
 
-The internal login operation authenticates a local password, then creates the session and appends a completed-login Audit event in one PostgreSQL transaction. It returns the bearer token only after commit. Logout accepts a trusted resolved session and transactionally revokes that session with a completed-logout Audit event; another session for the same user remains active. A retry with the same operation UUID reuses the matching logout audit fact; an already-revoked session creates no second completed-logout fact. Audit records include the acting user, session ID, authentication method for local login, and an operation UUID, but no password, bearer token, or digest. Failed password attempts continue to use the Identity security observer. HTTP and cookie behavior are deferred.
+The internal login operation authenticates a local password, then creates the session and appends a completed-login Audit event in one PostgreSQL transaction. It returns the bearer token only after commit. Logout accepts a trusted resolved session and transactionally revokes that session with a completed-logout Audit event; another session for the same user remains active. A retry with the same operation UUID reuses the matching logout audit fact; an already-revoked session creates no second completed-logout fact. Audit records include the acting user, session ID, authentication method for local login, and an operation UUID, but no password, bearer token, or digest. Failed password attempts continue to use the Identity security observer.
+
+## HTTP session transport
+
+`POST /api/auth/login` accepts JSON `email` and `password`, sets an opaque `btg_session` cookie, and returns only `authenticated`, `user_id`, and `expires_at`. `GET /api/auth/session` resolves that cookie against current server-side state and returns the same minimal response or a Problem Details `401`. `POST /api/auth/logout` revokes the resolved current session and clears the cookie; an absent, expired, or revoked cookie is cleared with `204 No Content`. Operational failures return Problem Details `500` without clearing the cookie.
+
+The cookie is host-only, `HttpOnly`, `Path=/`, and `SameSite=Lax`, with expiry and Max-Age derived from the server-side session expiry. Production mode is the default and always sets `Secure`; serve it behind HTTPS. The `.env.example` explicitly selects `BTG_LMS_MODE=development` and binds HTTP to loopback, where the cookie may omit `Secure`. Client `X-Request-ID` headers are ignored: trusted middleware generates a fresh random request/operation ID. SameSite is not a complete CSRF defense. Login/logout browser transport is not security-complete until M1.4b adds CSRF protection; M1.4c adds login rate limiting.
 
 ## Build and generation
 

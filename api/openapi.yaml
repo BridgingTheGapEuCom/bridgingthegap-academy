@@ -1,9 +1,57 @@
 openapi: 3.1.0
 info:
-  title: BTG LMS application health API
+  title: BTG LMS application API
   version: 0.1.0
-  description: Initial operational contract. No LMS business API is defined yet.
+  description: Operational and same-origin session transport API. No LMS business API is defined yet.
 paths:
+  /api/auth/login:
+    post:
+      operationId: loginWithPassword
+      description: Authenticate a local password and set the opaque HttpOnly session cookie. CSRF protection follows in M1.4b.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated; opaque token is returned only in the Set-Cookie header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '500':
+          $ref: '#/components/responses/Problem'
+  /api/auth/logout:
+    post:
+      operationId: logoutCurrentSession
+      description: Revoke the resolved current session and clear the cookie. Absent or invalid cookies are cleared with the same successful response. CSRF protection follows in M1.4b.
+      responses:
+        '204':
+          description: Logged out; session cookie cleared
+        '500':
+          $ref: '#/components/responses/Problem'
+  /api/auth/session:
+    get:
+      operationId: getCurrentSession
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Current authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '500':
+          $ref: '#/components/responses/Problem'
   /health/live:
     get:
       operationId: getLiveness
@@ -31,7 +79,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: btg_session
+      description: Opaque server-side session token; HttpOnly, SameSite=Lax, Secure in production.
+  responses:
+    Problem:
+      description: RFC 9457 Problem Details with request correlation ID
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
   schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string, format: password, writeOnly: true }
+    AuthenticatedSession:
+      type: object
+      additionalProperties: false
+      required: [authenticated, user_id, expires_at]
+      properties:
+        authenticated: { type: boolean, const: true }
+        user_id: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time }
     Health:
       type: object
       required: [status]
