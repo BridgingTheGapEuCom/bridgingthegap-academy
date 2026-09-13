@@ -9,12 +9,14 @@ import (
 )
 
 type AuditEvent struct {
-	ID           pgtype.UUID
-	Action       string
-	ActorKind    string
-	ResourceType string
-	ResourceID   pgtype.UUID
-	Outcome      string
-	OperationID  pgtype.UUID
-	OccurredAt   pgtype.Timestamptz
+	ID                   pgtype.UUID
+	Action               string
+	ActorKind            string
+	ResourceType         string
+	ResourceID           pgtype.UUID
+	Outcome              string
+	OperationID          pgtype.UUID
+	OccurredAt           pgtype.Timestamptz
+	ActorUserID          pgtype.UUID
+	AuthenticationMethod pgtype.Text
 }

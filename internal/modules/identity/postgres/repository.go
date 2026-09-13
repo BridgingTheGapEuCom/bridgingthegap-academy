@@ -304,6 +304,17 @@ func (r *Repository) GetSessionByDigest(ctx context.Context, digest identity.Ses
 	}
 	return mapSession(row)
 }
+func (r *Repository) GetSessionByID(ctx context.Context, id identity.SessionID) (identity.Session, error) {
+	key, err := uuid(string(id))
+	if err != nil {
+		return identity.Session{}, err
+	}
+	row, err := r.q.GetSessionByID(ctx, key)
+	if err != nil {
+		return identity.Session{}, storageError(err)
+	}
+	return mapSession(row)
+}
 func (r *Repository) RevokeSession(ctx context.Context, id identity.SessionID) (identity.Session, error) {
 	key, err := uuid(string(id))
 	if err != nil {

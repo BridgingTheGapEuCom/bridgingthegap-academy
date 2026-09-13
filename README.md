@@ -1,6 +1,6 @@
 # Bridging the Gap LMS
 
-An open-source, accessibility-first learning platform for structured, self-paced education. M1.3b adds an internal session lifecycle service; there are no login endpoints, cookies, LMS business workflows, or public `/api/v1` operations.
+An open-source, accessibility-first learning platform for structured, self-paced education. M1.3c adds internal login/logout orchestration; there are no login endpoints, cookies, LMS business workflows, or public `/api/v1` operations.
 
 The architecture source of truth is [BTG_LMS_Architecture_Decision_Baseline_v5.docx](BTG_LMS_Architecture_Decision_Baseline_v5.docx), especially sections 32–33. [Module boundaries](docs/architecture-boundaries.md) documents the Go package owners and enforced dependency rules.
 
@@ -47,7 +47,9 @@ The command prompts twice for a non-echoed password. It rejects non-interactive 
 
 ## Internal session lifecycle
 
-Identity can create and resolve server-side sessions without an HTTP transport. Each new session uses a fresh 32-byte random bearer token encoded as URL-safe base64; PostgreSQL stores only its SHA-256 digest. Sessions expire seven days after creation. Resolution checks expiry, revocation, and current user status, so suspending a user invalidates existing sessions. There is no idle timeout or automatic `last_seen_at` refresh yet. The Identity security observer signals explicit revocation and corrupt state; completed-login audit belongs to a later login orchestration milestone. Authentication method and authorization roles are not stored in sessions at this stage.
+Identity can create and resolve server-side sessions without an HTTP transport. Each new session uses a fresh 32-byte random bearer token encoded as URL-safe base64; PostgreSQL stores only its SHA-256 digest. Sessions expire seven days after creation. Resolution checks expiry, revocation, and current user status, so suspending a user invalidates existing sessions. There is no idle timeout or automatic `last_seen_at` refresh yet. The Identity security observer signals explicit revocation and corrupt state. Authentication method and authorization roles are not stored in sessions at this stage.
+
+The internal login operation authenticates a local password, then creates the session and appends a completed-login Audit event in one PostgreSQL transaction. It returns the bearer token only after commit. Logout accepts a trusted resolved session and transactionally revokes that session with a completed-logout Audit event; another session for the same user remains active. A retry with the same operation UUID reuses the matching logout audit fact. Audit records include the acting user, session ID, authentication method for local login, and an operation UUID, but no password, bearer token, or digest. Failed password attempts continue to use the Identity security observer. HTTP and cookie behavior are deferred.
 
 ## Build and generation
 

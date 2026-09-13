@@ -12,25 +12,29 @@ import (
 )
 
 const appendEvent = `-- name: AppendEvent :one
-INSERT INTO audit.events (action, actor_kind, resource_type, resource_id, outcome, operation_id)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, action, actor_kind, resource_type, resource_id, outcome, operation_id, occurred_at
+INSERT INTO audit.events (action, actor_kind, actor_user_id, resource_type, resource_id, authentication_method, outcome, operation_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, action, actor_kind, resource_type, resource_id, outcome, operation_id, occurred_at, actor_user_id, authentication_method
 `
 
 type AppendEventParams struct {
-	Action       string
-	ActorKind    string
-	ResourceType string
-	ResourceID   pgtype.UUID
-	Outcome      string
-	OperationID  pgtype.UUID
+	Action               string
+	ActorKind            string
+	ActorUserID          pgtype.UUID
+	ResourceType         string
+	ResourceID           pgtype.UUID
+	AuthenticationMethod pgtype.Text
+	Outcome              string
+	OperationID          pgtype.UUID
 }
 
 func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (AuditEvent, error) {
 	row := q.db.QueryRow(ctx, appendEvent,
 		arg.Action,
 		arg.ActorKind,
+		arg.ActorUserID,
 		arg.ResourceType,
 		arg.ResourceID,
+		arg.AuthenticationMethod,
 		arg.Outcome,
 		arg.OperationID,
 	)
@@ -44,12 +48,36 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (Audit
 		&i.Outcome,
 		&i.OperationID,
 		&i.OccurredAt,
+		&i.ActorUserID,
+		&i.AuthenticationMethod,
+	)
+	return i, err
+}
+
+const getEventByOperationID = `-- name: GetEventByOperationID :one
+SELECT id, action, actor_kind, resource_type, resource_id, outcome, operation_id, occurred_at, actor_user_id, authentication_method FROM audit.events WHERE operation_id = $1
+`
+
+func (q *Queries) GetEventByOperationID(ctx context.Context, operationID pgtype.UUID) (AuditEvent, error) {
+	row := q.db.QueryRow(ctx, getEventByOperationID, operationID)
+	var i AuditEvent
+	err := row.Scan(
+		&i.ID,
+		&i.Action,
+		&i.ActorKind,
+		&i.ResourceType,
+		&i.ResourceID,
+		&i.Outcome,
+		&i.OperationID,
+		&i.OccurredAt,
+		&i.ActorUserID,
+		&i.AuthenticationMethod,
 	)
 	return i, err
 }
 
 const listEventsForResource = `-- name: ListEventsForResource :many
-SELECT id, action, actor_kind, resource_type, resource_id, outcome, operation_id, occurred_at FROM audit.events
+SELECT id, action, actor_kind, resource_type, resource_id, outcome, operation_id, occurred_at, actor_user_id, authentication_method FROM audit.events
 WHERE resource_type = $1 AND resource_id = $2
 ORDER BY occurred_at DESC
 `
@@ -77,6 +105,8 @@ func (q *Queries) ListEventsForResource(ctx context.Context, arg ListEventsForRe
 			&i.Outcome,
 			&i.OperationID,
 			&i.OccurredAt,
+			&i.ActorUserID,
+			&i.AuthenticationMethod,
 		); err != nil {
 			return nil, err
 		}

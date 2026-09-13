@@ -43,13 +43,22 @@ func (r *Repository) Append(ctx context.Context, event audit.Event) (audit.Event
 	if err != nil {
 		return audit.Event{}, errors.New("invalid audit operation identifier")
 	}
+	var actorUserID pgtype.UUID
+	if event.ActorUserID != "" {
+		actorUserID, err = uuid(event.ActorUserID)
+		if err != nil {
+			return audit.Event{}, errors.New("invalid audit actor identifier")
+		}
+	}
 	row, err := r.q.AppendEvent(ctx, sqlc.AppendEventParams{
-		Action:       string(event.Action),
-		ActorKind:    event.ActorKind,
-		ResourceType: event.ResourceType,
-		ResourceID:   resourceID,
-		Outcome:      event.Outcome,
-		OperationID:  operationID,
+		Action:               string(event.Action),
+		ActorKind:            event.ActorKind,
+		ActorUserID:          actorUserID,
+		ResourceType:         event.ResourceType,
+		ResourceID:           resourceID,
+		AuthenticationMethod: pgtype.Text{String: event.AuthenticationMethod, Valid: event.AuthenticationMethod != ""},
+		Outcome:              event.Outcome,
+		OperationID:          operationID,
 	})
 	if err != nil {
 		return audit.Event{}, storageError(err)
@@ -73,6 +82,18 @@ func (r *Repository) ListForResource(ctx context.Context, resourceType, resource
 	return events, nil
 }
 
+func (r *Repository) GetByOperationID(ctx context.Context, operationID string) (audit.Event, error) {
+	id, err := uuid(operationID)
+	if err != nil {
+		return audit.Event{}, errors.New("invalid audit operation identifier")
+	}
+	row, err := r.q.GetEventByOperationID(ctx, id)
+	if err != nil {
+		return audit.Event{}, storageError(err)
+	}
+	return mapEvent(row), nil
+}
+
 func uuid(value string) (pgtype.UUID, error) {
 	var id pgtype.UUID
 	if err := id.Scan(value); err != nil || !id.Valid {
@@ -82,7 +103,11 @@ func uuid(value string) (pgtype.UUID, error) {
 }
 
 func mapEvent(row sqlc.AuditEvent) audit.Event {
-	return audit.Event{ID: row.ID.String(), Action: audit.Action(row.Action), ActorKind: row.ActorKind, ResourceType: row.ResourceType, ResourceID: row.ResourceID.String(), Outcome: row.Outcome, OperationID: row.OperationID.String(), OccurredAt: row.OccurredAt.Time}
+	var actorUserID string
+	if row.ActorUserID.Valid {
+		actorUserID = row.ActorUserID.String()
+	}
+	return audit.Event{ID: row.ID.String(), Action: audit.Action(row.Action), ActorKind: row.ActorKind, ActorUserID: actorUserID, ResourceType: row.ResourceType, ResourceID: row.ResourceID.String(), AuthenticationMethod: row.AuthenticationMethod.String, Outcome: row.Outcome, OperationID: row.OperationID.String(), OccurredAt: row.OccurredAt.Time}
 }
 
 func storageError(err error) error {

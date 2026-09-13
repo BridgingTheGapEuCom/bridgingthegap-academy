@@ -38,6 +38,7 @@ type GlobalRoleRepository interface {
 type SessionRepository interface {
 	CreateSession(context.Context, UserID, SessionTokenDigest, time.Time) (Session, error)
 	GetSessionByDigest(context.Context, SessionTokenDigest) (Session, error)
+	GetSessionByID(context.Context, SessionID) (Session, error)
 	RevokeSession(context.Context, SessionID) (Session, error)
 	RevokeUserSessions(context.Context, UserID) (int64, error)
 	UpdateSessionLastSeen(context.Context, SessionID) (Session, error)

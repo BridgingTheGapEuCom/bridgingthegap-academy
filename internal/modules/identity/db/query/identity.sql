@@ -52,6 +52,9 @@ VALUES ($1, $2, $3) RETURNING *;
 -- name: GetSessionByDigest :one
 SELECT * FROM identity.sessions WHERE token_digest = $1;
 
+-- name: GetSessionByID :one
+SELECT * FROM identity.sessions WHERE id = $1;
+
 -- name: RevokeSession :one
 UPDATE identity.sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING *;
 

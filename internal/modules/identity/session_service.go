@@ -55,6 +55,7 @@ type SessionLifecycleRepository interface {
 	GetUser(context.Context, UserID) (User, error)
 	CreateSession(context.Context, UserID, SessionTokenDigest, time.Time) (Session, error)
 	GetSessionByDigest(context.Context, SessionTokenDigest) (Session, error)
+	GetSessionByID(context.Context, SessionID) (Session, error)
 	RevokeSession(context.Context, SessionID) (Session, error)
 	RevokeUserSessions(context.Context, UserID) (int64, error)
 }
@@ -185,6 +186,32 @@ func (s SessionService) ResolveSession(ctx context.Context, rawToken string) (Re
 // RevokeSession is repeatable: an already-revoked or absent session is a no-op.
 // The caller must authorize the session identity before invoking this method.
 func (s SessionService) RevokeSession(ctx context.Context, sessionID SessionID) error {
+	return s.revokeSession(ctx, sessionID)
+}
+
+// RevokeResolvedSession checks that the row being revoked belongs to the
+// trusted current-session context before changing it.
+func (s SessionService) RevokeResolvedSession(ctx context.Context, current ResolvedSession) error {
+	if current.UserID == "" || current.SessionID == "" {
+		return ErrInvalidSession
+	}
+	if s.repository == nil {
+		return ErrSessionUnavailable
+	}
+	session, err := s.repository.GetSessionByID(ctx, current.SessionID)
+	if errors.Is(err, ErrNotFound) {
+		return ErrInvalidSession
+	}
+	if err != nil {
+		return ErrSessionUnavailable
+	}
+	if session.ID != current.SessionID || session.UserID != current.UserID {
+		return ErrInvalidSession
+	}
+	return s.revokeSession(ctx, current.SessionID)
+}
+
+func (s SessionService) revokeSession(ctx context.Context, sessionID SessionID) error {
 	if s.repository == nil {
 		return ErrSessionUnavailable
 	}

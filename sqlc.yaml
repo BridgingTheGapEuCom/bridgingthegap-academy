@@ -17,7 +17,9 @@ sql:
         out: internal/modules/identity/db/sqlc
         sql_package: pgx/v5
   - engine: postgresql
-    schema: internal/modules/infrastructure/postgres/db/migrations/00003_audit.sql
+    schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00003_audit.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00004_session_audit.sql
     queries: internal/modules/audit/db/query
     gen:
       go:

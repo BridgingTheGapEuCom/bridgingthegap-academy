@@ -79,6 +79,14 @@ func (f *sessionRepositoryFake) GetSessionByDigest(_ context.Context, digest Ses
 	}
 	return session, nil
 }
+func (f *sessionRepositoryFake) GetSessionByID(_ context.Context, id SessionID) (Session, error) {
+	for _, session := range f.sessions {
+		if session.ID == id {
+			return session, nil
+		}
+	}
+	return Session{}, ErrNotFound
+}
 func (f *sessionRepositoryFake) RevokeSession(_ context.Context, id SessionID) (Session, error) {
 	if f.revokeErr != nil {
 		return Session{}, f.revokeErr
@@ -309,5 +317,34 @@ func TestSessionRevocationIsRepeatableAndScopedToUser(t *testing.T) {
 	repository.revokeAllErr = errors.New("private database detail")
 	if _, err := service.RevokeAllSessionsForUser(ctx, otherSessionTestUser); err != ErrSessionUnavailable {
 		t.Fatalf("revoke-all storage error was misclassified: %v", err)
+	}
+}
+
+func TestRevokeResolvedSessionChecksOwnerBeforeMutation(t *testing.T) {
+	repository, _, service := newSessionFixture()
+	ctx := context.Background()
+	created, err := service.CreateSession(ctx, sessionTestUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongOwner := ResolvedSession{SessionID: created.SessionID, UserID: otherSessionTestUser}
+	if err := service.RevokeResolvedSession(ctx, wrongOwner); err != ErrInvalidSession {
+		t.Fatalf("mismatched owner was accepted: %v", err)
+	}
+	if _, err := service.ResolveSession(ctx, created.Token.Value()); err != nil {
+		t.Fatalf("owner mismatch changed the session: %v", err)
+	}
+	current := ResolvedSession{SessionID: created.SessionID, UserID: sessionTestUser}
+	if err := service.RevokeResolvedSession(ctx, current); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.RevokeResolvedSession(ctx, current); err != nil {
+		t.Fatalf("repeat revocation failed: %v", err)
+	}
+	if _, err := service.ResolveSession(ctx, created.Token.Value()); err != ErrInvalidSession {
+		t.Fatalf("session remained active: %v", err)
+	}
+	if len(repository.sessions) != 1 {
+		t.Fatal("revocation deleted or created a session row")
 	}
 }

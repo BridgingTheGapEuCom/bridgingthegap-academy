@@ -186,6 +186,25 @@ func (q *Queries) GetSessionByDigest(ctx context.Context, tokenDigest []byte) (I
 	return i, err
 }
 
+const getSessionByID = `-- name: GetSessionByID :one
+SELECT id, user_id, token_digest, created_at, last_seen_at, expires_at, revoked_at FROM identity.sessions WHERE id = $1
+`
+
+func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (IdentitySession, error) {
+	row := q.db.QueryRow(ctx, getSessionByID, id)
+	var i IdentitySession
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenDigest,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, status, created_at, updated_at FROM identity.users WHERE id = $1
 `
