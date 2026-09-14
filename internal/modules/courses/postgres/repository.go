@@ -141,6 +141,10 @@ func mapLesson(row sqlc.CoursesLesson) (courses.Lesson, error) {
 	if err := json.Unmarshal(row.LearningObjectives, &objectives); err != nil {
 		return courses.Lesson{}, errors.New("invalid stored lesson learning objectives")
 	}
+	content, err := courses.ParseLessonContent(row.Content)
+	if err != nil {
+		return courses.Lesson{}, errors.New("invalid stored lesson content")
+	}
 	var duration *int
 	if row.EstimatedDurationMinutes.Valid {
 		value := int(row.EstimatedDurationMinutes.Int32)
@@ -156,6 +160,7 @@ func mapLesson(row sqlc.CoursesLesson) (courses.Lesson, error) {
 		LearningObjectives:       objectives,
 		EstimatedDurationMinutes: duration,
 		Position:                 int(row.Position),
+		Content:                  content,
 		CreatedAt:                row.CreatedAt.Time,
 	}
 	if err := (courses.LessonInput{
@@ -167,6 +172,7 @@ func mapLesson(row sqlc.CoursesLesson) (courses.Lesson, error) {
 		LearningObjectives:       lesson.LearningObjectives,
 		EstimatedDurationMinutes: lesson.EstimatedDurationMinutes,
 		Position:                 lesson.Position,
+		Content:                  lesson.Content,
 	}).Validate(); err != nil {
 		return courses.Lesson{}, errors.New("invalid stored lesson")
 	}
@@ -428,6 +434,10 @@ func (r *Repository) CreateLesson(ctx context.Context, input courses.LessonInput
 	if err != nil {
 		return courses.Lesson{}, errors.New("encode lesson learning objectives")
 	}
+	content, err := courses.MarshalLessonContent(input.Content)
+	if err != nil {
+		return courses.Lesson{}, err
+	}
 	params := sqlc.CreateLessonParams{
 		CourseVersionID:    versionID,
 		ModuleID:           moduleID,
@@ -436,6 +446,7 @@ func (r *Repository) CreateLesson(ctx context.Context, input courses.LessonInput
 		Description:        input.Description,
 		LearningObjectives: objectives,
 		Position:           int32(input.Position),
+		Content:            content,
 	}
 	if input.EstimatedDurationMinutes != nil {
 		params.EstimatedDurationMinutes = pgtype.Int4{Int32: int32(*input.EstimatedDurationMinutes), Valid: true}

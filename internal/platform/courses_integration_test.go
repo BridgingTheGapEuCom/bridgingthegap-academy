@@ -161,6 +161,17 @@ func testCourseStructurePersistence(t *testing.T, ctx context.Context, pool *pgx
 	if lessons[1].EstimatedDurationMinutes == nil || *lessons[1].EstimatedDurationMinutes != duration || lessons[1].LearningObjectives[0] != "Explain the lesson concept" {
 		t.Fatal("lesson metadata did not round trip")
 	}
+	if len(lessons[1].Content.Blocks) != 1 || lessons[1].Content.Blocks[0].Key != "intro" {
+		t.Fatal("lesson content JSONB did not round trip")
+	}
+	invalidContent := createLessonInput(version.ID, fundamentals.ID, "invalid-content", "Invalid content", 3, nil)
+	invalidContent.Content.SchemaVersion = 2
+	if _, err := r.CreateLesson(ctx, invalidContent); err == nil {
+		t.Fatal("repository accepted invalid semantic lesson content")
+	}
+	if _, err := pool.Exec(ctx, "UPDATE courses.lesson SET content = '{\"schemaVersion\": \"1\", \"blocks\": []}'::jsonb WHERE id = $1", synchronous.ID); err == nil {
+		t.Fatal("database accepted invalid top-level lesson content shape")
+	}
 	if _, err := r.CreateLesson(ctx, createLessonInput(version.ID, fundamentals.ID, "sync-vs-async", "Duplicate key", 2, nil)); !errors.Is(err, courses.ErrConflict) {
 		t.Fatalf("duplicate version-level lesson key accepted: %v", err)
 	}
@@ -229,5 +240,10 @@ func createLessonInput(courseVersionID courses.CourseVersionID, moduleID courses
 		LearningObjectives:       []string{"Explain the lesson concept", "Apply the lesson concept"},
 		EstimatedDurationMinutes: duration,
 		Position:                 position,
+		Content: courses.LessonContent{SchemaVersion: courses.LessonContentSchemaVersion, Blocks: []courses.Block{{
+			Key: "intro", Type: courses.BlockText, Payload: courses.TextBlockPayload{Content: courses.RichText{Nodes: []courses.RichTextNode{{
+				Type: "paragraph", Content: []courses.RichTextInline{{Type: "text", Text: "Published lesson content."}},
+			}}}},
+		}}},
 	}
 }

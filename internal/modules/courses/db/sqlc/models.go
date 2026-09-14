@@ -48,6 +48,7 @@ type CoursesLesson struct {
 	EstimatedDurationMinutes pgtype.Int4
 	Position                 int32
 	CreatedAt                pgtype.Timestamptz
+	Content                  []byte
 }
 
 type CoursesLessonPrerequisite struct {

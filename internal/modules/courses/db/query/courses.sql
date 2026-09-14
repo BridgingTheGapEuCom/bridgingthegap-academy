@@ -73,9 +73,9 @@ ORDER BY position ASC, id ASC;
 -- name: CreateLesson :one
 INSERT INTO courses.lesson (
     course_version_id, module_id, stable_key, title, description,
-    learning_objectives, estimated_duration_minutes, position
+    learning_objectives, estimated_duration_minutes, position, content
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: GetLesson :one

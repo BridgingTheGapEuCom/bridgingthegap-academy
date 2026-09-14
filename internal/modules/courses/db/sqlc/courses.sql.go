@@ -99,10 +99,10 @@ func (q *Queries) CreateCourseVersion(ctx context.Context, arg CreateCourseVersi
 const createLesson = `-- name: CreateLesson :one
 INSERT INTO courses.lesson (
     course_version_id, module_id, stable_key, title, description,
-    learning_objectives, estimated_duration_minutes, position
+    learning_objectives, estimated_duration_minutes, position, content
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
 `
 
 type CreateLessonParams struct {
@@ -114,6 +114,7 @@ type CreateLessonParams struct {
 	LearningObjectives       []byte
 	EstimatedDurationMinutes pgtype.Int4
 	Position                 int32
+	Content                  []byte
 }
 
 func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) (CoursesLesson, error) {
@@ -126,6 +127,7 @@ func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) (Cou
 		arg.LearningObjectives,
 		arg.EstimatedDurationMinutes,
 		arg.Position,
+		arg.Content,
 	)
 	var i CoursesLesson
 	err := row.Scan(
@@ -139,6 +141,7 @@ func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) (Cou
 		&i.EstimatedDurationMinutes,
 		&i.Position,
 		&i.CreatedAt,
+		&i.Content,
 	)
 	return i, err
 }
@@ -308,7 +311,7 @@ func (q *Queries) GetCourseVersionByCourseAndVersion(ctx context.Context, arg Ge
 }
 
 const getLesson = `-- name: GetLesson :one
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
 FROM courses.lesson
 WHERE id = $1
 `
@@ -327,12 +330,13 @@ func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (CoursesLesson,
 		&i.EstimatedDurationMinutes,
 		&i.Position,
 		&i.CreatedAt,
+		&i.Content,
 	)
 	return i, err
 }
 
 const getLessonByCourseVersionAndKey = `-- name: GetLessonByCourseVersionAndKey :one
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
 FROM courses.lesson
 WHERE course_version_id = $1 AND stable_key = $2
 `
@@ -356,6 +360,7 @@ func (q *Queries) GetLessonByCourseVersionAndKey(ctx context.Context, arg GetLes
 		&i.EstimatedDurationMinutes,
 		&i.Position,
 		&i.CreatedAt,
+		&i.Content,
 	)
 	return i, err
 }
@@ -529,7 +534,7 @@ func (q *Queries) ListLessonPrerequisites(ctx context.Context, lessonID pgtype.U
 }
 
 const listLessonsForModule = `-- name: ListLessonsForModule :many
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
 FROM courses.lesson
 WHERE module_id = $1
 ORDER BY position ASC, id ASC
@@ -555,6 +560,7 @@ func (q *Queries) ListLessonsForModule(ctx context.Context, moduleID pgtype.UUID
 			&i.EstimatedDurationMinutes,
 			&i.Position,
 			&i.CreatedAt,
+			&i.Content,
 		); err != nil {
 			return nil, err
 		}

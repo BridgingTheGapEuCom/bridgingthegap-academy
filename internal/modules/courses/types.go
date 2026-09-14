@@ -379,6 +379,7 @@ type LessonInput struct {
 	LearningObjectives       []string
 	EstimatedDurationMinutes *int
 	Position                 int
+	Content                  LessonContent
 }
 
 func (in LessonInput) Validate() error {
@@ -408,6 +409,9 @@ func (in LessonInput) Validate() error {
 	if in.Position < 0 || in.Position > 100000 {
 		return errors.New("invalid lesson position")
 	}
+	if err := in.Content.Validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -421,6 +425,7 @@ type Lesson struct {
 	LearningObjectives       []string
 	EstimatedDurationMinutes *int
 	Position                 int
+	Content                  LessonContent
 	CreatedAt                time.Time
 }
 

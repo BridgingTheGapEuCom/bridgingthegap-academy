@@ -119,6 +119,7 @@ func TestModuleLessonAndPrerequisiteValidation(t *testing.T) {
 		LearningObjectives:       []string{"Compare synchronous and asynchronous interaction", "Identify coupling trade-offs"},
 		EstimatedDurationMinutes: &duration,
 		Position:                 0,
+		Content:                  testLessonContent(),
 	}
 	if err := lesson.Validate(); err != nil {
 		t.Fatalf("valid lesson rejected: %v", err)
@@ -152,4 +153,12 @@ func TestModuleLessonAndPrerequisiteValidation(t *testing.T) {
 	if err := prerequisite.Validate(); err == nil {
 		t.Fatal("invalid prerequisite key accepted")
 	}
+}
+
+func testLessonContent() LessonContent {
+	return LessonContent{SchemaVersion: LessonContentSchemaVersion, Blocks: []Block{{
+		Key: "intro", Type: BlockText, Payload: TextBlockPayload{Content: RichText{Nodes: []RichTextNode{{
+			Type: "paragraph", Content: []RichTextInline{{Type: "text", Text: "Introduction."}},
+		}}}},
+	}}}
 }
