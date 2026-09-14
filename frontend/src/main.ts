@@ -6,12 +6,15 @@ import { auth } from './auth/auth'
 import HomePage from './pages/HomePage.vue'
 import LoginPage from './pages/LoginPage.vue'
 import AdminPage from './pages/AdminPage.vue'
+import CourseListPage from './pages/CourseListPage.vue'
+import CourseOverviewPage from './pages/CourseOverviewPage.vue'
+import LessonPlaceholderPage from './pages/LessonPlaceholderPage.vue'
 import './style.css'
 
 const i18n = createI18n({
   legacy: false,
   locale: 'en',
-  messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home' } },
+  messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home', courses: 'Courses' } },
 })
 
 const router = createRouter({
@@ -20,6 +23,9 @@ const router = createRouter({
     { path: '/', component: HomePage },
     { path: '/login', component: LoginPage },
     { path: '/admin', component: AdminPage },
+    { path: '/courses', component: CourseListPage },
+    { path: '/courses/:slug', component: CourseOverviewPage },
+    { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPlaceholderPage },
   ],
 })
 

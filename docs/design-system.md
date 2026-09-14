@@ -35,4 +35,8 @@ Authenticated-route UI uses backend-authoritative checks for authorization. Prot
 
 Focus uses one high-contrast 3px outline with an offset across native and custom controls. Do not remove it. Motion is short and nonessential, and the reduced-motion query suppresses it. Page gutters scale down at small widths; controls retain a 44px minimum target size and layouts must not introduce horizontal scrolling.
 
-No dark mode, theme selector, Storybook, login UI, or course interface is part of this foundation. Future state-changing authenticated screens will continue to use the existing browser-security transport independently of these presentation tokens.
+## Learner course pages
+
+Course discovery is an ordered editorial list, not a dashboard. Course overviews use one page H1, then metadata, learning objectives as a real list, the fully visible ordered outline, and quiet attribution/license details. Modules and lessons use nested headings and actual ordered lists; lesson titles are links, while recommended prerequisites stay plain advisory text and never become locks, completion indicators, or progress controls. Course license labels must say they apply to course content. Render all API metadata as text and never use `v-html` for course data.
+
+No dark mode, theme selector, Storybook, lesson renderer, or learner-progress UI is part of this foundation. Future state-changing authenticated screens will continue to use the existing browser-security transport independently of these presentation tokens.

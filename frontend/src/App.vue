@@ -6,7 +6,7 @@
         <strong>{{ t('appName') }}</strong>
         <span class="site-brand__context">{{ t('appContext') }}</span>
       </RouterLink>
-      <nav class="site-navigation" aria-label="Main navigation"><RouterLink to="/">{{ t('home') }}</RouterLink></nav>
+      <nav class="site-navigation" aria-label="Main navigation"><RouterLink to="/">{{ t('home') }}</RouterLink><RouterLink to="/courses">{{ t('courses') }}</RouterLink></nav>
     </div>
   </header>
   <main id="main" tabindex="-1"><RouterView /></main>
