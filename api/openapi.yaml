@@ -2,8 +2,40 @@ openapi: 3.1.0
 info:
   title: BTG LMS application API
   version: 0.1.0
-  description: Operational and same-origin session transport API. No LMS business API is defined yet.
+  description: Same-origin session transport API and public immutable published-course read API.
 paths:
+  /api/courses:
+    get:
+      operationId: listPublishedCourses
+      responses:
+        '200':
+          description: Discoverable courses and preferred published versions
+          content: { application/json: { schema: { $ref: '#/components/schemas/CourseList' } } }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/{slug}:
+    get:
+      operationId: getCurrentCourse
+      parameters: [{ $ref: '#/components/parameters/CourseSlug' }]
+      responses:
+        '200': { description: Preferred published course, content: { application/json: { schema: { $ref: '#/components/schemas/CourseDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/courses/{slug}/versions/{version}:
+    get:
+      operationId: getCourseVersion
+      parameters: [{ $ref: '#/components/parameters/CourseSlug' }, { $ref: '#/components/parameters/CourseVersion' }]
+      responses:
+        '200': { description: Explicit servable historical or published version, content: { application/json: { schema: { $ref: '#/components/schemas/CourseDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/courses/{slug}/versions/{version}/lessons/{lessonKey}:
+    get:
+      operationId: getPublishedLesson
+      parameters: [{ $ref: '#/components/parameters/CourseSlug' }, { $ref: '#/components/parameters/CourseVersion' }, { $ref: '#/components/parameters/LessonKey' }]
+      responses:
+        '200': { description: Canonical published lesson content, content: { application/json: { schema: { $ref: '#/components/schemas/LessonDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/auth/login:
     post:
       operationId: loginWithPassword
@@ -117,6 +149,9 @@ paths:
                 $ref: '#/components/schemas/Problem'
 components:
   parameters:
+    CourseSlug: { name: slug, in: path, required: true, schema: { type: string } }
+    CourseVersion: { name: version, in: path, required: true, schema: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$' } }
+    LessonKey: { name: lessonKey, in: path, required: true, schema: { type: string } }
     CSRFToken:
       name: X-CSRF-Token
       in: header
@@ -137,6 +172,51 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    CourseList: { type: object, required: [courses], properties: { courses: { type: array, items: { $ref: '#/components/schemas/CourseSummary' } } } }
+    CourseSummary: { type: object, required: [slug, version], properties: { slug: { type: string }, version: { $ref: '#/components/schemas/CourseVersionSummary' } } }
+    CourseIdentity: { type: object, required: [slug], properties: { slug: { type: string } } }
+    CourseDetail: { type: object, required: [course, version, modules], properties: { course: { $ref: '#/components/schemas/CourseIdentity' }, version: { $ref: '#/components/schemas/CourseVersionSummary' }, modules: { type: array, items: { $ref: '#/components/schemas/ModuleStructure' } } } }
+    CourseVersionSummary: { type: object, properties: { version: { type: string }, status: { type: string, enum: [PUBLISHED, DEPRECATED, ARCHIVED] }, title: { type: string }, description: { type: string }, objectives: { type: array, items: { type: string } }, source_language: { type: string }, license: { $ref: '#/components/schemas/ContentLicense' }, contributors: { type: array, items: { $ref: '#/components/schemas/Contributor' } } } }
+    Contributor: { type: object, required: [display_name, role, order], properties: { display_name: { type: string }, role: { type: string, enum: [AUTHOR, MAINTAINER] }, order: { type: integer, minimum: 0 } } }
+    ContentLicense: { type: object, required: [kind, display_name], properties: { kind: { type: string }, identifier: { type: string }, display_name: { type: string }, url: { type: string, format: uri }, custom_text: { type: string } } }
+    ModuleSummary: { type: object, required: [key, title, position], properties: { key: { type: string }, title: { type: string }, description: { type: string }, position: { type: integer, minimum: 0 } } }
+    LessonSummary: { type: object, required: [key, title, description, objectives, position, recommended_prerequisite_keys], properties: { key: { type: string }, title: { type: string }, description: { type: string }, objectives: { type: array, items: { type: string } }, estimated_duration_minutes: { type: [integer, 'null'], minimum: 1 }, position: { type: integer, minimum: 0 }, recommended_prerequisite_keys: { type: array, items: { type: string } } } }
+    ModuleStructure: { type: object, required: [module, lessons], properties: { module: { $ref: '#/components/schemas/ModuleSummary' }, lessons: { type: array, items: { $ref: '#/components/schemas/LessonSummary' } } } }
+    LessonDetail: { type: object, required: [course, version, module, lesson], properties: { course: { $ref: '#/components/schemas/CourseIdentity' }, version: { $ref: '#/components/schemas/CourseVersionSummary' }, module: { $ref: '#/components/schemas/ModuleSummary' }, lesson: { allOf: [{ $ref: '#/components/schemas/LessonSummary' }, { type: object, required: [content], properties: { content: { $ref: '#/components/schemas/LessonContent' } } }] } } }
+    LessonContent: { type: object, required: [schemaVersion, blocks], properties: { schemaVersion: { type: integer, const: 1 }, blocks: { type: array, items: { $ref: '#/components/schemas/LessonBlock' } } } }
+    LessonBlock:
+      oneOf:
+        - $ref: '#/components/schemas/TextBlock'
+        - $ref: '#/components/schemas/HeadingBlock'
+        - $ref: '#/components/schemas/ImageBlock'
+        - $ref: '#/components/schemas/VideoBlock'
+        - $ref: '#/components/schemas/AudioBlock'
+        - $ref: '#/components/schemas/CodeBlock'
+        - $ref: '#/components/schemas/QuoteBlock'
+        - $ref: '#/components/schemas/CalloutBlock'
+        - $ref: '#/components/schemas/TableBlock'
+        - $ref: '#/components/schemas/DownloadBlock'
+        - $ref: '#/components/schemas/KnowledgeCheckBlock'
+        - $ref: '#/components/schemas/DividerBlock'
+      discriminator: { propertyName: type }
+    BlockEnvelope: { type: object, required: [key, type, payload], properties: { key: { type: string }, type: { type: string } } }
+    TextBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: TEXT }, payload: { $ref: '#/components/schemas/RichText' } } }] }
+    HeadingBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: HEADING }, payload: { type: object, properties: { level: { type: integer, minimum: 2, maximum: 4 }, content: { type: array, items: { $ref: '#/components/schemas/RichTextInline' } } } } } }] }
+    AssetReference: { type: object, required: [assetKey], properties: { assetKey: { type: string } } }
+    ImageBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: IMAGE }, payload: { type: object, properties: { asset: { $ref: '#/components/schemas/AssetReference' }, altText: { type: string }, decorative: { type: boolean }, caption: { type: string } } } } }] }
+    VideoBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: VIDEO }, payload: { type: object, properties: { asset: { $ref: '#/components/schemas/AssetReference' }, title: { type: string }, transcript: { type: string }, transcriptAsset: { $ref: '#/components/schemas/AssetReference' }, captionsAsset: { $ref: '#/components/schemas/AssetReference' } } } } }] }
+    AudioBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: AUDIO }, payload: { type: object, properties: { asset: { $ref: '#/components/schemas/AssetReference' }, title: { type: string }, transcript: { type: string }, transcriptAsset: { $ref: '#/components/schemas/AssetReference' } } } } }] }
+    CodeBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: CODE }, payload: { type: object, properties: { code: { type: string }, language: { type: string }, title: { type: string } } } } }] }
+    QuoteBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: QUOTE }, payload: { type: object, properties: { text: { type: string }, attribution: { type: string }, sourceUrl: { type: string, format: uri } } } } }] }
+    CalloutBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: CALLOUT }, payload: { type: object, properties: { kind: { type: string, enum: [INFO, NOTE, WARNING, TIP] }, title: { type: string }, content: { $ref: '#/components/schemas/RichText' } } } } }] }
+    TableBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: TABLE }, payload: { type: object, properties: { caption: { type: string }, headers: { type: array, items: { type: string } }, rows: { type: array, items: { type: array, items: { type: string } } } } } } }] }
+    DownloadBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: DOWNLOAD }, payload: { type: object, properties: { asset: { $ref: '#/components/schemas/AssetReference' }, label: { type: string }, description: { type: string } } } } }] }
+    KnowledgeCheckBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: KNOWLEDGE_CHECK }, payload: { type: object, properties: { assessmentKey: { type: string } } } } }] }
+    DividerBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: DIVIDER }, payload: { type: object } } }] }
+    RichText: { type: object, description: Constrained semantic rich text. It is not HTML or editor state., properties: { nodes: { type: array, items: { $ref: '#/components/schemas/RichTextNode' } } } }
+    RichTextNode: { type: object, properties: { type: { type: string, enum: [paragraph, bullet_list, ordered_list] }, content: { type: array, items: { $ref: '#/components/schemas/RichTextInline' } }, items: { type: array, items: { type: array, items: { $ref: '#/components/schemas/RichTextInline' } } } } }
+    RichTextInline: { type: object, properties: { type: { type: string, enum: [text, hard_break] }, text: { type: string }, marks: { type: array, items: { $ref: '#/components/schemas/RichTextMark' } } } }
+    RichTextMark: { type: object, properties: { type: { type: string, enum: [emphasis, strong, inline_code, link] }, href: { type: string, format: uri } } }
     LoginRequest:
       type: object
       additionalProperties: false

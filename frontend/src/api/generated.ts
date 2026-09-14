@@ -4,6 +4,70 @@
  */
 
 export interface paths {
+    "/api/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPublishedCourses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCurrentCourse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{slug}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCourseVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{slug}/versions/{version}/lessons/{lessonKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPublishedLesson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -107,6 +171,283 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CourseList: {
+            courses: components["schemas"]["CourseSummary"][];
+        };
+        CourseSummary: {
+            slug: string;
+            version: components["schemas"]["CourseVersionSummary"];
+        };
+        CourseIdentity: {
+            slug: string;
+        };
+        CourseDetail: {
+            course: components["schemas"]["CourseIdentity"];
+            version: components["schemas"]["CourseVersionSummary"];
+            modules: components["schemas"]["ModuleStructure"][];
+        };
+        CourseVersionSummary: {
+            version?: string;
+            /** @enum {string} */
+            status?: "PUBLISHED" | "DEPRECATED" | "ARCHIVED";
+            title?: string;
+            description?: string;
+            objectives?: string[];
+            source_language?: string;
+            license?: components["schemas"]["ContentLicense"];
+            contributors?: components["schemas"]["Contributor"][];
+        };
+        Contributor: {
+            display_name: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+            order: number;
+        };
+        ContentLicense: {
+            kind: string;
+            identifier?: string;
+            display_name: string;
+            /** Format: uri */
+            url?: string;
+            custom_text?: string;
+        };
+        ModuleSummary: {
+            key: string;
+            title: string;
+            description?: string;
+            position: number;
+        };
+        LessonSummary: {
+            key: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimated_duration_minutes?: number | null;
+            position: number;
+            recommended_prerequisite_keys: string[];
+        };
+        ModuleStructure: {
+            module: components["schemas"]["ModuleSummary"];
+            lessons: components["schemas"]["LessonSummary"][];
+        };
+        LessonDetail: {
+            course: components["schemas"]["CourseIdentity"];
+            version: components["schemas"]["CourseVersionSummary"];
+            module: components["schemas"]["ModuleSummary"];
+            lesson: components["schemas"]["LessonSummary"] & {
+                content: components["schemas"]["LessonContent"];
+            };
+        };
+        LessonContent: {
+            /** @constant */
+            schemaVersion: 1;
+            blocks: components["schemas"]["LessonBlock"][];
+        };
+        LessonBlock: components["schemas"]["TextBlock"] | components["schemas"]["HeadingBlock"] | components["schemas"]["ImageBlock"] | components["schemas"]["VideoBlock"] | components["schemas"]["AudioBlock"] | components["schemas"]["CodeBlock"] | components["schemas"]["QuoteBlock"] | components["schemas"]["CalloutBlock"] | components["schemas"]["TableBlock"] | components["schemas"]["DownloadBlock"] | components["schemas"]["KnowledgeCheckBlock"] | components["schemas"]["DividerBlock"];
+        BlockEnvelope: {
+            key: string;
+            type: string;
+        };
+        TextBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "TEXT";
+            payload?: components["schemas"]["RichText"];
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "TextBlock";
+        };
+        HeadingBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "HEADING";
+            payload?: {
+                level?: number;
+                content?: components["schemas"]["RichTextInline"][];
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "HeadingBlock";
+        };
+        AssetReference: {
+            assetKey: string;
+        };
+        ImageBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "IMAGE";
+            payload?: {
+                asset?: components["schemas"]["AssetReference"];
+                altText?: string;
+                decorative?: boolean;
+                caption?: string;
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ImageBlock";
+        };
+        VideoBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "VIDEO";
+            payload?: {
+                asset?: components["schemas"]["AssetReference"];
+                title?: string;
+                transcript?: string;
+                transcriptAsset?: components["schemas"]["AssetReference"];
+                captionsAsset?: components["schemas"]["AssetReference"];
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "VideoBlock";
+        };
+        AudioBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "AUDIO";
+            payload?: {
+                asset?: components["schemas"]["AssetReference"];
+                title?: string;
+                transcript?: string;
+                transcriptAsset?: components["schemas"]["AssetReference"];
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "AudioBlock";
+        };
+        CodeBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "CODE";
+            payload?: {
+                code?: string;
+                language?: string;
+                title?: string;
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "CodeBlock";
+        };
+        QuoteBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "QUOTE";
+            payload?: {
+                text?: string;
+                attribution?: string;
+                /** Format: uri */
+                sourceUrl?: string;
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "QuoteBlock";
+        };
+        CalloutBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "CALLOUT";
+            payload?: {
+                /** @enum {string} */
+                kind?: "INFO" | "NOTE" | "WARNING" | "TIP";
+                title?: string;
+                content?: components["schemas"]["RichText"];
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "CalloutBlock";
+        };
+        TableBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "TABLE";
+            payload?: {
+                caption?: string;
+                headers?: string[];
+                rows?: string[][];
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "TableBlock";
+        };
+        DownloadBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "DOWNLOAD";
+            payload?: {
+                asset?: components["schemas"]["AssetReference"];
+                label?: string;
+                description?: string;
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "DownloadBlock";
+        };
+        KnowledgeCheckBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "KNOWLEDGE_CHECK";
+            payload?: {
+                assessmentKey?: string;
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "KnowledgeCheckBlock";
+        };
+        DividerBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "DIVIDER";
+            payload?: Record<string, never>;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "DividerBlock";
+        };
+        /** @description Constrained semantic rich text. It is not HTML or editor state. */
+        RichText: {
+            nodes?: components["schemas"]["RichTextNode"][];
+        };
+        RichTextNode: {
+            /** @enum {string} */
+            type?: "paragraph" | "bullet_list" | "ordered_list";
+            content?: components["schemas"]["RichTextInline"][];
+            items?: components["schemas"]["RichTextInline"][][];
+        };
+        RichTextInline: {
+            /** @enum {string} */
+            type?: "text" | "hard_break";
+            text?: string;
+            marks?: components["schemas"]["RichTextMark"][];
+        };
+        RichTextMark: {
+            /** @enum {string} */
+            type?: "emphasis" | "strong" | "inline_code" | "link";
+            /** Format: uri */
+            href?: string;
+        };
         LoginRequest: {
             email: string;
             /** Format: password */
@@ -149,6 +490,9 @@ export interface components {
         };
     };
     parameters: {
+        CourseSlug: string;
+        CourseVersion: string;
+        LessonKey: string;
         /** @description Required when a valid btg_session cookie is present. Use the csrf_token from a no-store login or current-session response. This token is not an authentication credential. */
         CSRFToken: string;
     };
@@ -158,6 +502,102 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listPublishedCourses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discoverable courses and preferred published versions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseList"];
+                };
+            };
+            500: components["responses"]["Problem"];
+        };
+    };
+    getCurrentCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["CourseSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preferred published course */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCourseVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["CourseSlug"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Explicit servable historical or published version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getPublishedLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["CourseSlug"];
+                version: components["parameters"]["CourseVersion"];
+                lessonKey: components["parameters"]["LessonKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical published lesson content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     loginWithPassword: {
         parameters: {
             query?: never;

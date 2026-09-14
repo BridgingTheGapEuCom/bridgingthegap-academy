@@ -324,6 +324,22 @@ func (r *Repository) ListCourseVersions(ctx context.Context, courseID courses.Co
 	return result, nil
 }
 
+func (r *Repository) ListPublishedCourseVersions(ctx context.Context) ([]courses.CourseVersion, error) {
+	rows, err := r.q.ListPublishedCourseVersions(ctx)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	result := make([]courses.CourseVersion, 0, len(rows))
+	for _, row := range rows {
+		version, err := mapCourseVersion(row)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, version)
+	}
+	return result, nil
+}
+
 func (r *Repository) TransitionCourseVersionStatus(ctx context.Context, id courses.CourseVersionID, current, next courses.CourseVersionStatus) (courses.CourseVersion, error) {
 	if _, err := courses.ParseCourseVersionStatus(string(current)); err != nil {
 		return courses.CourseVersion{}, err
@@ -506,6 +522,26 @@ func (r *Repository) ListLessonsForModule(ctx context.Context, moduleID courses.
 	return lessons, nil
 }
 
+func (r *Repository) ListLessonsForCourseVersion(ctx context.Context, courseVersionID courses.CourseVersionID) ([]courses.Lesson, error) {
+	key, err := uuid(string(courseVersionID))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListLessonsForCourseVersion(ctx, key)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	lessons := make([]courses.Lesson, 0, len(rows))
+	for _, row := range rows {
+		lesson, err := mapLesson(row)
+		if err != nil {
+			return nil, err
+		}
+		lessons = append(lessons, lesson)
+	}
+	return lessons, nil
+}
+
 func (r *Repository) CreateLessonPrerequisite(ctx context.Context, input courses.LessonPrerequisiteInput) (courses.LessonPrerequisite, error) {
 	if err := input.Validate(); err != nil {
 		return courses.LessonPrerequisite{}, err
@@ -560,6 +596,28 @@ func (r *Repository) ListLessonPrerequisites(ctx context.Context, lessonID cours
 		return nil, err
 	}
 	rows, err := r.q.ListLessonPrerequisites(ctx, key)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	prerequisites := make([]courses.LessonPrerequisite, 0, len(rows))
+	for _, row := range rows {
+		prerequisites = append(prerequisites, courses.LessonPrerequisite{
+			CourseVersionID:       courses.CourseVersionID(row.CourseVersionID.String()),
+			LessonID:              courses.LessonID(row.LessonID.String()),
+			PrerequisiteLessonID:  courses.LessonID(row.PrerequisiteLessonID.String()),
+			PrerequisiteStableKey: row.PrerequisiteStableKey,
+			Position:              int(row.Position),
+		})
+	}
+	return prerequisites, nil
+}
+
+func (r *Repository) ListLessonPrerequisitesForCourseVersion(ctx context.Context, courseVersionID courses.CourseVersionID) ([]courses.LessonPrerequisite, error) {
+	key, err := uuid(string(courseVersionID))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListLessonPrerequisitesForCourseVersion(ctx, key)
 	if err != nil {
 		return nil, storageError(err)
 	}

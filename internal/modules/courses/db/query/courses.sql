@@ -43,6 +43,12 @@ FROM courses.course_version
 WHERE course_id = $1
 ORDER BY version_major DESC, version_minor DESC, version_patch DESC, id DESC;
 
+-- name: ListPublishedCourseVersions :many
+SELECT *
+FROM courses.course_version
+WHERE status = 'PUBLISHED'
+ORDER BY course_id ASC, version_major DESC, version_minor DESC, version_patch DESC, id DESC;
+
 -- name: TransitionCourseVersionStatus :one
 UPDATE courses.course_version
 SET status = $3
@@ -94,6 +100,12 @@ FROM courses.lesson
 WHERE module_id = $1
 ORDER BY position ASC, id ASC;
 
+-- name: ListLessonsForCourseVersion :many
+SELECT *
+FROM courses.lesson
+WHERE course_version_id = $1
+ORDER BY module_id ASC, position ASC, id ASC;
+
 -- name: CreateLessonPrerequisite :one
 INSERT INTO courses.lesson_prerequisite (course_version_id, lesson_id, prerequisite_lesson_id, position)
 VALUES ($1, $2, $3, $4)
@@ -110,3 +122,15 @@ FROM courses.lesson_prerequisite AS prerequisite
 JOIN courses.lesson AS target ON target.id = prerequisite.prerequisite_lesson_id
 WHERE prerequisite.lesson_id = $1
 ORDER BY prerequisite.position ASC, prerequisite.prerequisite_lesson_id ASC;
+
+-- name: ListLessonPrerequisitesForCourseVersion :many
+SELECT
+    prerequisite.course_version_id,
+    prerequisite.lesson_id,
+    prerequisite.prerequisite_lesson_id,
+    prerequisite.position,
+    target.stable_key AS prerequisite_stable_key
+FROM courses.lesson_prerequisite AS prerequisite
+JOIN courses.lesson AS target ON target.id = prerequisite.prerequisite_lesson_id
+WHERE prerequisite.course_version_id = $1
+ORDER BY prerequisite.lesson_id ASC, prerequisite.position ASC, prerequisite.prerequisite_lesson_id ASC;

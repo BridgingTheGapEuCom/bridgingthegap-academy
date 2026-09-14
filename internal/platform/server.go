@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
+	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
@@ -70,6 +72,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		loginMetrics: loginAttempts,
 		loginRejects: loginRejections,
 		authorizer:   identity.NewAuthorizationService(identitypostgres.New(pool)),
+		courses:      courses.NewReadService(coursespostgres.New(pool)),
 		authzMetrics: authorizationDecisions,
 		cookieSecure: !cfg.DevelopmentHTTP,
 		now:          time.Now,
@@ -118,6 +121,12 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 			api.Use(auth.noStore)
 			api.Use(auth.enforceOrigin)
 			api.Post("/auth/login", auth.handleLogin)
+			if auth.courses != nil {
+				api.Get("/courses", auth.handleCourseList)
+				api.Get("/courses/{slug}", auth.handleCourseCurrent)
+				api.Get("/courses/{slug}/versions/{version}", auth.handleCourseVersion)
+				api.Get("/courses/{slug}/versions/{version}/lessons/{lessonKey}", auth.handleLesson)
+			}
 			api.With(auth.resolveSession(false), auth.csrfProtection).Post("/auth/logout", auth.handleLogout)
 			api.Group(func(protected chi.Router) {
 				// Future cookie-authenticated APIs belong in this group: both

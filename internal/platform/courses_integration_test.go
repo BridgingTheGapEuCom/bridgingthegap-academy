@@ -5,6 +5,8 @@ package platform
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -223,6 +225,68 @@ func testCourseStructurePersistence(t *testing.T, ctx context.Context, pool *pgx
 	}
 	if _, err := r.CreateLesson(ctx, createLessonInput(secondVersion.ID, fundamentals.ID, "invalid-module-version", "Invalid", 5, nil)); !errors.Is(err, courses.ErrNotFound) {
 		t.Fatalf("lesson module/course-version consistency was not enforced: %v", err)
+	}
+}
+
+func testCourseReadService(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	r := coursespostgres.New(pool)
+	course, err := r.CreateCourse(ctx, "public-course-read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deprecatedInput := createCourseVersionInput(t, course.ID, "1.9.0")
+	deprecatedInput.Status = courses.CourseVersionDeprecated
+	if _, err := r.CreateCourseVersion(ctx, deprecatedInput); err != nil {
+		t.Fatal(err)
+	}
+	publishedInput := createCourseVersionInput(t, course.ID, "1.10.0")
+	if _, err := r.CreateCourseVersion(ctx, publishedInput); err != nil {
+		t.Fatal(err)
+	}
+	latestInput := createCourseVersionInput(t, course.ID, "2.0.0")
+	latest, err := r.CreateCourseVersion(ctx, latestInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := r.CreateModule(ctx, createModuleInput(latest.ID, "fundamentals", "Fundamentals", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lesson, err := r.CreateLesson(ctx, createLessonInput(latest.ID, module.ID, "what-is-eai", "What is EAI?", 0, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := courses.NewReadService(r)
+	preferred, err := service.Preferred(ctx, course.Slug)
+	if err != nil || preferred.Version.ID != latest.ID || len(preferred.Modules) != 1 || preferred.Modules[0].Lessons[0].Lesson.ID != lesson.ID {
+		t.Fatalf("preferred public read did not use highest numeric published version: %#v, %v", preferred, err)
+	}
+	if _, err := service.Explicit(ctx, course.Slug, deprecatedInput.Version); err != nil {
+		t.Fatalf("deprecated version was not explicitly servable: %v", err)
+	}
+	withdrawnInput := createCourseVersionInput(t, course.ID, "3.0.0")
+	withdrawnInput.Status = courses.CourseVersionWithdrawn
+	withdrawn, err := r.CreateCourseVersion(ctx, withdrawnInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Explicit(ctx, course.Slug, withdrawn.Version); !errors.Is(err, courses.ErrNotServable) {
+		t.Fatalf("withdrawn version was served: %v", err)
+	}
+	if _, _, readLesson, _, err := service.Lesson(ctx, course.Slug, latest.Version, lesson.StableKey); err != nil || readLesson.Content.SchemaVersion != courses.LessonContentSchemaVersion {
+		t.Fatalf("lesson content did not round trip through read service: %#v, %v", readLesson, err)
+	}
+	router := authTestRouter(&authHTTP{courses: service})
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/courses/public-course-read/versions/2.0.0/lessons/what-is-eai", nil))
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "public, max-age=3600" {
+		t.Fatalf("PostgreSQL-backed lesson API failed: status=%d cache=%q", response.Code, response.Header().Get("Cache-Control"))
+	}
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/courses/public-course-read/versions/3.0.0", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("withdrawn PostgreSQL-backed version was public: status=%d", response.Code)
 	}
 }
 

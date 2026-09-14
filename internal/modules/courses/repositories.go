@@ -23,6 +23,7 @@ type Repository interface {
 	GetCourseVersion(context.Context, CourseVersionID) (CourseVersion, error)
 	GetCourseVersionByCourseAndVersion(context.Context, CourseID, Version) (CourseVersion, error)
 	ListCourseVersions(context.Context, CourseID) ([]CourseVersion, error)
+	ListPublishedCourseVersions(context.Context) ([]CourseVersion, error)
 	TransitionCourseVersionStatus(context.Context, CourseVersionID, CourseVersionStatus, CourseVersionStatus) (CourseVersion, error)
 
 	CreateModule(context.Context, ModuleInput) (Module, error)
@@ -34,7 +35,9 @@ type Repository interface {
 	GetLesson(context.Context, LessonID) (Lesson, error)
 	GetLessonByCourseVersionAndKey(context.Context, CourseVersionID, string) (Lesson, error)
 	ListLessonsForModule(context.Context, ModuleID) ([]Lesson, error)
+	ListLessonsForCourseVersion(context.Context, CourseVersionID) ([]Lesson, error)
 
 	CreateLessonPrerequisite(context.Context, LessonPrerequisiteInput) (LessonPrerequisite, error)
 	ListLessonPrerequisites(context.Context, LessonID) ([]LessonPrerequisite, error)
+	ListLessonPrerequisitesForCourseVersion(context.Context, CourseVersionID) ([]LessonPrerequisite, error)
 }

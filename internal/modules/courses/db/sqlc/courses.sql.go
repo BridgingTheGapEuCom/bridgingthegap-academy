@@ -533,6 +533,92 @@ func (q *Queries) ListLessonPrerequisites(ctx context.Context, lessonID pgtype.U
 	return items, nil
 }
 
+const listLessonPrerequisitesForCourseVersion = `-- name: ListLessonPrerequisitesForCourseVersion :many
+SELECT
+    prerequisite.course_version_id,
+    prerequisite.lesson_id,
+    prerequisite.prerequisite_lesson_id,
+    prerequisite.position,
+    target.stable_key AS prerequisite_stable_key
+FROM courses.lesson_prerequisite AS prerequisite
+JOIN courses.lesson AS target ON target.id = prerequisite.prerequisite_lesson_id
+WHERE prerequisite.course_version_id = $1
+ORDER BY prerequisite.lesson_id ASC, prerequisite.position ASC, prerequisite.prerequisite_lesson_id ASC
+`
+
+type ListLessonPrerequisitesForCourseVersionRow struct {
+	CourseVersionID       pgtype.UUID
+	LessonID              pgtype.UUID
+	PrerequisiteLessonID  pgtype.UUID
+	Position              int32
+	PrerequisiteStableKey string
+}
+
+func (q *Queries) ListLessonPrerequisitesForCourseVersion(ctx context.Context, courseVersionID pgtype.UUID) ([]ListLessonPrerequisitesForCourseVersionRow, error) {
+	rows, err := q.db.Query(ctx, listLessonPrerequisitesForCourseVersion, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLessonPrerequisitesForCourseVersionRow
+	for rows.Next() {
+		var i ListLessonPrerequisitesForCourseVersionRow
+		if err := rows.Scan(
+			&i.CourseVersionID,
+			&i.LessonID,
+			&i.PrerequisiteLessonID,
+			&i.Position,
+			&i.PrerequisiteStableKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLessonsForCourseVersion = `-- name: ListLessonsForCourseVersion :many
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+FROM courses.lesson
+WHERE course_version_id = $1
+ORDER BY module_id ASC, position ASC, id ASC
+`
+
+func (q *Queries) ListLessonsForCourseVersion(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesLesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsForCourseVersion, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesLesson
+	for rows.Next() {
+		var i CoursesLesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseVersionID,
+			&i.ModuleID,
+			&i.StableKey,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.EstimatedDurationMinutes,
+			&i.Position,
+			&i.CreatedAt,
+			&i.Content,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLessonsForModule = `-- name: ListLessonsForModule :many
 SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
 FROM courses.lesson
@@ -596,6 +682,54 @@ func (q *Queries) ListModulesForCourseVersion(ctx context.Context, courseVersion
 			&i.Description,
 			&i.Position,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublishedCourseVersions = `-- name: ListPublishedCourseVersions :many
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+FROM courses.course_version
+WHERE status = 'PUBLISHED'
+ORDER BY course_id ASC, version_major DESC, version_minor DESC, version_patch DESC, id DESC
+`
+
+func (q *Queries) ListPublishedCourseVersions(ctx context.Context) ([]CoursesCourseVersion, error) {
+	rows, err := q.db.Query(ctx, listPublishedCourseVersions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesCourseVersion
+	for rows.Next() {
+		var i CoursesCourseVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.Version,
+			&i.VersionMajor,
+			&i.VersionMinor,
+			&i.VersionPatch,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.SourceLanguage,
+			&i.Changelog,
+			&i.LicenseKind,
+			&i.LicenseIdentifier,
+			&i.LicenseDisplayName,
+			&i.LicenseUrl,
+			&i.LicenseCustomText,
+			&i.Attribution,
+			&i.CreatedAt,
+			&i.PublishedAt,
 		); err != nil {
 			return nil, err
 		}
