@@ -198,7 +198,21 @@ components:
         - $ref: '#/components/schemas/DownloadBlock'
         - $ref: '#/components/schemas/KnowledgeCheckBlock'
         - $ref: '#/components/schemas/DividerBlock'
-      discriminator: { propertyName: type }
+      discriminator:
+        propertyName: type
+        mapping:
+          TEXT: '#/components/schemas/TextBlock'
+          HEADING: '#/components/schemas/HeadingBlock'
+          IMAGE: '#/components/schemas/ImageBlock'
+          VIDEO: '#/components/schemas/VideoBlock'
+          AUDIO: '#/components/schemas/AudioBlock'
+          CODE: '#/components/schemas/CodeBlock'
+          QUOTE: '#/components/schemas/QuoteBlock'
+          CALLOUT: '#/components/schemas/CalloutBlock'
+          TABLE: '#/components/schemas/TableBlock'
+          DOWNLOAD: '#/components/schemas/DownloadBlock'
+          KNOWLEDGE_CHECK: '#/components/schemas/KnowledgeCheckBlock'
+          DIVIDER: '#/components/schemas/DividerBlock'
     BlockEnvelope: { type: object, required: [key, type, payload], properties: { key: { type: string }, type: { type: string } } }
     TextBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: TEXT }, payload: { $ref: '#/components/schemas/RichText' } } }] }
     HeadingBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, properties: { type: { const: HEADING }, payload: { type: object, properties: { level: { type: integer, minimum: 2, maximum: 4 }, content: { type: array, items: { $ref: '#/components/schemas/RichTextInline' } } } } } }] }

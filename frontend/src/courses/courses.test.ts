@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getCourse, formatDuration, isCourseSlug, lessonPath, listCourses } from './courses'
+import { getCourse, getCourseVersion, getLesson, formatDuration, isCourseSlug, isCourseVersion, lessonPath, listCourses } from './courses'
 
 describe('Courses service', () => {
   it('uses the shared API client and validates public course paths', async () => {
@@ -20,5 +20,16 @@ describe('Courses service', () => {
     expect(formatDuration(75)).toBe('1 hr 15 min')
     expect(formatDuration(0)).toBeUndefined()
     expect(lessonPath('event-driven-architecture', '1.10.0', 'sync-vs-async')).toBe('/courses/event-driven-architecture/versions/1.10.0/lessons/sync-vs-async')
+  })
+
+  it('uses only bounded canonical exact-version lesson paths', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    await getCourseVersion('event-driven-architecture', '1.10.0', { request })
+    expect(request).toHaveBeenCalledWith('/api/courses/event-driven-architecture/versions/1.10.0')
+    await getLesson('event-driven-architecture', '1.10.0', 'sync-vs-async', { request })
+    expect(request).toHaveBeenLastCalledWith('/api/courses/event-driven-architecture/versions/1.10.0/lessons/sync-vs-async')
+    expect(isCourseVersion('1.10.0')).toBe(true)
+    expect(isCourseVersion('01.10.0')).toBe(false)
+    await expect(getLesson('event-driven-architecture', 'not-a-version', 'sync-vs-async', { request })).rejects.toThrow('Invalid course route')
   })
 })

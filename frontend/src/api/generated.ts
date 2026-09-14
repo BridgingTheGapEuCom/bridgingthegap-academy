@@ -257,7 +257,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "TextBlock";
+            type: "TEXT";
         };
         HeadingBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -271,7 +271,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "HeadingBlock";
+            type: "HEADING";
         };
         AssetReference: {
             assetKey: string;
@@ -290,7 +290,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "ImageBlock";
+            type: "IMAGE";
         };
         VideoBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -307,7 +307,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "VideoBlock";
+            type: "VIDEO";
         };
         AudioBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -323,7 +323,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "AudioBlock";
+            type: "AUDIO";
         };
         CodeBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -338,7 +338,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "CodeBlock";
+            type: "CODE";
         };
         QuoteBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -354,7 +354,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "QuoteBlock";
+            type: "QUOTE";
         };
         CalloutBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -370,7 +370,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "CalloutBlock";
+            type: "CALLOUT";
         };
         TableBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -385,7 +385,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "TableBlock";
+            type: "TABLE";
         };
         DownloadBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -400,7 +400,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "DownloadBlock";
+            type: "DOWNLOAD";
         };
         KnowledgeCheckBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -413,7 +413,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "KnowledgeCheckBlock";
+            type: "KNOWLEDGE_CHECK";
         };
         DividerBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
@@ -424,7 +424,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "DividerBlock";
+            type: "DIVIDER";
         };
         /** @description Constrained semantic rich text. It is not HTML or editor state. */
         RichText: {

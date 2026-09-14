@@ -8,7 +8,7 @@ import LoginPage from './pages/LoginPage.vue'
 import AdminPage from './pages/AdminPage.vue'
 import CourseListPage from './pages/CourseListPage.vue'
 import CourseOverviewPage from './pages/CourseOverviewPage.vue'
-import LessonPlaceholderPage from './pages/LessonPlaceholderPage.vue'
+import LessonPage from './pages/LessonPage.vue'
 import './style.css'
 
 const i18n = createI18n({
@@ -25,7 +25,7 @@ const router = createRouter({
     { path: '/admin', component: AdminPage },
     { path: '/courses', component: CourseListPage },
     { path: '/courses/:slug', component: CourseOverviewPage },
-    { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPlaceholderPage },
+    { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPage },
   ],
 })
 
