@@ -4,7 +4,9 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
@@ -103,5 +105,118 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	}
 	if response := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA.ID), "", &http.Cookie{Name: sessionCookieName, Value: adminSession.Token.Value()}); response.Code != http.StatusNotFound {
 		t.Fatalf("global administrator bypassed authoring membership = %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func testAuthoringDraftMetadataMutation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	courseRepository := coursespostgres.New(pool)
+	course, err := courseRepository.CreateCourse(ctx, "authoring-draft-metadata-mutation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityRepository := identitypostgres.New(pool)
+	user, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authoringRepository := authoringpostgres.New(pool)
+	draft, workspace, err := authoringRepository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizer := authoring.NewAuthorizationService(authoringRepository)
+	mutations := authoring.NewDraftMutationService(authoringRepository, authorizer)
+	sessions := identity.NewSessionService(identityRepository, nil, nil)
+	created, err := sessions.CreateSession(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readService := authoring.NewReadService(authoringRepository, authorizer)
+	router := authTestRouter(&authHTTP{sessions: sessions, authoring: readService, authoringMutations: mutations})
+	response := authRequest(router, http.MethodPatch, "/api/authoring/drafts/"+string(draft.ID), `{"expectedRevision":1,"title":"Writer B"}`, &http.Cookie{Name: sessionCookieName, Value: created.Token.Value()}, authTestCSRFToken().Value())
+	if response.Code != http.StatusOK {
+		t.Fatalf("initial PATCH = %d: %s", response.Code, response.Body.String())
+	}
+	resolved, err := sessions.ResolveSession(ctx, created.Token.Value())
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := identity.ActorFromResolvedSession(resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleTitle := "Writer A"
+	if _, err := mutations.UpdateDraft(ctx, actor, draft.ID, 1, authoring.DraftMetadataPatch{Title: &staleTitle}); !errors.Is(err, authoring.ErrRevisionMismatch) {
+		t.Fatalf("stale PostgreSQL writer = %v", err)
+	}
+	stored, err := authoringRepository.GetDraft(ctx, draft.ID)
+	if err != nil || stored.Metadata.Title != "Writer B" || stored.Metadata.Description != draft.Metadata.Description || stored.Revision != 2 || !stored.UpdatedAt.After(draft.UpdatedAt) {
+		t.Fatalf("stale write changed committed draft: err=%v draft=%#v", err, stored)
+	}
+	if _, err := authoringRepository.RevokeMember(ctx, workspace.ID, string(user.ID)); err != nil {
+		t.Fatal(err)
+	}
+	response = authRequest(router, http.MethodPatch, "/api/authoring/drafts/"+string(draft.ID), `{"expectedRevision":2,"title":"Revoked"}`, &http.Cookie{Name: sessionCookieName, Value: created.Token.Value()}, authTestCSRFToken().Value())
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("revoked member PATCH = %d: %s", response.Code, response.Body.String())
+	}
+	if _, err := mutations.UpdateDraft(ctx, actor, draft.ID, stored.Revision, authoring.DraftMetadataPatch{Title: &staleTitle}); !errors.Is(err, authoring.ErrNotFound) {
+		t.Fatalf("revoked member mutated draft: %v", err)
+	}
+	administrator, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identityRepository.AssignGlobalRole(ctx, administrator.ID, identity.RoleAdministrator, nil); err != nil {
+		t.Fatal(err)
+	}
+	adminSession, err := sessions.CreateSession(ctx, administrator.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = authRequest(router, http.MethodPatch, "/api/authoring/drafts/"+string(draft.ID), `{"expectedRevision":2,"title":"Administrator"}`, &http.Cookie{Name: sessionCookieName, Value: adminSession.Token.Value()}, authTestCSRFToken().Value())
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("global administrator bypassed authoring membership on PATCH = %d: %s", response.Code, response.Body.String())
+	}
+
+	// A separate real-PostgreSQL race confirms two callers with the same
+	// revision cannot both commit or increment it twice.
+	raceDraft, _, err := authoringRepository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, title := range []string{"Concurrent A", "Concurrent B"} {
+		title := title
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			_, err := mutations.UpdateDraft(ctx, actor, raceDraft.ID, 1, authoring.DraftMetadataPatch{Title: &title})
+			results <- err
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+	successes, conflicts := 0, 0
+	for result := range results {
+		if result == nil {
+			successes++
+		} else if errors.Is(result, authoring.ErrRevisionMismatch) {
+			conflicts++
+		} else {
+			t.Fatalf("concurrent mutation failed unexpectedly: %v", result)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent mutations successes=%d conflicts=%d", successes, conflicts)
+	}
+	raceStored, err := authoringRepository.GetDraft(ctx, raceDraft.ID)
+	if err != nil || raceStored.Revision != 2 {
+		t.Fatalf("concurrent mutation revision = %d err=%v", raceStored.Revision, err)
 	}
 }

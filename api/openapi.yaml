@@ -15,6 +15,24 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateAuthoringDraftMetadata
+      description: Updates only mutable draft metadata using an explicit optimistic-concurrency revision. The request requires the authenticated session's CSRF token and a trusted same-origin Origin. Responses are private and not cacheable.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthoringDraftUpdateRequest' }
+      responses:
+        '200': { description: Committed updated draft metadata with incremented revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringDraft' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}/workspace:
     get:
       operationId: getAuthoringWorkspace
@@ -218,6 +236,19 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    AuthoringDraftUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+        intendedVersion: { type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$' }
+        sourceLanguage: { type: string }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        changelog: { type: string }
+        license: { $ref: '#/components/schemas/ContentLicense' }
     AuthoringDraft:
       type: object
       required: [id, course_id, intended_version, source_language, title, description, objectives, changelog, license, status, revision, created_at, updated_at]

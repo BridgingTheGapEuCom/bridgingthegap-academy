@@ -17,7 +17,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** @description Updates only mutable draft metadata using an explicit optimistic-concurrency revision. The request requires the authenticated session's CSRF token and a trusted same-origin Origin. Responses are private and not cacheable. */
+        patch: operations["updateAuthoringDraftMetadata"];
         trace?: never;
     };
     "/api/authoring/drafts/{draftId}/workspace": {
@@ -235,6 +236,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthoringDraftUpdateRequest: {
+            expectedRevision: number;
+            intendedVersion?: string;
+            sourceLanguage?: string;
+            title?: string;
+            description?: string;
+            objectives?: string[];
+            changelog?: string;
+            license?: components["schemas"]["ContentLicense"];
+        };
         AuthoringDraft: {
             /** Format: uuid */
             id: string;
@@ -660,6 +671,38 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    updateAuthoringDraftMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringDraftUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed updated draft metadata with incremented revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringDraft"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

@@ -65,21 +65,23 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	go func() { _ = metricsServer.Serve(metricsListener) }()
 
 	authoringRepository := authoringpostgres.New(pool)
+	authoringAuthorizer := authoring.NewAuthorizationService(authoringRepository)
 	auth := &authHTTP{
-		login:        NewPostgresLoginOrchestrator(pool, nil, nil),
-		sessions:     identity.NewSessionService(identitypostgres.New(pool), nil, nil),
-		csrf:         identity.NewSessionCSRFService(identitypostgres.New(pool), nil),
-		origins:      origins,
-		loginSources: newLoginSourceLimiter(defaultLoginRatePolicy, nil),
-		loginWork:    newLoginWorkGuard(maxConcurrentLogins),
-		loginMetrics: loginAttempts,
-		loginRejects: loginRejections,
-		authorizer:   identity.NewAuthorizationService(identitypostgres.New(pool)),
-		courses:      courses.NewReadService(coursespostgres.New(pool)),
-		authoring:    authoring.NewReadService(authoringRepository, authoring.NewAuthorizationService(authoringRepository)),
-		authzMetrics: authorizationDecisions,
-		cookieSecure: !cfg.DevelopmentHTTP,
-		now:          time.Now,
+		login:              NewPostgresLoginOrchestrator(pool, nil, nil),
+		sessions:           identity.NewSessionService(identitypostgres.New(pool), nil, nil),
+		csrf:               identity.NewSessionCSRFService(identitypostgres.New(pool), nil),
+		origins:            origins,
+		loginSources:       newLoginSourceLimiter(defaultLoginRatePolicy, nil),
+		loginWork:          newLoginWorkGuard(maxConcurrentLogins),
+		loginMetrics:       loginAttempts,
+		loginRejects:       loginRejections,
+		authorizer:         identity.NewAuthorizationService(identitypostgres.New(pool)),
+		courses:            courses.NewReadService(coursespostgres.New(pool)),
+		authoring:          authoring.NewReadService(authoringRepository, authoringAuthorizer),
+		authoringMutations: authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
+		authzMetrics:       authorizationDecisions,
+		cookieSecure:       !cfg.DevelopmentHTTP,
+		now:                time.Now,
 	}
 	router := newRouter(pool, log, requests, latency, auth)
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: router, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: maxRequestReadDuration, MaxHeaderBytes: maxRequestHeaderBytes}
@@ -140,6 +142,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
 				if auth.authoring != nil {
 					protected.Get("/authoring/drafts/{draftId}", auth.handleAuthoringDraft)
+					if auth.authoringMutations != nil {
+						protected.Patch("/authoring/drafts/{draftId}", auth.handleAuthoringDraftUpdate)
+					}
 					protected.Get("/authoring/drafts/{draftId}/workspace", auth.handleAuthoringWorkspace)
 					protected.Get("/authoring/drafts/{draftId}/structure", auth.handleAuthoringStructure)
 					protected.Get("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLesson)

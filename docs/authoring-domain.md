@@ -64,3 +64,15 @@ both absent and unauthorized Draft resources, while malformed identifiers are
 `Cache-Control: no-store`: drafts are mutable and private. Current revision
 numbers are explicit in DTOs for later optimistic writes; no member list or
 Identity profile data is exposed by this read-only slice.
+
+The metadata PATCH endpoint accepts only intended version, source language,
+title, description, objectives, changelog, and content license. It requires an
+explicit expected revision and rejects a no-op patch. The Authoring mutation
+service composes a validated complete metadata value and delegates to the
+repository compare-and-swap update; a stale revision returns `409` without
+overwriting committed work. Browser writes inherit the established trusted
+Origin and session-bound CSRF checks, and retain the private-resource `404`
+hiding policy. Audit is deliberately deferred: the existing audit transaction
+orchestrators are scoped to session lifecycle work, and this slice does not add
+an Authoring-to-Audit persistence dependency without a shared transactional
+mutation boundary.

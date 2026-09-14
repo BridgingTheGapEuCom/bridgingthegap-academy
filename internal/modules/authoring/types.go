@@ -44,6 +44,59 @@ type DraftMetadata struct {
 	License            courses.ContentLicense
 }
 
+// DraftMetadataPatch contains only mutable draft-owned fields. Nil means that
+// a field was omitted and must retain its current value. Course identity,
+// lifecycle status, workspace state, and revisions are intentionally absent.
+type DraftMetadataPatch struct {
+	IntendedVersion    *courses.Version
+	SourceLanguage     *courses.LanguageTag
+	Title              *string
+	Description        *string
+	LearningObjectives *[]string
+	Changelog          *string
+	License            *courses.ContentLicense
+}
+
+func (p DraftMetadataPatch) Empty() bool {
+	return p.IntendedVersion == nil && p.SourceLanguage == nil && p.Title == nil &&
+		p.Description == nil && p.LearningObjectives == nil && p.Changelog == nil && p.License == nil
+}
+
+// Apply validates the complete resulting metadata rather than duplicating
+// field rules in a transport. Objectives are copied so request slices cannot
+// mutate the candidate after validation.
+func (p DraftMetadataPatch) Apply(current DraftMetadata) (DraftMetadata, error) {
+	if p.Empty() {
+		return DraftMetadata{}, errors.New("draft metadata patch is empty")
+	}
+	next := current
+	if p.IntendedVersion != nil {
+		next.IntendedVersion = *p.IntendedVersion
+	}
+	if p.SourceLanguage != nil {
+		next.SourceLanguage = *p.SourceLanguage
+	}
+	if p.Title != nil {
+		next.Title = *p.Title
+	}
+	if p.Description != nil {
+		next.Description = *p.Description
+	}
+	if p.LearningObjectives != nil {
+		next.LearningObjectives = append([]string(nil), (*p.LearningObjectives)...)
+	}
+	if p.Changelog != nil {
+		next.Changelog = *p.Changelog
+	}
+	if p.License != nil {
+		next.License = *p.License
+	}
+	if err := next.Validate(); err != nil {
+		return DraftMetadata{}, err
+	}
+	return next, nil
+}
+
 func (m DraftMetadata) Validate() error {
 	if m.CourseID == "" || !m.IntendedVersion.Valid() {
 		return errors.New("invalid draft course or intended version")

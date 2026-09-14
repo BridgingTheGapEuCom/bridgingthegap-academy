@@ -12,6 +12,7 @@ var (
 	ErrConflict         = errors.New("authoring conflict")
 	ErrRevisionMismatch = errors.New("authoring revision mismatch")
 	ErrInvalidState     = errors.New("invalid draft state")
+	ErrInvalidPatch     = errors.New("invalid draft metadata patch")
 )
 
 // Repository is Authoring-owned. All mutators are explicit; published Courses

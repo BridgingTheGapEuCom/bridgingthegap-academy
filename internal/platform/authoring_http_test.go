@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
@@ -62,9 +64,126 @@ func (r authoringHTTPRepository) ListPrerequisitesForDraft(_ context.Context, id
 	return r.prerequisites[id], r.err
 }
 
+func (r *authoringHTTPRepository) UpdateDraftMetadata(_ context.Context, id authoring.DraftID, expected int64, metadata authoring.DraftMetadata) (authoring.CourseDraft, error) {
+	if r.err != nil {
+		return authoring.CourseDraft{}, r.err
+	}
+	draft, found := r.drafts[id]
+	if !found {
+		return authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if draft.Revision != expected {
+		return authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	draft.Metadata = metadata
+	draft.Revision++
+	draft.UpdatedAt = time.Now().UTC()
+	r.drafts[id] = draft
+	return draft, nil
+}
+
 type authoringMembershipsFake struct {
 	roles map[authoring.DraftID]authoring.MemberRole
 	err   error
+}
+
+func TestAuthoringDraftMetadataPATCHSecurityAndConcurrency(t *testing.T) {
+	draftA := authoring.DraftID("11111111-1111-4111-8111-111111111111")
+	draftB := authoring.DraftID("22222222-2222-4222-8222-222222222222")
+	draft := authoring.CourseDraft{ID: draftA, Metadata: authoring.DraftMetadata{CourseID: "77777777-7777-4777-8777-777777777777", IntendedVersion: courses.Version{Major: 1}, SourceLanguage: "en", Title: "Original", Description: "Description", LearningObjectives: []string{"Understand"}, Changelog: "Initial", License: courses.ContentLicense{Kind: courses.ContentLicenseAllRightsReserved, DisplayName: "All Rights Reserved"}}, Status: authoring.DraftActive, Revision: 4, UpdatedAt: time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)}
+	repository := &authoringHTTPRepository{drafts: map[authoring.DraftID]authoring.CourseDraft{draftA: draft}}
+	memberships := authoringMembershipsFake{roles: map[authoring.DraftID]authoring.MemberRole{draftA: authoring.MemberAuthor}}
+	authorizer := authoring.NewAuthorizationService(memberships)
+	readService := authoring.NewReadService(repository, authorizer)
+	mutationService := authoring.NewDraftMutationService(repository, authorizer)
+	resolver := &authResolverFake{current: loginTestCurrent(t)}
+	router := authTestRouter(&authHTTP{sessions: resolver, authoring: readService, authoringMutations: mutationService})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
+	csrf := authTestCSRFToken().Value()
+	path := "/api/authoring/drafts/" + string(draftA)
+
+	if response := authRequest(router, http.MethodPatch, path, `{"expectedRevision":4,"title":"Updated"}`, nil, csrf); response.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated PATCH = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPatch, path, `{"expectedRevision":4,"title":"Updated"}`, cookie); response.Code != http.StatusForbidden {
+		t.Fatalf("missing CSRF PATCH = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPatch, path, `{"expectedRevision":4,"title":"Updated"}`, cookie, "wrong"); response.Code != http.StatusForbidden {
+		t.Fatalf("wrong CSRF PATCH = %d", response.Code)
+	}
+	untrusted := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(`{"expectedRevision":4,"title":"Updated"}`))
+	untrusted.Header.Set("Content-Type", "application/json")
+	untrusted.Header.Set("Origin", "https://attacker.example")
+	untrusted.Header.Set("X-CSRF-Token", csrf)
+	untrusted.AddCookie(cookie)
+	untrustedResponse := httptest.NewRecorder()
+	router.ServeHTTP(untrustedResponse, untrusted)
+	if untrustedResponse.Code != http.StatusForbidden {
+		t.Fatalf("untrusted Origin PATCH = %d", untrustedResponse.Code)
+	}
+
+	response := authRequest(router, http.MethodPatch, path, `{"expectedRevision":4,"title":"Updated","objectives":["First","Second"]}`, cookie, csrf)
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), `"revision":5`) || !strings.Contains(response.Body.String(), `"title":"Updated"`) {
+		t.Fatalf("author PATCH failed: status=%d body=%s", response.Code, response.Body.String())
+	}
+	if got := repository.drafts[draftA]; got.Metadata.Title != "Updated" || got.Metadata.Description != "Description" || got.Revision != 5 || !got.UpdatedAt.After(draft.UpdatedAt) {
+		t.Fatalf("PATCH did not preserve omitted fields or committed revision: %#v", got)
+	}
+
+	// MAINTAINER has the same draft-edit capability without handler role logic.
+	memberships.roles[draftA] = authoring.MemberMaintainer
+	response = authRequest(router, http.MethodPatch, path, `{"expectedRevision":5,"description":"Maintainer update"}`, cookie, csrf)
+	if response.Code != http.StatusOK || repository.drafts[draftA].Metadata.Description != "Maintainer update" || repository.drafts[draftA].Revision != 6 {
+		t.Fatalf("maintainer PATCH failed: status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	for _, body := range []string{
+		`{`,
+		`{"expectedRevision":6,"titel":"typo"}`,
+		`{"expectedRevision":6,"courseId":"immutable"}`,
+		`{"expectedRevision":6}`,
+		`{"expectedRevision":6,"intendedVersion":"1.bad.0"}`,
+		`{"expectedRevision":6,"sourceLanguage":"not a language"}`,
+		`{"expectedRevision":6,"title":""}`,
+		`{"expectedRevision":6,"objectives":null}`,
+		`{"expectedRevision":6,"license":{"kind":"STANDARD","display_name":"Standard"}}`,
+		`{"expectedRevision":6,"license":{"kind":"ALL_RIGHTS_RESERVED","display_name":"All Rights Reserved","unknown":"field"}}`,
+	} {
+		response = authRequest(router, http.MethodPatch, path, body, cookie, csrf)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid PATCH %s = %d: %s", body, response.Code, response.Body.String())
+		}
+	}
+	if response = authRequest(router, http.MethodPatch, path, `{"expectedRevision":5,"title":"Stale"}`, cookie, csrf); response.Code != http.StatusConflict || repository.drafts[draftA].Metadata.Title != "Updated" || repository.drafts[draftA].Revision != 6 {
+		t.Fatalf("stale PATCH overwrote current draft: status=%d draft=%#v", response.Code, repository.drafts[draftA])
+	}
+	if response = authRequest(router, http.MethodPatch, "/api/authoring/drafts/"+string(draftB), `{"expectedRevision":1,"title":"Hidden"}`, cookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("nonmember PATCH = %d", response.Code)
+	}
+	delete(memberships.roles, draftA)
+	if response = authRequest(router, http.MethodPatch, path, `{"expectedRevision":6,"title":"Revoked"}`, cookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("revoked PATCH = %d", response.Code)
+	}
+	if response = authRequest(router, http.MethodPatch, "/api/authoring/drafts/not-a-uuid", `{"expectedRevision":6,"title":"Bad"}`, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("malformed identifier PATCH = %d", response.Code)
+	}
+	memberships.roles[draftA] = authoring.MemberMaintainer
+	oversized := `{"expectedRevision":6,"changelog":"` + strings.Repeat("x", maxAuthoringDraftMetadataBodyBytes) + `"}`
+	response = authRequest(router, http.MethodPatch, path, oversized, cookie, csrf)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("oversized PATCH = %d", response.Code)
+	}
+
+	failedAuthorizer := authoring.NewAuthorizationService(authoringMembershipsFake{err: errors.New("database unavailable")})
+	failedRouter := authTestRouter(&authHTTP{sessions: resolver, authoring: readService, authoringMutations: authoring.NewDraftMutationService(repository, failedAuthorizer)})
+	if response = authRequest(failedRouter, http.MethodPatch, path, `{"expectedRevision":6,"title":"Unavailable"}`, cookie, csrf); response.Code != http.StatusInternalServerError {
+		t.Fatalf("authorization outage PATCH = %d", response.Code)
+	}
+	storageFailed := &authoringHTTPRepository{drafts: map[authoring.DraftID]authoring.CourseDraft{draftA: repository.drafts[draftA]}, err: errors.New("storage unavailable")}
+	storageFailedRouter := authTestRouter(&authHTTP{sessions: resolver, authoring: authoring.NewReadService(storageFailed, authorizer), authoringMutations: authoring.NewDraftMutationService(storageFailed, authorizer)})
+	if response = authRequest(storageFailedRouter, http.MethodPatch, path, `{"expectedRevision":6,"title":"Unavailable"}`, cookie, csrf); response.Code != http.StatusInternalServerError {
+		t.Fatalf("storage outage PATCH = %d", response.Code)
+	}
 }
 
 func (m authoringMembershipsFake) ActiveMembershipForDraft(_ context.Context, draft authoring.DraftID, _ string) (authoring.MemberRole, bool, error) {

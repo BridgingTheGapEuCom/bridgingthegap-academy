@@ -1,7 +1,11 @@
 package platform
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
+	"mime"
 	"net/http"
 	"time"
 
@@ -84,6 +88,59 @@ type authoringLessonDTO struct {
 	UpdatedAt                   time.Time             `json:"updated_at"`
 }
 
+type authoringDraftUpdateRequest struct {
+	ExpectedRevision *int64                                 `json:"expectedRevision"`
+	IntendedVersion  optionalField[string]                  `json:"intendedVersion"`
+	SourceLanguage   optionalField[string]                  `json:"sourceLanguage"`
+	Title            optionalField[string]                  `json:"title"`
+	Description      optionalField[string]                  `json:"description"`
+	Objectives       optionalField[[]string]                `json:"objectives"`
+	Changelog        optionalField[string]                  `json:"changelog"`
+	License          optionalField[authoringLicenseRequest] `json:"license"`
+}
+
+// optionalField distinguishes an omitted JSON member from an explicit null.
+// Null is rejected for all mutable metadata fields because their domain values
+// are required; an empty string or slice remains an explicit domain input.
+type optionalField[T any] struct {
+	set   bool
+	null  bool
+	value T
+}
+
+func (f *optionalField[T]) UnmarshalJSON(data []byte) error {
+	f.set = true
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		f.null = true
+		return nil
+	}
+	return json.Unmarshal(data, &f.value)
+}
+
+type authoringLicenseRequest struct {
+	Kind        courses.ContentLicenseKind `json:"kind"`
+	Identifier  string                     `json:"identifier"`
+	DisplayName string                     `json:"display_name"`
+	URL         string                     `json:"url"`
+	CustomText  string                     `json:"custom_text"`
+}
+
+func (l *authoringLicenseRequest) UnmarshalJSON(data []byte) error {
+	type fields authoringLicenseRequest
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var value fields
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("trailing license JSON")
+	}
+	*l = authoringLicenseRequest(value)
+	return nil
+}
+
 func (a *authHTTP) handleAuthoringDraft(w http.ResponseWriter, r *http.Request) {
 	draftID, actor, ok := authoringRequest(w, r)
 	if !ok {
@@ -92,6 +149,28 @@ func (a *authHTTP) handleAuthoringDraft(w http.ResponseWriter, r *http.Request) 
 	draft, err := a.authoring.Draft(r.Context(), actor, draftID)
 	if err != nil {
 		authoringProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringDraft(draft))
+}
+
+func (a *authHTTP) handleAuthoringDraftUpdate(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	expectedRevision, patch, err := decodeAuthoringDraftUpdate(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid draft update")
+		return
+	}
+	if a.authoringMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	draft, err := a.authoringMutations.UpdateDraft(r.Context(), actor, draftID, expectedRevision, patch)
+	if err != nil {
+		authoringMutationProblem(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, authoringDraft(draft))
@@ -196,6 +275,95 @@ func authoringProblem(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+}
+
+func authoringMutationProblem(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, authoring.ErrNotFound) || errors.Is(err, authoring.ErrAuthorizationDenied) {
+		problem(w, r, http.StatusNotFound, "Not found")
+		return
+	}
+	if errors.Is(err, authoring.ErrRevisionMismatch) || errors.Is(err, authoring.ErrInvalidState) {
+		problem(w, r, http.StatusConflict, "Draft revision conflict")
+		return
+	}
+	if errors.Is(err, authoring.ErrInvalidPatch) {
+		problem(w, r, http.StatusBadRequest, "Invalid draft update")
+		return
+	}
+	problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+}
+
+func decodeAuthoringDraftUpdate(w http.ResponseWriter, r *http.Request) (int64, authoring.DraftMetadataPatch, error) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return 0, authoring.DraftMetadataPatch{}, errors.New("invalid content type")
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringDraftMetadataBodyBytes))
+	decoder.DisallowUnknownFields()
+	var input authoringDraftUpdateRequest
+	if err := decoder.Decode(&input); err != nil {
+		return 0, authoring.DraftMetadataPatch{}, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return 0, authoring.DraftMetadataPatch{}, errors.New("trailing JSON")
+	}
+	if input.ExpectedRevision == nil || *input.ExpectedRevision < 1 {
+		return 0, authoring.DraftMetadataPatch{}, errors.New("missing expected revision")
+	}
+	patch := authoring.DraftMetadataPatch{}
+	if input.IntendedVersion.set {
+		if input.IntendedVersion.null {
+			return 0, authoring.DraftMetadataPatch{}, errors.New("null intended version")
+		}
+		version, err := courses.ParseVersion(input.IntendedVersion.value)
+		if err != nil {
+			return 0, authoring.DraftMetadataPatch{}, err
+		}
+		patch.IntendedVersion = &version
+	}
+	if input.SourceLanguage.set {
+		if input.SourceLanguage.null {
+			return 0, authoring.DraftMetadataPatch{}, errors.New("null source language")
+		}
+		language := courses.LanguageTag(input.SourceLanguage.value)
+		patch.SourceLanguage = &language
+	}
+	if input.Title.set {
+		if input.Title.null {
+			return 0, authoring.DraftMetadataPatch{}, errors.New("null title")
+		}
+		patch.Title = &input.Title.value
+	}
+	if input.Description.set {
+		if input.Description.null {
+			return 0, authoring.DraftMetadataPatch{}, errors.New("null description")
+		}
+		patch.Description = &input.Description.value
+	}
+	if input.Objectives.set {
+		if input.Objectives.null {
+			return 0, authoring.DraftMetadataPatch{}, errors.New("null objectives")
+		}
+		patch.LearningObjectives = &input.Objectives.value
+	}
+	if input.Changelog.set {
+		if input.Changelog.null {
+			return 0, authoring.DraftMetadataPatch{}, errors.New("null changelog")
+		}
+		patch.Changelog = &input.Changelog.value
+	}
+	if input.License.set {
+		if input.License.null {
+			return 0, authoring.DraftMetadataPatch{}, errors.New("null license")
+		}
+		license := courses.ContentLicense{Kind: input.License.value.Kind, Identifier: input.License.value.Identifier, DisplayName: input.License.value.DisplayName, URL: input.License.value.URL, CustomText: input.License.value.CustomText}
+		patch.License = &license
+	}
+	if patch.Empty() {
+		return 0, authoring.DraftMetadataPatch{}, errors.New("empty patch")
+	}
+	return *input.ExpectedRevision, patch, nil
 }
 
 func authoringDraft(draft authoring.CourseDraft) authoringDraftDTO {
