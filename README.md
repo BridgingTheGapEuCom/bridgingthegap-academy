@@ -4,6 +4,8 @@ An open-source, accessibility-first learning platform for structured, self-paced
 
 The architecture source of truth is [BTG_LMS_Architecture_Decision_Baseline_v5.docx](BTG_LMS_Architecture_Decision_Baseline_v5.docx), especially sections 32–33. [Module boundaries](docs/architecture-boundaries.md) documents the Go package owners and enforced dependency rules.
 
+[Academy visual foundation](docs/design-system.md) documents the BridgingTheGap design relationship, token ownership, and native-first accessible component rules.
+
 ## Prerequisites
 
 Install Go 1.25.14 or a newer security-patched release, Node.js 24, pnpm 10, Docker with Compose, and Make. Docker is needed for PostgreSQL and the Testcontainers test. The commands below assume a POSIX shell and ports 5432, 8080, and 5173 are free.

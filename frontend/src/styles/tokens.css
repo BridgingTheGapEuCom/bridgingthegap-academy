@@ -1,0 +1,62 @@
+:root {
+  /* Typography stays user-scalable; future learner preferences can override
+     these presentation tokens without changing component semantics. */
+  --btg-font-sans: "Atkinson Hyperlegible", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --btg-font-mono: ui-monospace, "Cascadia Code", "Segoe UI Mono", Menlo, Monaco, Consolas, monospace;
+  --btg-font-size-body: 1rem;
+  --btg-font-size-small: 0.875rem;
+  --btg-font-size-h1: clamp(2.25rem, 5vw, 4rem);
+  --btg-font-size-h2: clamp(1.625rem, 3vw, 2.375rem);
+  --btg-font-size-h3: clamp(1.25rem, 2vw, 1.5rem);
+  --btg-line-height-body: 1.6;
+  --btg-line-height-heading: 1.08;
+  --btg-font-weight-regular: 400;
+  --btg-font-weight-medium: 500;
+  --btg-font-weight-strong: 700;
+
+  /* Semantic colours are intentionally sparse. Components consume these
+     names, so a future declarative instance theme can replace values safely. */
+  --btg-color-background: #f8f8f7;
+  --btg-color-surface: #ffffff;
+  --btg-color-surface-elevated: #ffffff;
+  --btg-color-surface-muted: #f0f0ee;
+  --btg-color-code-background: #ececea;
+  --btg-color-text: #1d1d1d;
+  --btg-color-text-secondary: #555555;
+  --btg-color-border: #d4d4d1;
+  --btg-color-border-strong: #898986;
+  --btg-color-link: #174f68;
+  --btg-color-link-hover: #083e55;
+  --btg-color-interactive: #252525;
+  --btg-color-interactive-hover: #3d3d3d;
+  --btg-color-interactive-text: #ffffff;
+  --btg-color-focus: #0d7191;
+  --btg-color-danger: #a32d2d;
+  --btg-color-danger-hover: #7f1d1d;
+  --btg-color-success: #216e3a;
+  --btg-color-warning: #8a5200;
+
+  --btg-space-1: 0.25rem;
+  --btg-space-2: 0.5rem;
+  --btg-space-3: 0.75rem;
+  --btg-space-4: 1rem;
+  --btg-space-5: 1.5rem;
+  --btg-space-6: 2rem;
+  --btg-space-7: 3rem;
+  --btg-space-8: 4.5rem;
+
+  --btg-width-reading: 70ch;
+  --btg-width-application: 76rem;
+  --btg-width-form: 34rem;
+  --btg-page-gutter: clamp(1rem, 3vw, 2rem);
+  --btg-header-height: 4.75rem;
+
+  --btg-border-width: 1px;
+  --btg-radius-control: 0.25rem;
+  --btg-radius-surface: 0.375rem;
+  --btg-shadow-elevated: 0 0.5rem 1.5rem rgb(0 0 0 / 8%);
+
+  --btg-motion-fast: 120ms;
+  --btg-motion-standard: 180ms;
+  --btg-ease-standard: ease;
+}

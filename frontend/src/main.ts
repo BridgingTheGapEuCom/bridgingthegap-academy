@@ -8,7 +8,7 @@ import './style.css'
 const i18n = createI18n({
   legacy: false,
   locale: 'en',
-  messages: { en: { appName: 'Bridging the Gap LMS', home: 'Home' } },
+  messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home' } },
 })
 
 const router = createRouter({
