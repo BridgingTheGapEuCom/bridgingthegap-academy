@@ -73,6 +73,10 @@ func check(root string, tableOwners map[string]string) error {
 					continue
 				}
 				target := strings.Split(strings.TrimPrefix(literal, modulePrefix), "/")[0]
+				if owner == "authoring" && target == "courses" && literal != modulePrefix+"courses" {
+					violations = append(violations, fmt.Sprintf("%s: authoring may import Courses domain values only", path))
+					continue
+				}
 				if forbidden(owner, target) {
 					violations = append(violations, fmt.Sprintf("%s: %s cannot import %s", path, owner, target))
 				}
@@ -113,6 +117,11 @@ func forbidden(owner, target string) bool {
 	// Published Courses artifacts and read policy do not consult other domains.
 	// References such as knowledge-check keys stay opaque within Courses.
 	if owner == "courses" {
+		return true
+	}
+	// Authoring may reuse immutable Courses value objects, never another module's
+	// application or persistence adapters. The exact Courses path is checked above.
+	if owner == "authoring" && target != "courses" {
 		return true
 	}
 	if owner != "administration" && (target == "notifications" || target == "search" || target == "audit") {

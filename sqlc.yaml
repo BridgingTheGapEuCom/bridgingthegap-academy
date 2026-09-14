@@ -39,3 +39,13 @@ sql:
         package: sqlc
         out: internal/modules/courses/db/sqlc
         sql_package: pgx/v5
+  - engine: postgresql
+    schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00009_authoring.sql
+    queries: internal/modules/authoring/db/query
+    gen:
+      go:
+        package: sqlc
+        out: internal/modules/authoring/db/sqlc
+        sql_package: pgx/v5

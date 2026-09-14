@@ -1,5 +1,11 @@
 {
   "audit.events": "audit",
+  "authoring.course_draft": "authoring",
+  "authoring.workspace": "authoring",
+  "authoring.workspace_member": "authoring",
+  "authoring.module": "authoring",
+  "authoring.lesson": "authoring",
+  "authoring.lesson_prerequisite": "authoring",
   "courses.course": "courses",
   "courses.course_version": "courses",
   "courses.module": "courses",
