@@ -68,7 +68,9 @@ describe('LoginPage', () => {
     await renderLogin()
     await fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }))
 
-    expect(screen.getAllByRole('alert')).toHaveLength(2)
+    expect(screen.getByText('Enter your email address.')).toBeTruthy()
+    expect(screen.getByText('Enter your password.')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
     expect(document.activeElement).toBe(emailInput())
   })
 
@@ -92,7 +94,7 @@ describe('LoginPage', () => {
 
     await submitCredentials('learner@example.com', 'private password')
 
-    const error = screen.getByRole('alert')
+    const error = screen.getByText('The email or password is incorrect.')
     expect(error.textContent).toBe('The email or password is incorrect.')
     expect(document.activeElement).toBe(error)
     expect((emailInput() as HTMLInputElement).value).toBe('learner@example.com')
@@ -104,13 +106,38 @@ describe('LoginPage', () => {
     authMock.login.mockResolvedValueOnce({ kind: 'rate-limited', retryAfterSeconds: 20 })
     await renderLogin()
     await submitCredentials()
-    expect(screen.getByRole('alert').textContent).toBe('Too many sign-in attempts. Please try again in about 20 seconds.')
+    expect(screen.getByText('Too many sign-in attempts. Please try again in about 20 seconds.')).toBeTruthy()
 
     cleanup()
     authMock.login.mockResolvedValueOnce({ kind: 'unavailable' })
     await renderLogin()
     await submitCredentials()
-    expect(screen.getByRole('alert').textContent).toBe('We couldn’t sign you in right now. Please try again.')
+    expect(screen.getByText('We couldn’t sign you in right now. Please try again.')).toBeTruthy()
+  })
+
+  it('clears the password and releases submission state after an unexpected service rejection', async () => {
+    authMock.login.mockRejectedValue(new Error('request failed'))
+    await renderLogin()
+    await submitCredentials('learner@example.com', 'private password')
+
+    expect(screen.getByText('We couldn’t sign you in right now. Please try again.')).toBeTruthy()
+    expect((passwordInput() as HTMLInputElement).value).toBe('')
+    expect((emailInput() as HTMLInputElement).value).toBe('learner@example.com')
+    expect(screen.getByRole('button', { name: 'Sign in' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('does not navigate after a pending login resolves on an unmounted page', async () => {
+    let completeLogin: (value: { kind: 'authenticated'; userId: string; expiresAt: string }) => void = () => undefined
+    authMock.login.mockImplementation(() => new Promise((resolve) => { completeLogin = resolve }))
+    const { router, unmount } = await renderLogin()
+    const push = vi.spyOn(router, 'push')
+    await submitCredentials('learner@example.com', 'private password')
+
+    unmount()
+    completeLogin({ kind: 'authenticated', userId: authenticatedState.userId, expiresAt: authenticatedState.expiresAt })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(push).not.toHaveBeenCalledWith('/')
   })
 
   it('clears the password and navigates only to home after successful login', async () => {

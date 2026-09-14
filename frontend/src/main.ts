@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
@@ -21,6 +21,13 @@ const router = createRouter({
     { path: '/login', component: LoginPage },
     { path: '/admin', component: AdminPage },
   ],
+})
+
+// Give client-side navigation the same clear reading start as a new document.
+// Initial loading and in-page authorization checks leave focus undisturbed.
+router.afterEach((_to, from) => {
+  if (from.matched.length === 0) return
+  void nextTick(() => document.getElementById('main')?.focus())
 })
 
 createApp(App).use(router).use(i18n).mount('#app')

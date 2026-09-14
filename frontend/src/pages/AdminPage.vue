@@ -1,5 +1,6 @@
 <template>
   <BtgPageContainer as="section" class="admin-page" width="reading" aria-labelledby="admin-title">
+    <p class="sr-only" role="status">{{ accessAnnouncement }}</p>
     <div v-if="auth.state.value.status === 'bootstrapping'" class="admin-page__state" role="status">
       <h1 id="admin-title">Checking your session</h1>
       <p>One moment while we check whether you are signed in.</p>
@@ -26,11 +27,11 @@
       <h1 id="admin-title">Administration</h1>
       <p class="admin-page__intro">Administrator access is available for this Academy instance.</p>
       <p class="admin-page__status">System status: OK</p>
-      <div class="admin-page__actions" aria-label="Administration actions">
+      <div class="admin-page__actions">
         <BtgButton variant="secondary" @click="goHome">Return home</BtgButton>
         <BtgButton variant="quiet" :disabled="signingOut" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</BtgButton>
       </div>
-      <p v-if="logoutError" class="admin-page__error" role="alert">{{ logoutError }}</p>
+      <p v-if="logoutError" ref="logoutErrorElement" class="admin-page__error" tabindex="-1">{{ logoutError }}</p>
     </div>
 
     <div v-else-if="access.kind === 'forbidden'" class="admin-page__state">
@@ -48,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { checkAdminAccess, type AdminAccessOutcome } from '../admin/adminAccess'
 import { useAuth } from '../auth/auth'
@@ -60,22 +61,30 @@ type AccessState = AdminAccessOutcome | { kind: 'checking' }
 const auth = useAuth()
 const router = useRouter()
 const access = ref<AccessState>({ kind: 'checking' })
+const accessAnnouncement = computed(() => {
+  if (auth.state.value.status !== 'authenticated') return ''
+  if (access.value.kind === 'authorized') return 'Administration access confirmed.'
+  if (access.value.kind === 'forbidden') return 'Access denied.'
+  if (access.value.kind === 'unavailable') return 'Administration is temporarily unavailable.'
+  return ''
+})
 const signingOut = ref(false)
 const logoutError = ref<string>()
+const logoutErrorElement = ref<HTMLElement>()
 let requestVersion = 0
 let active = true
 
 watch(
-  () => auth.state.value.status,
-  (status) => {
+  () => auth.state.value,
+  (current) => {
     const version = ++requestVersion
     logoutError.value = undefined
-    if (status === 'authenticated') {
+    if (current.status === 'authenticated') {
       void checkAccess(version)
       return
     }
     access.value = { kind: 'checking' }
-    if (status === 'unauthenticated') void router.replace('/login')
+    if (current.status === 'unauthenticated') void router.replace('/login')
   },
   { immediate: true },
 )
@@ -107,13 +116,22 @@ async function signOut() {
   if (signingOut.value) return
   logoutError.value = undefined
   signingOut.value = true
-  const outcome = await auth.logout()
-  signingOut.value = false
+  let outcome: Awaited<ReturnType<typeof auth.logout>>
+  try {
+    outcome = await auth.logout()
+  } catch {
+    outcome = { kind: 'unavailable' }
+  } finally {
+    signingOut.value = false
+  }
+  if (!active) return
   if (outcome.kind === 'unauthenticated') {
     void router.replace('/login')
     return
   }
   logoutError.value = 'We couldn’t sign you out right now. Please try again.'
+  await nextTick()
+  if (active) logoutErrorElement.value?.focus()
 }
 
 function goHome() {

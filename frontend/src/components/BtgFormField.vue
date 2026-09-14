@@ -9,7 +9,7 @@
       {{ description }}
     </p>
     <slot :control-id="controlId" :described-by="describedBy" :invalid="Boolean(error)" />
-    <p v-if="error" :id="errorId" class="btg-form-field__error" role="alert">
+    <p v-if="error" :id="errorId" class="btg-form-field__error">
       {{ error }}
     </p>
   </div>

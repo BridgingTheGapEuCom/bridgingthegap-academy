@@ -34,6 +34,12 @@ function requestInit(fetcher: ReturnType<typeof responseFetcher>, call = 0): Req
   return (fetcher as unknown as ReturnType<typeof vi.fn>).mock.calls[call][1] as RequestInit
 }
 
+function pendingResponse() {
+  let resolve: (response: Response) => void = () => undefined
+  const promise = new Promise<Response>((complete) => { resolve = complete })
+  return { promise, resolve: (response: Response) => resolve(response) }
+}
+
 describe('authentication state', () => {
   it('uses one intentional module-level state instance', () => {
     expect(useAuth()).toBe(auth)
@@ -61,6 +67,44 @@ describe('authentication state', () => {
     expect(unauthenticated.state.value).toEqual({ status: 'unauthenticated' })
     expect(unavailable.state.value).toEqual({ status: 'unavailable' })
     expect(networkFailure.state.value).toEqual({ status: 'unavailable' })
+  })
+
+  it('coalesces concurrent bootstrap calls and ignores a stale bootstrap after login', async () => {
+    const bootstrap = pendingResponse()
+    const fetcher = vi.fn((path: string) => path === '/api/auth/session'
+      ? bootstrap.promise
+      : Promise.resolve(jsonResponse(session))) as unknown as typeof fetch
+    const service = createAuthService({ fetcher })
+
+    const first = service.bootstrapSession()
+    const second = service.bootstrapSession()
+    expect(first).toBe(second)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+
+    await expect(service.login('admin@example.com', 'test password')).resolves.toMatchObject({ kind: 'authenticated' })
+    bootstrap.resolve(jsonResponse(problem(401), 401))
+    await first
+    expect(service.state.value).toEqual({ status: 'authenticated', userId: session.user_id, expiresAt: session.expires_at })
+  })
+
+  it('does not let a delayed session response reinstall an old CSRF token after a newer login', async () => {
+    const bootstrap = pendingResponse()
+    const newerSession = { ...session, user_id: '9c3dc5dc-ac79-4bdd-8e1a-89a795186ddb', csrf_token: 'new-csrf-token' }
+    const fetcher = vi.fn((path: string) => {
+      if (path === '/api/auth/session') return bootstrap.promise
+      if (path === '/api/auth/login') return Promise.resolve(jsonResponse(newerSession))
+      return Promise.resolve(new Response(null, { status: 204 }))
+    }) as unknown as typeof fetch
+    const service = createAuthService({ fetcher })
+
+    const pendingBootstrap = service.bootstrapSession()
+    await service.login('admin@example.com', 'test password')
+    bootstrap.resolve(jsonResponse(session))
+    await pendingBootstrap
+    await service.request('/api/test', { method: 'POST', expectJSON: false })
+
+    expect(service.state.value).toMatchObject({ status: 'authenticated', userId: newerSession.user_id })
+    expect(new Headers(requestInit(fetcher, 2).headers).get('X-CSRF-Token')).toBe(newerSession.csrf_token)
   })
 })
 
@@ -139,6 +183,64 @@ describe('authentication service operations', () => {
     await expect(service.request('/api/admin/status')).rejects.toMatchObject({ status: 403 })
     await expect(service.request('/api/admin/status')).rejects.toMatchObject({ status: 429 })
     expect(service.state.value).toEqual({ status: 'authenticated', userId: session.user_id, expiresAt: session.expires_at })
+  })
+
+  it('ignores an old protected-request 401 after a newer login has replaced the session', async () => {
+    const oldRequest = pendingResponse()
+    const newerSession = { ...session, user_id: '9c3dc5dc-ac79-4bdd-8e1a-89a795186ddb', csrf_token: 'new-csrf-token' }
+    const fetcher = vi.fn((path: string) => {
+      if (path === '/api/auth/session') return Promise.resolve(jsonResponse(session))
+      if (path === '/api/admin/status') return oldRequest.promise
+      if (path === '/api/auth/login') return Promise.resolve(jsonResponse(newerSession))
+      return Promise.resolve(new Response(null, { status: 204 }))
+    }) as unknown as typeof fetch
+    const service = createAuthService({ fetcher })
+    await service.bootstrapSession()
+
+    const stale = service.request('/api/admin/status')
+    await service.login('admin@example.com', 'test password')
+    oldRequest.resolve(jsonResponse(problem(401), 401))
+    await expect(stale).rejects.toMatchObject({ status: 401 })
+    expect(service.state.value).toMatchObject({ status: 'authenticated', userId: newerSession.user_id })
+    await service.request('/api/test', { method: 'POST', expectJSON: false })
+    expect(new Headers(requestInit(fetcher, 3).headers).get('X-CSRF-Token')).toBe(newerSession.csrf_token)
+  })
+
+  it('does not let an in-flight protected response restore state after logout', async () => {
+    const oldRequest = pendingResponse()
+    const fetcher = vi.fn((path: string) => path === '/api/auth/session'
+      ? Promise.resolve(jsonResponse(session))
+      : path === '/api/admin/status'
+        ? oldRequest.promise
+        : Promise.resolve(new Response(null, { status: 204 }))) as unknown as typeof fetch
+    const service = createAuthService({ fetcher })
+    await service.bootstrapSession()
+
+    const pending = service.request('/api/admin/status')
+    await service.logout()
+    oldRequest.resolve(jsonResponse({ status: 'ok' }))
+    await pending
+    expect(service.state.value).toEqual({ status: 'unauthenticated' })
+  })
+
+  it('honors a protected 401 during a failing logout for the same session', async () => {
+    const protectedRequest = pendingResponse()
+    const logoutRequest = pendingResponse()
+    const fetcher = vi.fn((path: string) => {
+      if (path === '/api/auth/session') return Promise.resolve(jsonResponse(session))
+      if (path === '/api/admin/status') return protectedRequest.promise
+      return logoutRequest.promise
+    }) as unknown as typeof fetch
+    const service = createAuthService({ fetcher })
+    await service.bootstrapSession()
+
+    const pendingProtected = service.request('/api/admin/status')
+    const pendingLogout = service.logout()
+    protectedRequest.resolve(jsonResponse(problem(401), 401))
+    await expect(pendingProtected).rejects.toMatchObject({ status: 401 })
+    logoutRequest.resolve(jsonResponse(problem(500), 500))
+    await expect(pendingLogout).resolves.toEqual({ kind: 'unavailable' })
+    expect(service.state.value).toEqual({ status: 'unauthenticated' })
   })
 
   it('does not persist authentication or CSRF state in browser storage', async () => {

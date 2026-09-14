@@ -21,15 +21,15 @@ The built-in theme must remain usable if a future branding override has poor con
 
 The Academy owns `BtgButton`, `BtgFormField`, `BtgTextInput`, and `BtgPageContainer`. Prefer native semantic HTML for simple controls: native buttons, inputs, and labels carry their normal browser and assistive-technology behaviour. Use Reka UI only for behaviour that native HTML cannot provide well, such as the existing dialog primitive.
 
-Every form control needs a persistent visible label. `BtgFormField` supplies label, optional help, and error associations through its slot props. Required state includes both a visible marker and screen-reader text; errors use `role="alert"`, `aria-describedby`, and `aria-invalid`, never colour alone.
+Every form control needs a persistent visible label. `BtgFormField` supplies label, optional help, and error associations through its slot props. Required state includes both a visible marker and screen-reader text; errors use `aria-describedby` and `aria-invalid`, never colour alone. On submission errors, focus the first invalid control so its associated error is announced once.
 
 `BtgButton` has only `primary`, `secondary`, `quiet`, and `destructive` variants. New variants need a semantic reason. Bordered surfaces are preferred over cards and shadows; use elevation only where layer separation is necessary.
 
 ## Authentication forms
 
-Authentication forms keep credentials and field errors in component-local state. Use `BtgFormField` for persistent labels and field-level validation; on failed client validation, focus the first invalid native control. Authentication outcomes use one visible, focusable form-level alert that is focused once after the result is available. The page owns its wording and focus behavior; the frontend auth service owns transport, session state, and memory-only CSRF state.
+Authentication forms keep credentials and field errors in component-local state. Use `BtgFormField` for persistent labels and field-level validation; on failed client validation, focus the first invalid native control. Authentication outcomes use one visible, focusable form-level error that is focused once after the result is available, avoiding duplicate live-region announcements. The page owns its wording and focus behavior; the frontend auth service owns transport, session state, and memory-only CSRF state.
 
-Authenticated-route UI uses backend-authoritative checks for authorization. A `401` moves the frontend to its unauthenticated flow; a `403` leaves the authenticated session intact and presents access denied. Never cache roles or capabilities as frontend truth: route states may be local and short-lived, but every protected capability check remains a backend request.
+Authenticated-route UI uses backend-authoritative checks for authorization. Protected API calls go through `useAuth().request` so session invalidation and memory-only CSRF attachment remain consistent; the standalone API client currently serves liveness only. A `401` moves the frontend to its unauthenticated flow; a `403` leaves the authenticated session intact and presents access denied. Never cache roles or capabilities as frontend truth: route states may be local and short-lived, but every protected capability check remains a backend request.
 
 ## Interaction and responsiveness
 

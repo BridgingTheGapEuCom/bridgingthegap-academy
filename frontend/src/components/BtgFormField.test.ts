@@ -27,7 +27,7 @@ describe('BtgFormField', () => {
   it('associates an error and exposes invalid state without using colour alone', () => {
     render(FieldFixture, { props: { error: 'Enter a valid email address.' } })
     const input = screen.getByRole('textbox', { name: /email address/i })
-    const error = screen.getByRole('alert')
+    const error = screen.getByText('Enter a valid email address.')
     expect(input.getAttribute('aria-invalid')).toBe('true')
     expect(input.getAttribute('aria-describedby')).toContain(error.id)
   })

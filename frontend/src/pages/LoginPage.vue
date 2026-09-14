@@ -23,7 +23,7 @@
       <p class="login-page__intro">Use your Academy email address and password to continue.</p>
 
       <form class="login-page__form" aria-labelledby="login-title" :aria-busy="submitting" novalidate @submit.prevent="submit">
-        <div v-if="formError" ref="formErrorElement" class="login-page__form-error" role="alert" tabindex="-1">
+        <div v-if="formError" ref="formErrorElement" class="login-page__form-error" tabindex="-1">
           {{ formError }}
         </div>
 
@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../auth/auth'
 import BtgButton from '../components/BtgButton.vue'
@@ -83,6 +83,12 @@ const submitting = ref(false)
 const emailInput = ref<FocusableInput>()
 const passwordInput = ref<FocusableInput>()
 const formErrorElement = ref<HTMLElement>()
+let active = true
+
+onBeforeUnmount(() => {
+  active = false
+  password.value = ''
+})
 
 async function submit() {
   if (submitting.value) return
@@ -102,9 +108,16 @@ async function submit() {
   }
 
   submitting.value = true
-  const outcome = await auth.login(submittedEmail, password.value)
-  password.value = ''
-  submitting.value = false
+  let outcome: Awaited<ReturnType<typeof auth.login>>
+  try {
+    outcome = await auth.login(submittedEmail, password.value)
+  } catch {
+    outcome = { kind: 'unavailable' }
+  } finally {
+    password.value = ''
+    submitting.value = false
+  }
+  if (!active) return
 
   if (outcome.kind === 'authenticated') {
     await router.push('/')

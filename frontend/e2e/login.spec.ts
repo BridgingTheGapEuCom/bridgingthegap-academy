@@ -42,7 +42,7 @@ test('login is labelled, keyboard-operable, and reports invalid credentials gene
   await page.getByLabel(/^Password/).fill('private password')
   await page.getByLabel(/^Password/).press('Enter')
 
-  const error = page.getByRole('alert')
+  const error = page.getByText('The email or password is incorrect.')
   await expect(error).toHaveText('The email or password is incorrect.')
   await expect(error).toBeFocused()
   await expect(page.getByLabel(/^Email/)).toHaveValue('learner@example.com')
@@ -50,11 +50,16 @@ test('login is labelled, keyboard-operable, and reports invalid credentials gene
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
-test('login reflows at a narrow viewport without horizontal overflow', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
+test('login reflows from tablet width down to a 320px CSS viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 844 })
   await serveUnauthenticatedSession(page)
   await page.goto('/login')
 
-  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  for (const width of [768, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible()
+    await expect(page.getByLabel(/^Email/)).toBeVisible()
+    await expect(page.getByLabel(/^Password/)).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  }
 })
