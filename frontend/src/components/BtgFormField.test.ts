@@ -38,4 +38,16 @@ describe('BtgFormField', () => {
     input.focus()
     expect(document.activeElement).toBe(input)
   })
+
+  it('generates distinct control IDs for separate fields', () => {
+    render({
+      components: { BtgFormField, BtgTextInput },
+      template: `
+        <BtgFormField label="Email" v-slot="{ controlId }"><BtgTextInput :id="controlId" /></BtgFormField>
+        <BtgFormField label="Password" v-slot="{ controlId }"><BtgTextInput :id="controlId" type="password" /></BtgFormField>
+      `,
+    })
+
+    expect((screen.getByLabelText('Email') as HTMLInputElement).id).not.toBe((screen.getByLabelText('Password') as HTMLInputElement).id)
+  })
 })

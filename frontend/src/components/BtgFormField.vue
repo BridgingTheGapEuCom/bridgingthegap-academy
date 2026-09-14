@@ -16,9 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-
-let fieldNumber = 0
+import { computed, useId } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -31,7 +29,7 @@ const props = withDefaults(
   { controlId: undefined, description: undefined, error: undefined, required: false },
 )
 
-const generatedID = `btg-field-${++fieldNumber}`
+const generatedID = `btg-field-${useId()}`
 const controlId = computed(() => props.controlId || generatedID)
 const descriptionId = computed(() => `${controlId.value}-description`)
 const errorId = computed(() => `${controlId.value}-error`)

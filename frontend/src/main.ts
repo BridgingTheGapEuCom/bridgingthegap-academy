@@ -4,6 +4,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import { auth } from './auth/auth'
 import HomePage from './pages/HomePage.vue'
+import LoginPage from './pages/LoginPage.vue'
 import './style.css'
 
 const i18n = createI18n({
@@ -14,7 +15,10 @@ const i18n = createI18n({
 
 const router = createRouter({
   history: createWebHistory(),
-  routes: [{ path: '/', component: HomePage }],
+  routes: [
+    { path: '/', component: HomePage },
+    { path: '/login', component: LoginPage },
+  ],
 })
 
 createApp(App).use(router).use(i18n).mount('#app')
