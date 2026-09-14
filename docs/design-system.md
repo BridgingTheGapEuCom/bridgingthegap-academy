@@ -29,6 +29,8 @@ Every form control needs a persistent visible label. `BtgFormField` supplies lab
 
 Authentication forms keep credentials and field errors in component-local state. Use `BtgFormField` for persistent labels and field-level validation; on failed client validation, focus the first invalid native control. Authentication outcomes use one visible, focusable form-level alert that is focused once after the result is available. The page owns its wording and focus behavior; the frontend auth service owns transport, session state, and memory-only CSRF state.
 
+Authenticated-route UI uses backend-authoritative checks for authorization. A `401` moves the frontend to its unauthenticated flow; a `403` leaves the authenticated session intact and presents access denied. Never cache roles or capabilities as frontend truth: route states may be local and short-lived, but every protected capability check remains a backend request.
+
 ## Interaction and responsiveness
 
 Focus uses one high-contrast 3px outline with an offset across native and custom controls. Do not remove it. Motion is short and nonessential, and the reduced-motion query suppresses it. Page gutters scale down at small widths; controls retain a 44px minimum target size and layouts must not introduce horizontal scrolling.

@@ -5,6 +5,7 @@ import App from './App.vue'
 import { auth } from './auth/auth'
 import HomePage from './pages/HomePage.vue'
 import LoginPage from './pages/LoginPage.vue'
+import AdminPage from './pages/AdminPage.vue'
 import './style.css'
 
 const i18n = createI18n({
@@ -18,6 +19,7 @@ const router = createRouter({
   routes: [
     { path: '/', component: HomePage },
     { path: '/login', component: LoginPage },
+    { path: '/admin', component: AdminPage },
   ],
 })
 

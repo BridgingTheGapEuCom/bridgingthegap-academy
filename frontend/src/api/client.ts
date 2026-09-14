@@ -3,6 +3,7 @@ import type { components, paths } from './generated'
 export type LiveResponse = paths['/health/live']['get']['responses'][200]['content']['application/json']
 export type LoginRequest = components['schemas']['LoginRequest']
 export type AuthenticatedSessionResponse = components['schemas']['AuthenticatedSession']
+export type AdminStatusResponse = components['schemas']['AdminStatus']
 export type ProblemDetails = components['schemas']['Problem']
 
 type Fetcher = typeof fetch
