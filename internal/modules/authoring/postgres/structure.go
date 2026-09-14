@@ -21,6 +21,21 @@ func (r *Repository) lockActiveDraft(ctx context.Context, tx pgx.Tx, id pgtype.U
 	return nil
 }
 
+func (r *Repository) lockActiveDraftRevision(ctx context.Context, tx pgx.Tx, id pgtype.UUID, expected int64) error {
+	var status string
+	var revision int64
+	if err := tx.QueryRow(ctx, "SELECT status, revision FROM authoring.course_draft WHERE id = $1 FOR UPDATE", id).Scan(&status, &revision); err != nil {
+		return storageError(err)
+	}
+	if status != string(authoring.DraftActive) {
+		return authoring.ErrInvalidState
+	}
+	if revision != expected {
+		return authoring.ErrRevisionMismatch
+	}
+	return nil
+}
+
 func sameIDs[T ~string](got []T, wanted []T) bool {
 	if len(got) != len(wanted) {
 		return false
@@ -41,6 +56,9 @@ func sameIDs[T ~string](got []T, wanted []T) bool {
 }
 
 func (r *Repository) ReorderModules(ctx context.Context, draftID authoring.DraftID, expected int64, order []authoring.ModuleID) (authoring.CourseDraft, error) {
+	if err := authoring.ValidateModuleOrder(order); err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
 	id, err := uuid(string(draftID))
 	if err != nil {
 		return authoring.CourseDraft{}, err
@@ -67,7 +85,7 @@ func (r *Repository) ReorderModules(ctx context.Context, draftID authoring.Draft
 		got = append(got, authoring.ModuleID(m.ID.String()))
 	}
 	if !sameIDs(got, order) {
-		return authoring.CourseDraft{}, authoring.ErrConflict
+		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
 	}
 	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_module_draft_position_unique DEFERRED"); err != nil {
 		return authoring.CourseDraft{}, storageError(err)
@@ -88,6 +106,186 @@ func (r *Repository) ReorderModules(ctx context.Context, draftID authoring.Draft
 		return authoring.CourseDraft{}, storageError(err)
 	}
 	return mapDraft(row)
+}
+
+// CreateModuleAtPosition inserts a module at a contiguous zero-based position.
+// The parent draft row is locked and compared before any existing positions are
+// shifted, so a stale structural client cannot partially alter the outline.
+func (r *Repository) CreateModuleAtPosition(ctx context.Context, draftID authoring.DraftID, expected int64, input authoring.ModuleInput) (authoring.DraftModule, authoring.CourseDraft, error) {
+	if input.DraftID != draftID || input.Validate() != nil || expected < 1 {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	id, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	defer tx.Rollback(ctx)
+	if err := r.lockActiveDraftRevision(ctx, tx, id, expected); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	count, err := q.CountModules(ctx, id)
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if count >= authoring.MaxModulesPerDraft || input.Position > int(count) {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_module_draft_position_unique DEFERRED"); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.ShiftModulesAtPosition(ctx, sqlc.ShiftModulesAtPositionParams{DraftID: id, Position: int32(input.Position)}); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	moduleRow, err := q.CreateModule(ctx, sqlc.CreateModuleParams{ID: id, StableKey: input.StableKey, Title: input.Title, Description: input.Description, Position: int32(input.Position)})
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: id, Revision: expected})
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, id); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draft, err := mapDraft(draftRow)
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, err
+	}
+	return mapModule(moduleRow), draft, nil
+}
+
+// UpdateModuleMetadata applies a metadata-only compare-and-swap. Stable keys
+// and positions are deliberately absent from the patch.
+func (r *Repository) UpdateModuleMetadata(ctx context.Context, draftID authoring.DraftID, moduleID authoring.ModuleID, expected int64, patch authoring.DraftModulePatch) (authoring.DraftModule, authoring.CourseDraft, error) {
+	if expected < 1 || patch.Empty() {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, err
+	}
+	moduleKey, err := uuid(string(moduleID))
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	defer tx.Rollback(ctx)
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	currentRow, err := q.GetModule(ctx, moduleKey)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && currentRow.DraftID != draftKey) {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	current := mapModule(currentRow)
+	next, err := patch.Apply(current.ModuleInput)
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	moduleRow, err := q.UpdateModule(ctx, sqlc.UpdateModuleParams{ID: moduleKey, Revision: expected, Title: next.Title, Description: next.Description})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	// The draft is locked, so reading its current revision and CAS-bumping it
+	// gives the response the exact committed aggregate revision.
+	var draftRevision int64
+	if err := tx.QueryRow(ctx, "SELECT revision FROM authoring.course_draft WHERE id = $1", draftKey).Scan(&draftRevision); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: draftRevision})
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draft, err := mapDraft(draftRow)
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, err
+	}
+	return mapModule(moduleRow), draft, nil
+}
+
+// DeleteEmptyModule deliberately refuses to expose the persistence cascade for
+// contained lessons. Lesson movement/deletion remains an explicit later API.
+func (r *Repository) DeleteEmptyModule(ctx context.Context, draftID authoring.DraftID, moduleID authoring.ModuleID, expectedDraft, expectedModule int64) (authoring.CourseDraft, error) {
+	if expectedDraft < 1 || expectedModule < 1 {
+		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	moduleKey, err := uuid(string(moduleID))
+	if err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	defer tx.Rollback(ctx)
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expectedDraft); err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	current, err := q.GetModule(ctx, moduleKey)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && current.DraftID != draftKey) {
+		return authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	lessons, err := q.CountLessonsForModule(ctx, moduleKey)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if lessons > 0 {
+		return authoring.CourseDraft{}, authoring.ErrConflict
+	}
+	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_module_draft_position_unique DEFERRED"); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if _, err := q.DeleteModuleForDraft(ctx, sqlc.DeleteModuleForDraftParams{ID: moduleKey, DraftID: draftKey, Revision: expectedModule}); errors.Is(err, pgx.ErrNoRows) {
+		return authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	} else if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.CompactModulePositionsAfter(ctx, sqlc.CompactModulePositionsAfterParams{DraftID: draftKey, Position: current.Position}); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: expectedDraft})
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	return mapDraft(draftRow)
 }
 
 func (r *Repository) ReorderLessons(ctx context.Context, moduleID authoring.ModuleID, expected int64, order []authoring.LessonID) (authoring.DraftModule, error) {

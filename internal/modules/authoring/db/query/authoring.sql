@@ -74,6 +74,14 @@ SELECT * FROM authoring.module WHERE id = $1;
 -- name: ListModules :many
 SELECT * FROM authoring.module WHERE draft_id = $1 ORDER BY position, id;
 
+-- name: CountModules :one
+SELECT count(*) FROM authoring.module WHERE draft_id = $1;
+
+-- name: ShiftModulesAtPosition :exec
+UPDATE authoring.module
+SET position = position + 1, revision = revision + 1, updated_at = now()
+WHERE draft_id = $1 AND position >= $2;
+
 -- name: UpdateModule :one
 UPDATE authoring.module AS m
 SET title = $3, description = $4, revision = m.revision + 1, updated_at = now()
@@ -91,6 +99,20 @@ DELETE FROM authoring.module AS m
 WHERE m.id = $1 AND m.revision = $2
   AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = m.draft_id AND d.status = 'ACTIVE')
 RETURNING m.id;
+
+-- name: DeleteModuleForDraft :one
+DELETE FROM authoring.module AS m
+WHERE m.id = $1 AND m.draft_id = $2 AND m.revision = $3
+  AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = m.draft_id AND d.status = 'ACTIVE')
+RETURNING m.id;
+
+-- name: CompactModulePositionsAfter :exec
+UPDATE authoring.module
+SET position = position - 1, revision = revision + 1, updated_at = now()
+WHERE draft_id = $1 AND position > $2;
+
+-- name: CountLessonsForModule :one
+SELECT count(*) FROM authoring.lesson WHERE module_id = $1;
 
 -- name: CreateLesson :one
 INSERT INTO authoring.lesson (draft_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, content)

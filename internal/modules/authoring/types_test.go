@@ -89,6 +89,32 @@ func TestDraftStructureValidation(t *testing.T) {
 	}
 }
 
+func TestDraftModulePatchAndOrderValidation(t *testing.T) {
+	current := ModuleInput{DraftID: "draft-id", StableKey: "stable-module", Title: "Original", Description: "Original description", Position: 2}
+	title := "Updated"
+	description := ""
+	updated, err := (DraftModulePatch{Title: &title, Description: &description}).Apply(current)
+	if err != nil || updated.Title != title || updated.Description != "" || updated.StableKey != current.StableKey || updated.Position != current.Position {
+		t.Fatalf("module patch changed immutable structure: %#v err=%v", updated, err)
+	}
+	if _, err := (DraftModulePatch{}).Apply(current); err == nil {
+		t.Fatal("empty module patch accepted")
+	}
+	blank := " "
+	if _, err := (DraftModulePatch{Title: &blank}).Apply(current); err == nil {
+		t.Fatal("blank module title accepted")
+	}
+	if err := ValidateModuleOrder([]ModuleID{"first", "second"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateModuleOrder([]ModuleID{"first", "first"}); err == nil {
+		t.Fatal("duplicate module order accepted")
+	}
+	if err := ValidateModuleOrder(make([]ModuleID, MaxModulesPerDraft+1)); err == nil {
+		t.Fatal("oversized module order accepted")
+	}
+}
+
 func TestPrerequisiteKeys(t *testing.T) {
 	if err := ValidatePrerequisiteKeys("current-lesson", []string{"first-lesson", "second-lesson"}); err != nil {
 		t.Fatal(err)

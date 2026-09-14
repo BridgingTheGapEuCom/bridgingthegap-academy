@@ -20,6 +20,7 @@ import (
 const sessionCookieName = "btg_session"
 const maxLoginBodyBytes = 8 * 1024
 const maxAuthoringDraftMetadataBodyBytes = 128 * 1024
+const maxAuthoringModuleBodyBytes = 64 * 1024
 const maxCookieHeaderBytes = 8 * 1024
 const maxSessionCookieValueBytes = 128
 
@@ -38,21 +39,22 @@ type sessionCSRF interface {
 }
 
 type authHTTP struct {
-	login              loginLogoutService
-	sessions           sessionResolver
-	csrf               sessionCSRF
-	origins            originPolicy
-	loginSources       *loginSourceLimiter
-	loginWork          *loginWorkGuard
-	loginMetrics       *prometheus.CounterVec
-	loginRejects       *prometheus.CounterVec
-	authorizer         identity.Authorizer
-	authzMetrics       *prometheus.CounterVec
-	courses            *courses.ReadService
-	authoring          *authoring.ReadService
-	authoringMutations *authoring.DraftMutationService
-	cookieSecure       bool
-	now                func() time.Time
+	login                       loginLogoutService
+	sessions                    sessionResolver
+	csrf                        sessionCSRF
+	origins                     originPolicy
+	loginSources                *loginSourceLimiter
+	loginWork                   *loginWorkGuard
+	loginMetrics                *prometheus.CounterVec
+	loginRejects                *prometheus.CounterVec
+	authorizer                  identity.Authorizer
+	authzMetrics                *prometheus.CounterVec
+	courses                     *courses.ReadService
+	authoring                   *authoring.ReadService
+	authoringMutations          *authoring.DraftMutationService
+	authoringStructureMutations *authoring.ModuleMutationService
+	cookieSecure                bool
+	now                         func() time.Time
 }
 
 type resolvedSessionKey struct{}

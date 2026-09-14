@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -218,5 +219,171 @@ func testAuthoringDraftMetadataMutation(t *testing.T, ctx context.Context, pool 
 	raceStored, err := authoringRepository.GetDraft(ctx, raceDraft.ID)
 	if err != nil || raceStored.Revision != 2 {
 		t.Fatalf("concurrent mutation revision = %d err=%v", raceStored.Revision, err)
+	}
+}
+
+func testAuthoringModuleMutation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	courseRepository := coursespostgres.New(pool)
+	course, err := courseRepository.CreateCourse(ctx, "authoring-module-mutation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityRepository := identitypostgres.New(pool)
+	user, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := authoringpostgres.New(pool)
+	draft, workspace, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizer := authoring.NewAuthorizationService(repository)
+	mutations := authoring.NewModuleMutationService(repository, authorizer)
+	sessions := identity.NewSessionService(identityRepository, nil, nil)
+	session, err := sessions.CreateSession(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := authTestRouter(&authHTTP{sessions: sessions, authoringStructureMutations: mutations})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: session.Token.Value()}
+	csrf := authTestCSRFToken().Value()
+	base := "/api/authoring/drafts/" + string(draft.ID) + "/modules"
+
+	response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":1,"stableKey":"advanced","title":"Advanced","position":0}`, cookie, csrf)
+	if response.Code != http.StatusOK {
+		t.Fatalf("first module create = %d: %s", response.Code, response.Body.String())
+	}
+	response = authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":2,"stableKey":"basics","title":"Basics","position":0}`, cookie, csrf)
+	if response.Code != http.StatusOK {
+		t.Fatalf("middle module create = %d: %s", response.Code, response.Body.String())
+	}
+	modules, err := repository.ListModules(ctx, draft.ID)
+	if err != nil || len(modules) != 2 || modules[0].StableKey != "basics" || modules[0].Position != 0 || modules[1].StableKey != "advanced" || modules[1].Position != 1 {
+		t.Fatalf("insert did not shift positions: %v %#v", err, modules)
+	}
+	basics, advanced := modules[0], modules[1]
+	response = authRequest(router, http.MethodPatch, base+"/"+string(basics.ID), `{"expectedModuleRevision":1,"title":"Fundamentals"}`, cookie, csrf)
+	if response.Code != http.StatusOK {
+		t.Fatalf("module update = %d: %s", response.Code, response.Body.String())
+	}
+	basics, err = repository.GetModule(ctx, basics.ID)
+	if err != nil || basics.Revision != 2 || basics.StableKey != "basics" {
+		t.Fatalf("metadata update altered key/revision: %v %#v", err, basics)
+	}
+	draft, err = repository.GetDraft(ctx, draft.ID)
+	if err != nil || draft.Revision != 4 {
+		t.Fatalf("draft revision after update = %d err=%v", draft.Revision, err)
+	}
+	response = authRequest(router, http.MethodPut, base+"/order", `{"expectedDraftRevision":4,"moduleIds":["`+string(advanced.ID)+`","`+string(basics.ID)+`"]}`, cookie, csrf)
+	if response.Code != http.StatusOK {
+		t.Fatalf("module reorder = %d: %s", response.Code, response.Body.String())
+	}
+	modules, err = repository.ListModules(ctx, draft.ID)
+	if err != nil || modules[0].ID != advanced.ID || modules[0].Position != 0 || modules[1].ID != basics.ID || modules[1].Position != 1 {
+		t.Fatalf("reorder was not contiguous: %v %#v", err, modules)
+	}
+	if response = authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"stale","title":"Stale","position":2}`, cookie, csrf); response.Code != http.StatusConflict {
+		t.Fatalf("stale create = %d: %s", response.Code, response.Body.String())
+	}
+	basics, err = repository.GetModule(ctx, basics.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.CreateLesson(ctx, lessonFixture(draft.ID, basics.ID, "module-lesson", 0)); err != nil {
+		t.Fatal(err)
+	}
+	draft, err = repository.GetDraft(ctx, draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = authRequest(router, http.MethodDelete, base+"/"+string(basics.ID), `{"expectedDraftRevision":`+strconv.FormatInt(draft.Revision, 10)+`,"expectedModuleRevision":`+strconv.FormatInt(basics.Revision, 10)+`}`, cookie, csrf)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("non-empty module delete = %d: %s", response.Code, response.Body.String())
+	}
+	advanced, err = repository.GetModule(ctx, advanced.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = authRequest(router, http.MethodDelete, base+"/"+string(advanced.ID), `{"expectedDraftRevision":`+strconv.FormatInt(draft.Revision, 10)+`,"expectedModuleRevision":`+strconv.FormatInt(advanced.Revision, 10)+`}`, cookie, csrf)
+	if response.Code != http.StatusOK {
+		t.Fatalf("empty module delete = %d: %s", response.Code, response.Body.String())
+	}
+	modules, err = repository.ListModules(ctx, draft.ID)
+	if err != nil || len(modules) != 1 || modules[0].ID != basics.ID || modules[0].Position != 0 {
+		t.Fatalf("delete did not compact positions: %v %#v", err, modules)
+	}
+
+	other, _, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherModule, _, err := repository.CreateModuleAtPosition(ctx, other.ID, other.Revision, authoring.ModuleInput{DraftID: other.ID, StableKey: "other", Title: "Other", Position: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err = repository.GetDraft(ctx, draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = authRequest(router, http.MethodPatch, base+"/"+string(otherModule.ID), `{"expectedModuleRevision":1,"title":"Leak"}`, cookie, csrf)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("cross-draft module mutation = %d: %s", response.Code, response.Body.String())
+	}
+	if _, err := repository.RevokeMember(ctx, workspace.ID, string(user.ID)); err != nil {
+		t.Fatal(err)
+	}
+	response = authRequest(router, http.MethodPatch, base+"/"+string(basics.ID), `{"expectedModuleRevision":`+strconv.FormatInt(basics.Revision, 10)+`,"title":"Revoked"}`, cookie, csrf)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("revoked structural mutation = %d", response.Code)
+	}
+
+	// Independent PostgreSQL callers with the same aggregate revision cannot
+	// both commit a full reorder.
+	raceDraft, _, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raceOne, _, err := repository.CreateModuleAtPosition(ctx, raceDraft.ID, 1, authoring.ModuleInput{DraftID: raceDraft.ID, StableKey: "one", Title: "One", Position: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raceTwo, raceCurrent, err := repository.CreateModuleAtPosition(ctx, raceDraft.ID, 2, authoring.ModuleInput{DraftID: raceDraft.ID, StableKey: "two", Title: "Two", Position: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, order := range [][]authoring.ModuleID{{raceOne.ID, raceTwo.ID}, {raceTwo.ID, raceOne.ID}} {
+		order := order
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			_, err := repository.ReorderModules(ctx, raceDraft.ID, raceCurrent.Revision, order)
+			results <- err
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+	successes, conflicts := 0, 0
+	for err := range results {
+		if err == nil {
+			successes++
+		} else if errors.Is(err, authoring.ErrRevisionMismatch) {
+			conflicts++
+		} else {
+			t.Fatalf("concurrent reorder error: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent reorder results successes=%d conflicts=%d", successes, conflicts)
+	}
+	raced, err := repository.ListModules(ctx, raceDraft.ID)
+	if err != nil || len(raced) != 2 || raced[0].Position != 0 || raced[1].Position != 1 || raced[0].ID == raced[1].ID {
+		t.Fatalf("concurrent reorder corrupted positions: %v %#v", err, raced)
 	}
 }

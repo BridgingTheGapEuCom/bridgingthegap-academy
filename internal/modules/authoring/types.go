@@ -157,6 +157,10 @@ type ModuleInput struct {
 	Position                      int
 }
 
+// MaxModulesPerDraft bounds authoring structure operations and their request
+// payloads without constraining ordinary course design.
+const MaxModulesPerDraft = 1000
+
 func (m ModuleInput) Validate() error {
 	if m.DraftID == "" {
 		return errors.New("draft identifier required")
@@ -178,6 +182,50 @@ type DraftModule struct {
 	ModuleInput
 	Revision             int64
 	CreatedAt, UpdatedAt time.Time
+}
+
+// DraftModulePatch deliberately excludes stable key and position. A stable
+// key is publication continuity metadata, while position changes belong to
+// the explicit full-order operation.
+type DraftModulePatch struct {
+	Title       *string
+	Description *string
+}
+
+func (p DraftModulePatch) Empty() bool { return p.Title == nil && p.Description == nil }
+
+func (p DraftModulePatch) Apply(current ModuleInput) (ModuleInput, error) {
+	if p.Empty() {
+		return ModuleInput{}, errors.New("draft module patch is empty")
+	}
+	next := current
+	if p.Title != nil {
+		next.Title = *p.Title
+	}
+	if p.Description != nil {
+		next.Description = *p.Description
+	}
+	if err := next.Validate(); err != nil {
+		return ModuleInput{}, err
+	}
+	return next, nil
+}
+
+func ValidateModuleOrder(order []ModuleID) error {
+	if len(order) > MaxModulesPerDraft {
+		return errors.New("too many modules")
+	}
+	seen := make(map[ModuleID]struct{}, len(order))
+	for _, id := range order {
+		if id == "" {
+			return errors.New("module identifier required")
+		}
+		if _, found := seen[id]; found {
+			return errors.New("duplicate module identifier")
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
 }
 
 type LessonInput struct {

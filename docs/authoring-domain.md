@@ -76,3 +76,14 @@ hiding policy. Audit is deliberately deferred: the existing audit transaction
 orchestrators are scoped to session lifecycle work, and this slice does not add
 an Authoring-to-Audit persistence dependency without a shared transactional
 mutation boundary.
+
+Draft Module mutations require `authoring.structure.edit`, the trusted Origin,
+and the session-bound CSRF token. Creation, full-list reorder, and deletion use
+the current Draft revision; metadata PATCH uses the Module revision and also
+advances the Draft revision. Module stable keys are immutable through ordinary
+metadata PATCH because they carry semantic identity into publication. Reorder
+accepts every Module ID exactly once and commits contiguous zero-based
+positions atomically. The API deliberately deletes only empty Modules: a
+Module containing Lessons returns a conflict, rather than exposing the
+persistence cascade through an ordinary structural request. As with all
+private Authoring responses, mutation results are `Cache-Control: no-store`.

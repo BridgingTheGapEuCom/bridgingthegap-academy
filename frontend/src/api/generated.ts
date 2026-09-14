@@ -37,6 +37,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/modules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates one draft Module at a zero-based position using the current draft revision. The authenticated session must provide a valid CSRF token and trusted same-origin Origin. */
+        post: operations["createAuthoringModule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/modules/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Atomically replaces the complete ordered Module ID list for one Draft. The list must contain every current Module exactly once. */
+        put: operations["reorderAuthoringModules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/modules/{moduleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Deletes an empty Module only. Modules containing Lessons are rejected so the lesson cascade remains unavailable through this API. */
+        delete: operations["deleteAuthoringModule"];
+        options?: never;
+        head?: never;
+        /** @description Updates title and description only. Stable key and position are immutable through PATCH. */
+        patch: operations["updateAuthoringModule"];
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}/structure": {
         parameters: {
             query?: never;
@@ -236,6 +288,33 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthoringModuleCreateRequest: {
+            expectedDraftRevision: number;
+            stableKey: string;
+            title: string;
+            description?: string;
+            position: number;
+        };
+        AuthoringModuleUpdateRequest: {
+            expectedModuleRevision: number;
+            title?: string;
+            description?: string;
+        };
+        AuthoringModuleReorderRequest: {
+            expectedDraftRevision: number;
+            moduleIds: string[];
+        };
+        AuthoringModuleDeleteRequest: {
+            expectedDraftRevision: number;
+            expectedModuleRevision: number;
+        };
+        AuthoringModuleMutationResponse: {
+            module: components["schemas"]["AuthoringModuleSummary"];
+            draftRevision: number;
+        };
+        AuthoringModuleOrderResponse: {
+            draftRevision: number;
+        };
         AuthoringDraftUpdateRequest: {
             expectedRevision: number;
             intendedVersion?: string;
@@ -635,6 +714,7 @@ export interface components {
     };
     parameters: {
         AuthoringDraftID: string;
+        AuthoringModuleID: string;
         AuthoringLessonID: string;
         CourseSlug: string;
         CourseVersion: string;
@@ -729,6 +809,136 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createAuthoringModule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringModuleCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Module and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringModuleMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    reorderAuthoringModules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringModuleReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringModuleOrderResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    deleteAuthoringModule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                moduleId: components["parameters"]["AuthoringModuleID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringModuleDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringModuleOrderResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    updateAuthoringModule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                moduleId: components["parameters"]["AuthoringModuleID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringModuleUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Module and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringModuleMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

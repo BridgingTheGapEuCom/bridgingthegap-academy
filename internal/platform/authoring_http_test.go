@@ -87,6 +87,164 @@ type authoringMembershipsFake struct {
 	err   error
 }
 
+type authoringModuleHTTPRepository struct {
+	draft   authoring.CourseDraft
+	modules map[authoring.ModuleID]authoring.DraftModule
+}
+
+func (r *authoringModuleHTTPRepository) CreateModuleAtPosition(_ context.Context, draftID authoring.DraftID, expected int64, input authoring.ModuleInput) (authoring.DraftModule, authoring.CourseDraft, error) {
+	if draftID != r.draft.ID {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if expected != r.draft.Revision {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	if input.Position < 0 || input.Position > len(r.modules) {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	for id, module := range r.modules {
+		if module.Position >= input.Position {
+			module.Position++
+			module.Revision++
+			r.modules[id] = module
+		}
+	}
+	module := authoring.DraftModule{ID: authoring.ModuleID("55555555-5555-4555-8555-555555555555"), ModuleInput: input, Revision: 1}
+	r.modules[module.ID] = module
+	r.draft.Revision++
+	return module, r.draft, nil
+}
+
+func (r *authoringModuleHTTPRepository) GetModule(_ context.Context, id authoring.ModuleID) (authoring.DraftModule, error) {
+	module, found := r.modules[id]
+	if !found {
+		return authoring.DraftModule{}, authoring.ErrNotFound
+	}
+	return module, nil
+}
+
+func (r *authoringModuleHTTPRepository) UpdateModuleMetadata(_ context.Context, draftID authoring.DraftID, id authoring.ModuleID, expected int64, patch authoring.DraftModulePatch) (authoring.DraftModule, authoring.CourseDraft, error) {
+	module, found := r.modules[id]
+	if !found || module.DraftID != draftID {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if module.Revision != expected {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	next, err := patch.Apply(module.ModuleInput)
+	if err != nil {
+		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	module.ModuleInput, module.Revision = next, module.Revision+1
+	r.modules[id] = module
+	r.draft.Revision++
+	return module, r.draft, nil
+}
+
+func (r *authoringModuleHTTPRepository) ReorderModules(_ context.Context, draftID authoring.DraftID, expected int64, order []authoring.ModuleID) (authoring.CourseDraft, error) {
+	if draftID != r.draft.ID {
+		return authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if expected != r.draft.Revision {
+		return authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	if len(order) != len(r.modules) {
+		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	for position, id := range order {
+		module, found := r.modules[id]
+		if !found {
+			return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+		}
+		module.Position = position
+		r.modules[id] = module
+	}
+	r.draft.Revision++
+	return r.draft, nil
+}
+
+func (r *authoringModuleHTTPRepository) DeleteEmptyModule(_ context.Context, draftID authoring.DraftID, id authoring.ModuleID, expectedDraft, expectedModule int64) (authoring.CourseDraft, error) {
+	module, found := r.modules[id]
+	if !found || module.DraftID != draftID {
+		return authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if expectedDraft != r.draft.Revision || expectedModule != module.Revision {
+		return authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	delete(r.modules, id)
+	r.draft.Revision++
+	return r.draft, nil
+}
+
+func TestAuthoringModuleMutationHTTPSecurityAndStrictBodies(t *testing.T) {
+	draftID := authoring.DraftID("11111111-1111-4111-8111-111111111111")
+	moduleID := authoring.ModuleID("22222222-2222-4222-8222-222222222222")
+	draft := authoring.CourseDraft{ID: draftID, Metadata: authoring.DraftMetadata{CourseID: "77777777-7777-4777-8777-777777777777", IntendedVersion: courses.Version{Major: 1}, SourceLanguage: "en", Title: "Draft", Description: "Description", LearningObjectives: []string{"Understand"}, Changelog: "Initial", License: courses.ContentLicense{Kind: courses.ContentLicenseAllRightsReserved, DisplayName: "All Rights Reserved"}}, Status: authoring.DraftActive, Revision: 4}
+	repository := &authoringModuleHTTPRepository{draft: draft, modules: map[authoring.ModuleID]authoring.DraftModule{moduleID: {ID: moduleID, ModuleInput: authoring.ModuleInput{DraftID: draftID, StableKey: "basics", Title: "Basics", Position: 0}, Revision: 2}}}
+	memberships := authoringMembershipsFake{roles: map[authoring.DraftID]authoring.MemberRole{draftID: authoring.MemberAuthor}}
+	resolver := &authResolverFake{current: loginTestCurrent(t)}
+	router := authTestRouter(&authHTTP{sessions: resolver, authoringStructureMutations: authoring.NewModuleMutationService(repository, authoring.NewAuthorizationService(memberships))})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
+	csrf := authTestCSRFToken().Value()
+	base := "/api/authoring/drafts/" + string(draftID) + "/modules"
+
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`, nil, csrf); response.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated create = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`, cookie); response.Code != http.StatusForbidden {
+		t.Fatalf("missing CSRF create = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`, cookie, "wrong"); response.Code != http.StatusForbidden {
+		t.Fatalf("wrong CSRF create = %d", response.Code)
+	}
+	untrusted := httptest.NewRequest(http.MethodPost, base, strings.NewReader(`{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`))
+	untrusted.Header.Set("Content-Type", "application/json")
+	untrusted.Header.Set("Origin", "https://attacker.example")
+	untrusted.Header.Set("X-CSRF-Token", csrf)
+	untrusted.AddCookie(cookie)
+	untrustedResponse := httptest.NewRecorder()
+	router.ServeHTTP(untrustedResponse, untrusted)
+	if untrustedResponse.Code != http.StatusForbidden {
+		t.Fatalf("untrusted Origin create = %d", untrustedResponse.Code)
+	}
+	response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`, cookie, csrf)
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), `"draftRevision":5`) {
+		t.Fatalf("create = %d: %s", response.Code, response.Body.String())
+	}
+	patchPath := base + "/" + string(moduleID)
+	response = authRequest(router, http.MethodPatch, patchPath, `{"expectedModuleRevision":2,"title":"Renamed"}`, cookie, csrf)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"stable_key":"basics"`) || !strings.Contains(response.Body.String(), `"draftRevision":6`) {
+		t.Fatalf("update = %d: %s", response.Code, response.Body.String())
+	}
+	for _, body := range []string{
+		`{"expectedModuleRevision":3}`,
+		`{"expectedModuleRevision":3,"stableKey":"renamed"}`,
+		`{"expectedModuleRevision":3,"title":"Renamed"} {}`,
+	} {
+		if response = authRequest(router, http.MethodPatch, patchPath, body, cookie, csrf); response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid module PATCH %s = %d", body, response.Code)
+		}
+	}
+	response = authRequest(router, http.MethodPut, base+"/order", `{"expectedDraftRevision":6,"moduleIds":["`+string(moduleID)+`","55555555-5555-4555-8555-555555555555"]}`, cookie, csrf)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"draftRevision":7`) {
+		t.Fatalf("reorder = %d: %s", response.Code, response.Body.String())
+	}
+	if response = authRequest(router, http.MethodPut, base+"/order", `{"expectedDraftRevision":7,"moduleIds":["`+string(moduleID)+`","`+string(moduleID)+`"]}`, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("duplicate reorder = %d", response.Code)
+	}
+	if response = authRequest(router, http.MethodDelete, patchPath, `{"expectedDraftRevision":6,"expectedModuleRevision":3}`, cookie, csrf); response.Code != http.StatusConflict {
+		t.Fatalf("stale delete = %d", response.Code)
+	}
+	oversized := `{"expectedDraftRevision":7,"stableKey":"too-large","title":"` + strings.Repeat("x", maxAuthoringModuleBodyBytes) + `","position":2}`
+	if response = authRequest(router, http.MethodPost, base, oversized, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("oversized module create = %d", response.Code)
+	}
+	delete(memberships.roles, draftID)
+	if response = authRequest(router, http.MethodPatch, patchPath, `{"expectedModuleRevision":3,"title":"Hidden"}`, cookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("nonmember update = %d", response.Code)
+	}
+}
+
 func TestAuthoringDraftMetadataPATCHSecurityAndConcurrency(t *testing.T) {
 	draftA := authoring.DraftID("11111111-1111-4111-8111-111111111111")
 	draftB := authoring.DraftID("22222222-2222-4222-8222-222222222222")

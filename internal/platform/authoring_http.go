@@ -99,6 +99,35 @@ type authoringDraftUpdateRequest struct {
 	License          optionalField[authoringLicenseRequest] `json:"license"`
 }
 
+type authoringModuleCreateRequest struct {
+	ExpectedDraftRevision *int64 `json:"expectedDraftRevision"`
+	StableKey             string `json:"stableKey"`
+	Title                 string `json:"title"`
+	Description           string `json:"description"`
+	Position              *int   `json:"position"`
+}
+
+type authoringModuleUpdateRequest struct {
+	ExpectedModuleRevision *int64                `json:"expectedModuleRevision"`
+	Title                  optionalField[string] `json:"title"`
+	Description            optionalField[string] `json:"description"`
+}
+
+type authoringModuleReorderRequest struct {
+	ExpectedDraftRevision *int64   `json:"expectedDraftRevision"`
+	ModuleIDs             []string `json:"moduleIds"`
+}
+
+type authoringModuleDeleteRequest struct {
+	ExpectedDraftRevision  *int64 `json:"expectedDraftRevision"`
+	ExpectedModuleRevision *int64 `json:"expectedModuleRevision"`
+}
+
+type authoringModuleMutationDTO struct {
+	Module        authoringModuleDTO `json:"module"`
+	DraftRevision int64              `json:"draftRevision"`
+}
+
 // optionalField distinguishes an omitted JSON member from an explicit null.
 // Null is rejected for all mutable metadata fields because their domain values
 // are required; an empty string or slice remains an explicit domain input.
@@ -174,6 +203,106 @@ func (a *authHTTP) handleAuthoringDraftUpdate(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, authoringDraft(draft))
+}
+
+func (a *authHTTP) handleAuthoringModuleCreate(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	expected, input, err := decodeAuthoringModuleCreate(w, r, draftID)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid module create")
+		return
+	}
+	if a.authoringStructureMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringStructureMutations.CreateModule(r.Context(), actor, draftID, expected, input)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringModuleMutation(result))
+}
+
+func (a *authHTTP) handleAuthoringModuleUpdate(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	moduleID, ok := authoringModuleID(w, r)
+	if !ok {
+		return
+	}
+	expected, patch, err := decodeAuthoringModuleUpdate(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid module update")
+		return
+	}
+	if a.authoringStructureMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringStructureMutations.UpdateModule(r.Context(), actor, draftID, moduleID, expected, patch)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringModuleMutation(result))
+}
+
+func (a *authHTTP) handleAuthoringModuleReorder(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	expected, order, err := decodeAuthoringModuleReorder(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid module order")
+		return
+	}
+	if a.authoringStructureMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	draft, err := a.authoringStructureMutations.ReorderModules(r.Context(), actor, draftID, expected, order)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		DraftRevision int64 `json:"draftRevision"`
+	}{DraftRevision: draft.Revision})
+}
+
+func (a *authHTTP) handleAuthoringModuleDelete(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	moduleID, ok := authoringModuleID(w, r)
+	if !ok {
+		return
+	}
+	expectedDraft, expectedModule, err := decodeAuthoringModuleDelete(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid module delete")
+		return
+	}
+	if a.authoringStructureMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	draft, err := a.authoringStructureMutations.DeleteModule(r.Context(), actor, draftID, moduleID, expectedDraft, expectedModule)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		DraftRevision int64 `json:"draftRevision"`
+	}{DraftRevision: draft.Revision})
 }
 
 func (a *authHTTP) handleAuthoringWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -255,6 +384,11 @@ func authoringLessonID(w http.ResponseWriter, r *http.Request) (authoring.Lesson
 	return authoring.LessonID(id), ok
 }
 
+func authoringModuleID(w http.ResponseWriter, r *http.Request) (authoring.ModuleID, bool) {
+	id, ok := authoringUUIDParam(w, r, "moduleId", "Invalid module identifier")
+	return authoring.ModuleID(id), ok
+}
+
 func authoringUUIDParam(w http.ResponseWriter, r *http.Request, name, title string) (authoring.DraftID, bool) {
 	value := chi.URLParam(r, name)
 	if len(value) != authoringIDLength {
@@ -282,12 +416,28 @@ func authoringMutationProblem(w http.ResponseWriter, r *http.Request, err error)
 		problem(w, r, http.StatusNotFound, "Not found")
 		return
 	}
-	if errors.Is(err, authoring.ErrRevisionMismatch) || errors.Is(err, authoring.ErrInvalidState) {
+	if errors.Is(err, authoring.ErrRevisionMismatch) || errors.Is(err, authoring.ErrInvalidState) || errors.Is(err, authoring.ErrConflict) {
 		problem(w, r, http.StatusConflict, "Draft revision conflict")
 		return
 	}
 	if errors.Is(err, authoring.ErrInvalidPatch) {
 		problem(w, r, http.StatusBadRequest, "Invalid draft update")
+		return
+	}
+	problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+}
+
+func authoringStructureMutationProblem(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, authoring.ErrNotFound) || errors.Is(err, authoring.ErrAuthorizationDenied) {
+		problem(w, r, http.StatusNotFound, "Not found")
+		return
+	}
+	if errors.Is(err, authoring.ErrRevisionMismatch) || errors.Is(err, authoring.ErrInvalidState) || errors.Is(err, authoring.ErrConflict) {
+		problem(w, r, http.StatusConflict, "Draft revision conflict")
+		return
+	}
+	if errors.Is(err, authoring.ErrInvalidStructure) {
+		problem(w, r, http.StatusBadRequest, "Invalid module structure")
 		return
 	}
 	problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
@@ -366,6 +516,104 @@ func decodeAuthoringDraftUpdate(w http.ResponseWriter, r *http.Request) (int64, 
 	return *input.ExpectedRevision, patch, nil
 }
 
+func decodeAuthoringModuleCreate(w http.ResponseWriter, r *http.Request, draftID authoring.DraftID) (int64, authoring.ModuleInput, error) {
+	var input authoringModuleCreateRequest
+	if err := decodeAuthoringJSON(w, r, &input); err != nil {
+		return 0, authoring.ModuleInput{}, err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || input.Position == nil {
+		return 0, authoring.ModuleInput{}, errors.New("missing module create fields")
+	}
+	module := authoring.ModuleInput{DraftID: draftID, StableKey: input.StableKey, Title: input.Title, Description: input.Description, Position: *input.Position}
+	if err := module.Validate(); err != nil {
+		return 0, authoring.ModuleInput{}, err
+	}
+	return *input.ExpectedDraftRevision, module, nil
+}
+
+func decodeAuthoringModuleUpdate(w http.ResponseWriter, r *http.Request) (int64, authoring.DraftModulePatch, error) {
+	var input authoringModuleUpdateRequest
+	if err := decodeAuthoringJSON(w, r, &input); err != nil {
+		return 0, authoring.DraftModulePatch{}, err
+	}
+	if input.ExpectedModuleRevision == nil || *input.ExpectedModuleRevision < 1 {
+		return 0, authoring.DraftModulePatch{}, errors.New("missing expected module revision")
+	}
+	patch := authoring.DraftModulePatch{}
+	if input.Title.set {
+		if input.Title.null {
+			return 0, authoring.DraftModulePatch{}, errors.New("null title")
+		}
+		patch.Title = &input.Title.value
+	}
+	if input.Description.set {
+		if input.Description.null {
+			return 0, authoring.DraftModulePatch{}, errors.New("null description")
+		}
+		patch.Description = &input.Description.value
+	}
+	if patch.Empty() {
+		return 0, authoring.DraftModulePatch{}, errors.New("empty module patch")
+	}
+	return *input.ExpectedModuleRevision, patch, nil
+}
+
+func decodeAuthoringModuleReorder(w http.ResponseWriter, r *http.Request) (int64, []authoring.ModuleID, error) {
+	var input authoringModuleReorderRequest
+	if err := decodeAuthoringJSON(w, r, &input); err != nil {
+		return 0, nil, err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 {
+		return 0, nil, errors.New("missing expected draft revision")
+	}
+	order := make([]authoring.ModuleID, 0, len(input.ModuleIDs))
+	for _, raw := range input.ModuleIDs {
+		if !validAuthoringUUID(raw) {
+			return 0, nil, errors.New("invalid module identifier")
+		}
+		order = append(order, authoring.ModuleID(raw))
+	}
+	if err := authoring.ValidateModuleOrder(order); err != nil {
+		return 0, nil, err
+	}
+	return *input.ExpectedDraftRevision, order, nil
+}
+
+func decodeAuthoringModuleDelete(w http.ResponseWriter, r *http.Request) (int64, int64, error) {
+	var input authoringModuleDeleteRequest
+	if err := decodeAuthoringJSON(w, r, &input); err != nil {
+		return 0, 0, err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || input.ExpectedModuleRevision == nil || *input.ExpectedModuleRevision < 1 {
+		return 0, 0, errors.New("missing expected revision")
+	}
+	return *input.ExpectedDraftRevision, *input.ExpectedModuleRevision, nil
+}
+
+func decodeAuthoringJSON(w http.ResponseWriter, r *http.Request, value any) error {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return errors.New("invalid content type")
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringModuleBodyBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("trailing JSON")
+	}
+	return nil
+}
+
+func validAuthoringUUID(value string) bool {
+	return len(value) == authoringIDLength && func() bool {
+		id, err := uuid.Parse(value)
+		return err == nil && id.String() == value
+	}()
+}
+
 func authoringDraft(draft authoring.CourseDraft) authoringDraftDTO {
 	return authoringDraftDTO{ID: string(draft.ID), CourseID: string(draft.Metadata.CourseID), IntendedVersion: draft.Metadata.IntendedVersion.String(), SourceLanguage: string(draft.Metadata.SourceLanguage), Title: draft.Metadata.Title, Description: draft.Metadata.Description, Objectives: draft.Metadata.LearningObjectives, Changelog: draft.Metadata.Changelog, License: authoringLicenseDTO{Kind: draft.Metadata.License.Kind, Identifier: draft.Metadata.License.Identifier, DisplayName: draft.Metadata.License.DisplayName, URL: draft.Metadata.License.URL, CustomText: draft.Metadata.License.CustomText}, Status: draft.Status, Revision: draft.Revision, CreatedAt: draft.CreatedAt, UpdatedAt: draft.UpdatedAt}
 }
@@ -376,4 +624,12 @@ func authoringLessonSummary(lesson authoring.DraftLesson, prerequisites []string
 
 func authoringLessonDetail(lesson authoring.DraftLesson, prerequisites []string) authoringLessonDTO {
 	return authoringLessonDTO{ID: string(lesson.ID), DraftID: string(lesson.DraftID), ModuleID: string(lesson.ModuleID), StableKey: lesson.StableKey, Title: lesson.Title, Description: lesson.Description, Objectives: lesson.LearningObjectives, EstimatedDurationMinutes: lesson.EstimatedDurationMinutes, Position: lesson.Position, Revision: lesson.Revision, RecommendedPrerequisiteKeys: prerequisites, Content: lesson.Content, CreatedAt: lesson.CreatedAt, UpdatedAt: lesson.UpdatedAt}
+}
+
+func authoringModuleMutation(result authoring.ModuleMutationResult) authoringModuleMutationDTO {
+	module := result.Module
+	return authoringModuleMutationDTO{
+		Module:        authoringModuleDTO{ID: string(module.ID), StableKey: module.StableKey, Title: module.Title, Description: module.Description, Position: module.Position, Revision: module.Revision, Lessons: []authoringLessonSummaryDTO{}},
+		DraftRevision: result.Draft.Revision,
+	}
 }

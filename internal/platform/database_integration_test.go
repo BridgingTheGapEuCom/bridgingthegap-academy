@@ -49,4 +49,5 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("authoring authorization", func(t *testing.T) { testAuthoringAuthorization(t, ctx, pool) })
 	t.Run("authoring private read API", func(t *testing.T) { testAuthoringReadAPI(t, ctx, pool) })
 	t.Run("authoring draft metadata mutation", func(t *testing.T) { testAuthoringDraftMetadataMutation(t, ctx, pool) })
+	t.Run("authoring module mutation", func(t *testing.T) { testAuthoringModuleMutation(t, ctx, pool) })
 }

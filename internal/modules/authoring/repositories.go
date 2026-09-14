@@ -13,6 +13,7 @@ var (
 	ErrRevisionMismatch = errors.New("authoring revision mismatch")
 	ErrInvalidState     = errors.New("invalid draft state")
 	ErrInvalidPatch     = errors.New("invalid draft metadata patch")
+	ErrInvalidStructure = errors.New("invalid authoring structure mutation")
 )
 
 // Repository is Authoring-owned. All mutators are explicit; published Courses
@@ -33,6 +34,9 @@ type Repository interface {
 	UpdateModule(context.Context, ModuleID, int64, string, string) (DraftModule, error)
 	ReorderModules(context.Context, DraftID, int64, []ModuleID) (CourseDraft, error)
 	DeleteModule(context.Context, ModuleID, int64) error
+	CreateModuleAtPosition(context.Context, DraftID, int64, ModuleInput) (DraftModule, CourseDraft, error)
+	UpdateModuleMetadata(context.Context, DraftID, ModuleID, int64, DraftModulePatch) (DraftModule, CourseDraft, error)
+	DeleteEmptyModule(context.Context, DraftID, ModuleID, int64, int64) (CourseDraft, error)
 	CreateLesson(context.Context, LessonInput) (DraftLesson, error)
 	GetLesson(context.Context, LessonID) (DraftLesson, error)
 	ListLessons(context.Context, ModuleID) ([]DraftLesson, error)

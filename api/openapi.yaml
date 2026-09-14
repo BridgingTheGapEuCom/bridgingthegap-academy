@@ -44,6 +44,81 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/modules:
+    post:
+      operationId: createAuthoringModule
+      description: Creates one draft Module at a zero-based position using the current draft revision. The authenticated session must provide a valid CSRF token and trusted same-origin Origin.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthoringModuleCreateRequest' }
+      responses:
+        '200': { description: Committed Module and current Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringModuleMutationResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/modules/order:
+    put:
+      operationId: reorderAuthoringModules
+      description: Atomically replaces the complete ordered Module ID list for one Draft. The list must contain every current Module exactly once.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthoringModuleReorderRequest' }
+      responses:
+        '200': { description: Committed Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringModuleOrderResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/modules/{moduleId}:
+    patch:
+      operationId: updateAuthoringModule
+      description: Updates title and description only. Stable key and position are immutable through PATCH.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthoringModuleUpdateRequest' }
+      responses:
+        '200': { description: Committed Module and current Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringModuleMutationResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteAuthoringModule
+      description: Deletes an empty Module only. Modules containing Lessons are rejected so the lesson cascade remains unavailable through this API.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthoringModuleDeleteRequest' }
+      responses:
+        '200': { description: Committed Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringModuleOrderResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}/structure:
     get:
       operationId: getAuthoringDraftStructure
@@ -212,6 +287,7 @@ paths:
 components:
   parameters:
     AuthoringDraftID: { name: draftId, in: path, required: true, schema: { type: string, format: uuid } }
+    AuthoringModuleID: { name: moduleId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringLessonID: { name: lessonId, in: path, required: true, schema: { type: string, format: uuid } }
     CourseSlug: { name: slug, in: path, required: true, schema: { type: string } }
     CourseVersion: { name: version, in: path, required: true, schema: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$' } }
@@ -236,6 +312,48 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    AuthoringModuleCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedDraftRevision, stableKey, title, position]
+      properties:
+        expectedDraftRevision: { type: integer, minimum: 1 }
+        stableKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        position: { type: integer, minimum: 0 }
+    AuthoringModuleUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedModuleRevision]
+      properties:
+        expectedModuleRevision: { type: integer, minimum: 1 }
+        title: { type: string }
+        description: { type: string }
+    AuthoringModuleReorderRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedDraftRevision, moduleIds]
+      properties:
+        expectedDraftRevision: { type: integer, minimum: 1 }
+        moduleIds: { type: array, maxItems: 1000, items: { type: string, format: uuid } }
+    AuthoringModuleDeleteRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedDraftRevision, expectedModuleRevision]
+      properties:
+        expectedDraftRevision: { type: integer, minimum: 1 }
+        expectedModuleRevision: { type: integer, minimum: 1 }
+    AuthoringModuleMutationResponse:
+      type: object
+      required: [module, draftRevision]
+      properties:
+        module: { $ref: '#/components/schemas/AuthoringModuleSummary' }
+        draftRevision: { type: integer, minimum: 1 }
+    AuthoringModuleOrderResponse:
+      type: object
+      required: [draftRevision]
+      properties: { draftRevision: { type: integer, minimum: 1 } }
     AuthoringDraftUpdateRequest:
       type: object
       additionalProperties: false

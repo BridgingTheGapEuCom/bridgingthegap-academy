@@ -208,6 +208,44 @@ func (q *Queries) BumpModuleRevision(ctx context.Context, arg BumpModuleRevision
 	return i, err
 }
 
+const compactModulePositionsAfter = `-- name: CompactModulePositionsAfter :exec
+UPDATE authoring.module
+SET position = position - 1, revision = revision + 1, updated_at = now()
+WHERE draft_id = $1 AND position > $2
+`
+
+type CompactModulePositionsAfterParams struct {
+	DraftID  pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) CompactModulePositionsAfter(ctx context.Context, arg CompactModulePositionsAfterParams) error {
+	_, err := q.db.Exec(ctx, compactModulePositionsAfter, arg.DraftID, arg.Position)
+	return err
+}
+
+const countLessonsForModule = `-- name: CountLessonsForModule :one
+SELECT count(*) FROM authoring.lesson WHERE module_id = $1
+`
+
+func (q *Queries) CountLessonsForModule(ctx context.Context, moduleID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countLessonsForModule, moduleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countModules = `-- name: CountModules :one
+SELECT count(*) FROM authoring.module WHERE draft_id = $1
+`
+
+func (q *Queries) CountModules(ctx context.Context, draftID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countModules, draftID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createDraft = `-- name: CreateDraft :one
 INSERT INTO authoring.course_draft (course_id, intended_version, source_language, title, description, learning_objectives, changelog, license)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -401,6 +439,26 @@ type DeleteModuleParams struct {
 
 func (q *Queries) DeleteModule(ctx context.Context, arg DeleteModuleParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, deleteModule, arg.ID, arg.Revision)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const deleteModuleForDraft = `-- name: DeleteModuleForDraft :one
+DELETE FROM authoring.module AS m
+WHERE m.id = $1 AND m.draft_id = $2 AND m.revision = $3
+  AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = m.draft_id AND d.status = 'ACTIVE')
+RETURNING m.id
+`
+
+type DeleteModuleForDraftParams struct {
+	ID       pgtype.UUID
+	DraftID  pgtype.UUID
+	Revision int64
+}
+
+func (q *Queries) DeleteModuleForDraft(ctx context.Context, arg DeleteModuleForDraftParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteModuleForDraft, arg.ID, arg.DraftID, arg.Revision)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -878,6 +936,22 @@ func (q *Queries) SetModulePosition(ctx context.Context, arg SetModulePositionPa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const shiftModulesAtPosition = `-- name: ShiftModulesAtPosition :exec
+UPDATE authoring.module
+SET position = position + 1, revision = revision + 1, updated_at = now()
+WHERE draft_id = $1 AND position >= $2
+`
+
+type ShiftModulesAtPositionParams struct {
+	DraftID  pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) ShiftModulesAtPosition(ctx context.Context, arg ShiftModulesAtPositionParams) error {
+	_, err := q.db.Exec(ctx, shiftModulesAtPosition, arg.DraftID, arg.Position)
+	return err
 }
 
 const touchDraft = `-- name: TouchDraft :exec
