@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
+import { auth } from './auth/auth'
 import HomePage from './pages/HomePage.vue'
 import './style.css'
 
@@ -17,3 +18,5 @@ const router = createRouter({
 })
 
 createApp(App).use(router).use(i18n).mount('#app')
+
+void auth.bootstrapSession()
