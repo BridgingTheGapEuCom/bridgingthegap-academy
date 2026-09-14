@@ -29,7 +29,9 @@ sql:
         out: internal/modules/audit/db/sqlc
         sql_package: pgx/v5
   - engine: postgresql
-    schema: internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
+    schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00007_course_structure.sql
     queries: internal/modules/courses/db/query
     gen:
       go:

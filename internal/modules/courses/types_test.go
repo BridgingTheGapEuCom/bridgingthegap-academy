@@ -93,3 +93,63 @@ func TestLanguageLicenseAndAttributionValidation(t *testing.T) {
 		t.Fatal("invalid contributor identifier accepted")
 	}
 }
+
+func TestModuleLessonAndPrerequisiteValidation(t *testing.T) {
+	module := ModuleInput{CourseVersionID: "11111111-1111-1111-1111-111111111111", StableKey: "fundamentals", Title: "Fundamentals", Position: 0}
+	if err := module.Validate(); err != nil {
+		t.Fatalf("valid module rejected: %v", err)
+	}
+	module.StableKey = "Fundamentals"
+	if err := module.Validate(); err == nil {
+		t.Fatal("invalid module key accepted")
+	}
+	module.StableKey = "fundamentals"
+	module.Title = ""
+	if err := module.Validate(); err == nil {
+		t.Fatal("empty module title accepted")
+	}
+
+	duration := 20
+	lesson := LessonInput{
+		CourseVersionID:          "11111111-1111-1111-1111-111111111111",
+		ModuleID:                 "22222222-2222-2222-2222-222222222222",
+		StableKey:                "sync-vs-async",
+		Title:                    "Synchronous and asynchronous",
+		Description:              "Lesson metadata.",
+		LearningObjectives:       []string{"Compare synchronous and asynchronous interaction", "Identify coupling trade-offs"},
+		EstimatedDurationMinutes: &duration,
+		Position:                 0,
+	}
+	if err := lesson.Validate(); err != nil {
+		t.Fatalf("valid lesson rejected: %v", err)
+	}
+	lesson.StableKey = "bad key"
+	if err := lesson.Validate(); err == nil {
+		t.Fatal("invalid lesson key accepted")
+	}
+	lesson.StableKey = "sync-vs-async"
+	lesson.Title = ""
+	if err := lesson.Validate(); err == nil {
+		t.Fatal("empty lesson title accepted")
+	}
+	lesson.Title = "Synchronous and asynchronous"
+	zero := 0
+	lesson.EstimatedDurationMinutes = &zero
+	if err := lesson.Validate(); err == nil {
+		t.Fatal("non-positive duration accepted")
+	}
+	lesson.EstimatedDurationMinutes = &duration
+	lesson.Position = -1
+	if err := lesson.Validate(); err == nil {
+		t.Fatal("negative lesson position accepted")
+	}
+
+	prerequisite := LessonPrerequisiteInput{CourseVersionID: "11111111-1111-1111-1111-111111111111", LessonID: "33333333-3333-3333-3333-333333333333", PrerequisiteStableKey: "what-is-eai", Position: 0}
+	if err := prerequisite.Validate(); err != nil {
+		t.Fatalf("valid prerequisite rejected: %v", err)
+	}
+	prerequisite.PrerequisiteStableKey = "What-Is-EAI"
+	if err := prerequisite.Validate(); err == nil {
+		t.Fatal("invalid prerequisite key accepted")
+	}
+}

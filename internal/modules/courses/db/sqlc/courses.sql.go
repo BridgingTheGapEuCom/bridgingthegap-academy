@@ -96,6 +96,118 @@ func (q *Queries) CreateCourseVersion(ctx context.Context, arg CreateCourseVersi
 	return i, err
 }
 
+const createLesson = `-- name: CreateLesson :one
+INSERT INTO courses.lesson (
+    course_version_id, module_id, stable_key, title, description,
+    learning_objectives, estimated_duration_minutes, position
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at
+`
+
+type CreateLessonParams struct {
+	CourseVersionID          pgtype.UUID
+	ModuleID                 pgtype.UUID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []byte
+	EstimatedDurationMinutes pgtype.Int4
+	Position                 int32
+}
+
+func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) (CoursesLesson, error) {
+	row := q.db.QueryRow(ctx, createLesson,
+		arg.CourseVersionID,
+		arg.ModuleID,
+		arg.StableKey,
+		arg.Title,
+		arg.Description,
+		arg.LearningObjectives,
+		arg.EstimatedDurationMinutes,
+		arg.Position,
+	)
+	var i CoursesLesson
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.ModuleID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.EstimatedDurationMinutes,
+		&i.Position,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createLessonPrerequisite = `-- name: CreateLessonPrerequisite :one
+INSERT INTO courses.lesson_prerequisite (course_version_id, lesson_id, prerequisite_lesson_id, position)
+VALUES ($1, $2, $3, $4)
+RETURNING course_version_id, lesson_id, prerequisite_lesson_id, position
+`
+
+type CreateLessonPrerequisiteParams struct {
+	CourseVersionID      pgtype.UUID
+	LessonID             pgtype.UUID
+	PrerequisiteLessonID pgtype.UUID
+	Position             int32
+}
+
+func (q *Queries) CreateLessonPrerequisite(ctx context.Context, arg CreateLessonPrerequisiteParams) (CoursesLessonPrerequisite, error) {
+	row := q.db.QueryRow(ctx, createLessonPrerequisite,
+		arg.CourseVersionID,
+		arg.LessonID,
+		arg.PrerequisiteLessonID,
+		arg.Position,
+	)
+	var i CoursesLessonPrerequisite
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.LessonID,
+		&i.PrerequisiteLessonID,
+		&i.Position,
+	)
+	return i, err
+}
+
+const createModule = `-- name: CreateModule :one
+INSERT INTO courses.module (course_version_id, stable_key, title, description, position)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, course_version_id, stable_key, title, description, position, created_at
+`
+
+type CreateModuleParams struct {
+	CourseVersionID pgtype.UUID
+	StableKey       string
+	Title           string
+	Description     string
+	Position        int32
+}
+
+func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (CoursesModule, error) {
+	row := q.db.QueryRow(ctx, createModule,
+		arg.CourseVersionID,
+		arg.StableKey,
+		arg.Title,
+		arg.Description,
+		arg.Position,
+	)
+	var i CoursesModule
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getCourse = `-- name: GetCourse :one
 SELECT id, slug, created_at
 FROM courses.course
@@ -195,6 +307,106 @@ func (q *Queries) GetCourseVersionByCourseAndVersion(ctx context.Context, arg Ge
 	return i, err
 }
 
+const getLesson = `-- name: GetLesson :one
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at
+FROM courses.lesson
+WHERE id = $1
+`
+
+func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (CoursesLesson, error) {
+	row := q.db.QueryRow(ctx, getLesson, id)
+	var i CoursesLesson
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.ModuleID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.EstimatedDurationMinutes,
+		&i.Position,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getLessonByCourseVersionAndKey = `-- name: GetLessonByCourseVersionAndKey :one
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at
+FROM courses.lesson
+WHERE course_version_id = $1 AND stable_key = $2
+`
+
+type GetLessonByCourseVersionAndKeyParams struct {
+	CourseVersionID pgtype.UUID
+	StableKey       string
+}
+
+func (q *Queries) GetLessonByCourseVersionAndKey(ctx context.Context, arg GetLessonByCourseVersionAndKeyParams) (CoursesLesson, error) {
+	row := q.db.QueryRow(ctx, getLessonByCourseVersionAndKey, arg.CourseVersionID, arg.StableKey)
+	var i CoursesLesson
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.ModuleID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.EstimatedDurationMinutes,
+		&i.Position,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getModule = `-- name: GetModule :one
+SELECT id, course_version_id, stable_key, title, description, position, created_at
+FROM courses.module
+WHERE id = $1
+`
+
+func (q *Queries) GetModule(ctx context.Context, id pgtype.UUID) (CoursesModule, error) {
+	row := q.db.QueryRow(ctx, getModule, id)
+	var i CoursesModule
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getModuleByCourseVersionAndKey = `-- name: GetModuleByCourseVersionAndKey :one
+SELECT id, course_version_id, stable_key, title, description, position, created_at
+FROM courses.module
+WHERE course_version_id = $1 AND stable_key = $2
+`
+
+type GetModuleByCourseVersionAndKeyParams struct {
+	CourseVersionID pgtype.UUID
+	StableKey       string
+}
+
+func (q *Queries) GetModuleByCourseVersionAndKey(ctx context.Context, arg GetModuleByCourseVersionAndKeyParams) (CoursesModule, error) {
+	row := q.db.QueryRow(ctx, getModuleByCourseVersionAndKey, arg.CourseVersionID, arg.StableKey)
+	var i CoursesModule
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listCourseVersions = `-- name: ListCourseVersions :many
 SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
 FROM courses.course_version
@@ -259,6 +471,126 @@ func (q *Queries) ListCourses(ctx context.Context) ([]CoursesCourse, error) {
 	for rows.Next() {
 		var i CoursesCourse
 		if err := rows.Scan(&i.ID, &i.Slug, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLessonPrerequisites = `-- name: ListLessonPrerequisites :many
+SELECT
+    prerequisite.course_version_id,
+    prerequisite.lesson_id,
+    prerequisite.prerequisite_lesson_id,
+    prerequisite.position,
+    target.stable_key AS prerequisite_stable_key
+FROM courses.lesson_prerequisite AS prerequisite
+JOIN courses.lesson AS target ON target.id = prerequisite.prerequisite_lesson_id
+WHERE prerequisite.lesson_id = $1
+ORDER BY prerequisite.position ASC, prerequisite.prerequisite_lesson_id ASC
+`
+
+type ListLessonPrerequisitesRow struct {
+	CourseVersionID       pgtype.UUID
+	LessonID              pgtype.UUID
+	PrerequisiteLessonID  pgtype.UUID
+	Position              int32
+	PrerequisiteStableKey string
+}
+
+func (q *Queries) ListLessonPrerequisites(ctx context.Context, lessonID pgtype.UUID) ([]ListLessonPrerequisitesRow, error) {
+	rows, err := q.db.Query(ctx, listLessonPrerequisites, lessonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLessonPrerequisitesRow
+	for rows.Next() {
+		var i ListLessonPrerequisitesRow
+		if err := rows.Scan(
+			&i.CourseVersionID,
+			&i.LessonID,
+			&i.PrerequisiteLessonID,
+			&i.Position,
+			&i.PrerequisiteStableKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLessonsForModule = `-- name: ListLessonsForModule :many
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at
+FROM courses.lesson
+WHERE module_id = $1
+ORDER BY position ASC, id ASC
+`
+
+func (q *Queries) ListLessonsForModule(ctx context.Context, moduleID pgtype.UUID) ([]CoursesLesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsForModule, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesLesson
+	for rows.Next() {
+		var i CoursesLesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseVersionID,
+			&i.ModuleID,
+			&i.StableKey,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.EstimatedDurationMinutes,
+			&i.Position,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listModulesForCourseVersion = `-- name: ListModulesForCourseVersion :many
+SELECT id, course_version_id, stable_key, title, description, position, created_at
+FROM courses.module
+WHERE course_version_id = $1
+ORDER BY position ASC, id ASC
+`
+
+func (q *Queries) ListModulesForCourseVersion(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesModule, error) {
+	rows, err := q.db.Query(ctx, listModulesForCourseVersion, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesModule
+	for rows.Next() {
+		var i CoursesModule
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseVersionID,
+			&i.StableKey,
+			&i.Title,
+			&i.Description,
+			&i.Position,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -110,3 +110,124 @@ func createCourseVersionInput(t *testing.T, courseID courses.CourseID, versionTe
 		PublishedAt: time.Now().UTC(),
 	}
 }
+
+func testCourseStructurePersistence(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	r := coursespostgres.New(pool)
+	course, err := r.CreateCourse(ctx, "integration-structure")
+	if err != nil {
+		t.Fatal(err)
+	}
+	version, err := r.CreateCourseVersion(ctx, createCourseVersionInput(t, course.ID, "1.0.0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanced, err := r.CreateModule(ctx, createModuleInput(version.ID, "advanced", "Advanced", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fundamentals, err := r.CreateModule(ctx, createModuleInput(version.ID, "fundamentals", "Fundamentals", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	modules, err := r.ListModulesForCourseVersion(ctx, version.ID)
+	if err != nil || len(modules) != 2 || modules[0].ID != fundamentals.ID || modules[1].ID != advanced.ID {
+		t.Fatalf("module ordering did not use positions: %#v, %v", modules, err)
+	}
+	if _, err := r.CreateModule(ctx, createModuleInput(version.ID, "fundamentals", "Duplicate", 2)); !errors.Is(err, courses.ErrConflict) {
+		t.Fatalf("duplicate module stable key accepted: %v", err)
+	}
+	if _, err := r.CreateModule(ctx, createModuleInput(version.ID, "other", "Duplicate position", 0)); !errors.Is(err, courses.ErrConflict) {
+		t.Fatalf("duplicate module position accepted: %v", err)
+	}
+
+	duration := 25
+	synchronous, err := r.CreateLesson(ctx, createLessonInput(version.ID, fundamentals.ID, "sync-vs-async", "Synchronous and asynchronous", 1, &duration))
+	if err != nil {
+		t.Fatal(err)
+	}
+	whatIsEAI, err := r.CreateLesson(ctx, createLessonInput(version.ID, fundamentals.ID, "what-is-eai", "What is EAI?", 0, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.CreateLesson(ctx, createLessonInput(version.ID, advanced.ID, "message-brokers", "Message brokers", 0, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lessons, err := r.ListLessonsForModule(ctx, fundamentals.ID)
+	if err != nil || len(lessons) != 2 || lessons[0].ID != whatIsEAI.ID || lessons[1].ID != synchronous.ID {
+		t.Fatalf("lesson ordering did not use positions: %#v, %v", lessons, err)
+	}
+	if lessons[1].EstimatedDurationMinutes == nil || *lessons[1].EstimatedDurationMinutes != duration || lessons[1].LearningObjectives[0] != "Explain the lesson concept" {
+		t.Fatal("lesson metadata did not round trip")
+	}
+	if _, err := r.CreateLesson(ctx, createLessonInput(version.ID, fundamentals.ID, "sync-vs-async", "Duplicate key", 2, nil)); !errors.Is(err, courses.ErrConflict) {
+		t.Fatalf("duplicate version-level lesson key accepted: %v", err)
+	}
+	if _, err := r.CreateLesson(ctx, createLessonInput(version.ID, fundamentals.ID, "another-lesson", "Duplicate position", 0, nil)); !errors.Is(err, courses.ErrConflict) {
+		t.Fatalf("duplicate module lesson position accepted: %v", err)
+	}
+
+	prerequisite, err := r.CreateLessonPrerequisite(ctx, courses.LessonPrerequisiteInput{CourseVersionID: version.ID, LessonID: synchronous.ID, PrerequisiteStableKey: "what-is-eai", Position: 0})
+	if err != nil || prerequisite.PrerequisiteLessonID != whatIsEAI.ID || prerequisite.PrerequisiteStableKey != "what-is-eai" {
+		t.Fatalf("lesson prerequisite failed: %#v, %v", prerequisite, err)
+	}
+	if _, err := r.CreateLessonPrerequisite(ctx, courses.LessonPrerequisiteInput{CourseVersionID: version.ID, LessonID: synchronous.ID, PrerequisiteStableKey: "message-brokers", Position: 1}); err != nil {
+		t.Fatal(err)
+	}
+	prerequisites, err := r.ListLessonPrerequisites(ctx, synchronous.ID)
+	if err != nil || len(prerequisites) != 2 || prerequisites[0].PrerequisiteStableKey != "what-is-eai" || prerequisites[1].PrerequisiteStableKey != "message-brokers" {
+		t.Fatalf("lesson prerequisite listing failed: %#v, %v", prerequisites, err)
+	}
+	if _, err := r.CreateLessonPrerequisite(ctx, courses.LessonPrerequisiteInput{CourseVersionID: version.ID, LessonID: synchronous.ID, PrerequisiteStableKey: "what-is-eai", Position: 1}); !errors.Is(err, courses.ErrConflict) {
+		t.Fatalf("duplicate prerequisite accepted: %v", err)
+	}
+	if _, err := r.CreateLessonPrerequisite(ctx, courses.LessonPrerequisiteInput{CourseVersionID: version.ID, LessonID: whatIsEAI.ID, PrerequisiteStableKey: "what-is-eai", Position: 0}); !errors.Is(err, courses.ErrInvalidLessonPrerequisite) {
+		t.Fatalf("self prerequisite accepted: %v", err)
+	}
+
+	secondVersion, err := r.CreateCourseVersion(ctx, createCourseVersionInput(t, course.ID, "1.1.0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondModule, err := r.CreateModule(ctx, createModuleInput(secondVersion.ID, "fundamentals", "Fundamentals", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.CreateLesson(ctx, createLessonInput(secondVersion.ID, secondModule.ID, "sync-vs-async", "Synchronous and asynchronous", 0, nil)); err != nil {
+		t.Fatalf("same logical lesson key in another CourseVersion was rejected: %v", err)
+	}
+	if _, err := r.CreateLessonPrerequisite(ctx, courses.LessonPrerequisiteInput{CourseVersionID: version.ID, LessonID: whatIsEAI.ID, PrerequisiteStableKey: "sync-vs-async", Position: 0}); err != nil {
+		t.Fatal(err)
+	}
+	secondLesson, err := r.GetLessonByCourseVersionAndKey(ctx, secondVersion.ID, "sync-vs-async")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.CreateLessonPrerequisite(ctx, courses.LessonPrerequisiteInput{CourseVersionID: version.ID, LessonID: secondLesson.ID, PrerequisiteStableKey: "what-is-eai", Position: 0}); !errors.Is(err, courses.ErrInvalidLessonPrerequisite) {
+		t.Fatalf("cross-version prerequisite accepted: %v", err)
+	}
+	if _, err := r.CreateModule(ctx, createModuleInput(courses.CourseVersionID("00000000-0000-0000-0000-000000000001"), "missing", "Missing", 0)); !errors.Is(err, courses.ErrNotFound) {
+		t.Fatalf("module course-version foreign key was not enforced: %v", err)
+	}
+	if _, err := r.CreateLesson(ctx, createLessonInput(secondVersion.ID, fundamentals.ID, "invalid-module-version", "Invalid", 5, nil)); !errors.Is(err, courses.ErrNotFound) {
+		t.Fatalf("lesson module/course-version consistency was not enforced: %v", err)
+	}
+}
+
+func createModuleInput(courseVersionID courses.CourseVersionID, stableKey, title string, position int) courses.ModuleInput {
+	return courses.ModuleInput{CourseVersionID: courseVersionID, StableKey: stableKey, Title: title, Description: "Module metadata.", Position: position}
+}
+
+func createLessonInput(courseVersionID courses.CourseVersionID, moduleID courses.ModuleID, stableKey, title string, position int, duration *int) courses.LessonInput {
+	return courses.LessonInput{
+		CourseVersionID:          courseVersionID,
+		ModuleID:                 moduleID,
+		StableKey:                stableKey,
+		Title:                    title,
+		Description:              "Brief lesson metadata.",
+		LearningObjectives:       []string{"Explain the lesson concept", "Apply the lesson concept"},
+		EstimatedDurationMinutes: duration,
+		Position:                 position,
+	}
+}

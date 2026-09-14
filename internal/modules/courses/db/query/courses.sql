@@ -48,3 +48,65 @@ UPDATE courses.course_version
 SET status = $3
 WHERE id = $1 AND status = $2
 RETURNING *;
+
+-- name: CreateModule :one
+INSERT INTO courses.module (course_version_id, stable_key, title, description, position)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: GetModule :one
+SELECT *
+FROM courses.module
+WHERE id = $1;
+
+-- name: GetModuleByCourseVersionAndKey :one
+SELECT *
+FROM courses.module
+WHERE course_version_id = $1 AND stable_key = $2;
+
+-- name: ListModulesForCourseVersion :many
+SELECT *
+FROM courses.module
+WHERE course_version_id = $1
+ORDER BY position ASC, id ASC;
+
+-- name: CreateLesson :one
+INSERT INTO courses.lesson (
+    course_version_id, module_id, stable_key, title, description,
+    learning_objectives, estimated_duration_minutes, position
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING *;
+
+-- name: GetLesson :one
+SELECT *
+FROM courses.lesson
+WHERE id = $1;
+
+-- name: GetLessonByCourseVersionAndKey :one
+SELECT *
+FROM courses.lesson
+WHERE course_version_id = $1 AND stable_key = $2;
+
+-- name: ListLessonsForModule :many
+SELECT *
+FROM courses.lesson
+WHERE module_id = $1
+ORDER BY position ASC, id ASC;
+
+-- name: CreateLessonPrerequisite :one
+INSERT INTO courses.lesson_prerequisite (course_version_id, lesson_id, prerequisite_lesson_id, position)
+VALUES ($1, $2, $3, $4)
+RETURNING course_version_id, lesson_id, prerequisite_lesson_id, position;
+
+-- name: ListLessonPrerequisites :many
+SELECT
+    prerequisite.course_version_id,
+    prerequisite.lesson_id,
+    prerequisite.prerequisite_lesson_id,
+    prerequisite.position,
+    target.stable_key AS prerequisite_stable_key
+FROM courses.lesson_prerequisite AS prerequisite
+JOIN courses.lesson AS target ON target.id = prerequisite.prerequisite_lesson_id
+WHERE prerequisite.lesson_id = $1
+ORDER BY prerequisite.position ASC, prerequisite.prerequisite_lesson_id ASC;

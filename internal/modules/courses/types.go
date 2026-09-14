@@ -12,6 +12,8 @@ import (
 
 type CourseID string
 type CourseVersionID string
+type ModuleID string
+type LessonID string
 
 var (
 	slugPattern       = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -34,6 +36,10 @@ func NormalizeSlug(value string) (string, error) {
 	}
 	return slug, nil
 }
+
+// NormalizeStructureKey applies the Course key rules to Module and Lesson
+// logical keys. Keys are immutable references, never display titles.
+func NormalizeStructureKey(value string) (string, error) { return NormalizeSlug(value) }
 
 // Version is a constrained SemVer-like identifier used for published artifacts.
 // Pre-release and build metadata are intentionally deferred until a product need exists.
@@ -325,4 +331,125 @@ type CourseVersion struct {
 	Attribution        []ContributorSnapshot
 	CreatedAt          time.Time
 	PublishedAt        time.Time
+}
+
+type ModuleInput struct {
+	CourseVersionID CourseVersionID
+	StableKey       string
+	Title           string
+	Description     string
+	Position        int
+}
+
+func (in ModuleInput) Validate() error {
+	if in.CourseVersionID == "" {
+		return errors.New("course version identifier is required")
+	}
+	if _, err := NormalizeStructureKey(in.StableKey); err != nil {
+		return errors.New("invalid module stable key")
+	}
+	if len(strings.TrimSpace(in.Title)) == 0 || len(in.Title) > 240 {
+		return errors.New("invalid module title")
+	}
+	if len(in.Description) > 20000 {
+		return errors.New("invalid module description")
+	}
+	if in.Position < 0 || in.Position > 100000 {
+		return errors.New("invalid module position")
+	}
+	return nil
+}
+
+type Module struct {
+	ID              ModuleID
+	CourseVersionID CourseVersionID
+	StableKey       string
+	Title           string
+	Description     string
+	Position        int
+	CreatedAt       time.Time
+}
+
+type LessonInput struct {
+	CourseVersionID          CourseVersionID
+	ModuleID                 ModuleID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []string
+	EstimatedDurationMinutes *int
+	Position                 int
+}
+
+func (in LessonInput) Validate() error {
+	if in.CourseVersionID == "" || in.ModuleID == "" {
+		return errors.New("lesson course version and module identifiers are required")
+	}
+	if _, err := NormalizeStructureKey(in.StableKey); err != nil {
+		return errors.New("invalid lesson stable key")
+	}
+	if len(strings.TrimSpace(in.Title)) == 0 || len(in.Title) > 240 {
+		return errors.New("invalid lesson title")
+	}
+	if len(strings.TrimSpace(in.Description)) == 0 || len(in.Description) > 20000 {
+		return errors.New("invalid lesson description")
+	}
+	if len(in.LearningObjectives) == 0 || len(in.LearningObjectives) > 100 {
+		return errors.New("lesson requires learning objectives")
+	}
+	for _, objective := range in.LearningObjectives {
+		if len(strings.TrimSpace(objective)) == 0 || len(objective) > 1000 {
+			return errors.New("invalid lesson learning objective")
+		}
+	}
+	if in.EstimatedDurationMinutes != nil && (*in.EstimatedDurationMinutes < 1 || *in.EstimatedDurationMinutes > 1440) {
+		return errors.New("invalid estimated lesson duration")
+	}
+	if in.Position < 0 || in.Position > 100000 {
+		return errors.New("invalid lesson position")
+	}
+	return nil
+}
+
+type Lesson struct {
+	ID                       LessonID
+	CourseVersionID          CourseVersionID
+	ModuleID                 ModuleID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []string
+	EstimatedDurationMinutes *int
+	Position                 int
+	CreatedAt                time.Time
+}
+
+// LessonPrerequisite is advisory metadata. Its stable target key supports
+// cross-version comparison; it never controls whether a learner may open a Lesson.
+type LessonPrerequisite struct {
+	CourseVersionID       CourseVersionID
+	LessonID              LessonID
+	PrerequisiteLessonID  LessonID
+	PrerequisiteStableKey string
+	Position              int
+}
+
+type LessonPrerequisiteInput struct {
+	CourseVersionID       CourseVersionID
+	LessonID              LessonID
+	PrerequisiteStableKey string
+	Position              int
+}
+
+func (in LessonPrerequisiteInput) Validate() error {
+	if in.CourseVersionID == "" || in.LessonID == "" {
+		return errors.New("prerequisite course version and lesson identifiers are required")
+	}
+	if _, err := NormalizeStructureKey(in.PrerequisiteStableKey); err != nil {
+		return errors.New("invalid prerequisite lesson key")
+	}
+	if in.Position < 0 || in.Position > 100000 {
+		return errors.New("invalid prerequisite position")
+	}
+	return nil
 }

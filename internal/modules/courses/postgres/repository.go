@@ -124,6 +124,55 @@ func mapCourseVersion(row sqlc.CoursesCourseVersion) (courses.CourseVersion, err
 	}, nil
 }
 
+func mapModule(row sqlc.CoursesModule) courses.Module {
+	return courses.Module{
+		ID:              courses.ModuleID(row.ID.String()),
+		CourseVersionID: courses.CourseVersionID(row.CourseVersionID.String()),
+		StableKey:       row.StableKey,
+		Title:           row.Title,
+		Description:     row.Description,
+		Position:        int(row.Position),
+		CreatedAt:       row.CreatedAt.Time,
+	}
+}
+
+func mapLesson(row sqlc.CoursesLesson) (courses.Lesson, error) {
+	var objectives []string
+	if err := json.Unmarshal(row.LearningObjectives, &objectives); err != nil {
+		return courses.Lesson{}, errors.New("invalid stored lesson learning objectives")
+	}
+	var duration *int
+	if row.EstimatedDurationMinutes.Valid {
+		value := int(row.EstimatedDurationMinutes.Int32)
+		duration = &value
+	}
+	lesson := courses.Lesson{
+		ID:                       courses.LessonID(row.ID.String()),
+		CourseVersionID:          courses.CourseVersionID(row.CourseVersionID.String()),
+		ModuleID:                 courses.ModuleID(row.ModuleID.String()),
+		StableKey:                row.StableKey,
+		Title:                    row.Title,
+		Description:              row.Description,
+		LearningObjectives:       objectives,
+		EstimatedDurationMinutes: duration,
+		Position:                 int(row.Position),
+		CreatedAt:                row.CreatedAt.Time,
+	}
+	if err := (courses.LessonInput{
+		CourseVersionID:          lesson.CourseVersionID,
+		ModuleID:                 lesson.ModuleID,
+		StableKey:                lesson.StableKey,
+		Title:                    lesson.Title,
+		Description:              lesson.Description,
+		LearningObjectives:       lesson.LearningObjectives,
+		EstimatedDurationMinutes: lesson.EstimatedDurationMinutes,
+		Position:                 lesson.Position,
+	}).Validate(); err != nil {
+		return courses.Lesson{}, errors.New("invalid stored lesson")
+	}
+	return lesson, nil
+}
+
 func (r *Repository) CreateCourse(ctx context.Context, slug string) (courses.Course, error) {
 	normalized, err := courses.NormalizeSlug(slug)
 	if err != nil {
@@ -288,4 +337,230 @@ func (r *Repository) TransitionCourseVersionStatus(ctx context.Context, id cours
 		return courses.CourseVersion{}, storageError(err)
 	}
 	return mapCourseVersion(row)
+}
+
+func (r *Repository) CreateModule(ctx context.Context, input courses.ModuleInput) (courses.Module, error) {
+	if err := input.Validate(); err != nil {
+		return courses.Module{}, err
+	}
+	versionID, err := uuid(string(input.CourseVersionID))
+	if err != nil {
+		return courses.Module{}, err
+	}
+	stableKey, err := courses.NormalizeStructureKey(input.StableKey)
+	if err != nil {
+		return courses.Module{}, err
+	}
+	row, err := r.q.CreateModule(ctx, sqlc.CreateModuleParams{
+		CourseVersionID: versionID,
+		StableKey:       stableKey,
+		Title:           input.Title,
+		Description:     input.Description,
+		Position:        int32(input.Position),
+	})
+	if err != nil {
+		return courses.Module{}, storageError(err)
+	}
+	return mapModule(row), nil
+}
+
+func (r *Repository) GetModule(ctx context.Context, id courses.ModuleID) (courses.Module, error) {
+	key, err := uuid(string(id))
+	if err != nil {
+		return courses.Module{}, err
+	}
+	row, err := r.q.GetModule(ctx, key)
+	if err != nil {
+		return courses.Module{}, storageError(err)
+	}
+	return mapModule(row), nil
+}
+
+func (r *Repository) GetModuleByCourseVersionAndKey(ctx context.Context, courseVersionID courses.CourseVersionID, stableKey string) (courses.Module, error) {
+	versionID, err := uuid(string(courseVersionID))
+	if err != nil {
+		return courses.Module{}, err
+	}
+	stableKey, err = courses.NormalizeStructureKey(stableKey)
+	if err != nil {
+		return courses.Module{}, err
+	}
+	row, err := r.q.GetModuleByCourseVersionAndKey(ctx, sqlc.GetModuleByCourseVersionAndKeyParams{CourseVersionID: versionID, StableKey: stableKey})
+	if err != nil {
+		return courses.Module{}, storageError(err)
+	}
+	return mapModule(row), nil
+}
+
+func (r *Repository) ListModulesForCourseVersion(ctx context.Context, courseVersionID courses.CourseVersionID) ([]courses.Module, error) {
+	versionID, err := uuid(string(courseVersionID))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListModulesForCourseVersion(ctx, versionID)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	modules := make([]courses.Module, 0, len(rows))
+	for _, row := range rows {
+		modules = append(modules, mapModule(row))
+	}
+	return modules, nil
+}
+
+func (r *Repository) CreateLesson(ctx context.Context, input courses.LessonInput) (courses.Lesson, error) {
+	if err := input.Validate(); err != nil {
+		return courses.Lesson{}, err
+	}
+	versionID, err := uuid(string(input.CourseVersionID))
+	if err != nil {
+		return courses.Lesson{}, err
+	}
+	moduleID, err := uuid(string(input.ModuleID))
+	if err != nil {
+		return courses.Lesson{}, err
+	}
+	stableKey, err := courses.NormalizeStructureKey(input.StableKey)
+	if err != nil {
+		return courses.Lesson{}, err
+	}
+	objectives, err := json.Marshal(input.LearningObjectives)
+	if err != nil {
+		return courses.Lesson{}, errors.New("encode lesson learning objectives")
+	}
+	params := sqlc.CreateLessonParams{
+		CourseVersionID:    versionID,
+		ModuleID:           moduleID,
+		StableKey:          stableKey,
+		Title:              input.Title,
+		Description:        input.Description,
+		LearningObjectives: objectives,
+		Position:           int32(input.Position),
+	}
+	if input.EstimatedDurationMinutes != nil {
+		params.EstimatedDurationMinutes = pgtype.Int4{Int32: int32(*input.EstimatedDurationMinutes), Valid: true}
+	}
+	row, err := r.q.CreateLesson(ctx, params)
+	if err != nil {
+		return courses.Lesson{}, storageError(err)
+	}
+	return mapLesson(row)
+}
+
+func (r *Repository) GetLesson(ctx context.Context, id courses.LessonID) (courses.Lesson, error) {
+	key, err := uuid(string(id))
+	if err != nil {
+		return courses.Lesson{}, err
+	}
+	row, err := r.q.GetLesson(ctx, key)
+	if err != nil {
+		return courses.Lesson{}, storageError(err)
+	}
+	return mapLesson(row)
+}
+
+func (r *Repository) GetLessonByCourseVersionAndKey(ctx context.Context, courseVersionID courses.CourseVersionID, stableKey string) (courses.Lesson, error) {
+	versionID, err := uuid(string(courseVersionID))
+	if err != nil {
+		return courses.Lesson{}, err
+	}
+	stableKey, err = courses.NormalizeStructureKey(stableKey)
+	if err != nil {
+		return courses.Lesson{}, err
+	}
+	row, err := r.q.GetLessonByCourseVersionAndKey(ctx, sqlc.GetLessonByCourseVersionAndKeyParams{CourseVersionID: versionID, StableKey: stableKey})
+	if err != nil {
+		return courses.Lesson{}, storageError(err)
+	}
+	return mapLesson(row)
+}
+
+func (r *Repository) ListLessonsForModule(ctx context.Context, moduleID courses.ModuleID) ([]courses.Lesson, error) {
+	key, err := uuid(string(moduleID))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListLessonsForModule(ctx, key)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	lessons := make([]courses.Lesson, 0, len(rows))
+	for _, row := range rows {
+		lesson, err := mapLesson(row)
+		if err != nil {
+			return nil, err
+		}
+		lessons = append(lessons, lesson)
+	}
+	return lessons, nil
+}
+
+func (r *Repository) CreateLessonPrerequisite(ctx context.Context, input courses.LessonPrerequisiteInput) (courses.LessonPrerequisite, error) {
+	if err := input.Validate(); err != nil {
+		return courses.LessonPrerequisite{}, err
+	}
+	lessonID, err := uuid(string(input.LessonID))
+	if err != nil {
+		return courses.LessonPrerequisite{}, err
+	}
+	versionID, err := uuid(string(input.CourseVersionID))
+	if err != nil {
+		return courses.LessonPrerequisite{}, err
+	}
+	source, err := r.q.GetLesson(ctx, lessonID)
+	if err != nil {
+		return courses.LessonPrerequisite{}, storageError(err)
+	}
+	if source.CourseVersionID != versionID {
+		return courses.LessonPrerequisite{}, courses.ErrInvalidLessonPrerequisite
+	}
+	stableKey, err := courses.NormalizeStructureKey(input.PrerequisiteStableKey)
+	if err != nil {
+		return courses.LessonPrerequisite{}, err
+	}
+	if source.StableKey == stableKey {
+		return courses.LessonPrerequisite{}, courses.ErrInvalidLessonPrerequisite
+	}
+	target, err := r.q.GetLessonByCourseVersionAndKey(ctx, sqlc.GetLessonByCourseVersionAndKeyParams{CourseVersionID: versionID, StableKey: stableKey})
+	if err != nil {
+		return courses.LessonPrerequisite{}, storageError(err)
+	}
+	row, err := r.q.CreateLessonPrerequisite(ctx, sqlc.CreateLessonPrerequisiteParams{
+		CourseVersionID:      versionID,
+		LessonID:             lessonID,
+		PrerequisiteLessonID: target.ID,
+		Position:             int32(input.Position),
+	})
+	if err != nil {
+		return courses.LessonPrerequisite{}, storageError(err)
+	}
+	return courses.LessonPrerequisite{
+		CourseVersionID:       courses.CourseVersionID(row.CourseVersionID.String()),
+		LessonID:              courses.LessonID(row.LessonID.String()),
+		PrerequisiteLessonID:  courses.LessonID(row.PrerequisiteLessonID.String()),
+		PrerequisiteStableKey: stableKey,
+		Position:              int(row.Position),
+	}, nil
+}
+
+func (r *Repository) ListLessonPrerequisites(ctx context.Context, lessonID courses.LessonID) ([]courses.LessonPrerequisite, error) {
+	key, err := uuid(string(lessonID))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListLessonPrerequisites(ctx, key)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	prerequisites := make([]courses.LessonPrerequisite, 0, len(rows))
+	for _, row := range rows {
+		prerequisites = append(prerequisites, courses.LessonPrerequisite{
+			CourseVersionID:       courses.CourseVersionID(row.CourseVersionID.String()),
+			LessonID:              courses.LessonID(row.LessonID.String()),
+			PrerequisiteLessonID:  courses.LessonID(row.PrerequisiteLessonID.String()),
+			PrerequisiteStableKey: row.PrerequisiteStableKey,
+			Position:              int(row.Position),
+		})
+	}
+	return prerequisites, nil
 }

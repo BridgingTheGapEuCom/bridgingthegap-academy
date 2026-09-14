@@ -36,3 +36,33 @@ type CoursesCourseVersion struct {
 	CreatedAt          pgtype.Timestamptz
 	PublishedAt        pgtype.Timestamptz
 }
+
+type CoursesLesson struct {
+	ID                       pgtype.UUID
+	CourseVersionID          pgtype.UUID
+	ModuleID                 pgtype.UUID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []byte
+	EstimatedDurationMinutes pgtype.Int4
+	Position                 int32
+	CreatedAt                pgtype.Timestamptz
+}
+
+type CoursesLessonPrerequisite struct {
+	CourseVersionID      pgtype.UUID
+	LessonID             pgtype.UUID
+	PrerequisiteLessonID pgtype.UUID
+	Position             int32
+}
+
+type CoursesModule struct {
+	ID              pgtype.UUID
+	CourseVersionID pgtype.UUID
+	StableKey       string
+	Title           string
+	Description     string
+	Position        int32
+	CreatedAt       pgtype.Timestamptz
+}
