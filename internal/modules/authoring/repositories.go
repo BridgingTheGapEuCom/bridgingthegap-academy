@@ -35,6 +35,7 @@ type Repository interface {
 	CreateLesson(context.Context, LessonInput) (DraftLesson, error)
 	GetLesson(context.Context, LessonID) (DraftLesson, error)
 	ListLessons(context.Context, ModuleID) ([]DraftLesson, error)
+	ListLessonsForDraft(context.Context, DraftID) ([]DraftLesson, error)
 	UpdateLessonMetadata(context.Context, LessonID, int64, string, string, []string, *int) (DraftLesson, error)
 	UpdateLessonContent(context.Context, LessonID, int64, courses.LessonContent) (DraftLesson, error)
 	ReorderLessons(context.Context, ModuleID, int64, []LessonID) (DraftModule, error)
@@ -42,4 +43,17 @@ type Repository interface {
 	DeleteLesson(context.Context, LessonID, int64) error
 	ReplacePrerequisites(context.Context, LessonID, int64, []string) (DraftLesson, error)
 	ListPrerequisites(context.Context, LessonID) ([]Prerequisite, error)
+	ListPrerequisitesForDraft(context.Context, DraftID) ([]Prerequisite, error)
+}
+
+// ReadRepository is the narrow Authoring-owned read contract used by private
+// draft serving. It deliberately contains no membership role interpretation;
+// resource-scoped decisions remain with Authorizer.
+type ReadRepository interface {
+	GetDraft(context.Context, DraftID) (CourseDraft, error)
+	GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error)
+	ListModules(context.Context, DraftID) ([]DraftModule, error)
+	GetLesson(context.Context, LessonID) (DraftLesson, error)
+	ListLessonsForDraft(context.Context, DraftID) ([]DraftLesson, error)
+	ListPrerequisitesForDraft(context.Context, DraftID) ([]Prerequisite, error)
 }

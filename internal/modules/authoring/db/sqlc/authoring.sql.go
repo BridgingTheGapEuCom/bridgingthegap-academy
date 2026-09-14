@@ -571,6 +571,48 @@ func (q *Queries) ListLessons(ctx context.Context, moduleID pgtype.UUID) ([]Auth
 	return items, nil
 }
 
+const listLessonsForDraft = `-- name: ListLessonsForDraft :many
+SELECT lesson.id, lesson.draft_id, lesson.module_id, lesson.stable_key, lesson.title, lesson.description, lesson.learning_objectives, lesson.estimated_duration_minutes, lesson.position, lesson.content, lesson.revision, lesson.created_at, lesson.updated_at
+FROM authoring.lesson AS lesson
+JOIN authoring.module AS module ON module.id = lesson.module_id
+WHERE lesson.draft_id = $1
+ORDER BY module.position, lesson.position, lesson.id
+`
+
+func (q *Queries) ListLessonsForDraft(ctx context.Context, draftID pgtype.UUID) ([]AuthoringLesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsForDraft, draftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthoringLesson
+	for rows.Next() {
+		var i AuthoringLesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.DraftID,
+			&i.ModuleID,
+			&i.StableKey,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.EstimatedDurationMinutes,
+			&i.Position,
+			&i.Content,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMembers = `-- name: ListMembers :many
 SELECT id, workspace_id, user_id, role, created_at, revoked_at FROM authoring.workspace_member WHERE workspace_id = $1 ORDER BY created_at, id
 `
@@ -659,6 +701,46 @@ func (q *Queries) ListPrerequisites(ctx context.Context, lessonID pgtype.UUID) (
 	var items []ListPrerequisitesRow
 	for rows.Next() {
 		var i ListPrerequisitesRow
+		if err := rows.Scan(
+			&i.LessonID,
+			&i.PrerequisiteLessonID,
+			&i.Position,
+			&i.TargetStableKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPrerequisitesForDraft = `-- name: ListPrerequisitesForDraft :many
+SELECT p.lesson_id, p.prerequisite_lesson_id, p.position, target.stable_key AS target_stable_key
+FROM authoring.lesson_prerequisite AS p
+JOIN authoring.lesson AS target ON target.id = p.prerequisite_lesson_id
+WHERE p.draft_id = $1
+ORDER BY p.lesson_id, p.position, p.prerequisite_lesson_id
+`
+
+type ListPrerequisitesForDraftRow struct {
+	LessonID             pgtype.UUID
+	PrerequisiteLessonID pgtype.UUID
+	Position             int32
+	TargetStableKey      string
+}
+
+func (q *Queries) ListPrerequisitesForDraft(ctx context.Context, draftID pgtype.UUID) ([]ListPrerequisitesForDraftRow, error) {
+	rows, err := q.db.Query(ctx, listPrerequisitesForDraft, draftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPrerequisitesForDraftRow
+	for rows.Next() {
+		var i ListPrerequisitesForDraftRow
 		if err := rows.Scan(
 			&i.LessonID,
 			&i.PrerequisiteLessonID,

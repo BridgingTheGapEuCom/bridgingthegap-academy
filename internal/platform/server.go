@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
+	authoringpostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
@@ -62,6 +64,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	metricsServer := &http.Server{Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: maxRequestHeaderBytes}
 	go func() { _ = metricsServer.Serve(metricsListener) }()
 
+	authoringRepository := authoringpostgres.New(pool)
 	auth := &authHTTP{
 		login:        NewPostgresLoginOrchestrator(pool, nil, nil),
 		sessions:     identity.NewSessionService(identitypostgres.New(pool), nil, nil),
@@ -73,6 +76,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		loginRejects: loginRejections,
 		authorizer:   identity.NewAuthorizationService(identitypostgres.New(pool)),
 		courses:      courses.NewReadService(coursespostgres.New(pool)),
+		authoring:    authoring.NewReadService(authoringRepository, authoring.NewAuthorizationService(authoringRepository)),
 		authzMetrics: authorizationDecisions,
 		cookieSecure: !cfg.DevelopmentHTTP,
 		now:          time.Now,
@@ -134,6 +138,12 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				protected.Use(auth.authenticated)
 				protected.Get("/auth/session", auth.handleSession)
 				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
+				if auth.authoring != nil {
+					protected.Get("/authoring/drafts/{draftId}", auth.handleAuthoringDraft)
+					protected.Get("/authoring/drafts/{draftId}/workspace", auth.handleAuthoringWorkspace)
+					protected.Get("/authoring/drafts/{draftId}/structure", auth.handleAuthoringStructure)
+					protected.Get("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLesson)
+				}
 			})
 			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				problem(w, req, http.StatusNotFound, "Not found")

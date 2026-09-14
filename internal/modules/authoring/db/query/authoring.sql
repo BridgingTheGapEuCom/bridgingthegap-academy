@@ -106,6 +106,13 @@ SELECT * FROM authoring.lesson WHERE id = $1;
 -- name: ListLessons :many
 SELECT * FROM authoring.lesson WHERE module_id = $1 ORDER BY position, id;
 
+-- name: ListLessonsForDraft :many
+SELECT lesson.*
+FROM authoring.lesson AS lesson
+JOIN authoring.module AS module ON module.id = lesson.module_id
+WHERE lesson.draft_id = $1
+ORDER BY module.position, lesson.position, lesson.id;
+
 -- name: UpdateLessonMetadata :one
 UPDATE authoring.lesson AS l
 SET title = $3, description = $4, learning_objectives = $5, estimated_duration_minutes = $6,
@@ -150,6 +157,13 @@ SELECT p.lesson_id, p.prerequisite_lesson_id, p.position, target.stable_key AS t
 FROM authoring.lesson_prerequisite AS p
 JOIN authoring.lesson AS target ON target.id = p.prerequisite_lesson_id
 WHERE p.lesson_id = $1 ORDER BY p.position, p.prerequisite_lesson_id;
+
+-- name: ListPrerequisitesForDraft :many
+SELECT p.lesson_id, p.prerequisite_lesson_id, p.position, target.stable_key AS target_stable_key
+FROM authoring.lesson_prerequisite AS p
+JOIN authoring.lesson AS target ON target.id = p.prerequisite_lesson_id
+WHERE p.draft_id = $1
+ORDER BY p.lesson_id, p.position, p.prerequisite_lesson_id;
 
 -- name: BumpLessonRevision :one
 UPDATE authoring.lesson AS l SET revision = l.revision + 1, updated_at = now()

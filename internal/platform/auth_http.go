@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	"github.com/prometheus/client_golang/prometheus"
@@ -47,6 +48,7 @@ type authHTTP struct {
 	authorizer   identity.Authorizer
 	authzMetrics *prometheus.CounterVec
 	courses      *courses.ReadService
+	authoring    *authoring.ReadService
 	cookieSecure bool
 	now          func() time.Time
 }

@@ -55,3 +55,12 @@ authorization unavailable. There is no implicit global ADMINISTRATOR bypass.
 The future HTTP layer should keep authentication, authorization, resource
 existence, and draft-lifecycle checks distinct, and may collapse missing or
 unauthorized resources to one outward response where enumeration matters.
+
+The private read API exposes Draft metadata, workspace metadata, ordered draft
+structure, and individual canonical LessonContent only to an authenticated
+member with `authoring.read` on that exact Draft. It uses `404 Not Found` for
+both absent and unauthorized Draft resources, while malformed identifiers are
+`400` and authorization or storage failures are `500`. Responses are always
+`Cache-Control: no-store`: drafts are mutable and private. Current revision
+numbers are explicit in DTOs for later optimistic writes; no member list or
+Identity profile data is exposed by this read-only slice.

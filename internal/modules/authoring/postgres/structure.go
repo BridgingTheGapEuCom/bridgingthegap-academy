@@ -305,6 +305,22 @@ func (r *Repository) ListPrerequisites(ctx context.Context, lessonID authoring.L
 	return out, nil
 }
 
+func (r *Repository) ListPrerequisitesForDraft(ctx context.Context, draftID authoring.DraftID) ([]authoring.Prerequisite, error) {
+	id, err := uuid(string(draftID))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListPrerequisitesForDraft(ctx, id)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	out := make([]authoring.Prerequisite, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, authoring.Prerequisite{LessonID: authoring.LessonID(row.LessonID.String()), TargetLessonID: authoring.LessonID(row.PrerequisiteLessonID.String()), TargetStableKey: row.TargetStableKey, Position: int(row.Position)})
+	}
+	return out, nil
+}
+
 // MoveLesson renumbers only the two affected modules. The draft row lock
 // serializes structural mutations, while deferrable uniqueness permits swaps.
 func (r *Repository) MoveLesson(ctx context.Context, lessonID authoring.LessonID, expected int64, targetModuleID authoring.ModuleID, targetPosition int) (authoring.DraftLesson, error) {

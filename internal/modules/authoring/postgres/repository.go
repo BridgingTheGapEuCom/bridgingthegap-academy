@@ -564,6 +564,26 @@ func (r *Repository) ListLessons(ctx context.Context, id authoring.ModuleID) ([]
 	return out, nil
 }
 
+func (r *Repository) ListLessonsForDraft(ctx context.Context, id authoring.DraftID) ([]authoring.DraftLesson, error) {
+	key, err := uuid(string(id))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListLessonsForDraft(ctx, key)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	out := make([]authoring.DraftLesson, 0, len(rows))
+	for _, row := range rows {
+		lesson, err := mapLesson(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, lesson)
+	}
+	return out, nil
+}
+
 func (r *Repository) UpdateLessonMetadata(ctx context.Context, id authoring.LessonID, expected int64, title, description string, objectives []string, estimated *int) (authoring.DraftLesson, error) {
 	key, err := uuid(string(id))
 	if err != nil {

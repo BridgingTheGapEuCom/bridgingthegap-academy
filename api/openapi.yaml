@@ -2,8 +2,52 @@ openapi: 3.1.0
 info:
   title: BTG LMS application API
   version: 0.1.0
-  description: Same-origin session transport API and public immutable published-course read API.
+  description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads.
 paths:
+  /api/authoring/drafts/{draftId}:
+    get:
+      operationId: getAuthoringDraft
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Draft metadata and current revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringDraft' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/workspace:
+    get:
+      operationId: getAuthoringWorkspace
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Private workspace metadata, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringWorkspace' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/structure:
+    get:
+      operationId: getAuthoringDraftStructure
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Ordered modules and lesson summaries without full lesson content, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringStructure' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/lessons/{lessonId}:
+    get:
+      operationId: getAuthoringLesson
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      responses:
+        '200': { description: Private draft lesson with canonical semantic content and current revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/courses:
     get:
       operationId: listPublishedCourses
@@ -149,6 +193,8 @@ paths:
                 $ref: '#/components/schemas/Problem'
 components:
   parameters:
+    AuthoringDraftID: { name: draftId, in: path, required: true, schema: { type: string, format: uuid } }
+    AuthoringLessonID: { name: lessonId, in: path, required: true, schema: { type: string, format: uuid } }
     CourseSlug: { name: slug, in: path, required: true, schema: { type: string } }
     CourseVersion: { name: version, in: path, required: true, schema: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$' } }
     LessonKey: { name: lessonKey, in: path, required: true, schema: { type: string } }
@@ -172,6 +218,70 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    AuthoringDraft:
+      type: object
+      required: [id, course_id, intended_version, source_language, title, description, objectives, changelog, license, status, revision, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        course_id: { type: string, format: uuid }
+        intended_version: { type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$' }
+        source_language: { type: string }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        changelog: { type: string }
+        license: { $ref: '#/components/schemas/ContentLicense' }
+        status: { type: string, enum: [ACTIVE, ABANDONED] }
+        revision: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AuthoringWorkspace:
+      type: object
+      required: [id, draft_id, created_at, last_activity_at]
+      properties:
+        id: { type: string, format: uuid }
+        draft_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time }
+    AuthoringLessonSummary:
+      type: object
+      required: [id, stable_key, title, description, objectives, estimated_duration_minutes, position, revision, recommended_prerequisite_keys]
+      properties:
+        id: { type: string, format: uuid }
+        stable_key: { type: string }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        estimated_duration_minutes: { type: [integer, 'null'], minimum: 1 }
+        position: { type: integer, minimum: 0 }
+        revision: { type: integer, minimum: 1 }
+        recommended_prerequisite_keys: { type: array, items: { type: string } }
+    AuthoringModuleSummary:
+      type: object
+      required: [id, stable_key, title, description, position, revision, lessons]
+      properties:
+        id: { type: string, format: uuid }
+        stable_key: { type: string }
+        title: { type: string }
+        description: { type: string }
+        position: { type: integer, minimum: 0 }
+        revision: { type: integer, minimum: 1 }
+        lessons: { type: array, items: { $ref: '#/components/schemas/AuthoringLessonSummary' } }
+    AuthoringStructure:
+      type: object
+      required: [modules]
+      properties: { modules: { type: array, items: { $ref: '#/components/schemas/AuthoringModuleSummary' } } }
+    AuthoringLessonDetail:
+      allOf:
+        - $ref: '#/components/schemas/AuthoringLessonSummary'
+        - type: object
+          required: [draft_id, module_id, content, created_at, updated_at]
+          properties:
+            draft_id: { type: string, format: uuid }
+            module_id: { type: string, format: uuid }
+            content: { $ref: '#/components/schemas/LessonContent' }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
     CourseList: { type: object, required: [courses], properties: { courses: { type: array, items: { $ref: '#/components/schemas/CourseSummary' } } } }
     CourseSummary: { type: object, required: [slug, version], properties: { slug: { type: string }, version: { $ref: '#/components/schemas/CourseVersionSummary' } } }
     CourseIdentity: { type: object, required: [slug], properties: { slug: { type: string } } }

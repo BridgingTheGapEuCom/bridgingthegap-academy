@@ -4,6 +4,70 @@
  */
 
 export interface paths {
+    "/api/authoring/drafts/{draftId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAuthoringDraft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAuthoringWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/structure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAuthoringDraftStructure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/lessons/{lessonId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAuthoringLesson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses": {
         parameters: {
             query?: never;
@@ -171,6 +235,72 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthoringDraft: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            course_id: string;
+            intended_version: string;
+            source_language: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            changelog: string;
+            license: components["schemas"]["ContentLicense"];
+            /** @enum {string} */
+            status: "ACTIVE" | "ABANDONED";
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AuthoringWorkspace: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            draft_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_activity_at: string;
+        };
+        AuthoringLessonSummary: {
+            /** Format: uuid */
+            id: string;
+            stable_key: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimated_duration_minutes: number | null;
+            position: number;
+            revision: number;
+            recommended_prerequisite_keys: string[];
+        };
+        AuthoringModuleSummary: {
+            /** Format: uuid */
+            id: string;
+            stable_key: string;
+            title: string;
+            description: string;
+            position: number;
+            revision: number;
+            lessons: components["schemas"]["AuthoringLessonSummary"][];
+        };
+        AuthoringStructure: {
+            modules: components["schemas"]["AuthoringModuleSummary"][];
+        };
+        AuthoringLessonDetail: components["schemas"]["AuthoringLessonSummary"] & {
+            /** Format: uuid */
+            draft_id: string;
+            /** Format: uuid */
+            module_id: string;
+            content: components["schemas"]["LessonContent"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         CourseList: {
             courses: components["schemas"]["CourseSummary"][];
         };
@@ -493,6 +623,8 @@ export interface components {
         };
     };
     parameters: {
+        AuthoringDraftID: string;
+        AuthoringLessonID: string;
         CourseSlug: string;
         CourseVersion: string;
         LessonKey: string;
@@ -505,6 +637,111 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getAuthoringDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Draft metadata and current revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringDraft"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private workspace metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringWorkspace"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringDraftStructure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered modules and lesson summaries without full lesson content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringStructure"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private draft lesson with canonical semantic content and current revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringLessonDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
     listPublishedCourses: {
         parameters: {
             query?: never;
