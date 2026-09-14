@@ -357,6 +357,29 @@ func (r *Repository) ListMembers(ctx context.Context, workspace authoring.Worksp
 	return out, nil
 }
 
+func (r *Repository) ActiveMembershipForDraft(ctx context.Context, draft authoring.DraftID, user string) (authoring.MemberRole, bool, error) {
+	draftID, err := uuid(string(draft))
+	if err != nil {
+		return "", false, err
+	}
+	userID, err := uuid(user)
+	if err != nil {
+		return "", false, err
+	}
+	role, err := r.q.ActiveMembershipForDraft(ctx, sqlc.ActiveMembershipForDraftParams{DraftID: draftID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, storageError(err)
+	}
+	current := authoring.MemberRole(role)
+	if !current.Valid() {
+		return "", false, errors.New("invalid stored authoring membership")
+	}
+	return current, true, nil
+}
+
 func (r *Repository) CreateModule(ctx context.Context, input authoring.ModuleInput) (authoring.DraftModule, error) {
 	if err := input.Validate(); err != nil {
 		return authoring.DraftModule{}, err

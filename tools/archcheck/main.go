@@ -77,6 +77,10 @@ func check(root string, tableOwners map[string]string) error {
 					violations = append(violations, fmt.Sprintf("%s: authoring may import Courses domain values only", path))
 					continue
 				}
+				if owner == "authoring" && target == "identity" && literal != modulePrefix+"identity" {
+					violations = append(violations, fmt.Sprintf("%s: authoring may import Identity domain actor only", path))
+					continue
+				}
 				if forbidden(owner, target) {
 					violations = append(violations, fmt.Sprintf("%s: %s cannot import %s", path, owner, target))
 				}
@@ -121,7 +125,7 @@ func forbidden(owner, target string) bool {
 	}
 	// Authoring may reuse immutable Courses value objects, never another module's
 	// application or persistence adapters. The exact Courses path is checked above.
-	if owner == "authoring" && target != "courses" {
+	if owner == "authoring" && target != "courses" && target != "identity" {
 		return true
 	}
 	if owner != "administration" && (target == "notifications" || target == "search" || target == "audit") {

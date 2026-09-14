@@ -23,11 +23,40 @@ func TestForbiddenImports(t *testing.T) {
 		{"administration", "courses", false},
 		{"publishing", "courses", false},
 		{"courses", "courses", false},
+		{"authoring", "identity", false},
+		{"authoring", "courses", false},
+		{"authoring", "audit", true},
 	}
 	for _, tt := range tests {
 		if got := forbidden(tt.owner, tt.target); got != tt.want {
 			t.Errorf("forbidden(%q, %q) = %v, want %v", tt.owner, tt.target, got, tt.want)
 		}
+	}
+}
+
+func TestAuthoringMayUseDomainActorButNotIdentityPersistence(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "authoring", "actor.go")
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("package authoring\nimport _ \""+modulePrefix+"identity\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := check(root, nil); err != nil {
+		t.Fatalf("trusted actor domain import rejected: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("package authoring\nimport _ \""+modulePrefix+"identity/postgres\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := check(root, nil); err == nil || !strings.Contains(err.Error(), "Identity domain actor only") {
+		t.Fatalf("Identity persistence import accepted: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("package authoring\nimport _ \""+modulePrefix+"courses/postgres\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := check(root, nil); err == nil || !strings.Contains(err.Error(), "Courses domain values only") {
+		t.Fatalf("Courses persistence import accepted: %v", err)
 	}
 }
 

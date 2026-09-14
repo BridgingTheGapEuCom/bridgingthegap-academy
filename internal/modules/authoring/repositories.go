@@ -25,6 +25,7 @@ type Repository interface {
 	AddMember(context.Context, WorkspaceID, string, MemberRole) (WorkspaceMember, error)
 	RevokeMember(context.Context, WorkspaceID, string) (WorkspaceMember, error)
 	ListMembers(context.Context, WorkspaceID) ([]WorkspaceMember, error)
+	ActiveMembershipForDraft(context.Context, DraftID, string) (MemberRole, bool, error)
 	CreateModule(context.Context, ModuleInput) (DraftModule, error)
 	GetModule(context.Context, ModuleID) (DraftModule, error)
 	ListModules(context.Context, DraftID) ([]DraftModule, error)

@@ -44,6 +44,25 @@ func (q *Queries) AbandonDraft(ctx context.Context, arg AbandonDraftParams) (Aut
 	return i, err
 }
 
+const activeMembershipForDraft = `-- name: ActiveMembershipForDraft :one
+SELECT member.role
+FROM authoring.workspace_member AS member
+JOIN authoring.workspace AS workspace ON workspace.id = member.workspace_id
+WHERE workspace.draft_id = $1 AND member.user_id = $2 AND member.revoked_at IS NULL
+`
+
+type ActiveMembershipForDraftParams struct {
+	DraftID pgtype.UUID
+	UserID  pgtype.UUID
+}
+
+func (q *Queries) ActiveMembershipForDraft(ctx context.Context, arg ActiveMembershipForDraftParams) (string, error) {
+	row := q.db.QueryRow(ctx, activeMembershipForDraft, arg.DraftID, arg.UserID)
+	var role string
+	err := row.Scan(&role)
+	return role, err
+}
+
 const addMember = `-- name: AddMember :one
 INSERT INTO authoring.workspace_member (workspace_id, user_id, role)
 SELECT $1, $2, $3 FROM authoring.workspace AS w

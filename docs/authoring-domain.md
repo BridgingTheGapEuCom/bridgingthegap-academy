@@ -1,4 +1,4 @@
-# Authoring domain (M3.1)
+# Authoring domain
 
 **A draft is a workspace; a published CourseVersion is an immutable artifact.**
 Authoring owns current mutable content in its own PostgreSQL schema. Its `course_id`
@@ -30,5 +30,28 @@ deleting a lesson or Module cascades to its draft-owned children and prerequisit
 references. No published CourseVersion deletion or mutation path is added.
 
 Locks, autosave, revision history, comments, review states, and publication
-orchestration are separate future boundaries. Authoring currently imports only
-Courses' canonical domain value objects and validation, not Courses persistence.
+orchestration are separate future boundaries. Authoring imports Courses'
+canonical value objects and Identity's trusted actor type, never their
+persistence adapters.
+
+Authorization uses a current, active membership for the exact Draft/workspace.
+Future handlers must ask the Authoring authorizer for a capability and must not
+branch on MAINTAINER/AUTHOR roles. The policy is:
+
+| Capability | AUTHOR | MAINTAINER |
+| --- | --- | --- |
+| `authoring.read` | Allow | Allow |
+| `authoring.draft.edit` | Allow | Allow |
+| `authoring.structure.edit` | Allow | Allow |
+| `authoring.content.edit` | Allow | Allow |
+| `authoring.members.manage` | Deny | Allow |
+| `authoring.draft.abandon` | Deny | Allow |
+
+Membership is read on every authorization decision; revoked rows grant nothing.
+An in-flight check may observe the prior committed membership if it races with
+revocation; the next check after the revoke commits sees the new state.
+Missing membership and missing Draft both deny, while a database failure returns
+authorization unavailable. There is no implicit global ADMINISTRATOR bypass.
+The future HTTP layer should keep authentication, authorization, resource
+existence, and draft-lifecycle checks distinct, and may collapse missing or
+unauthorized resources to one outward response where enumeration matters.
