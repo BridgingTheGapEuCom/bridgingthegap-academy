@@ -12,10 +12,22 @@ type ModuleStructure struct {
 	Lessons []LessonStructure
 }
 
+// LessonSummary omits the potentially large block document from course outlines.
+type LessonSummary struct {
+	ID                       LessonID
+	ModuleID                 ModuleID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []string
+	EstimatedDurationMinutes *int
+	Position                 int
+}
+
 // LessonStructure is the public-read projection of version-owned lesson
 // metadata. Recommended prerequisites are advisory stable keys, never locks.
 type LessonStructure struct {
-	Lesson                      Lesson
+	Lesson                      LessonSummary
 	RecommendedPrerequisiteKeys []string
 }
 type CourseRead struct {
@@ -40,26 +52,38 @@ func (s *ReadService) Preferred(ctx context.Context, slug string) (CourseRead, e
 	if err != nil {
 		return CourseRead{}, err
 	}
-	for _, version := range versions {
-		if version.Status == CourseVersionPublished {
-			return s.load(ctx, course, version)
+	var preferred *CourseVersion
+	for i := range versions {
+		version := &versions[i]
+		if version.Status == CourseVersionPublished && (preferred == nil || version.Version.Compare(preferred.Version) > 0) {
+			preferred = version
 		}
 	}
-	return CourseRead{}, ErrNotServable
+	if preferred == nil {
+		return CourseRead{}, ErrNotServable
+	}
+	return s.load(ctx, course, *preferred)
 }
 func (s *ReadService) Explicit(ctx context.Context, slug string, version Version) (CourseRead, error) {
-	course, err := s.repository.GetCourseBySlug(ctx, slug)
+	course, v, err := s.explicitVersion(ctx, slug, version)
 	if err != nil {
 		return CourseRead{}, err
+	}
+	return s.load(ctx, course, v)
+}
+func (s *ReadService) explicitVersion(ctx context.Context, slug string, version Version) (Course, CourseVersion, error) {
+	course, err := s.repository.GetCourseBySlug(ctx, slug)
+	if err != nil {
+		return Course{}, CourseVersion{}, err
 	}
 	v, err := s.repository.GetCourseVersionByCourseAndVersion(ctx, course.ID, version)
 	if err != nil {
-		return CourseRead{}, err
+		return Course{}, CourseVersion{}, err
 	}
-	if v.Status == CourseVersionWithdrawn {
-		return CourseRead{}, ErrNotServable
+	if v.Status != CourseVersionPublished && v.Status != CourseVersionDeprecated && v.Status != CourseVersionArchived {
+		return Course{}, CourseVersion{}, ErrNotServable
 	}
-	return s.load(ctx, course, v)
+	return course, v, nil
 }
 func (s *ReadService) Discover(ctx context.Context) ([]CourseRead, error) {
 	courses, err := s.repository.ListCourses(ctx)
@@ -72,7 +96,8 @@ func (s *ReadService) Discover(ctx context.Context) ([]CourseRead, error) {
 	}
 	preferred := make(map[CourseID]CourseVersion, len(courses))
 	for _, version := range published {
-		if _, exists := preferred[version.CourseID]; !exists {
+		current, exists := preferred[version.CourseID]
+		if version.Status == CourseVersionPublished && (!exists || version.Version.Compare(current.Version) > 0) {
 			preferred[version.CourseID] = version
 		}
 	}
@@ -85,11 +110,11 @@ func (s *ReadService) Discover(ctx context.Context) ([]CourseRead, error) {
 	return result, nil
 }
 func (s *ReadService) Lesson(ctx context.Context, slug string, version Version, key string) (CourseRead, Module, Lesson, []LessonPrerequisite, error) {
-	read, err := s.Explicit(ctx, slug, version)
+	course, courseVersion, err := s.explicitVersion(ctx, slug, version)
 	if err != nil {
 		return CourseRead{}, Module{}, Lesson{}, nil, err
 	}
-	lesson, err := s.repository.GetLessonByCourseVersionAndKey(ctx, read.Version.ID, key)
+	lesson, err := s.repository.GetLessonByCourseVersionAndKey(ctx, courseVersion.ID, key)
 	if err != nil {
 		return CourseRead{}, Module{}, Lesson{}, nil, err
 	}
@@ -101,14 +126,14 @@ func (s *ReadService) Lesson(ctx context.Context, slug string, version Version, 
 	if err != nil {
 		return CourseRead{}, Module{}, Lesson{}, nil, err
 	}
-	return read, module, lesson, prerequisites, nil
+	return CourseRead{Course: course, Version: courseVersion}, module, lesson, prerequisites, nil
 }
 func (s *ReadService) load(ctx context.Context, course Course, version CourseVersion) (CourseRead, error) {
 	modules, err := s.repository.ListModulesForCourseVersion(ctx, version.ID)
 	if err != nil {
 		return CourseRead{}, err
 	}
-	lessons, err := s.repository.ListLessonsForCourseVersion(ctx, version.ID)
+	lessons, err := s.repository.ListLessonSummariesForCourseVersion(ctx, version.ID)
 	if err != nil {
 		return CourseRead{}, err
 	}

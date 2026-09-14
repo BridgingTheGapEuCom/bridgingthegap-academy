@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -280,13 +281,29 @@ func testCourseReadService(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	router := authTestRouter(&authHTTP{courses: service})
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/courses/public-course-read/versions/2.0.0/lessons/what-is-eai", nil))
-	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "public, max-age=3600" {
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("PostgreSQL-backed lesson API failed: status=%d cache=%q", response.Code, response.Header().Get("Cache-Control"))
+	}
+	if !strings.Contains(response.Body.String(), `"payload":{"content":{"nodes":`) {
+		t.Fatalf("TEXT payload does not match the published block contract: %s", response.Body.String())
 	}
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/courses/public-course-read/versions/3.0.0", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("withdrawn PostgreSQL-backed version was public: status=%d", response.Code)
+	}
+	if _, err := r.TransitionCourseVersionStatus(ctx, latest.ID, courses.CourseVersionPublished, courses.CourseVersionWithdrawn); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		"/api/courses/public-course-read/versions/2.0.0",
+		"/api/courses/public-course-read/versions/2.0.0/lessons/what-is-eai",
+	} {
+		response = httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusNotFound || response.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("withdrawn content remained public at %s: status=%d cache=%q", path, response.Code, response.Header().Get("Cache-Control"))
+		}
 	}
 }
 

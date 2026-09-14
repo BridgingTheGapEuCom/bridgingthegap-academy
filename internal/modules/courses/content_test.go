@@ -44,6 +44,11 @@ func TestLessonContentValidationAndRoundTrip(t *testing.T) {
 	if _, err := ParseLessonContent([]byte(`{"schemaVersion":1,"blocks":[],"unexpected":true}`)); err == nil {
 		t.Fatal("unknown JSON field accepted")
 	}
+	for _, input := range []string{`{"schemaVersion":1}`, `{"schemaVersion":1,"blocks":null}`, `{"schemaVersion":1,"blocks":[{"key":"divider","type":"DIVIDER","payload":null}]}`} {
+		if _, err := ParseLessonContent([]byte(input)); err == nil {
+			t.Fatalf("missing or null document field accepted: %s", input)
+		}
+	}
 }
 
 func TestBuiltInBlockPayloadValidation(t *testing.T) {
@@ -88,6 +93,9 @@ func TestBuiltInBlockPayloadValidation(t *testing.T) {
 	if err := (QuoteBlockPayload{Text: "x", SourceURL: "javascript:alert(1)"}).Validate(); err == nil {
 		t.Fatal("unsafe URL accepted")
 	}
+	if err := (QuoteBlockPayload{Text: "x", SourceURL: "/\\evil.example"}).Validate(); err == nil {
+		t.Fatal("backslash authority URL accepted")
+	}
 	if err := (CodeBlockPayload{Code: strings.Repeat("x", MaxCodeCharacters+1)}).Validate(); err == nil {
 		t.Fatal("oversized code accepted")
 	}
@@ -104,6 +112,9 @@ func FuzzParseLessonContent(f *testing.F) {
 	valid, _ := json.Marshal(testLessonContent())
 	f.Add(string(valid))
 	f.Add(`{"schemaVersion":1,"blocks":[]}`)
+	f.Add(`{"schemaVersion":1,"blocks":[{"key":"table","type":"TABLE","payload":{"headers":["A"],"rows":[["B"]]}}]}`)
+	f.Add(`{"schemaVersion":1,"blocks":[{"key":"quote","type":"QUOTE","payload":{"text":"x","sourceUrl":"javascript:alert(1)"}}]}`)
+	f.Add(`{"schemaVersion":1,"blocks":[{"key":"divider","type":"DIVIDER","payload":null}]}`)
 	f.Add(`{`)
 	f.Fuzz(func(t *testing.T, input string) { _, _ = ParseLessonContent([]byte(input)) })
 }

@@ -67,5 +67,25 @@ test('lesson reflows at narrow widths without page-wide horizontal overflow', as
     await page.goto(lessonPath)
     await expect(page.getByRole('heading', { level: 1, name: 'Synchronous and asynchronous' })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    if (width === 320) {
+      const caption = await page.getByText('Comparison', { exact: true }).boundingBox()
+      const scrollArea = await page.locator('.lesson-table-scroll').boundingBox()
+      expect(caption && scrollArea && caption.x - scrollArea.x).toBeLessThan(20)
+    }
   }
+})
+
+test('legacy empty lesson remains readable without a broken Focus position', async ({ page }) => {
+  await serveLesson(page)
+  await page.route('**/api/courses/event-driven-architecture/versions/1.10.0/lessons/sync-vs-async', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ...lesson, lesson: { ...lesson.lesson, content: { schemaVersion: 1, blocks: [] } } }),
+  }))
+  await page.goto(lessonPath)
+  await expect(page.getByRole('heading', { level: 1, name: 'Synchronous and asynchronous' })).toBeVisible()
+  await expect(page.getByText('This lesson has no published content yet.')).toBeVisible()
+  await expect(page.getByLabel('Focus')).toHaveCount(0)
+  await expect(page.getByText('Block 1 of 0')).toHaveCount(0)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

@@ -383,6 +383,14 @@ type LessonInput struct {
 }
 
 func (in LessonInput) Validate() error {
+	if err := in.ValidateMetadata(); err != nil {
+		return err
+	}
+	return in.Content.Validate()
+}
+
+// ValidateMetadata supports read projections that deliberately omit block content.
+func (in LessonInput) ValidateMetadata() error {
 	if in.CourseVersionID == "" || in.ModuleID == "" {
 		return errors.New("lesson course version and module identifiers are required")
 	}
@@ -408,9 +416,6 @@ func (in LessonInput) Validate() error {
 	}
 	if in.Position < 0 || in.Position > 100000 {
 		return errors.New("invalid lesson position")
-	}
-	if err := in.Content.Validate(); err != nil {
-		return err
 	}
 	return nil
 }

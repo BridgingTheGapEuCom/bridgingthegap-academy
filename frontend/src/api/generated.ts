@@ -187,15 +187,15 @@ export interface components {
             modules: components["schemas"]["ModuleStructure"][];
         };
         CourseVersionSummary: {
-            version?: string;
+            version: string;
             /** @enum {string} */
-            status?: "PUBLISHED" | "DEPRECATED" | "ARCHIVED";
-            title?: string;
-            description?: string;
-            objectives?: string[];
-            source_language?: string;
-            license?: components["schemas"]["ContentLicense"];
-            contributors?: components["schemas"]["Contributor"][];
+            status: "PUBLISHED" | "DEPRECATED" | "ARCHIVED";
+            title: string;
+            description: string;
+            objectives: string[];
+            source_language: string;
+            license: components["schemas"]["ContentLicense"];
+            contributors: components["schemas"]["Contributor"][];
         };
         Contributor: {
             display_name: string;
@@ -204,17 +204,18 @@ export interface components {
             order: number;
         };
         ContentLicense: {
-            kind: string;
-            identifier?: string;
+            /** @enum {string} */
+            kind: "STANDARD" | "ALL_RIGHTS_RESERVED" | "CUSTOM";
+            identifier: string;
             display_name: string;
-            /** Format: uri */
-            url?: string;
-            custom_text?: string;
+            /** @description Empty when no public license URL is present. */
+            url: string;
+            custom_text: string;
         };
         ModuleSummary: {
             key: string;
             title: string;
-            description?: string;
+            description: string;
             position: number;
         };
         LessonSummary: {
@@ -222,7 +223,7 @@ export interface components {
             title: string;
             description: string;
             objectives: string[];
-            estimated_duration_minutes?: number | null;
+            estimated_duration_minutes: number | null;
             position: number;
             recommended_prerequisite_keys: string[];
         };
@@ -251,7 +252,9 @@ export interface components {
         TextBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "TEXT";
-            payload?: components["schemas"]["RichText"];
+            payload: {
+                content: components["schemas"]["RichText"];
+            };
         } & {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -262,9 +265,9 @@ export interface components {
         HeadingBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "HEADING";
-            payload?: {
-                level?: number;
-                content?: components["schemas"]["RichTextInline"][];
+            payload: {
+                level: number;
+                content: components["schemas"]["RichTextInline"][];
             };
         } & {
             /**
@@ -279,10 +282,10 @@ export interface components {
         ImageBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "IMAGE";
-            payload?: {
-                asset?: components["schemas"]["AssetReference"];
+            payload: {
+                asset: components["schemas"]["AssetReference"];
                 altText?: string;
-                decorative?: boolean;
+                decorative: boolean;
                 caption?: string;
             };
         } & {
@@ -295,12 +298,12 @@ export interface components {
         VideoBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "VIDEO";
-            payload?: {
-                asset?: components["schemas"]["AssetReference"];
-                title?: string;
+            payload: {
+                asset: components["schemas"]["AssetReference"];
+                title: string;
                 transcript?: string;
                 transcriptAsset?: components["schemas"]["AssetReference"];
-                captionsAsset?: components["schemas"]["AssetReference"];
+                captionsAsset: components["schemas"]["AssetReference"];
             };
         } & {
             /**
@@ -312,9 +315,9 @@ export interface components {
         AudioBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "AUDIO";
-            payload?: {
-                asset?: components["schemas"]["AssetReference"];
-                title?: string;
+            payload: {
+                asset: components["schemas"]["AssetReference"];
+                title: string;
                 transcript?: string;
                 transcriptAsset?: components["schemas"]["AssetReference"];
             };
@@ -328,8 +331,8 @@ export interface components {
         CodeBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "CODE";
-            payload?: {
-                code?: string;
+            payload: {
+                code: string;
                 language?: string;
                 title?: string;
             };
@@ -343,10 +346,10 @@ export interface components {
         QuoteBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "QUOTE";
-            payload?: {
-                text?: string;
+            payload: {
+                text: string;
                 attribution?: string;
-                /** Format: uri */
+                /** Format: uri-reference */
                 sourceUrl?: string;
             };
         } & {
@@ -359,11 +362,11 @@ export interface components {
         CalloutBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "CALLOUT";
-            payload?: {
+            payload: {
                 /** @enum {string} */
-                kind?: "INFO" | "NOTE" | "WARNING" | "TIP";
+                kind: "INFO" | "NOTE" | "WARNING" | "TIP";
                 title?: string;
-                content?: components["schemas"]["RichText"];
+                content: components["schemas"]["RichText"];
             };
         } & {
             /**
@@ -375,10 +378,10 @@ export interface components {
         TableBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "TABLE";
-            payload?: {
+            payload: {
                 caption?: string;
-                headers?: string[];
-                rows?: string[][];
+                headers: string[];
+                rows: string[][];
             };
         } & {
             /**
@@ -390,9 +393,9 @@ export interface components {
         DownloadBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "DOWNLOAD";
-            payload?: {
-                asset?: components["schemas"]["AssetReference"];
-                label?: string;
+            payload: {
+                asset: components["schemas"]["AssetReference"];
+                label: string;
                 description?: string;
             };
         } & {
@@ -405,8 +408,8 @@ export interface components {
         KnowledgeCheckBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "KNOWLEDGE_CHECK";
-            payload?: {
-                assessmentKey?: string;
+            payload: {
+                assessmentKey: string;
             };
         } & {
             /**
@@ -418,7 +421,7 @@ export interface components {
         DividerBlock: components["schemas"]["BlockEnvelope"] & {
             /** @constant */
             type?: "DIVIDER";
-            payload?: Record<string, never>;
+            payload: Record<string, never>;
         } & {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -428,7 +431,7 @@ export interface components {
         };
         /** @description Constrained semantic rich text. It is not HTML or editor state. */
         RichText: {
-            nodes?: components["schemas"]["RichTextNode"][];
+            nodes: components["schemas"]["RichTextNode"][];
         };
         RichTextNode: {
             /** @enum {string} */
@@ -444,8 +447,8 @@ export interface components {
         };
         RichTextMark: {
             /** @enum {string} */
-            type?: "emphasis" | "strong" | "inline_code" | "link";
-            /** Format: uri */
+            type: "emphasis" | "strong" | "inline_code" | "link";
+            /** Format: uri-reference */
             href?: string;
         };
         LoginRequest: {

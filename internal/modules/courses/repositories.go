@@ -35,7 +35,7 @@ type Repository interface {
 	GetLesson(context.Context, LessonID) (Lesson, error)
 	GetLessonByCourseVersionAndKey(context.Context, CourseVersionID, string) (Lesson, error)
 	ListLessonsForModule(context.Context, ModuleID) ([]Lesson, error)
-	ListLessonsForCourseVersion(context.Context, CourseVersionID) ([]Lesson, error)
+	ListLessonSummariesForCourseVersion(context.Context, CourseVersionID) ([]LessonSummary, error)
 
 	CreateLessonPrerequisite(context.Context, LessonPrerequisiteInput) (LessonPrerequisite, error)
 	ListLessonPrerequisites(context.Context, LessonID) ([]LessonPrerequisite, error)

@@ -47,13 +47,17 @@
         <ul><li v-for="key in state.lesson.lesson.recommended_prerequisite_keys" :key="key">{{ prerequisiteName(key) }}</li></ul>
       </section>
 
-      <fieldset class="lesson-mode-control">
+      <fieldset v-if="state.content.blocks.length" class="lesson-mode-control">
         <legend>Reading mode</legend>
         <label><input v-model="mode" type="radio" value="continuous" /> Continuous</label>
         <label><input v-model="mode" type="radio" value="focus" /> Focus</label>
       </fieldset>
 
-      <section v-if="mode === 'continuous'" class="lesson-content" aria-label="Lesson content">
+      <section v-if="!state.content.blocks.length" class="lesson-content" aria-label="Lesson content">
+        <p>This lesson has no published content yet.</p>
+      </section>
+
+      <section v-else-if="mode === 'continuous'" class="lesson-content" aria-label="Lesson content">
         <div v-for="block in state.content.blocks" :id="`lesson-block-${block.key}`" :key="block.key" class="lesson-content__block">
           <LessonBlockRenderer :block="block" />
         </div>
@@ -126,10 +130,16 @@ async function load() {
   focusIndex.value = 0
   try {
     const lesson = await getLesson(slug, version, lessonKey)
-    const structure = await getCourseVersion(slug, version).catch(() => undefined)
     if (!active || generation !== requestVersion) return
     const content = decodeLessonContent(lesson.lesson.content)
-    state.value = content.kind === 'ready' ? { kind: 'ready', lesson, structure, content } : { kind: 'unsupported' }
+    state.value = content.kind === 'ready' ? { kind: 'ready', lesson, content } : { kind: 'unsupported' }
+    if (content.kind === 'ready') {
+      void getCourseVersion(slug, version).then((structure) => {
+        if (active && generation === requestVersion && state.value.kind === 'ready') {
+          state.value = { ...state.value, structure }
+        }
+      }).catch(() => { /* Optional sequence context must not hide a loaded lesson. */ })
+    }
   } catch (error) {
     if (!active || generation !== requestVersion) return
     state.value = error instanceof InvalidCourseRouteError || (error instanceof APIProblemError && error.status === 404) ? { kind: 'not-found' } : { kind: 'unavailable' }

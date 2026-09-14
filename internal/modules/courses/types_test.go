@@ -124,6 +124,14 @@ func TestModuleLessonAndPrerequisiteValidation(t *testing.T) {
 	if err := lesson.Validate(); err != nil {
 		t.Fatalf("valid lesson rejected: %v", err)
 	}
+	metadataOnly := lesson
+	metadataOnly.Content = LessonContent{}
+	if err := metadataOnly.ValidateMetadata(); err != nil {
+		t.Fatalf("valid metadata-only projection rejected: %v", err)
+	}
+	if err := metadataOnly.Validate(); err == nil {
+		t.Fatal("published lesson creation accepted missing content")
+	}
 	lesson.StableKey = "bad key"
 	if err := lesson.Validate(); err == nil {
 		t.Fatal("invalid lesson key accepted")

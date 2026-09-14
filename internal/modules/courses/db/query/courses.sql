@@ -100,8 +100,9 @@ FROM courses.lesson
 WHERE module_id = $1
 ORDER BY position ASC, id ASC;
 
--- name: ListLessonsForCourseVersion :many
-SELECT *
+-- name: ListLessonSummariesForCourseVersion :many
+SELECT id, course_version_id, module_id, stable_key, title, description,
+       learning_objectives, estimated_duration_minutes, position
 FROM courses.lesson
 WHERE course_version_id = $1
 ORDER BY module_id ASC, position ASC, id ASC;

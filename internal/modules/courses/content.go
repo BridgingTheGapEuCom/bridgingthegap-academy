@@ -47,8 +47,8 @@ func (c LessonContent) Validate() error {
 	if c.SchemaVersion != 1 {
 		return errors.New("unsupported lesson content schema version")
 	}
-	if len(c.Blocks) > MaxLessonBlocks {
-		return errors.New("too many lesson blocks")
+	if c.Blocks == nil || len(c.Blocks) > MaxLessonBlocks {
+		return errors.New("invalid lesson blocks array")
 	}
 	seen := map[string]bool{}
 	for _, b := range c.Blocks {
@@ -149,7 +149,7 @@ func (b *Block) UnmarshalJSON(data []byte) error {
 		Type    BlockType       `json:"type"`
 		Payload json.RawMessage `json:"payload"`
 	}
-	if e := strict(data, &r); e != nil || len(r.Payload) == 0 {
+	if e := strict(data, &r); e != nil || len(r.Payload) == 0 || bytes.Equal(bytes.TrimSpace(r.Payload), []byte("null")) {
 		return errors.New("invalid lesson block")
 	}
 	p, e := blockPayload(r.Type, r.Payload)
@@ -496,7 +496,7 @@ func safeURL(s string) error {
 		return errors.New("invalid content URL")
 	}
 	if strings.HasPrefix(s, "/") {
-		if strings.HasPrefix(s, "//") {
+		if strings.HasPrefix(s, "//") || strings.Contains(s, "\\") {
 			return errors.New("invalid content URL")
 		}
 		return nil

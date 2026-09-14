@@ -36,7 +36,7 @@ function assetIsUnresolved(asset: { assetKey: string }): boolean {
     <div class="lesson-media__transcript">
       <h3>Transcript</h3>
       <p v-if="block.payload.transcript">{{ block.payload.transcript }}</p>
-      <p v-else>Transcript is included with the published media asset.</p>
+      <p v-else>Transcript unavailable until published asset delivery is enabled.</p>
     </div>
   </div>
 

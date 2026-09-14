@@ -110,7 +110,9 @@ func forbidden(owner, target string) bool {
 	if target == "administration" {
 		return true
 	}
-	if owner == "courses" && (target == "authoring" || target == "publishing") {
+	// Published Courses artifacts and read policy do not consult other domains.
+	// References such as knowledge-check keys stay opaque within Courses.
+	if owner == "courses" {
 		return true
 	}
 	if owner != "administration" && (target == "notifications" || target == "search" || target == "audit") {

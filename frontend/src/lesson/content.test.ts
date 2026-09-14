@@ -10,6 +10,7 @@ describe('published lesson content decoder', () => {
     if (decoded.kind === 'ready') expect(decoded.blocks.map((block) => block.key)).toEqual(['intro', 'divider'])
 
     expect(decodeLessonContent({ schemaVersion: 2, blocks: [textBlock] }).kind).toBe('unsupported-schema')
+    expect(decodeLessonContent({ schemaVersion: 1, blocks: [] })).toEqual({ kind: 'ready', schemaVersion: 1, blocks: [] })
     expect(decodeLessonContent({ schemaVersion: 1, blocks: [textBlock, textBlock] }).kind).toBe('invalid-content')
   })
 

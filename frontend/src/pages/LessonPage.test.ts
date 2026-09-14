@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { nextTick } from 'vue'
 import { APIProblemError } from '../api/client'
 
 const getLessonMock = vi.hoisted(() => vi.fn())
@@ -58,7 +59,7 @@ describe('LessonPage', () => {
     expect(screen.getByText('This lesson is from a deprecated course version.')).toBeTruthy()
     expect(screen.getByText('Estimated duration')).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: 'Lesson objectives' })).toBeTruthy()
-    expect(screen.getByText('What is EAI?')).toBeTruthy()
+    expect(await screen.findByText('What is EAI?')).toBeTruthy()
     expect(screen.getByText('Introduction')).toBeTruthy()
     expect(screen.getByText('fmt.Println("safe")')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Previous lesson' }).getAttribute('href')).toContain('/versions/1.10.0/')
@@ -81,6 +82,23 @@ describe('LessonPage', () => {
     await fireEvent.click(screen.getByLabelText('Continuous'))
     expect(screen.getByText('Introduction')).toBeTruthy()
     expect(screen.getByText('fmt.Println("safe")')).toBeTruthy()
+  })
+
+  it('renders a migration-era empty document without invalid Focus controls', async () => {
+    getLessonMock.mockResolvedValueOnce({ ...lesson, lesson: { ...lesson.lesson, content: { schemaVersion: 1, blocks: [] } } })
+    await renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Synchronous and asynchronous' })
+    expect(screen.getByText('This lesson has no published content yet.')).toBeTruthy()
+    expect(screen.queryByLabelText('Focus')).toBeNull()
+    expect(screen.queryByText(/Block 1 of 0/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Next block' })).toBeNull()
+  })
+
+  it('does not hold a valid lesson behind an optional structure request', async () => {
+    getCourseVersionMock.mockImplementationOnce(() => new Promise(() => {}))
+    await renderPage()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Synchronous and asynchronous' })).toBeTruthy()
+    expect(screen.getByText('Introduction')).toBeTruthy()
   })
 
   it('separates not found, operational failure, and unsupported content safely', async () => {
@@ -110,5 +128,21 @@ describe('LessonPage', () => {
     await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Event flow' })).toBeTruthy())
     resolveOld?.(lesson)
     await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Event flow' })).toBeTruthy())
+  })
+
+  it('ignores optional structure from a previous lesson route', async () => {
+    let resolveOld: ((value: typeof structure) => void) | undefined
+    getCourseVersionMock.mockImplementationOnce(() => new Promise<typeof structure>((resolve) => { resolveOld = resolve }))
+    getCourseVersionMock.mockResolvedValueOnce({ ...structure, modules: [] })
+    getLessonMock.mockResolvedValueOnce(lesson)
+    getLessonMock.mockResolvedValueOnce({ ...lesson, lesson: { ...lesson.lesson, key: 'event-flow', title: 'Event flow', recommended_prerequisite_keys: [] } })
+    const { router } = await renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Synchronous and asynchronous' })
+    await router.push('/courses/event-driven-architecture/versions/1.10.0/lessons/event-flow')
+    await screen.findByRole('heading', { level: 1, name: 'Event flow' })
+    resolveOld?.(structure)
+    await Promise.resolve()
+    await nextTick()
+    expect(screen.queryByRole('link', { name: 'Previous lesson' })).toBeNull()
   })
 })

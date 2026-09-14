@@ -580,22 +580,35 @@ func (q *Queries) ListLessonPrerequisitesForCourseVersion(ctx context.Context, c
 	return items, nil
 }
 
-const listLessonsForCourseVersion = `-- name: ListLessonsForCourseVersion :many
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+const listLessonSummariesForCourseVersion = `-- name: ListLessonSummariesForCourseVersion :many
+SELECT id, course_version_id, module_id, stable_key, title, description,
+       learning_objectives, estimated_duration_minutes, position
 FROM courses.lesson
 WHERE course_version_id = $1
 ORDER BY module_id ASC, position ASC, id ASC
 `
 
-func (q *Queries) ListLessonsForCourseVersion(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesLesson, error) {
-	rows, err := q.db.Query(ctx, listLessonsForCourseVersion, courseVersionID)
+type ListLessonSummariesForCourseVersionRow struct {
+	ID                       pgtype.UUID
+	CourseVersionID          pgtype.UUID
+	ModuleID                 pgtype.UUID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []byte
+	EstimatedDurationMinutes pgtype.Int4
+	Position                 int32
+}
+
+func (q *Queries) ListLessonSummariesForCourseVersion(ctx context.Context, courseVersionID pgtype.UUID) ([]ListLessonSummariesForCourseVersionRow, error) {
+	rows, err := q.db.Query(ctx, listLessonSummariesForCourseVersion, courseVersionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CoursesLesson
+	var items []ListLessonSummariesForCourseVersionRow
 	for rows.Next() {
-		var i CoursesLesson
+		var i ListLessonSummariesForCourseVersionRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CourseVersionID,
@@ -606,8 +619,6 @@ func (q *Queries) ListLessonsForCourseVersion(ctx context.Context, courseVersion
 			&i.LearningObjectives,
 			&i.EstimatedDurationMinutes,
 			&i.Position,
-			&i.CreatedAt,
-			&i.Content,
 		); err != nil {
 			return nil, err
 		}

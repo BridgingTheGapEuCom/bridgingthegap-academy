@@ -36,7 +36,7 @@ export type DecodedLessonContent =
 // of arbitrary payloads, and deliberately has no HTML/editor-state escape hatch.
 export function decodeLessonContent(value: components['schemas']['LessonContent'] | unknown): DecodedLessonContent {
   if (!isRecord(value) || value.schemaVersion !== 1) return { kind: 'unsupported-schema' }
-  if (!Array.isArray(value.blocks) || value.blocks.length === 0 || value.blocks.length > maxBlocks) return { kind: 'invalid-content' }
+  if (!Array.isArray(value.blocks) || value.blocks.length > maxBlocks) return { kind: 'invalid-content' }
 
   const keys = new Set<string>()
   const blocks: RenderableBlock[] = []

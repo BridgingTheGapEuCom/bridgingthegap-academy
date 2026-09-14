@@ -13,7 +13,6 @@ func (a *authHTTP) handleCourseList(w http.ResponseWriter, r *http.Request) {
 		courseProblem(w, r, e)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=300")
 	items := make([]any, 0, len(reads))
 	for _, x := range reads {
 		items = append(items, summary(x))
@@ -30,7 +29,6 @@ func (a *authHTTP) handleCourseCurrent(w http.ResponseWriter, r *http.Request) {
 		courseProblem(w, r, e)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, 200, detail(x))
 }
 func (a *authHTTP) handleCourseVersion(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +46,6 @@ func (a *authHTTP) handleCourseVersion(w http.ResponseWriter, r *http.Request) {
 		courseProblem(w, r, e)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=3600")
 	writeJSON(w, 200, detail(x))
 }
 func (a *authHTTP) handleLesson(w http.ResponseWriter, r *http.Request) {
@@ -75,8 +72,7 @@ func (a *authHTTP) handleLesson(w http.ResponseWriter, r *http.Request) {
 	for _, q := range p {
 		keys = append(keys, q.PrerequisiteStableKey)
 	}
-	w.Header().Set("Cache-Control", "public, max-age=3600")
-	writeJSON(w, 200, map[string]any{"course": map[string]any{"slug": x.Course.Slug}, "version": version(x.Version), "module": module(m), "lesson": lesson(l, keys, true)})
+	writeJSON(w, 200, map[string]any{"course": map[string]any{"slug": x.Course.Slug}, "version": version(x.Version), "module": module(m), "lesson": lessonDetail(l, keys)})
 }
 func courseSlug(w http.ResponseWriter, r *http.Request) (string, bool) {
 	slug := chi.URLParam(r, "slug")
@@ -101,7 +97,7 @@ func detail(x courses.CourseRead) any {
 	for _, s := range x.Modules {
 		ls := []any{}
 		for _, l := range s.Lessons {
-			ls = append(ls, lesson(l.Lesson, l.RecommendedPrerequisiteKeys, false))
+			ls = append(ls, lessonSummary(l.Lesson, l.RecommendedPrerequisiteKeys))
 		}
 		ms = append(ms, map[string]any{"module": module(s.Module), "lessons": ls})
 	}
@@ -120,10 +116,11 @@ func contributors(c []courses.ContributorSnapshot) []any {
 func module(m courses.Module) any {
 	return map[string]any{"key": m.StableKey, "title": m.Title, "description": m.Description, "position": m.Position}
 }
-func lesson(l courses.Lesson, p []string, content bool) any {
-	r := map[string]any{"key": l.StableKey, "title": l.Title, "description": l.Description, "objectives": l.LearningObjectives, "estimated_duration_minutes": l.EstimatedDurationMinutes, "position": l.Position, "recommended_prerequisite_keys": p}
-	if content {
-		r["content"] = l.Content
-	}
+func lessonSummary(l courses.LessonSummary, p []string) map[string]any {
+	return map[string]any{"key": l.StableKey, "title": l.Title, "description": l.Description, "objectives": l.LearningObjectives, "estimated_duration_minutes": l.EstimatedDurationMinutes, "position": l.Position, "recommended_prerequisite_keys": p}
+}
+func lessonDetail(l courses.Lesson, p []string) map[string]any {
+	r := lessonSummary(courses.LessonSummary{StableKey: l.StableKey, Title: l.Title, Description: l.Description, LearningObjectives: l.LearningObjectives, EstimatedDurationMinutes: l.EstimatedDurationMinutes, Position: l.Position}, p)
+	r["content"] = l.Content
 	return r
 }

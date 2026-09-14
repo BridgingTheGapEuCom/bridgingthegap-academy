@@ -135,6 +135,7 @@
 .lesson-callout__title { font-weight: var(--btg-font-weight-strong); }
 .lesson-table-scroll { max-width: 100%; overflow-x: auto; border: var(--btg-border-width) solid var(--btg-color-border); }
 .lesson-table-scroll table { min-width: 32rem; margin: 0; }
+.lesson-table-scroll caption { text-align: start; }
 .lesson-block--unsupported { border-inline-start: 0.25rem solid var(--btg-color-danger); background: var(--btg-color-surface-muted); padding: var(--btg-space-4); }
 .lesson-focus { display: grid; gap: var(--btg-space-5); border-top: var(--btg-border-width) solid var(--btg-color-border); border-bottom: var(--btg-border-width) solid var(--btg-color-border); padding-block: var(--btg-space-6); }
 .lesson-focus__position { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }

@@ -179,6 +179,41 @@ func mapLesson(row sqlc.CoursesLesson) (courses.Lesson, error) {
 	return lesson, nil
 }
 
+func mapLessonSummary(row sqlc.ListLessonSummariesForCourseVersionRow) (courses.LessonSummary, error) {
+	var objectives []string
+	if err := json.Unmarshal(row.LearningObjectives, &objectives); err != nil {
+		return courses.LessonSummary{}, errors.New("invalid stored lesson learning objectives")
+	}
+	var duration *int
+	if row.EstimatedDurationMinutes.Valid {
+		value := int(row.EstimatedDurationMinutes.Int32)
+		duration = &value
+	}
+	summary := courses.LessonSummary{
+		ID:                       courses.LessonID(row.ID.String()),
+		ModuleID:                 courses.ModuleID(row.ModuleID.String()),
+		StableKey:                row.StableKey,
+		Title:                    row.Title,
+		Description:              row.Description,
+		LearningObjectives:       objectives,
+		EstimatedDurationMinutes: duration,
+		Position:                 int(row.Position),
+	}
+	if err := (courses.LessonInput{
+		CourseVersionID:          courses.CourseVersionID(row.CourseVersionID.String()),
+		ModuleID:                 summary.ModuleID,
+		StableKey:                summary.StableKey,
+		Title:                    summary.Title,
+		Description:              summary.Description,
+		LearningObjectives:       summary.LearningObjectives,
+		EstimatedDurationMinutes: summary.EstimatedDurationMinutes,
+		Position:                 summary.Position,
+	}).ValidateMetadata(); err != nil {
+		return courses.LessonSummary{}, errors.New("invalid stored lesson metadata")
+	}
+	return summary, nil
+}
+
 func (r *Repository) CreateCourse(ctx context.Context, slug string) (courses.Course, error) {
 	normalized, err := courses.NormalizeSlug(slug)
 	if err != nil {
@@ -522,18 +557,18 @@ func (r *Repository) ListLessonsForModule(ctx context.Context, moduleID courses.
 	return lessons, nil
 }
 
-func (r *Repository) ListLessonsForCourseVersion(ctx context.Context, courseVersionID courses.CourseVersionID) ([]courses.Lesson, error) {
+func (r *Repository) ListLessonSummariesForCourseVersion(ctx context.Context, courseVersionID courses.CourseVersionID) ([]courses.LessonSummary, error) {
 	key, err := uuid(string(courseVersionID))
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.q.ListLessonsForCourseVersion(ctx, key)
+	rows, err := r.q.ListLessonSummariesForCourseVersion(ctx, key)
 	if err != nil {
 		return nil, storageError(err)
 	}
-	lessons := make([]courses.Lesson, 0, len(rows))
+	lessons := make([]courses.LessonSummary, 0, len(rows))
 	for _, row := range rows {
-		lesson, err := mapLesson(row)
+		lesson, err := mapLessonSummary(row)
 		if err != nil {
 			return nil, err
 		}

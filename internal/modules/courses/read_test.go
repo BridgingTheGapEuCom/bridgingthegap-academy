@@ -17,8 +17,36 @@ type readRepository struct {
 	prerequisites []LessonPrerequisite
 }
 
+type lessonLookupRepository struct{ readRepository }
+
+func (r lessonLookupRepository) ListModulesForCourseVersion(context.Context, CourseVersionID) ([]Module, error) {
+	panic("lesson detail must not load the complete course structure")
+}
+func (r lessonLookupRepository) GetLessonByCourseVersionAndKey(context.Context, CourseVersionID, string) (Lesson, error) {
+	return r.lessons[0], nil
+}
+func (r lessonLookupRepository) GetModule(context.Context, ModuleID) (Module, error) {
+	return r.modules[0], nil
+}
+func (r lessonLookupRepository) ListLessonPrerequisites(context.Context, LessonID) ([]LessonPrerequisite, error) {
+	return r.prerequisites, nil
+}
+
+func TestReadServiceLessonLoadsOnlyRequestedContent(t *testing.T) {
+	version := Version{Major: 1}
+	service := NewReadService(lessonLookupRepository{readRepository{course: Course{ID: "course", Slug: "event-driven-architecture"}, versions: []CourseVersion{{ID: "version", CourseID: "course", Version: version, Status: CourseVersionPublished}}, modules: []Module{{ID: "module"}}, lessons: []Lesson{{ID: "lesson", StableKey: "what-is-eai", ModuleID: "module"}}}})
+	_, _, lesson, _, err := service.Lesson(context.Background(), "event-driven-architecture", version, "what-is-eai")
+	if err != nil || lesson.ID != "lesson" {
+		t.Fatalf("lesson lookup = %#v, %v", lesson, err)
+	}
+}
+
 func (r readRepository) GetCourseBySlug(context.Context, string) (Course, error) {
 	return r.course, nil
+}
+
+func (r readRepository) ListCourses(context.Context) ([]Course, error) {
+	return []Course{r.course}, nil
 }
 
 func (r readRepository) ListCourseVersions(context.Context, CourseID) ([]CourseVersion, error) {
@@ -39,8 +67,12 @@ func (r readRepository) ListModulesForCourseVersion(context.Context, CourseVersi
 	return r.modules, nil
 }
 
-func (r readRepository) ListLessonsForCourseVersion(context.Context, CourseVersionID) ([]Lesson, error) {
-	return r.lessons, nil
+func (r readRepository) ListLessonSummariesForCourseVersion(context.Context, CourseVersionID) ([]LessonSummary, error) {
+	summaries := make([]LessonSummary, 0, len(r.lessons))
+	for _, lesson := range r.lessons {
+		summaries = append(summaries, LessonSummary{ID: lesson.ID, ModuleID: lesson.ModuleID, StableKey: lesson.StableKey, Title: lesson.Title, Description: lesson.Description, LearningObjectives: lesson.LearningObjectives, EstimatedDurationMinutes: lesson.EstimatedDurationMinutes, Position: lesson.Position})
+	}
+	return summaries, nil
 }
 
 func (r readRepository) ListLessonPrerequisitesForCourseVersion(context.Context, CourseVersionID) ([]LessonPrerequisite, error) {
@@ -63,6 +95,7 @@ func TestReadServicePreferredUsesHighestPublishedNumericVersion(t *testing.T) {
 		{ID: "two", CourseID: course.ID, Version: Version{Major: 2}, Status: CourseVersionPublished},
 		{ID: "one-ten", CourseID: course.ID, Version: Version{Major: 1, Minor: 10}, Status: CourseVersionPublished},
 		{ID: "one-nine", CourseID: course.ID, Version: Version{Major: 1, Minor: 9}, Status: CourseVersionPublished},
+		{ID: "one-eleven", CourseID: course.ID, Version: Version{Major: 1, Minor: 11}, Status: CourseVersionPublished},
 	}})
 
 	got, err := service.Preferred(context.Background(), course.Slug)
@@ -71,6 +104,23 @@ func TestReadServicePreferredUsesHighestPublishedNumericVersion(t *testing.T) {
 	}
 	if got.Version.ID != "two" {
 		t.Fatalf("preferred version = %s, want highest PUBLISHED numeric SemVer", got.Version.ID)
+	}
+}
+
+func TestReadServicePreferredDoesNotDependOnRepositoryOrder(t *testing.T) {
+	course := Course{ID: "course", Slug: "event-driven-architecture"}
+	service := NewReadService(readRepository{course: course, versions: []CourseVersion{
+		{ID: "one-nine", CourseID: course.ID, Version: Version{Major: 1, Minor: 9}, Status: CourseVersionPublished},
+		{ID: "two", CourseID: course.ID, Version: Version{Major: 2}, Status: CourseVersionArchived},
+		{ID: "one-ten", CourseID: course.ID, Version: Version{Major: 1, Minor: 10}, Status: CourseVersionPublished},
+	}})
+	preferred, err := service.Preferred(context.Background(), course.Slug)
+	if err != nil || preferred.Version.ID != "one-ten" {
+		t.Fatalf("unsorted preferred version = %#v, %v", preferred.Version, err)
+	}
+	discovered, err := service.Discover(context.Background())
+	if err != nil || len(discovered) != 1 || discovered[0].Version.ID != "one-ten" {
+		t.Fatalf("unsorted discovery = %#v, %v", discovered, err)
 	}
 }
 
@@ -95,6 +145,10 @@ func TestReadServiceHistoricalServingPolicyAndStructure(t *testing.T) {
 	withdrawn := NewReadService(readRepository{course: Course{ID: "course", Slug: "event-driven-architecture"}, versions: []CourseVersion{{ID: "withdrawn", CourseID: "course", Version: version, Status: CourseVersionWithdrawn}}})
 	if _, err := withdrawn.Explicit(context.Background(), "event-driven-architecture", version); !errors.Is(err, ErrNotServable) {
 		t.Fatalf("withdrawn explicit version error = %v, want ErrNotServable", err)
+	}
+	unknown := NewReadService(readRepository{course: Course{ID: "course", Slug: "event-driven-architecture"}, versions: []CourseVersion{{ID: "unknown", CourseID: "course", Version: version, Status: "DRAFT"}}})
+	if _, err := unknown.Explicit(context.Background(), "event-driven-architecture", version); !errors.Is(err, ErrNotServable) {
+		t.Fatalf("unknown status should fail closed: %v", err)
 	}
 }
 
