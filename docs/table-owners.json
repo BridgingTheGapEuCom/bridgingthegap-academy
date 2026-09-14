@@ -1,5 +1,7 @@
 {
   "audit.events": "audit",
+  "courses.course": "courses",
+  "courses.course_version": "courses",
   "identity.users": "identity",
   "identity.user_emails": "identity",
   "identity.local_password_credentials": "identity",
