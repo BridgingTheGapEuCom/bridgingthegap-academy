@@ -27,6 +27,7 @@ const maxAuthoringLessonBodyBytes = 256 * 1024
 // semantic document plus a small mutation envelope, never an unbounded editor
 // payload.
 const maxAuthoringLessonContentBodyBytes = courses.MaxLessonContentBytes + 16*1024
+const maxAuthoringMembershipBodyBytes = 16 * 1024
 const maxCookieHeaderBytes = 8 * 1024
 const maxSessionCookieValueBytes = 128
 
@@ -61,6 +62,7 @@ type authHTTP struct {
 	authoringStructureMutations *authoring.ModuleMutationService
 	authoringLessonMutations    *authoring.LessonMutationService
 	authoringLessonContent      *authoring.LessonContentMutationService
+	authoringMemberships        *authoring.MembershipMutationService
 	cookieSecure                bool
 	now                         func() time.Time
 }

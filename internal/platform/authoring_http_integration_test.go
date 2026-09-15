@@ -798,3 +798,229 @@ func testAuthoringLessonContentMutation(t *testing.T, ctx context.Context, pool 
 		t.Fatalf("concurrent content replacement corrupted lesson: %v %#v", err, finalLesson)
 	}
 }
+
+func testAuthoringMembershipMutation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	courseRepository := coursespostgres.New(pool)
+	course, err := courseRepository.CreateCourse(ctx, "authoring-membership-mutation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityRepository := identitypostgres.New(pool)
+	creator, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorUser, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maintainerUser, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedMaintainer, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := authoringpostgres.New(pool)
+	draft, workspace, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(creator.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizer := authoring.NewAuthorizationService(repository)
+	memberships := authoring.NewMembershipMutationService(repository, authorizer)
+	sessions := identity.NewSessionService(identityRepository, nil, nil)
+	creatorSession, err := sessions.CreateSession(ctx, creator.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := authTestRouter(&authHTTP{sessions: sessions, authoringMemberships: memberships})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: creatorSession.Token.Value()}
+	csrf := authTestCSRFToken().Value()
+	base := "/api/authoring/drafts/" + string(draft.ID) + "/members"
+	post := func(revision int64, user identity.UserID, role authoring.MemberRole) *httptest.ResponseRecorder {
+		return authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":`+strconv.FormatInt(revision, 10)+`,"userId":"`+string(user)+`","role":"`+string(role)+`"}`, cookie, csrf)
+	}
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":1,"userId":"`+string(authorUser.ID)+`","role":"AUTHOR"}`, nil, csrf); response.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated member add = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":1,"userId":"`+string(authorUser.ID)+`","role":"AUTHOR"}`, cookie); response.Code != http.StatusForbidden {
+		t.Fatalf("missing CSRF member add = %d", response.Code)
+	}
+	untrusted := httptest.NewRequest(http.MethodPost, base, strings.NewReader(`{"expectedDraftRevision":1,"userId":"`+string(authorUser.ID)+`","role":"AUTHOR"}`))
+	untrusted.Header.Set("Content-Type", "application/json")
+	untrusted.Header.Set("Origin", "https://attacker.example")
+	untrusted.Header.Set("X-CSRF-Token", csrf)
+	untrusted.AddCookie(cookie)
+	untrustedResponse := httptest.NewRecorder()
+	router.ServeHTTP(untrustedResponse, untrusted)
+	if untrustedResponse.Code != http.StatusForbidden {
+		t.Fatalf("untrusted Origin member add = %d", untrustedResponse.Code)
+	}
+	for _, invalid := range []string{
+		`{"expectedDraftRevision":1,"userId":"` + string(authorUser.ID) + `","role":"ADMIN"}`,
+		`{"expectedDraftRevision":1,"userId":"` + string(authorUser.ID) + `","role":"AUTHOR","unexpected":true}`,
+		`{"expectedDraftRevision":1,"userId":"` + string(authorUser.ID) + `","role":"AUTHOR"} {}`,
+	} {
+		if response := authRequest(router, http.MethodPost, base, invalid, cookie, csrf); response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid member add %s = %d", invalid, response.Code)
+		}
+	}
+	if response := authRequest(router, http.MethodPost, "/api/authoring/drafts/not-a-uuid/members", `{"expectedDraftRevision":1,"userId":"`+string(authorUser.ID)+`","role":"AUTHOR"}`, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("malformed draft membership path = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPatch, base+"/not-a-uuid", `{"expectedDraftRevision":1,"role":"AUTHOR"}`, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("malformed member membership path = %d", response.Code)
+	}
+	oversized := `{"expectedDraftRevision":1,"userId":"` + string(authorUser.ID) + `","role":"AUTHOR","padding":"` + strings.Repeat("x", maxAuthoringMembershipBodyBytes) + `"}`
+	if response := authRequest(router, http.MethodPost, base, oversized, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("oversized membership request = %d", response.Code)
+	}
+	if response := post(1, authorUser.ID, authoring.MemberAuthor); response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), `"draftRevision":2`) {
+		t.Fatalf("member add = %d: %s", response.Code, response.Body.String())
+	}
+	if response := post(2, authorUser.ID, authoring.MemberAuthor); response.Code != http.StatusConflict {
+		t.Fatalf("duplicate active member = %d", response.Code)
+	}
+	authorSession, err := sessions.CreateSession(ctx, authorUser.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorCookie := &http.Cookie{Name: sessionCookieName, Value: authorSession.Token.Value()}
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":2,"userId":"`+string(maintainerUser.ID)+`","role":"MAINTAINER"}`, authorCookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("AUTHOR membership management = %d", response.Code)
+	}
+	if response := post(2, maintainerUser.ID, authoring.MemberMaintainer); response.Code != http.StatusOK {
+		t.Fatalf("maintainer add = %d: %s", response.Code, response.Body.String())
+	}
+	rolePath := base + "/" + string(authorUser.ID)
+	if response := authRequest(router, http.MethodPatch, rolePath, `{"expectedDraftRevision":3,"role":"MAINTAINER"}`, cookie, csrf); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"draftRevision":4`) {
+		t.Fatalf("AUTHOR promotion = %d: %s", response.Code, response.Body.String())
+	}
+	if response := authRequest(router, http.MethodPatch, base+"/"+string(creator.ID), `{"expectedDraftRevision":4,"role":"MAINTAINER"}`, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("no-op role change = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPatch, base+"/"+string(maintainerUser.ID), `{"expectedDraftRevision":4,"role":"AUTHOR"}`, cookie, csrf); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"draftRevision":5`) {
+		t.Fatalf("maintainer demotion with replacement = %d: %s", response.Code, response.Body.String())
+	}
+	if response := authRequest(router, http.MethodPatch, rolePath, `{"expectedDraftRevision":4,"role":"AUTHOR"}`, cookie, csrf); response.Code != http.StatusConflict {
+		t.Fatalf("stale member role update = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodDelete, rolePath, `{"expectedDraftRevision":5}`, cookie, csrf); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"draftRevision":6`) {
+		t.Fatalf("maintainer revoke with replacement = %d: %s", response.Code, response.Body.String())
+	}
+	if response := authRequest(router, http.MethodDelete, base+"/"+string(creator.ID), `{"expectedDraftRevision":6}`, cookie, csrf); response.Code != http.StatusConflict {
+		t.Fatalf("sole maintainer revoke = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPatch, base+"/"+string(creator.ID), `{"expectedDraftRevision":6,"role":"AUTHOR"}`, cookie, csrf); response.Code != http.StatusConflict {
+		t.Fatalf("sole maintainer demotion = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodDelete, base+"/"+string(maintainerUser.ID), `{"expectedDraftRevision":6}`, cookie, csrf); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"draftRevision":7`) {
+		t.Fatalf("AUTHOR revoke = %d: %s", response.Code, response.Body.String())
+	}
+	if response := post(7, revokedMaintainer.ID, authoring.MemberMaintainer); response.Code != http.StatusOK {
+		t.Fatalf("replacement maintainer add = %d", response.Code)
+	}
+	revokedSession, err := sessions.CreateSession(ctx, revokedMaintainer.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedCookie := &http.Cookie{Name: sessionCookieName, Value: revokedSession.Token.Value()}
+	if response := authRequest(router, http.MethodDelete, base+"/"+string(revokedMaintainer.ID), `{"expectedDraftRevision":8}`, cookie, csrf); response.Code != http.StatusOK {
+		t.Fatalf("revoke replacement maintainer = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":9,"userId":"99999999-9999-4999-8999-999999999999","role":"AUTHOR"}`, revokedCookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("revoked maintainer membership management = %d", response.Code)
+	}
+	members, err := repository.ListMembers(ctx, workspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeMaintainers := 0
+	revokedHistory := 0
+	for _, member := range members {
+		if member.Role == authoring.MemberMaintainer && member.RevokedAt == nil {
+			activeMaintainers++
+		}
+		if member.RevokedAt != nil {
+			revokedHistory++
+		}
+	}
+	if activeMaintainers != 1 || revokedHistory < 3 {
+		t.Fatalf("membership history lost active maintainer invariant: %#v", members)
+	}
+	foreignUser, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(foreignUser.ID)); err != nil {
+		t.Fatal(err)
+	}
+	currentDraft, err := repository.GetDraft(ctx, draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := authRequest(router, http.MethodPatch, base+"/"+string(foreignUser.ID), `{"expectedDraftRevision":`+strconv.FormatInt(currentDraft.Revision, 10)+`,"role":"AUTHOR"}`, cookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("cross-draft member role update = %d", response.Code)
+	}
+
+	raceDraft, _, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(creator.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raceOther, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, raceDraft, err = repository.AddMemberForDraft(ctx, raceDraft.ID, raceDraft.Revision, string(raceOther.ID), authoring.MemberMaintainer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, userID := range []string{string(creator.ID), string(raceOther.ID)} {
+		userID := userID
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			_, _, err := repository.RevokeMemberForDraft(ctx, raceDraft.ID, raceDraft.Revision, userID)
+			results <- err
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+	successes, conflicts := 0, 0
+	for err := range results {
+		if err == nil {
+			successes++
+		} else if errors.Is(err, authoring.ErrConflict) || errors.Is(err, authoring.ErrRevisionMismatch) {
+			conflicts++
+		} else {
+			t.Fatalf("concurrent maintainer revoke = %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent maintainer revoke successes=%d conflicts=%d", successes, conflicts)
+	}
+	raceWorkspace, err := repository.GetWorkspace(ctx, raceDraft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raceMembers, err := repository.ListMembers(ctx, raceWorkspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remaining := 0
+	for _, member := range raceMembers {
+		if member.Role == authoring.MemberMaintainer && member.RevokedAt == nil {
+			remaining++
+		}
+	}
+	if remaining != 1 {
+		t.Fatalf("concurrent revoke left %d active maintainers", remaining)
+	}
+}

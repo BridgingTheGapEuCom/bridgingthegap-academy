@@ -118,3 +118,12 @@ committed document. The endpoint is private, `no-store`, and inherits the
 trusted-Origin and session-bound CSRF requirements. It deliberately offers no
 block-level editing, editor-state persistence, autosave, locks, history, or
 assessment behavior.
+
+Membership changes are a separate `authoring.members.manage` boundary. Adding,
+changing a role, and revoking a member all require the current Draft revision
+and commit that revision once with the membership change. Roles are limited to
+AUTHOR and MAINTAINER. Role changes preserve membership history by revoking the
+previous active row and creating a new active row. Revocation preserves the
+historical row. Authoring does not query Identity: member user IDs are opaque
+UUID references. Every mutation is serialized by the Draft transaction and
+will reject a demotion or revocation that would leave no active MAINTAINER.

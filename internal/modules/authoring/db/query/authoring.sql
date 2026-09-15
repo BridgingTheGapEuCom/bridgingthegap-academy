@@ -53,6 +53,15 @@ SET revoked_at = now()
 WHERE workspace_id = $1 AND user_id = $2 AND revoked_at IS NULL
 RETURNING *;
 
+-- name: GetActiveMember :one
+SELECT * FROM authoring.workspace_member
+WHERE workspace_id = $1 AND user_id = $2 AND revoked_at IS NULL;
+
+-- name: CountActiveMaintainers :one
+SELECT count(*)
+FROM authoring.workspace_member
+WHERE workspace_id = $1 AND role = 'MAINTAINER' AND revoked_at IS NULL;
+
 -- name: ListMembers :many
 SELECT * FROM authoring.workspace_member WHERE workspace_id = $1 ORDER BY created_at, id;
 

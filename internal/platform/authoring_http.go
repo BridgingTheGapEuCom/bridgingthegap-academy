@@ -171,6 +171,21 @@ type authoringLessonContentRequest struct {
 	Content                courses.LessonContent `json:"content"`
 }
 
+type authoringMemberAddRequest struct {
+	ExpectedDraftRevision *int64               `json:"expectedDraftRevision"`
+	UserID                string               `json:"userId"`
+	Role                  authoring.MemberRole `json:"role"`
+}
+
+type authoringMemberRoleRequest struct {
+	ExpectedDraftRevision *int64               `json:"expectedDraftRevision"`
+	Role                  authoring.MemberRole `json:"role"`
+}
+
+type authoringMemberRevokeRequest struct {
+	ExpectedDraftRevision *int64 `json:"expectedDraftRevision"`
+}
+
 type authoringLessonMutationDTO struct {
 	ID                       string   `json:"id"`
 	DraftID                  string   `json:"draft_id"`
@@ -188,6 +203,15 @@ type authoringLessonMutationDTO struct {
 type authoringLessonContentMutationDTO struct {
 	Lesson  authoringLessonMutationDTO `json:"lesson"`
 	Content courses.LessonContent      `json:"content"`
+}
+
+type authoringMemberMutationDTO struct {
+	ID            string               `json:"id"`
+	UserID        string               `json:"userId"`
+	Role          authoring.MemberRole `json:"role"`
+	CreatedAt     time.Time            `json:"createdAt"`
+	RevokedAt     *time.Time           `json:"revokedAt"`
+	DraftRevision int64                `json:"draftRevision"`
 }
 
 // optionalField distinguishes an omitted JSON member from an explicit null.
@@ -495,6 +519,80 @@ func (a *authHTTP) handleAuthoringLessonContent(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, authoringLessonContentMutationDTO{Lesson: authoringLessonMutation(result), Content: result.Lesson.Content})
 }
 
+func (a *authHTTP) handleAuthoringMemberAdd(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	expected, userID, role, err := decodeAuthoringMemberAdd(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid membership add")
+		return
+	}
+	if a.authoringMemberships == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringMemberships.AddMember(r.Context(), actor, draftID, expected, userID, role)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringMemberMutation(result))
+}
+
+func (a *authHTTP) handleAuthoringMemberRole(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	userID, ok := authoringUserID(w, r)
+	if !ok {
+		return
+	}
+	expected, role, err := decodeAuthoringMemberRole(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid membership role")
+		return
+	}
+	if a.authoringMemberships == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringMemberships.ChangeRole(r.Context(), actor, draftID, expected, userID, role)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringMemberMutation(result))
+}
+
+func (a *authHTTP) handleAuthoringMemberRevoke(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	userID, ok := authoringUserID(w, r)
+	if !ok {
+		return
+	}
+	expected, err := decodeAuthoringMemberRevoke(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid membership revoke")
+		return
+	}
+	if a.authoringMemberships == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringMemberships.RevokeMember(r.Context(), actor, draftID, expected, userID)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringMemberMutation(result))
+}
+
 func (a *authHTTP) handleAuthoringLessonDelete(w http.ResponseWriter, r *http.Request) {
 	draftID, actor, ok := authoringRequest(w, r)
 	if !ok {
@@ -605,6 +703,11 @@ func authoringLessonID(w http.ResponseWriter, r *http.Request) (authoring.Lesson
 func authoringModuleID(w http.ResponseWriter, r *http.Request) (authoring.ModuleID, bool) {
 	id, ok := authoringUUIDParam(w, r, "moduleId", "Invalid module identifier")
 	return authoring.ModuleID(id), ok
+}
+
+func authoringUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id, ok := authoringUUIDParam(w, r, "userId", "Invalid user identifier")
+	return string(id), ok
 }
 
 func authoringUUIDParam(w http.ResponseWriter, r *http.Request, name, title string) (authoring.DraftID, bool) {
@@ -947,6 +1050,56 @@ func decodeAuthoringLessonContentJSON(w http.ResponseWriter, r *http.Request, va
 	return nil
 }
 
+func decodeAuthoringMemberAdd(w http.ResponseWriter, r *http.Request) (int64, string, authoring.MemberRole, error) {
+	var input authoringMemberAddRequest
+	if err := decodeAuthoringMembershipJSON(w, r, &input); err != nil {
+		return 0, "", "", err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || !validAuthoringUUID(input.UserID) || !input.Role.Valid() {
+		return 0, "", "", errors.New("invalid membership add")
+	}
+	return *input.ExpectedDraftRevision, input.UserID, input.Role, nil
+}
+
+func decodeAuthoringMemberRole(w http.ResponseWriter, r *http.Request) (int64, authoring.MemberRole, error) {
+	var input authoringMemberRoleRequest
+	if err := decodeAuthoringMembershipJSON(w, r, &input); err != nil {
+		return 0, "", err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || !input.Role.Valid() {
+		return 0, "", errors.New("invalid membership role")
+	}
+	return *input.ExpectedDraftRevision, input.Role, nil
+}
+
+func decodeAuthoringMemberRevoke(w http.ResponseWriter, r *http.Request) (int64, error) {
+	var input authoringMemberRevokeRequest
+	if err := decodeAuthoringMembershipJSON(w, r, &input); err != nil {
+		return 0, err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 {
+		return 0, errors.New("missing expected draft revision")
+	}
+	return *input.ExpectedDraftRevision, nil
+}
+
+func decodeAuthoringMembershipJSON(w http.ResponseWriter, r *http.Request, value any) error {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return errors.New("invalid content type")
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringMembershipBodyBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("trailing JSON")
+	}
+	return nil
+}
+
 func decodeAuthoringLessonJSON(w http.ResponseWriter, r *http.Request, value any) error {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
@@ -1011,4 +1164,9 @@ func authoringModuleMutation(result authoring.ModuleMutationResult) authoringMod
 func authoringLessonMutation(result authoring.LessonMutationResult) authoringLessonMutationDTO {
 	lesson := result.Lesson
 	return authoringLessonMutationDTO{ID: string(lesson.ID), DraftID: string(lesson.DraftID), ModuleID: string(lesson.ModuleID), StableKey: lesson.StableKey, Title: lesson.Title, Description: lesson.Description, Objectives: lesson.LearningObjectives, EstimatedDurationMinutes: lesson.EstimatedDurationMinutes, Position: lesson.Position, Revision: lesson.Revision, DraftRevision: result.Draft.Revision}
+}
+
+func authoringMemberMutation(result authoring.MembershipMutationResult) authoringMemberMutationDTO {
+	member := result.Member
+	return authoringMemberMutationDTO{ID: member.ID, UserID: member.UserID, Role: member.Role, CreatedAt: member.CreatedAt, RevokedAt: member.RevokedAt, DraftRevision: result.Draft.Revision}
 }

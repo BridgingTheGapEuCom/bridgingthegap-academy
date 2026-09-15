@@ -54,6 +54,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Adds an active AUTHOR or MAINTAINER membership using the Draft revision. The authenticated actor must have authoring.members.manage. */
+        post: operations["addAuthoringMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Revokes one active membership while preserving history. Revoking the final active MAINTAINER is rejected. */
+        delete: operations["revokeAuthoringMember"];
+        options?: never;
+        head?: never;
+        /** @description Replaces one active member role. Demoting the final active MAINTAINER is rejected. */
+        patch: operations["changeAuthoringMemberRole"];
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}/modules/order": {
         parameters: {
             query?: never;
@@ -357,6 +392,34 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthoringMemberAddRequest: {
+            expectedDraftRevision: number;
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+        };
+        AuthoringMemberRoleRequest: {
+            expectedDraftRevision: number;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+        };
+        AuthoringMemberRevokeRequest: {
+            expectedDraftRevision: number;
+        };
+        AuthoringMemberMutationResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt?: string | null;
+            draftRevision: number;
+        };
         AuthoringLessonCreateRequest: {
             expectedDraftRevision: number;
             stableKey: string;
@@ -840,6 +903,7 @@ export interface components {
     };
     parameters: {
         AuthoringDraftID: string;
+        AuthoringUserID: string;
         AuthoringModuleID: string;
         AuthoringLessonID: string;
         CourseSlug: string;
@@ -960,6 +1024,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthoringModuleMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    addAuthoringMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringMemberAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed membership and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringMemberMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    revokeAuthoringMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                userId: components["parameters"]["AuthoringUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringMemberRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description Revoked membership and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringMemberMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    changeAuthoringMemberRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                userId: components["parameters"]["AuthoringUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringMemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed active membership and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringMemberMutationResponse"];
                 };
             };
             400: components["responses"]["Problem"];

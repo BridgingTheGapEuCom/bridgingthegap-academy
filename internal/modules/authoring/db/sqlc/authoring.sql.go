@@ -240,6 +240,19 @@ func (q *Queries) CompactModulePositionsAfter(ctx context.Context, arg CompactMo
 	return err
 }
 
+const countActiveMaintainers = `-- name: CountActiveMaintainers :one
+SELECT count(*)
+FROM authoring.workspace_member
+WHERE workspace_id = $1 AND role = 'MAINTAINER' AND revoked_at IS NULL
+`
+
+func (q *Queries) CountActiveMaintainers(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveMaintainers, workspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countLessonsForDraft = `-- name: CountLessonsForDraft :one
 SELECT count(*) FROM authoring.lesson WHERE draft_id = $1
 `
@@ -555,6 +568,30 @@ func (q *Queries) FindLessonByDraftAndKey(ctx context.Context, arg FindLessonByD
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getActiveMember = `-- name: GetActiveMember :one
+SELECT id, workspace_id, user_id, role, created_at, revoked_at FROM authoring.workspace_member
+WHERE workspace_id = $1 AND user_id = $2 AND revoked_at IS NULL
+`
+
+type GetActiveMemberParams struct {
+	WorkspaceID pgtype.UUID
+	UserID      pgtype.UUID
+}
+
+func (q *Queries) GetActiveMember(ctx context.Context, arg GetActiveMemberParams) (AuthoringWorkspaceMember, error) {
+	row := q.db.QueryRow(ctx, getActiveMember, arg.WorkspaceID, arg.UserID)
+	var i AuthoringWorkspaceMember
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }

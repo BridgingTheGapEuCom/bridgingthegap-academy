@@ -52,4 +52,5 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("authoring module mutation", func(t *testing.T) { testAuthoringModuleMutation(t, ctx, pool) })
 	t.Run("authoring lesson mutation", func(t *testing.T) { testAuthoringLessonMutation(t, ctx, pool) })
 	t.Run("authoring lesson content mutation", func(t *testing.T) { testAuthoringLessonContentMutation(t, ctx, pool) })
+	t.Run("authoring membership mutation", func(t *testing.T) { testAuthoringMembershipMutation(t, ctx, pool) })
 }
