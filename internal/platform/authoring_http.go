@@ -128,6 +128,58 @@ type authoringModuleMutationDTO struct {
 	DraftRevision int64              `json:"draftRevision"`
 }
 
+type authoringLessonCreateRequest struct {
+	ExpectedDraftRevision    *int64   `json:"expectedDraftRevision"`
+	StableKey                string   `json:"stableKey"`
+	Title                    string   `json:"title"`
+	Description              string   `json:"description"`
+	Objectives               []string `json:"objectives"`
+	EstimatedDurationMinutes *int     `json:"estimatedDurationMinutes"`
+	Position                 *int     `json:"position"`
+}
+
+type authoringLessonUpdateRequest struct {
+	ExpectedLessonRevision   *int64                  `json:"expectedLessonRevision"`
+	Title                    optionalField[string]   `json:"title"`
+	Description              optionalField[string]   `json:"description"`
+	Objectives               optionalField[[]string] `json:"objectives"`
+	EstimatedDurationMinutes optionalField[int]      `json:"estimatedDurationMinutes"`
+}
+
+type authoringLessonOrderModuleRequest struct {
+	ModuleID  string   `json:"moduleId"`
+	LessonIDs []string `json:"lessonIds"`
+}
+
+type authoringLessonReorderRequest struct {
+	ExpectedDraftRevision *int64                              `json:"expectedDraftRevision"`
+	Modules               []authoringLessonOrderModuleRequest `json:"modules"`
+}
+
+type authoringLessonPrerequisitesRequest struct {
+	ExpectedLessonRevision *int64    `json:"expectedLessonRevision"`
+	PrerequisiteLessonKeys *[]string `json:"prerequisiteLessonKeys"`
+}
+
+type authoringLessonDeleteRequest struct {
+	ExpectedDraftRevision  *int64 `json:"expectedDraftRevision"`
+	ExpectedLessonRevision *int64 `json:"expectedLessonRevision"`
+}
+
+type authoringLessonMutationDTO struct {
+	ID                       string   `json:"id"`
+	DraftID                  string   `json:"draft_id"`
+	ModuleID                 string   `json:"module_id"`
+	StableKey                string   `json:"stable_key"`
+	Title                    string   `json:"title"`
+	Description              string   `json:"description"`
+	Objectives               []string `json:"objectives"`
+	EstimatedDurationMinutes *int     `json:"estimated_duration_minutes"`
+	Position                 int      `json:"position"`
+	Revision                 int64    `json:"revision"`
+	DraftRevision            int64    `json:"draftRevision"`
+}
+
 // optionalField distinguishes an omitted JSON member from an explicit null.
 // Null is rejected for all mutable metadata fields because their domain values
 // are required; an empty string or slice remains an explicit domain input.
@@ -305,6 +357,136 @@ func (a *authHTTP) handleAuthoringModuleDelete(w http.ResponseWriter, r *http.Re
 	}{DraftRevision: draft.Revision})
 }
 
+func (a *authHTTP) handleAuthoringLessonCreate(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	moduleID, ok := authoringModuleID(w, r)
+	if !ok {
+		return
+	}
+	expected, input, err := decodeAuthoringLessonCreate(w, r, draftID, moduleID)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid lesson create")
+		return
+	}
+	if a.authoringLessonMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringLessonMutations.CreateLesson(r.Context(), actor, draftID, moduleID, expected, input)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringLessonMutation(result))
+}
+
+func (a *authHTTP) handleAuthoringLessonUpdate(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	lessonID, ok := authoringLessonID(w, r)
+	if !ok {
+		return
+	}
+	expected, patch, err := decodeAuthoringLessonUpdate(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid lesson update")
+		return
+	}
+	if a.authoringLessonMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringLessonMutations.UpdateLesson(r.Context(), actor, draftID, lessonID, expected, patch)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringLessonMutation(result))
+}
+
+func (a *authHTTP) handleAuthoringLessonReorder(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	expected, order, err := decodeAuthoringLessonReorder(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid lesson order")
+		return
+	}
+	if a.authoringLessonMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	draft, err := a.authoringLessonMutations.ReorderLessons(r.Context(), actor, draftID, expected, order)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		DraftRevision int64 `json:"draftRevision"`
+	}{DraftRevision: draft.Revision})
+}
+
+func (a *authHTTP) handleAuthoringLessonPrerequisites(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	lessonID, ok := authoringLessonID(w, r)
+	if !ok {
+		return
+	}
+	expected, keys, err := decodeAuthoringLessonPrerequisites(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid lesson prerequisites")
+		return
+	}
+	if a.authoringLessonMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringLessonMutations.ReplacePrerequisites(r.Context(), actor, draftID, lessonID, expected, keys)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringLessonMutation(result))
+}
+
+func (a *authHTTP) handleAuthoringLessonDelete(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	lessonID, ok := authoringLessonID(w, r)
+	if !ok {
+		return
+	}
+	expectedDraft, expectedLesson, err := decodeAuthoringLessonDelete(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid lesson delete")
+		return
+	}
+	if a.authoringLessonMutations == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	draft, err := a.authoringLessonMutations.DeleteLesson(r.Context(), actor, draftID, lessonID, expectedDraft, expectedLesson)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		DraftRevision int64 `json:"draftRevision"`
+	}{DraftRevision: draft.Revision})
+}
+
 func (a *authHTTP) handleAuthoringWorkspace(w http.ResponseWriter, r *http.Request) {
 	draftID, actor, ok := authoringRequest(w, r)
 	if !ok {
@@ -437,7 +619,7 @@ func authoringStructureMutationProblem(w http.ResponseWriter, r *http.Request, e
 		return
 	}
 	if errors.Is(err, authoring.ErrInvalidStructure) {
-		problem(w, r, http.StatusBadRequest, "Invalid module structure")
+		problem(w, r, http.StatusBadRequest, "Invalid authoring structure")
 		return
 	}
 	problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
@@ -590,6 +772,131 @@ func decodeAuthoringModuleDelete(w http.ResponseWriter, r *http.Request) (int64,
 	return *input.ExpectedDraftRevision, *input.ExpectedModuleRevision, nil
 }
 
+func decodeAuthoringLessonCreate(w http.ResponseWriter, r *http.Request, draftID authoring.DraftID, moduleID authoring.ModuleID) (int64, authoring.LessonInput, error) {
+	var input authoringLessonCreateRequest
+	if err := decodeAuthoringLessonJSON(w, r, &input); err != nil {
+		return 0, authoring.LessonInput{}, err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || input.Position == nil {
+		return 0, authoring.LessonInput{}, errors.New("missing lesson create fields")
+	}
+	lesson := authoring.NewDraftLessonInput(draftID, moduleID, input.StableKey, input.Title, input.Description, input.Objectives, input.EstimatedDurationMinutes, *input.Position)
+	if err := lesson.Validate(); err != nil {
+		return 0, authoring.LessonInput{}, err
+	}
+	return *input.ExpectedDraftRevision, lesson, nil
+}
+
+func decodeAuthoringLessonUpdate(w http.ResponseWriter, r *http.Request) (int64, authoring.DraftLessonPatch, error) {
+	var input authoringLessonUpdateRequest
+	if err := decodeAuthoringLessonJSON(w, r, &input); err != nil {
+		return 0, authoring.DraftLessonPatch{}, err
+	}
+	if input.ExpectedLessonRevision == nil || *input.ExpectedLessonRevision < 1 {
+		return 0, authoring.DraftLessonPatch{}, errors.New("missing expected lesson revision")
+	}
+	patch := authoring.DraftLessonPatch{}
+	if input.Title.set {
+		if input.Title.null {
+			return 0, authoring.DraftLessonPatch{}, errors.New("null title")
+		}
+		patch.Title = &input.Title.value
+	}
+	if input.Description.set {
+		if input.Description.null {
+			return 0, authoring.DraftLessonPatch{}, errors.New("null description")
+		}
+		patch.Description = &input.Description.value
+	}
+	if input.Objectives.set {
+		if input.Objectives.null {
+			return 0, authoring.DraftLessonPatch{}, errors.New("null objectives")
+		}
+		patch.LearningObjectives = &input.Objectives.value
+	}
+	if input.EstimatedDurationMinutes.set {
+		patch.EstimatedDurationSet = true
+		if !input.EstimatedDurationMinutes.null {
+			patch.EstimatedDurationMinutes = &input.EstimatedDurationMinutes.value
+		}
+	}
+	if patch.Empty() {
+		return 0, authoring.DraftLessonPatch{}, errors.New("empty lesson patch")
+	}
+	return *input.ExpectedLessonRevision, patch, nil
+}
+
+func decodeAuthoringLessonReorder(w http.ResponseWriter, r *http.Request) (int64, []authoring.ModuleLessonOrder, error) {
+	var input authoringLessonReorderRequest
+	if err := decodeAuthoringLessonJSON(w, r, &input); err != nil {
+		return 0, nil, err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 {
+		return 0, nil, errors.New("missing expected draft revision")
+	}
+	order := make([]authoring.ModuleLessonOrder, 0, len(input.Modules))
+	for _, module := range input.Modules {
+		if !validAuthoringUUID(module.ModuleID) {
+			return 0, nil, errors.New("invalid module identifier")
+		}
+		item := authoring.ModuleLessonOrder{ModuleID: authoring.ModuleID(module.ModuleID), LessonIDs: make([]authoring.LessonID, 0, len(module.LessonIDs))}
+		for _, lessonID := range module.LessonIDs {
+			if !validAuthoringUUID(lessonID) {
+				return 0, nil, errors.New("invalid lesson identifier")
+			}
+			item.LessonIDs = append(item.LessonIDs, authoring.LessonID(lessonID))
+		}
+		order = append(order, item)
+	}
+	if err := authoring.ValidateLessonOrder(order); err != nil {
+		return 0, nil, err
+	}
+	return *input.ExpectedDraftRevision, order, nil
+}
+
+func decodeAuthoringLessonPrerequisites(w http.ResponseWriter, r *http.Request) (int64, []string, error) {
+	var input authoringLessonPrerequisitesRequest
+	if err := decodeAuthoringLessonJSON(w, r, &input); err != nil {
+		return 0, nil, err
+	}
+	if input.ExpectedLessonRevision == nil || *input.ExpectedLessonRevision < 1 || input.PrerequisiteLessonKeys == nil {
+		return 0, nil, errors.New("missing prerequisite replacement fields")
+	}
+	keys := append([]string(nil), (*input.PrerequisiteLessonKeys)...)
+	if err := authoring.ValidatePrerequisiteKeys("", keys); err != nil {
+		return 0, nil, err
+	}
+	return *input.ExpectedLessonRevision, keys, nil
+}
+
+func decodeAuthoringLessonDelete(w http.ResponseWriter, r *http.Request) (int64, int64, error) {
+	var input authoringLessonDeleteRequest
+	if err := decodeAuthoringLessonJSON(w, r, &input); err != nil {
+		return 0, 0, err
+	}
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || input.ExpectedLessonRevision == nil || *input.ExpectedLessonRevision < 1 {
+		return 0, 0, errors.New("missing expected revision")
+	}
+	return *input.ExpectedDraftRevision, *input.ExpectedLessonRevision, nil
+}
+
+func decodeAuthoringLessonJSON(w http.ResponseWriter, r *http.Request, value any) error {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return errors.New("invalid content type")
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringLessonBodyBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("trailing JSON")
+	}
+	return nil
+}
+
 func decodeAuthoringJSON(w http.ResponseWriter, r *http.Request, value any) error {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
@@ -632,4 +939,9 @@ func authoringModuleMutation(result authoring.ModuleMutationResult) authoringMod
 		Module:        authoringModuleDTO{ID: string(module.ID), StableKey: module.StableKey, Title: module.Title, Description: module.Description, Position: module.Position, Revision: module.Revision, Lessons: []authoringLessonSummaryDTO{}},
 		DraftRevision: result.Draft.Revision,
 	}
+}
+
+func authoringLessonMutation(result authoring.LessonMutationResult) authoringLessonMutationDTO {
+	lesson := result.Lesson
+	return authoringLessonMutationDTO{ID: string(lesson.ID), DraftID: string(lesson.DraftID), ModuleID: string(lesson.ModuleID), StableKey: lesson.StableKey, Title: lesson.Title, Description: lesson.Description, Objectives: lesson.LearningObjectives, EstimatedDurationMinutes: lesson.EstimatedDurationMinutes, Position: lesson.Position, Revision: lesson.Revision, DraftRevision: result.Draft.Revision}
 }

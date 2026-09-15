@@ -89,15 +89,32 @@ export interface paths {
         patch: operations["updateAuthoringModule"];
         trace?: never;
     };
-    "/api/authoring/drafts/{draftId}/structure": {
+    "/api/authoring/drafts/{draftId}/modules/{moduleId}/lessons": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getAuthoringDraftStructure"];
+        get?: never;
         put?: never;
+        post: operations["createAuthoringLesson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/lessons/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Atomically replaces the complete ordered Lesson structure for every Module in the Draft; this permits moves without changing Lesson identity or stable key. */
+        put: operations["reorderAuthoringLessons"];
         post?: never;
         delete?: never;
         options?: never;
@@ -113,6 +130,41 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getAuthoringLesson"];
+        put?: never;
+        post?: never;
+        /** @description Deletes one draft Lesson and explicitly removes incoming advisory prerequisite relations, advancing affected source Lesson revisions. */
+        delete: operations["deleteAuthoringLesson"];
+        options?: never;
+        head?: never;
+        /** @description Updates Lesson metadata only. Stable key, Module, position, prerequisites, and content have separate boundaries. */
+        patch: operations["updateAuthoringLesson"];
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/lessons/{lessonId}/prerequisites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Replaces the complete ordered advisory prerequisite stable-key list for one Lesson. Cycles are not evaluated in this slice. */
+        put: operations["replaceAuthoringLessonPrerequisites"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/structure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAuthoringDraftStructure"];
         put?: never;
         post?: never;
         delete?: never;
@@ -288,6 +340,55 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthoringLessonCreateRequest: {
+            expectedDraftRevision: number;
+            stableKey: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimatedDurationMinutes?: number | null;
+            position: number;
+        };
+        AuthoringLessonUpdateRequest: {
+            expectedLessonRevision: number;
+            title?: string;
+            description?: string;
+            objectives?: string[];
+            estimatedDurationMinutes?: number | null;
+        };
+        AuthoringLessonOrderModule: {
+            /** Format: uuid */
+            moduleId: string;
+            lessonIds: string[];
+        };
+        AuthoringLessonReorderRequest: {
+            expectedDraftRevision: number;
+            modules: components["schemas"]["AuthoringLessonOrderModule"][];
+        };
+        AuthoringLessonPrerequisitesRequest: {
+            expectedLessonRevision: number;
+            prerequisiteLessonKeys: string[];
+        };
+        AuthoringLessonDeleteRequest: {
+            expectedDraftRevision: number;
+            expectedLessonRevision: number;
+        };
+        AuthoringLessonMutationResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            draft_id: string;
+            /** Format: uuid */
+            module_id: string;
+            stable_key: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimated_duration_minutes: number | null;
+            position: number;
+            revision: number;
+            draftRevision: number;
+        };
         AuthoringModuleCreateRequest: {
             expectedDraftRevision: number;
             stableKey: string;
@@ -942,7 +1043,40 @@ export interface operations {
             500: components["responses"]["Problem"];
         };
     };
-    getAuthoringDraftStructure: {
+    createAuthoringLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                moduleId: components["parameters"]["AuthoringModuleID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Lesson metadata and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringLessonMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    reorderAuthoringLessons: {
         parameters: {
             query?: never;
             header?: never;
@@ -951,20 +1085,26 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonReorderRequest"];
+            };
+        };
         responses: {
-            /** @description Ordered modules and lesson summaries without full lesson content */
+            /** @description Committed Draft revision */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthoringStructure"];
+                    "application/json": components["schemas"]["AuthoringModuleOrderResponse"];
                 };
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };
@@ -987,6 +1127,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthoringLessonDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    deleteAuthoringLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringModuleOrderResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    updateAuthoringLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Lesson metadata and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringLessonMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    replaceAuthoringLessonPrerequisites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonPrerequisitesRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Lesson metadata and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringLessonMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringDraftStructure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered modules and lesson summaries without full lesson content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringStructure"];
                 };
             };
             400: components["responses"]["Problem"];

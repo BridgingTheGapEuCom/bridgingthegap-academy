@@ -119,16 +119,38 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
-  /api/authoring/drafts/{draftId}/structure:
-    get:
-      operationId: getAuthoringDraftStructure
+  /api/authoring/drafts/{draftId}/modules/{moduleId}/lessons:
+    post:
+      operationId: createAuthoringLesson
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonCreateRequest' } } }
       responses:
-        '200': { description: Ordered modules and lesson summaries without full lesson content, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringStructure' } } } }
+        '200': { description: Committed Lesson metadata and current Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonMutationResponse' } } } }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/lessons/order:
+    put:
+      operationId: reorderAuthoringLessons
+      description: Atomically replaces the complete ordered Lesson structure for every Module in the Draft; this permits moves without changing Lesson identity or stable key.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonReorderRequest' } } }
+      responses:
+        '200': { description: Committed Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringModuleOrderResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}/lessons/{lessonId}:
     get:
@@ -137,6 +159,66 @@ paths:
       parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
       responses:
         '200': { description: Private draft lesson with canonical semantic content and current revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateAuthoringLesson
+      description: Updates Lesson metadata only. Stable key, Module, position, prerequisites, and content have separate boundaries.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonUpdateRequest' } } }
+      responses:
+        '200': { description: Committed Lesson metadata and current Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonMutationResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteAuthoringLesson
+      description: Deletes one draft Lesson and explicitly removes incoming advisory prerequisite relations, advancing affected source Lesson revisions.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonDeleteRequest' } } }
+      responses:
+        '200': { description: Committed Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringModuleOrderResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/lessons/{lessonId}/prerequisites:
+    put:
+      operationId: replaceAuthoringLessonPrerequisites
+      description: Replaces the complete ordered advisory prerequisite stable-key list for one Lesson. Cycles are not evaluated in this slice.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonPrerequisitesRequest' } } }
+      responses:
+        '200': { description: Committed Lesson metadata and current Draft revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonMutationResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/structure:
+    get:
+      operationId: getAuthoringDraftStructure
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Ordered modules and lesson summaries without full lesson content, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringStructure' } } } }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
@@ -312,6 +394,71 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    AuthoringLessonCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedDraftRevision, stableKey, title, description, objectives, position]
+      properties:
+        expectedDraftRevision: { type: integer, minimum: 1 }
+        stableKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        estimatedDurationMinutes: { type: [integer, 'null'], minimum: 1 }
+        position: { type: integer, minimum: 0 }
+    AuthoringLessonUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedLessonRevision]
+      properties:
+        expectedLessonRevision: { type: integer, minimum: 1 }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        estimatedDurationMinutes: { type: [integer, 'null'], minimum: 1 }
+    AuthoringLessonOrderModule:
+      type: object
+      additionalProperties: false
+      required: [moduleId, lessonIds]
+      properties:
+        moduleId: { type: string, format: uuid }
+        lessonIds: { type: array, maxItems: 10000, items: { type: string, format: uuid } }
+    AuthoringLessonReorderRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedDraftRevision, modules]
+      properties:
+        expectedDraftRevision: { type: integer, minimum: 1 }
+        modules: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/AuthoringLessonOrderModule' } }
+    AuthoringLessonPrerequisitesRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedLessonRevision, prerequisiteLessonKeys]
+      properties:
+        expectedLessonRevision: { type: integer, minimum: 1 }
+        prerequisiteLessonKeys: { type: array, maxItems: 100, items: { type: string } }
+    AuthoringLessonDeleteRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedDraftRevision, expectedLessonRevision]
+      properties:
+        expectedDraftRevision: { type: integer, minimum: 1 }
+        expectedLessonRevision: { type: integer, minimum: 1 }
+    AuthoringLessonMutationResponse:
+      type: object
+      required: [id, draft_id, module_id, stable_key, title, description, objectives, estimated_duration_minutes, position, revision, draftRevision]
+      properties:
+        id: { type: string, format: uuid }
+        draft_id: { type: string, format: uuid }
+        module_id: { type: string, format: uuid }
+        stable_key: { type: string }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        estimated_duration_minutes: { type: [integer, 'null'], minimum: 1 }
+        position: { type: integer, minimum: 0 }
+        revision: { type: integer, minimum: 1 }
+        draftRevision: { type: integer, minimum: 1 }
     AuthoringModuleCreateRequest:
       type: object
       additionalProperties: false

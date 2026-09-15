@@ -135,6 +135,19 @@ JOIN authoring.module AS module ON module.id = lesson.module_id
 WHERE lesson.draft_id = $1
 ORDER BY module.position, lesson.position, lesson.id;
 
+-- name: CountLessonsForDraft :one
+SELECT count(*) FROM authoring.lesson WHERE draft_id = $1;
+
+-- name: ShiftLessonsAtPosition :exec
+UPDATE authoring.lesson
+SET position = position + 1, revision = revision + 1, updated_at = now()
+WHERE module_id = $1 AND position >= $2;
+
+-- name: CompactLessonPositionsAfter :exec
+UPDATE authoring.lesson
+SET position = position - 1, revision = revision + 1, updated_at = now()
+WHERE module_id = $1 AND position > $2;
+
 -- name: UpdateLessonMetadata :one
 UPDATE authoring.lesson AS l
 SET title = $3, description = $4, learning_objectives = $5, estimated_duration_minutes = $6,
@@ -164,11 +177,27 @@ WHERE l.id = $1 AND l.revision = $2
   AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = l.draft_id AND d.status = 'ACTIVE')
 RETURNING l.id;
 
+-- name: DeleteLessonForDraft :one
+DELETE FROM authoring.lesson AS l
+WHERE l.id = $1 AND l.draft_id = $2 AND l.revision = $3
+  AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = l.draft_id AND d.status = 'ACTIVE')
+RETURNING l.id;
+
 -- name: FindLessonByDraftAndKey :one
 SELECT * FROM authoring.lesson WHERE draft_id = $1 AND stable_key = $2;
 
 -- name: DeletePrerequisites :exec
 DELETE FROM authoring.lesson_prerequisite WHERE lesson_id = $1;
+
+-- name: DeleteIncomingPrerequisites :exec
+DELETE FROM authoring.lesson_prerequisite WHERE prerequisite_lesson_id = $1;
+
+-- name: ListIncomingPrerequisiteLessons :many
+SELECT source.*
+FROM authoring.lesson_prerequisite AS prerequisite
+JOIN authoring.lesson AS source ON source.id = prerequisite.lesson_id
+WHERE prerequisite.prerequisite_lesson_id = $1
+ORDER BY source.id;
 
 -- name: AddPrerequisite :exec
 INSERT INTO authoring.lesson_prerequisite (draft_id, lesson_id, prerequisite_lesson_id, position)

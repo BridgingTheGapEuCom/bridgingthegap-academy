@@ -80,6 +80,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoring:                   authoring.NewReadService(authoringRepository, authoringAuthorizer),
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
+		authoringLessonMutations:    authoring.NewLessonMutationService(authoringRepository, authoringAuthorizer),
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -155,6 +156,13 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Put("/authoring/drafts/{draftId}/modules/order", auth.handleAuthoringModuleReorder)
 					protected.Patch("/authoring/drafts/{draftId}/modules/{moduleId}", auth.handleAuthoringModuleUpdate)
 					protected.Delete("/authoring/drafts/{draftId}/modules/{moduleId}", auth.handleAuthoringModuleDelete)
+				}
+				if auth.authoringLessonMutations != nil {
+					protected.Post("/authoring/drafts/{draftId}/modules/{moduleId}/lessons", auth.handleAuthoringLessonCreate)
+					protected.Put("/authoring/drafts/{draftId}/lessons/order", auth.handleAuthoringLessonReorder)
+					protected.Patch("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLessonUpdate)
+					protected.Put("/authoring/drafts/{draftId}/lessons/{lessonId}/prerequisites", auth.handleAuthoringLessonPrerequisites)
+					protected.Delete("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLessonDelete)
 				}
 			})
 			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

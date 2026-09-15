@@ -208,6 +208,22 @@ func (q *Queries) BumpModuleRevision(ctx context.Context, arg BumpModuleRevision
 	return i, err
 }
 
+const compactLessonPositionsAfter = `-- name: CompactLessonPositionsAfter :exec
+UPDATE authoring.lesson
+SET position = position - 1, revision = revision + 1, updated_at = now()
+WHERE module_id = $1 AND position > $2
+`
+
+type CompactLessonPositionsAfterParams struct {
+	ModuleID pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) CompactLessonPositionsAfter(ctx context.Context, arg CompactLessonPositionsAfterParams) error {
+	_, err := q.db.Exec(ctx, compactLessonPositionsAfter, arg.ModuleID, arg.Position)
+	return err
+}
+
 const compactModulePositionsAfter = `-- name: CompactModulePositionsAfter :exec
 UPDATE authoring.module
 SET position = position - 1, revision = revision + 1, updated_at = now()
@@ -222,6 +238,17 @@ type CompactModulePositionsAfterParams struct {
 func (q *Queries) CompactModulePositionsAfter(ctx context.Context, arg CompactModulePositionsAfterParams) error {
 	_, err := q.db.Exec(ctx, compactModulePositionsAfter, arg.DraftID, arg.Position)
 	return err
+}
+
+const countLessonsForDraft = `-- name: CountLessonsForDraft :one
+SELECT count(*) FROM authoring.lesson WHERE draft_id = $1
+`
+
+func (q *Queries) CountLessonsForDraft(ctx context.Context, draftID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countLessonsForDraft, draftID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const countLessonsForModule = `-- name: CountLessonsForModule :one
@@ -406,6 +433,15 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 	return i, err
 }
 
+const deleteIncomingPrerequisites = `-- name: DeleteIncomingPrerequisites :exec
+DELETE FROM authoring.lesson_prerequisite WHERE prerequisite_lesson_id = $1
+`
+
+func (q *Queries) DeleteIncomingPrerequisites(ctx context.Context, prerequisiteLessonID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteIncomingPrerequisites, prerequisiteLessonID)
+	return err
+}
+
 const deleteLesson = `-- name: DeleteLesson :one
 DELETE FROM authoring.lesson AS l
 WHERE l.id = $1 AND l.revision = $2
@@ -420,6 +456,26 @@ type DeleteLessonParams struct {
 
 func (q *Queries) DeleteLesson(ctx context.Context, arg DeleteLessonParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, deleteLesson, arg.ID, arg.Revision)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const deleteLessonForDraft = `-- name: DeleteLessonForDraft :one
+DELETE FROM authoring.lesson AS l
+WHERE l.id = $1 AND l.draft_id = $2 AND l.revision = $3
+  AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = l.draft_id AND d.status = 'ACTIVE')
+RETURNING l.id
+`
+
+type DeleteLessonForDraftParams struct {
+	ID       pgtype.UUID
+	DraftID  pgtype.UUID
+	Revision int64
+}
+
+func (q *Queries) DeleteLessonForDraft(ctx context.Context, arg DeleteLessonForDraftParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteLessonForDraft, arg.ID, arg.DraftID, arg.Revision)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -589,6 +645,48 @@ func (q *Queries) GetWorkspace(ctx context.Context, draftID pgtype.UUID) (Author
 		&i.LastActivityAt,
 	)
 	return i, err
+}
+
+const listIncomingPrerequisiteLessons = `-- name: ListIncomingPrerequisiteLessons :many
+SELECT source.id, source.draft_id, source.module_id, source.stable_key, source.title, source.description, source.learning_objectives, source.estimated_duration_minutes, source.position, source.content, source.revision, source.created_at, source.updated_at
+FROM authoring.lesson_prerequisite AS prerequisite
+JOIN authoring.lesson AS source ON source.id = prerequisite.lesson_id
+WHERE prerequisite.prerequisite_lesson_id = $1
+ORDER BY source.id
+`
+
+func (q *Queries) ListIncomingPrerequisiteLessons(ctx context.Context, prerequisiteLessonID pgtype.UUID) ([]AuthoringLesson, error) {
+	rows, err := q.db.Query(ctx, listIncomingPrerequisiteLessons, prerequisiteLessonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthoringLesson
+	for rows.Next() {
+		var i AuthoringLesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.DraftID,
+			&i.ModuleID,
+			&i.StableKey,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.EstimatedDurationMinutes,
+			&i.Position,
+			&i.Content,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listLessons = `-- name: ListLessons :many
@@ -936,6 +1034,22 @@ func (q *Queries) SetModulePosition(ctx context.Context, arg SetModulePositionPa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const shiftLessonsAtPosition = `-- name: ShiftLessonsAtPosition :exec
+UPDATE authoring.lesson
+SET position = position + 1, revision = revision + 1, updated_at = now()
+WHERE module_id = $1 AND position >= $2
+`
+
+type ShiftLessonsAtPositionParams struct {
+	ModuleID pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) ShiftLessonsAtPosition(ctx context.Context, arg ShiftLessonsAtPositionParams) error {
+	_, err := q.db.Exec(ctx, shiftLessonsAtPosition, arg.ModuleID, arg.Position)
+	return err
 }
 
 const shiftModulesAtPosition = `-- name: ShiftModulesAtPosition :exec

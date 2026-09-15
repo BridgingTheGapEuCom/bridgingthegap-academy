@@ -87,3 +87,25 @@ positions atomically. The API deliberately deletes only empty Modules: a
 Module containing Lessons returns a conflict, rather than exposing the
 persistence cascade through an ordinary structural request. As with all
 private Authoring responses, mutation results are `Cache-Control: no-store`.
+
+Draft Lesson structural and metadata mutations also require
+`authoring.structure.edit`, the trusted Origin, and the session-bound CSRF
+token. A Lesson is created with an empty valid canonical content document, but
+this slice has no content-edit operation. Ordinary metadata PATCH accepts only
+title, description, objectives, and estimated duration; stable keys, Module
+assignment, position, prerequisites, and content each remain outside that
+operation. Lesson stable keys are immutable semantic identities across the
+whole Draft and survive moves between Modules.
+
+Lesson ordering is replaced as one complete Draft-wide Module-to-Lesson layout.
+It contains every current Module and Lesson exactly once, so moves and
+zero-based contiguous positions commit atomically. The Draft revision advances
+once; moved Lessons and affected Modules advance their revisions so clients can
+observe the structural change. Prerequisites are atomically replaced as one
+ordered, same-Draft stable-key list. They remain advisory: direct self-links
+and duplicates are rejected, while general cycles are not evaluated in this
+slice. Deleting a Lesson is a hard delete. Incoming prerequisite rows are
+explicitly removed and their source Lesson revisions advance before the target
+is removed; remaining Lessons in its Module are compacted. These structural
+mutations are future audit candidates, but audit integration remains deferred
+until a shared transaction boundary exists.

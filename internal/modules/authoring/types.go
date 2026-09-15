@@ -161,6 +161,10 @@ type ModuleInput struct {
 // payloads without constraining ordinary course design.
 const MaxModulesPerDraft = 1000
 
+// MaxLessonsPerDraft bounds the complete structural-order document accepted by
+// Authoring while leaving ample room for substantial courses.
+const MaxLessonsPerDraft = 10000
+
 func (m ModuleInput) Validate() error {
 	if m.DraftID == "" {
 		return errors.New("draft identifier required")
@@ -265,6 +269,82 @@ type DraftLesson struct {
 	LessonInput
 	Revision             int64
 	CreatedAt, UpdatedAt time.Time
+}
+
+// DraftLessonPatch contains metadata only. Stable key, Module assignment,
+// position, prerequisite relations, and canonical content each have explicit
+// structural operations.
+type DraftLessonPatch struct {
+	Title                    *string
+	Description              *string
+	LearningObjectives       *[]string
+	EstimatedDurationSet     bool
+	EstimatedDurationMinutes *int
+}
+
+func (p DraftLessonPatch) Empty() bool {
+	return p.Title == nil && p.Description == nil && p.LearningObjectives == nil && !p.EstimatedDurationSet
+}
+
+func (p DraftLessonPatch) Apply(current LessonInput) (LessonInput, error) {
+	if p.Empty() {
+		return LessonInput{}, errors.New("draft lesson patch is empty")
+	}
+	next := current
+	if p.Title != nil {
+		next.Title = *p.Title
+	}
+	if p.Description != nil {
+		next.Description = *p.Description
+	}
+	if p.LearningObjectives != nil {
+		next.LearningObjectives = append([]string(nil), (*p.LearningObjectives)...)
+	}
+	if p.EstimatedDurationSet {
+		next.EstimatedDurationMinutes = p.EstimatedDurationMinutes
+	}
+	if err := next.Validate(); err != nil {
+		return LessonInput{}, err
+	}
+	return next, nil
+}
+
+// ModuleLessonOrder is one module's complete Lesson order. Reorder requests
+// contain every module and lesson in the Draft exactly once, allowing moves to
+// remain atomic and preserving stable Lesson IDs and keys.
+type ModuleLessonOrder struct {
+	ModuleID  ModuleID
+	LessonIDs []LessonID
+}
+
+func ValidateLessonOrder(order []ModuleLessonOrder) error {
+	if len(order) > MaxModulesPerDraft {
+		return errors.New("too many modules")
+	}
+	modules := make(map[ModuleID]struct{}, len(order))
+	lessons := make(map[LessonID]struct{})
+	for _, module := range order {
+		if module.ModuleID == "" {
+			return errors.New("module identifier required")
+		}
+		if _, found := modules[module.ModuleID]; found {
+			return errors.New("duplicate module identifier")
+		}
+		modules[module.ModuleID] = struct{}{}
+		for _, lessonID := range module.LessonIDs {
+			if lessonID == "" {
+				return errors.New("lesson identifier required")
+			}
+			if _, found := lessons[lessonID]; found {
+				return errors.New("duplicate lesson identifier")
+			}
+			lessons[lessonID] = struct{}{}
+			if len(lessons) > MaxLessonsPerDraft {
+				return errors.New("too many lessons")
+			}
+		}
+	}
+	return nil
 }
 
 // Prerequisite is advisory metadata; no learner access decision depends on it.

@@ -21,6 +21,7 @@ const sessionCookieName = "btg_session"
 const maxLoginBodyBytes = 8 * 1024
 const maxAuthoringDraftMetadataBodyBytes = 128 * 1024
 const maxAuthoringModuleBodyBytes = 64 * 1024
+const maxAuthoringLessonBodyBytes = 256 * 1024
 const maxCookieHeaderBytes = 8 * 1024
 const maxSessionCookieValueBytes = 128
 
@@ -53,6 +54,7 @@ type authHTTP struct {
 	authoring                   *authoring.ReadService
 	authoringMutations          *authoring.DraftMutationService
 	authoringStructureMutations *authoring.ModuleMutationService
+	authoringLessonMutations    *authoring.LessonMutationService
 	cookieSecure                bool
 	now                         func() time.Time
 }
