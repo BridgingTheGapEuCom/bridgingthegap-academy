@@ -118,6 +118,25 @@
 }
 .authoring-shell__section { max-width: var(--btg-width-reading); }
 .authoring-section > p { color: var(--btg-color-text-secondary); }
+.authoring-metadata-form,
+.authoring-metadata-form__license { display: grid; gap: var(--btg-space-5); }
+.authoring-metadata-form textarea { min-height: 8rem; resize: vertical; }
+.authoring-metadata-form__license {
+  margin: 0;
+  border: var(--btg-border-width) solid var(--btg-color-border);
+  padding: var(--btg-space-4);
+}
+.authoring-metadata-form__license legend { padding-inline: var(--btg-space-2); font-weight: var(--btg-font-weight-strong); }
+.authoring-metadata-form__error,
+.authoring-metadata-form__conflict {
+  border-inline-start: 0.25rem solid var(--btg-color-danger);
+  background: var(--btg-color-surface-muted);
+  padding: var(--btg-space-3) var(--btg-space-4);
+}
+.authoring-metadata-form__conflict { border-inline-start-color: var(--btg-color-warning); }
+.authoring-metadata-form__conflict p { margin-bottom: var(--btg-space-3); }
+.authoring-metadata-form__unsaved { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }
+.authoring-metadata-form__actions { display: flex; gap: var(--btg-space-3); }
 
 @media (max-width: 30rem) {
   .authoring-shell__navigation a { flex: 1 1 auto; justify-content: center; }

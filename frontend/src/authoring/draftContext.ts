@@ -1,13 +1,20 @@
 import { computed, inject, type ComputedRef, type InjectionKey, type Ref } from 'vue'
 import type { AuthoringDraft } from './authoring'
 
-export const authoringDraftContextKey: InjectionKey<Readonly<Ref<AuthoringDraft | undefined>>> = Symbol('authoring-draft-context')
+export type AuthoringDraftContext = {
+  draft: Readonly<Ref<AuthoringDraft | undefined>>
+  replaceDraft: (draft: AuthoringDraft) => void
+  markDraftUnavailable: () => void
+}
 
-export function useAuthoringDraftContext(): ComputedRef<AuthoringDraft> {
+export const authoringDraftContextKey: InjectionKey<AuthoringDraftContext> = Symbol('authoring-draft-context')
+
+export function useAuthoringDraftContext(): AuthoringDraftContext & { draft: ComputedRef<AuthoringDraft> } {
   const context = inject(authoringDraftContextKey)
   if (!context) throw new Error('Authoring draft context is unavailable')
-  return computed(() => {
-    if (!context.value) throw new Error('Authoring draft context is unavailable')
-    return context.value
+  const draft = computed(() => {
+    if (!context.draft.value) throw new Error('Authoring draft context is unavailable')
+    return context.draft.value
   })
+  return { ...context, draft }
 }

@@ -75,10 +75,22 @@ const route = useRoute()
 const router = useRouter()
 const state = ref<State>({ kind: 'loading' })
 const draft = ref<AuthoringDraft>()
-provide(authoringDraftContextKey, draft)
 
 let requestVersion = 0
 let active = true
+
+provide(authoringDraftContextKey, {
+  draft,
+  replaceDraft: (nextDraft) => {
+    draft.value = nextDraft
+    state.value = { kind: 'ready', draft: nextDraft }
+  },
+  markDraftUnavailable: () => {
+    requestVersion += 1
+    draft.value = undefined
+    state.value = { kind: 'not-found' }
+  },
+})
 
 watch(
   () => [auth.state.value.status, route.params.draftId],

@@ -12,7 +12,13 @@ const draft = {
   description: 'A mutable working version.',
   objectives: ['Explain ownership'],
   changelog: 'Initial Draft.',
-  license: { kind: 'STANDARD', display_name: 'Creative Commons Attribution 4.0' },
+  license: {
+    kind: 'STANDARD',
+    identifier: 'CC-BY-4.0',
+    display_name: 'Creative Commons Attribution 4.0',
+    url: 'https://creativecommons.org/licenses/by/4.0/',
+    custom_text: '',
+  },
   status: 'ACTIVE',
   revision: 3,
   created_at: '2026-09-15T10:00:00Z',
@@ -39,4 +45,31 @@ test('Authoring Draft shell is private, accessible, and responsive', async ({ pa
 
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('Authoring metadata editor saves a changed field with its current revision', async ({ page }) => {
+  let patchBody: unknown
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patchBody = route.request().postDataJSON()
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...draft, title: 'Updated foundations', revision: 4, updated_at: '2026-09-15T12:00:00Z' }),
+      })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) })
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}`)
+  const title = page.getByRole('textbox', { name: /^Title\b/ })
+  await title.fill('Updated foundations')
+  await page.getByRole('button', { name: 'Save changes' }).click()
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Updated foundations' })).toBeVisible()
+  expect(patchBody).toEqual({ expectedRevision: 3, title: 'Updated foundations' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

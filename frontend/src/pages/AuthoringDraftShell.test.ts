@@ -16,11 +16,13 @@ const authMock = vi.hoisted(() => ({
   bootstrapSession: vi.fn(),
 }))
 const getAuthoringDraftMock = vi.hoisted(() => vi.fn())
+const updateAuthoringDraftMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
 vi.mock('../authoring/authoring', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../authoring/authoring')>()),
   getAuthoringDraft: getAuthoringDraftMock,
+  updateAuthoringDraft: updateAuthoringDraftMock,
 }))
 
 import AuthoringDraftShell from './AuthoringDraftShell.vue'
@@ -77,6 +79,7 @@ describe('AuthoringDraftShell', () => {
     authMock.state = shallowRef<AuthenticationState>({ status: 'authenticated', userId: '44444444-4444-4444-8444-444444444444', expiresAt: '2026-09-15T12:00:00Z' })
     authMock.bootstrapSession.mockReset()
     getAuthoringDraftMock.mockReset()
+    updateAuthoringDraftMock.mockReset()
     getAuthoringDraftMock.mockResolvedValue(draft())
   })
 
@@ -89,7 +92,7 @@ describe('AuthoringDraftShell', () => {
     expect(screen.getByRole('status').textContent).toContain('Loading draft')
     resolveDraft(draft())
     await screen.findByRole('heading', { level: 1, name: 'Integration foundations' })
-    expect(screen.getByText('Intended version').nextElementSibling?.textContent).toBe('1.0.0')
+    expect(screen.getAllByText('Intended version')[0]?.nextElementSibling?.textContent).toBe('1.0.0')
     const overview = screen.getByRole('link', { name: 'Overview' })
     expect(overview.getAttribute('aria-current')).toBe('page')
     expect(screen.getByRole('heading', { level: 2, name: 'Overview' })).toBeTruthy()
@@ -138,5 +141,65 @@ describe('AuthoringDraftShell', () => {
     await screen.findByRole('heading', { level: 1, name: 'Second Draft' })
     resolveFirst(draft(firstID, 'Old Draft'))
     await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: 'Old Draft' })).toBeNull())
+  })
+
+  it('edits only changed metadata with the authoritative revision and updates the shell after save', async () => {
+    const updated = { ...draft(), title: 'Updated foundations', revision: 4, updated_at: '2026-09-15T12:00:00Z' }
+    updateAuthoringDraftMock.mockResolvedValue(updated)
+    await renderShell()
+    const title = await screen.findByRole('textbox', { name: /Title/ })
+    await fireEvent.update(title, 'Updated foundations')
+    const save = screen.getByRole('button', { name: 'Save changes' })
+    expect(save.hasAttribute('disabled')).toBe(false)
+    await fireEvent.click(save)
+    await waitFor(() => expect(updateAuthoringDraftMock).toHaveBeenCalledWith(firstID, { expectedRevision: 3, title: 'Updated foundations' }))
+    expect(screen.getByRole('heading', { level: 1, name: 'Updated foundations' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save changes' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('preserves user input on a stale revision and reloads only when explicitly requested', async () => {
+    updateAuthoringDraftMock.mockRejectedValueOnce(new APIProblemError(409, undefined, undefined))
+    getAuthoringDraftMock.mockResolvedValueOnce(draft()).mockResolvedValueOnce({ ...draft(), title: 'Latest Draft', revision: 4 })
+    await renderShell()
+    const title = await screen.findByRole('textbox', { name: /Title/ })
+    await fireEvent.update(title, 'My local title')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText(/Draft changed elsewhere/)).toBeTruthy()
+    expect((title as HTMLInputElement).value).toBe('My local title')
+    expect(updateAuthoringDraftMock).toHaveBeenCalledTimes(1)
+    await fireEvent.click(screen.getByRole('button', { name: 'Reload latest Draft' }))
+    await waitFor(() => expect((screen.getByRole('textbox', { name: /Title/ }) as HTMLInputElement).value).toBe('Latest Draft'))
+  })
+
+  it('keeps Save disabled for unchanged or reverted metadata and reports client validation accessibly', async () => {
+    await renderShell()
+    const title = await screen.findByRole('textbox', { name: /Title/ })
+    const save = screen.getByRole('button', { name: 'Save changes' })
+    expect(save.hasAttribute('disabled')).toBe(true)
+    await fireEvent.update(title, 'Temporary title')
+    await fireEvent.update(title, 'Integration foundations')
+    expect(save.hasAttribute('disabled')).toBe(true)
+    await fireEvent.update(title, '')
+    await fireEvent.click(save)
+    expect(await screen.findByText('Enter a title.')).toBeTruthy()
+    expect(title.getAttribute('aria-invalid')).toBe('true')
+    expect(updateAuthoringDraftMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps local values for an operational save failure and hides a Draft after an opaque mutation 404', async () => {
+    updateAuthoringDraftMock.mockRejectedValueOnce(new Error('offline'))
+    await renderShell()
+    const title = await screen.findByRole('textbox', { name: /Title/ })
+    await fireEvent.update(title, 'Local title')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('We couldn’t save this Draft right now.')
+    expect((title as HTMLInputElement).value).toBe('Local title')
+
+    cleanup()
+    updateAuthoringDraftMock.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))
+    await renderShell()
+    await fireEvent.update(await screen.findByRole('textbox', { name: /Title/ }), 'Hidden Draft')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Draft unavailable' })).toBeTruthy()
   })
 })
