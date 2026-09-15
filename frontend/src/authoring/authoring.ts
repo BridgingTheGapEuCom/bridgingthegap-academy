@@ -9,6 +9,11 @@ export type AuthoringLessonSummary = components['schemas']['AuthoringLessonSumma
 export type AuthoringLessonDetail = components['schemas']['AuthoringLessonDetail']
 export type AuthoringLessonContent = components['schemas']['LessonContent']
 export type AuthoringLessonContentMutation = components['schemas']['AuthoringLessonContentMutationResponse']
+export type AuthoringActiveMember = components['schemas']['AuthoringActiveMember']
+export type AuthoringActiveMemberList = components['schemas']['AuthoringActiveMemberList']
+export type AuthoringMemberAdd = components['schemas']['AuthoringMemberAddRequest']
+export type AuthoringMemberRoleChange = components['schemas']['AuthoringMemberRoleRequest']
+export type AuthoringMemberMutation = components['schemas']['AuthoringMemberMutationResponse']
 
 export type AuthoringModuleCreate = components['schemas']['AuthoringModuleCreateRequest']
 export type AuthoringModuleUpdate = { expectedModuleRevision: number; title?: string; description?: string }
@@ -72,6 +77,30 @@ export async function updateAuthoringDraft(draftID: string, patch: AuthoringDraf
 export async function getAuthoringStructure(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringStructure> {
   assertAuthoringID(draftID)
   return client.request<AuthoringStructure>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/structure`)
+}
+
+// Membership remains an Authoring-only, opaque identity projection. The API
+// owns authorization and active/revoked filtering; callers never derive it
+// from mutation responses or browser-side role assumptions.
+export async function getAuthoringDraftMembers(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringActiveMemberList> {
+  assertAuthoringID(draftID)
+  return client.request<AuthoringActiveMemberList>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/members`)
+}
+
+export async function addAuthoringMember(draftID: string, input: AuthoringMemberAdd, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringMemberMutation> {
+  assertAuthoringID(draftID)
+  assertAuthoringID(input.userId)
+  return client.request<AuthoringMemberMutation>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/members`, jsonRequest('POST', input))
+}
+
+export async function changeAuthoringMemberRole(draftID: string, userID: string, input: AuthoringMemberRoleChange, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringMemberMutation> {
+  assertAuthoringID(draftID); assertAuthoringID(userID)
+  return client.request<AuthoringMemberMutation>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/members/${encodeURIComponent(userID)}`, jsonRequest('PATCH', input))
+}
+
+export async function revokeAuthoringMember(draftID: string, userID: string, expectedDraftRevision: number, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringMemberMutation> {
+  assertAuthoringID(draftID); assertAuthoringID(userID)
+  return client.request<AuthoringMemberMutation>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/members/${encodeURIComponent(userID)}`, jsonRequest('DELETE', { expectedDraftRevision }))
 }
 
 export async function createAuthoringModule(draftID: string, input: AuthoringModuleCreate, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringModuleMutation> {

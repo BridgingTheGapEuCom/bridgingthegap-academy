@@ -61,7 +61,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** @description Returns current active AUTHOR and MAINTAINER memberships for one Draft. The authenticated actor must have authoring.read. Revoked membership history is not exposed. */
+        get: operations["listAuthoringActiveMembers"];
         put?: never;
         /** @description Adds an active AUTHOR or MAINTAINER membership using the Draft revision. The authenticated actor must have authoring.members.manage. */
         post: operations["addAuthoringMember"];
@@ -392,6 +393,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthoringActiveMember: {
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+        };
+        AuthoringActiveMemberList: {
+            members: components["schemas"]["AuthoringActiveMember"][];
+        };
         AuthoringMemberAddRequest: {
             expectedDraftRevision: number;
             /** Format: uuid */
@@ -1045,6 +1055,32 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringActiveMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active opaque Draft memberships ordered by user ID */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringActiveMemberList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

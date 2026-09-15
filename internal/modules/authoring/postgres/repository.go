@@ -322,6 +322,28 @@ func (r *Repository) ListMembers(ctx context.Context, workspace authoring.Worksp
 	return out, nil
 }
 
+// ActiveMembers is deliberately draft-scoped. The HTTP read service has
+// already authorized the draft and needs no workspace identifier from callers.
+func (r *Repository) ActiveMembers(ctx context.Context, draft authoring.DraftID) ([]authoring.WorkspaceMember, error) {
+	draftID, err := uuid(string(draft))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListActiveMembersForDraft(ctx, draftID)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	result := make([]authoring.WorkspaceMember, 0, len(rows))
+	for _, row := range rows {
+		member := mapMember(row)
+		if member.RevokedAt != nil {
+			return nil, errors.New("active authoring member query returned revoked row")
+		}
+		result = append(result, member)
+	}
+	return result, nil
+}
+
 func (r *Repository) ActiveMembershipForDraft(ctx context.Context, draft authoring.DraftID, user string) (authoring.MemberRole, bool, error) {
 	draftID, err := uuid(string(draft))
 	if err != nil {

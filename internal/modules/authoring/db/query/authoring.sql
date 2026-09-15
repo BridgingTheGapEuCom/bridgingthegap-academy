@@ -65,6 +65,13 @@ WHERE workspace_id = $1 AND role = 'MAINTAINER' AND revoked_at IS NULL;
 -- name: ListMembers :many
 SELECT * FROM authoring.workspace_member WHERE workspace_id = $1 ORDER BY created_at, id;
 
+-- name: ListActiveMembersForDraft :many
+SELECT member.*
+FROM authoring.workspace_member AS member
+JOIN authoring.workspace AS workspace ON workspace.id = member.workspace_id
+WHERE workspace.draft_id = $1 AND member.revoked_at IS NULL
+ORDER BY member.user_id, member.id;
+
 -- name: ActiveMembershipForDraft :one
 SELECT member.role
 FROM authoring.workspace_member AS member

@@ -48,6 +48,13 @@ type authoringWorkspaceDTO struct {
 	LastActivityAt time.Time `json:"last_activity_at"`
 }
 
+// authoringActiveMemberDTO is intentionally smaller than the persistence
+// membership record: it exposes only the opaque identity reference and role.
+type authoringActiveMemberDTO struct {
+	UserID string               `json:"userId"`
+	Role   authoring.MemberRole `json:"role"`
+}
+
 type authoringModuleDTO struct {
 	ID          string                      `json:"id"`
 	StableKey   string                      `json:"stable_key"`
@@ -634,6 +641,25 @@ func (a *authHTTP) handleAuthoringWorkspace(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, authoringWorkspaceDTO{ID: string(workspace.ID), DraftID: string(workspace.DraftID), CreatedAt: workspace.CreatedAt, LastActivityAt: workspace.LastActivityAt})
+}
+
+func (a *authHTTP) handleAuthoringMembers(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	members, err := a.authoring.Members(r.Context(), actor, draftID)
+	if err != nil {
+		authoringProblem(w, r, err)
+		return
+	}
+	response := make([]authoringActiveMemberDTO, 0, len(members))
+	for _, member := range members {
+		response = append(response, authoringActiveMemberDTO{UserID: member.UserID, Role: member.Role})
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Members []authoringActiveMemberDTO `json:"members"`
+	}{Members: response})
 }
 
 func (a *authHTTP) handleAuthoringStructure(w http.ResponseWriter, r *http.Request) {

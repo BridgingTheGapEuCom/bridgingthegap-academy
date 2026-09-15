@@ -64,6 +64,17 @@ paths:
         '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}/members:
+    get:
+      operationId: listAuthoringActiveMembers
+      description: Returns current active AUTHOR and MAINTAINER memberships for one Draft. The authenticated actor must have authoring.read. Revoked membership history is not exposed.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Active opaque Draft memberships ordered by user ID, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringActiveMemberList' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
     post:
       operationId: addAuthoringMember
       description: Adds an active AUTHOR or MAINTAINER membership using the Draft revision. The authenticated actor must have authoring.members.manage.
@@ -464,6 +475,21 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    AuthoringActiveMember:
+      type: object
+      additionalProperties: false
+      required: [userId, role]
+      properties:
+        userId: { type: string, format: uuid }
+        role: { type: string, enum: [AUTHOR, MAINTAINER] }
+    AuthoringActiveMemberList:
+      type: object
+      additionalProperties: false
+      required: [members]
+      properties:
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/AuthoringActiveMember' }
     AuthoringMemberAddRequest:
       type: object
       additionalProperties: false

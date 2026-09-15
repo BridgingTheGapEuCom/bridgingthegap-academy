@@ -63,6 +63,10 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, string(member.ID), authoring.MemberAuthor); err != nil {
 		t.Fatal(err)
 	}
+	revokedMember := "11111111-1111-4111-8111-111111111111"
+	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, revokedMember, authoring.MemberAuthor); err != nil {
+		t.Fatal(err)
+	}
 	sessions := identity.NewSessionService(identityRepository, nil, nil)
 	created, err := sessions.CreateSession(ctx, member.ID)
 	if err != nil {
@@ -75,6 +79,7 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	for _, path := range []string{
 		"/api/authoring/drafts/" + string(draftA.ID),
 		"/api/authoring/drafts/" + string(draftA.ID) + "/workspace",
+		"/api/authoring/drafts/" + string(draftA.ID) + "/members",
 		"/api/authoring/drafts/" + string(draftA.ID) + "/structure",
 		"/api/authoring/drafts/" + string(draftA.ID) + "/lessons/" + string(lessonA.ID),
 	} {
@@ -82,6 +87,28 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 		if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("GET %s = %d cache=%q: %s", path, response.Code, response.Header().Get("Cache-Control"), response.Body.String())
 		}
+	}
+	memberResponse := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA.ID)+"/members", "", cookie)
+	var activeMembers struct {
+		Members []struct {
+			UserID string               `json:"userId"`
+			Role   authoring.MemberRole `json:"role"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal(memberResponse.Body.Bytes(), &activeMembers); err != nil || len(activeMembers.Members) != 3 || strings.Contains(memberResponse.Body.String(), "createdAt") || strings.Contains(memberResponse.Body.String(), "revokedAt") {
+		t.Fatalf("active members response = %s err=%v", memberResponse.Body.String(), err)
+	}
+	for index := 1; index < len(activeMembers.Members); index++ {
+		if activeMembers.Members[index-1].UserID >= activeMembers.Members[index].UserID {
+			t.Fatalf("active membership ordering is not deterministic: %#v", activeMembers.Members)
+		}
+	}
+	if _, err := revokeTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, revokedMember); err != nil {
+		t.Fatal(err)
+	}
+	memberResponse = authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA.ID)+"/members", "", cookie)
+	if err := json.Unmarshal(memberResponse.Body.Bytes(), &activeMembers); err != nil || len(activeMembers.Members) != 2 || strings.Contains(memberResponse.Body.String(), revokedMember) {
+		t.Fatalf("revoked member was exposed: %s err=%v", memberResponse.Body.String(), err)
 	}
 	if response := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA.ID)+"/lessons/"+string(lessonB.ID), "", cookie); response.Code != http.StatusNotFound {
 		t.Fatalf("cross-draft lesson read = %d: %s", response.Code, response.Body.String())
@@ -92,8 +119,13 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if _, err := revokeTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, string(member.ID)); err != nil {
 		t.Fatal(err)
 	}
-	if response := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA.ID), "", cookie); response.Code != http.StatusNotFound {
-		t.Fatalf("revoked member read = %d: %s", response.Code, response.Body.String())
+	for _, path := range []string{
+		"/api/authoring/drafts/" + string(draftA.ID),
+		"/api/authoring/drafts/" + string(draftA.ID) + "/members",
+	} {
+		if response := authRequest(router, http.MethodGet, path, "", cookie); response.Code != http.StatusNotFound {
+			t.Fatalf("revoked member read %s = %d: %s", path, response.Code, response.Body.String())
+		}
 	}
 
 	administrator, err := identityRepository.CreateUser(ctx, identity.UserActive)

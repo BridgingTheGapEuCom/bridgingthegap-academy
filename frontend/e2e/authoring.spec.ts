@@ -242,3 +242,58 @@ test('Authoring Lesson prerequisites remain advisory, ordered, keyboard-operable
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
+
+test('Authoring member management uses opaque IDs, authoritative reloads, and keyboard-accessible actions', async ({ page }) => {
+  let revision = 3
+  let activeMembers = [
+    { userId: '66666666-6666-4666-8666-666666666666', role: 'AUTHOR' },
+    { userId: '77777777-7777-4777-8777-777777777777', role: 'MAINTAINER' },
+  ]
+  const addedMember = '88888888-8888-4888-8888-888888888888'
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...draft, revision }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/members`, (route) => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ members: activeMembers }) })
+    const body = route.request().postDataJSON() as { userId: string; role: string; expectedDraftRevision: number }
+    expect(body).toEqual({ userId: addedMember, role: 'MAINTAINER', expectedDraftRevision: revision })
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
+    activeMembers = [...activeMembers, { userId: body.userId, role: body.role }]
+    revision += 1
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draftRevision: revision }) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/members/*`, (route) => {
+    const userID = route.request().url().split('/').pop()
+    const body = route.request().postDataJSON() as { role?: string; expectedDraftRevision: number }
+    expect(body.expectedDraftRevision).toBe(revision)
+    if (route.request().method() === 'PATCH') activeMembers = activeMembers.map((member) => member.userId === userID ? { ...member, role: body.role! } : member)
+    else activeMembers = activeMembers.filter((member) => member.userId !== userID)
+    revision += 1
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draftRevision: revision }) })
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/members`)
+  await expect(page.getByRole('heading', { level: 2, name: 'Members' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'User ID' }).fill(addedMember)
+  await page.getByRole('combobox', { name: /Role required/ }).selectOption('MAINTAINER')
+  await page.getByRole('button', { name: 'Add member' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Member added.')).toBeVisible()
+  await expect(page.getByText(addedMember, { exact: true })).toBeVisible()
+
+  const authorRow = page.getByText('66666666-6666-4666-8666-666666666666', { exact: true }).locator('xpath=ancestor::li')
+  await authorRow.getByRole('combobox').selectOption('MAINTAINER')
+  await authorRow.getByRole('button', { name: 'Save role' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Member role updated.')).toBeVisible()
+
+  const addedRow = page.getByText(addedMember, { exact: true }).locator('xpath=ancestor::li')
+  await addedRow.getByRole('button', { name: `Revoke access for ${addedMember}` }).focus()
+  await page.keyboard.press('Enter')
+  await addedRow.getByRole('button', { name: `Confirm revoke access for ${addedMember}` }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Member access revoked.')).toBeVisible()
+  await expect(page.getByText(addedMember, { exact: true })).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})

@@ -15,7 +15,12 @@ type readRepositoryFake struct {
 	modules       []DraftModule
 	lessons       []DraftLesson
 	prerequisites []Prerequisite
+	members       []WorkspaceMember
 	err           error
+}
+
+func (r readRepositoryFake) ActiveMembers(context.Context, DraftID) ([]WorkspaceMember, error) {
+	return append([]WorkspaceMember(nil), r.members...), r.err
 }
 
 func (r readRepositoryFake) GetDraft(context.Context, DraftID) (CourseDraft, error) {
@@ -95,5 +100,22 @@ func TestReadServiceRejectsCrossDraftLessonAndPreservesFailures(t *testing.T) {
 	service = NewReadService(readRepositoryFake{}, readAuthorizerFake{err: unavailable})
 	if _, err := service.Draft(context.Background(), identity.AuthenticatedActor{}, draftA); !errors.Is(err, unavailable) {
 		t.Fatalf("authorization outage = %v, want propagated error", err)
+	}
+}
+
+func TestReadServiceReturnsOnlyRepositoryActiveMembershipProjectionAfterAuthorization(t *testing.T) {
+	draftID := DraftID("11111111-1111-4111-8111-111111111111")
+	members := []WorkspaceMember{
+		{UserID: "11111111-1111-4111-8111-111111111111", Role: MemberAuthor},
+		{UserID: "22222222-2222-4222-8222-222222222222", Role: MemberMaintainer},
+	}
+	service := NewReadService(readRepositoryFake{members: members}, readAuthorizerFake{})
+	got, err := service.Members(context.Background(), identity.AuthenticatedActor{}, draftID)
+	if err != nil || len(got) != 2 || got[0].UserID != members[0].UserID || got[1].Role != MemberMaintainer {
+		t.Fatalf("active member projection = %#v err=%v", got, err)
+	}
+	denied := NewReadService(readRepositoryFake{members: members}, readAuthorizerFake{err: ErrAuthorizationDenied})
+	if _, err := denied.Members(context.Background(), identity.AuthenticatedActor{}, draftID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("denied member read = %v, want hidden not found", err)
 	}
 }

@@ -147,6 +147,7 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				if auth.authoring != nil {
 					protected.Get("/authoring/drafts/{draftId}", auth.handleAuthoringDraft)
 					protected.Get("/authoring/drafts/{draftId}/workspace", auth.handleAuthoringWorkspace)
+					protected.Get("/authoring/drafts/{draftId}/members", auth.handleAuthoringMembers)
 					protected.Get("/authoring/drafts/{draftId}/structure", auth.handleAuthoringStructure)
 					protected.Get("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLesson)
 				}

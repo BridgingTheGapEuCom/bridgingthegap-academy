@@ -736,6 +736,41 @@ func (q *Queries) GetWorkspace(ctx context.Context, draftID pgtype.UUID) (Author
 	return i, err
 }
 
+const listActiveMembersForDraft = `-- name: ListActiveMembersForDraft :many
+SELECT member.id, member.workspace_id, member.user_id, member.role, member.created_at, member.revoked_at
+FROM authoring.workspace_member AS member
+JOIN authoring.workspace AS workspace ON workspace.id = member.workspace_id
+WHERE workspace.draft_id = $1 AND member.revoked_at IS NULL
+ORDER BY member.user_id, member.id
+`
+
+func (q *Queries) ListActiveMembersForDraft(ctx context.Context, draftID pgtype.UUID) ([]AuthoringWorkspaceMember, error) {
+	rows, err := q.db.Query(ctx, listActiveMembersForDraft, draftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthoringWorkspaceMember
+	for rows.Next() {
+		var i AuthoringWorkspaceMember
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.Role,
+			&i.CreatedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLessonSummariesForDraft = `-- name: ListLessonSummariesForDraft :many
 SELECT lesson.id, lesson.draft_id, lesson.module_id, lesson.stable_key,
        lesson.title, lesson.description, lesson.learning_objectives,

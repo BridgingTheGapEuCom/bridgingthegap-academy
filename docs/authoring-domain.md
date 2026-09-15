@@ -63,7 +63,10 @@ both absent and unauthorized Draft resources, while malformed identifiers are
 `400` and authorization or storage failures are `500`. Responses are always
 `Cache-Control: no-store`: drafts are mutable and private. Current revision
 numbers are explicit in DTOs for later optimistic writes; no member list or
-Identity profile data is exposed by this read-only slice.
+Identity profile data is included in Draft metadata or structure responses.
+`GET /api/authoring/drafts/{draftId}/members` is a separate `authoring.read`,
+`no-store` projection of only active opaque user IDs and AUTHOR/MAINTAINER
+roles, ordered by user ID. It never exposes revoked membership history.
 
 The metadata PATCH endpoint accepts only intended version, source language,
 title, description, objectives, changelog, and content license. It requires an
@@ -127,6 +130,13 @@ previous active row and creating a new active row. Revocation preserves the
 historical row. Authoring does not query Identity: member user IDs are opaque
 UUID references. Every mutation is serialized by the Draft transaction and
 will reject a demotion or revocation that would leave no active MAINTAINER.
+
+The Authoring Members page uses that active-members projection as its sole
+membership source. It uses opaque IDs without an Identity lookup, reloads the
+server list after every successful add, role change, or revocation, and keeps
+the server-returned Draft revision for later writes. Keyboard-accessible role
+and revoke controls remain advisory to the backend authorization boundary; a
+membership conflict is never retried or merged automatically.
 
 The complete API shares one bounded strict JSON decoder: duplicate members,
 unknown or incorrectly cased request fields, trailing data, and invalid nulls

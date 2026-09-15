@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createAuthoringModule, getAuthoringDraft, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, changeAuthoringMemberRole, createAuthoringModule, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('replaces only canonical content through the scoped authenticated PUT boundary', async () => {
@@ -27,6 +27,21 @@ describe('Authoring API service', () => {
     const request = vi.fn().mockResolvedValue({})
     await updateAuthoringDraft('11111111-1111-4111-8111-111111111111', { expectedRevision: 3, title: 'Updated' }, { request })
     expect(request).toHaveBeenCalledWith('/api/authoring/drafts/11111111-1111-4111-8111-111111111111', expect.objectContaining({ method: 'PATCH' }))
+  })
+
+  it('uses the scoped authenticated membership read and mutation boundaries with opaque IDs', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const userID = '22222222-2222-4222-8222-222222222222'
+    await getAuthoringDraftMembers(draftID, { request })
+    await addAuthoringMember(draftID, { expectedDraftRevision: 3, userId: userID, role: 'AUTHOR' }, { request })
+    await changeAuthoringMemberRole(draftID, userID, { expectedDraftRevision: 4, role: 'MAINTAINER' }, { request })
+    await revokeAuthoringMember(draftID, userID, 5, { request })
+    expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/members`)
+    expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/members`, expect.objectContaining({ method: 'POST' }))
+    expect(request).toHaveBeenNthCalledWith(3, `/api/authoring/drafts/${draftID}/members/${userID}`, expect.objectContaining({ method: 'PATCH' }))
+    expect(request).toHaveBeenNthCalledWith(4, `/api/authoring/drafts/${draftID}/members/${userID}`, expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ expectedDraftRevision: 5 }) }))
+    await expect(changeAuthoringMemberRole(draftID, 'not-a-user-id', { expectedDraftRevision: 6, role: 'AUTHOR' }, { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
   })
 
   it('uses the authenticated shared request boundary for Draft structure reads and mutations', async () => {

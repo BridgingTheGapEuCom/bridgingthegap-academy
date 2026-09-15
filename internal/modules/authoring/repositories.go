@@ -65,6 +65,7 @@ type Repository interface {
 type ReadRepository interface {
 	GetDraft(context.Context, DraftID) (CourseDraft, error)
 	GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error)
+	ActiveMembers(context.Context, DraftID) ([]WorkspaceMember, error)
 	ReadStructure(context.Context, DraftID) ([]ModuleStructure, error)
 	ReadLesson(context.Context, DraftID, LessonID) (DraftLesson, []Prerequisite, error)
 }
