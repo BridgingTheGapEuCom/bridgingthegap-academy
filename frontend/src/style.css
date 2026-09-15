@@ -158,6 +158,26 @@
 .authoring-lesson-editor__conflict p { margin-bottom: var(--btg-space-3); }
 .authoring-lesson-editor__unsaved { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }
 .authoring-lesson-editor__actions { display: flex; gap: var(--btg-space-3); }
+.authoring-prerequisites,
+.authoring-prerequisites header,
+.authoring-prerequisites form,
+.authoring-prerequisites__add { display: grid; gap: var(--btg-space-4); }
+.authoring-prerequisites { border-block-start: var(--btg-border-width) solid var(--btg-color-border); padding-block-start: var(--btg-space-6); }
+.authoring-prerequisites header > p,
+.authoring-prerequisites__empty { color: var(--btg-color-text-secondary); }
+.authoring-prerequisites__list { display: grid; gap: var(--btg-space-3); margin: 0; padding-inline-start: var(--btg-space-5); }
+.authoring-prerequisites__list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--btg-space-3); border-inline-start: 0.25rem solid var(--btg-color-border); padding-inline-start: var(--btg-space-3); }
+.authoring-prerequisites__list li > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.authoring-prerequisites__actions { display: flex; flex-wrap: wrap; justify-content: end; gap: var(--btg-space-2); }
+.authoring-prerequisites__state,
+.authoring-prerequisites__error,
+.authoring-prerequisites__conflict,
+.authoring-prerequisites__status { border-inline-start: 0.25rem solid var(--btg-color-danger); background: var(--btg-color-surface-muted); padding: var(--btg-space-3) var(--btg-space-4); }
+.authoring-prerequisites__conflict { border-inline-start-color: var(--btg-color-warning); }
+.authoring-prerequisites__status { border-inline-start-color: var(--btg-color-success); }
+.authoring-prerequisites__conflict p { margin-bottom: var(--btg-space-3); }
+.authoring-prerequisites__unsaved { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }
+.authoring-prerequisites__save { display: flex; gap: var(--btg-space-3); }
 .authoring-structure,
 .authoring-structure__header,
 .authoring-structure__modules,
@@ -197,6 +217,8 @@
   .authoring-shell__navigation a { flex: 1 1 auto; justify-content: center; }
   .authoring-structure-module__header { grid-template-columns: 1fr; }
   .authoring-lesson-editor__objectives li { grid-template-columns: 1fr; align-items: stretch; }
+  .authoring-prerequisites__list li { grid-template-columns: 1fr; align-items: stretch; }
+  .authoring-prerequisites__actions { justify-content: start; }
 }
 .admin-page__status { border-inline-start: 0.25rem solid var(--btg-color-success); background: var(--btg-color-surface-muted); font-weight: var(--btg-font-weight-medium); padding: var(--btg-space-3) var(--btg-space-4); }
 .admin-page__actions { display: flex; flex-wrap: wrap; gap: var(--btg-space-3); }

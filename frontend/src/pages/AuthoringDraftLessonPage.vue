@@ -59,6 +59,14 @@
         <p v-if="dirty" class="authoring-lesson-editor__unsaved" role="status">You have unsaved changes.</p>
         <div class="authoring-lesson-editor__actions"><BtgButton type="submit" :disabled="!dirty || saving || conflict">{{ saving ? 'Saving…' : 'Save changes' }}</BtgButton></div>
       </form>
+
+      <AuthoringLessonPrerequisitesEditor
+        :draft-id="draft.id"
+        :lesson="state.lesson"
+        @saved="applyPrerequisites"
+        @replace-lesson="replaceLesson"
+        @unavailable="markDraftUnavailable"
+      />
     </template>
   </section>
 </template>
@@ -72,6 +80,7 @@ import { useAuthoringDraftContext } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
+import AuthoringLessonPrerequisitesEditor from '../components/AuthoringLessonPrerequisitesEditor.vue'
 
 type Form = { title: string; description: string; objectives: string[]; estimatedDurationMinutes: string }
 type State = { kind: 'loading' } | { kind: 'ready'; lesson: AuthoringLessonDetail } | { kind: 'unavailable' }
@@ -201,5 +210,20 @@ async function reloadLatest() {
     if (error instanceof InvalidAuthoringDraftIDError || (error instanceof APIProblemError && error.status === 404)) markDraftUnavailable()
     else formError.value = 'We couldn’t reload this Lesson right now. Please try again.'
   } finally { reloading.value = false }
+}
+
+function replaceLesson(lesson: AuthoringLessonDetail) {
+  const metadataWasDirty = dirty.value
+  state.value = { kind: 'ready', lesson }
+  const nextForm = toForm(lesson)
+  original.value = nextForm
+  if (!metadataWasDirty) replaceForm(nextForm)
+}
+
+function applyPrerequisites(result: { lesson: import('../api/generated').components['schemas']['AuthoringLessonMutationResponse']; prerequisiteKeys: string[] }) {
+  if (state.value.kind !== 'ready') return
+  const lesson = { ...state.value.lesson, ...result.lesson, recommended_prerequisite_keys: result.prerequisiteKeys }
+  state.value = { kind: 'ready', lesson }
+  replaceDraft({ ...draft.value, revision: result.lesson.draftRevision })
 }
 </script>

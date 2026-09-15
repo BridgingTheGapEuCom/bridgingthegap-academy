@@ -7,11 +7,15 @@ import { authoringDraftContextKey } from '../authoring/draftContext'
 
 const getAuthoringLessonMock = vi.hoisted(() => vi.fn())
 const updateAuthoringLessonMock = vi.hoisted(() => vi.fn())
+const getAuthoringStructureMock = vi.hoisted(() => vi.fn())
+const replaceAuthoringLessonPrerequisitesMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../authoring/authoring', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../authoring/authoring')>()),
   getAuthoringLesson: getAuthoringLessonMock,
   updateAuthoringLesson: updateAuthoringLessonMock,
+  getAuthoringStructure: getAuthoringStructureMock,
+  replaceAuthoringLessonPrerequisites: replaceAuthoringLessonPrerequisitesMock,
 }))
 
 import AuthoringDraftLessonPage from './AuthoringDraftLessonPage.vue'
@@ -20,12 +24,18 @@ const draftID = '11111111-1111-4111-8111-111111111111'
 const moduleID = '22222222-2222-4222-8222-222222222222'
 const lessonID = '33333333-3333-4333-8333-333333333333'
 const secondLessonID = '55555555-5555-4555-8555-555555555555'
+const prerequisiteLessonID = '66666666-6666-4666-8666-666666666666'
 const draft = () => ({
   id: draftID, course_id: '44444444-4444-4444-8444-444444444444', intended_version: '1.0.0', source_language: 'en', title: 'Integration foundations', description: 'Draft.', objectives: ['Explain ownership'], changelog: 'Initial Draft.', license: { kind: 'STANDARD' as const, identifier: '', display_name: 'All Rights Reserved', url: '', custom_text: '' }, status: 'ACTIVE' as const, revision: 3, created_at: '2026-09-15T10:00:00Z', updated_at: '2026-09-15T11:00:00Z',
 })
 const lesson = (overrides = {}) => ({
   id: lessonID, draft_id: draftID, module_id: moduleID, stable_key: 'what-is-eai', title: 'What is EAI?', description: 'Start here.', objectives: ['Explain EAI', 'Recognise integration boundaries'], estimated_duration_minutes: 15, position: 0, revision: 3, recommended_prerequisite_keys: [], content: { schemaVersion: 1, blocks: [] }, created_at: '2026-09-15T10:00:00Z', updated_at: '2026-09-15T11:00:00Z', ...overrides,
 })
+const structure = () => ({ modules: [{ id: moduleID, stable_key: 'foundations', title: 'Foundations', description: '', position: 0, revision: 2, lessons: [
+  { id: lessonID, stable_key: 'what-is-eai', title: 'What is EAI?', description: 'Start here.', objectives: ['Explain EAI'], estimated_duration_minutes: 15, position: 0, revision: 3, recommended_prerequisite_keys: [] },
+  { id: prerequisiteLessonID, stable_key: 'intro-to-eai', title: 'Introduction to EAI', description: 'Begin here.', objectives: ['Recognise EAI'], estimated_duration_minutes: 10, position: 1, revision: 2, recommended_prerequisite_keys: [] },
+  { id: secondLessonID, stable_key: 'routing', title: 'Message routing', description: 'Route safely.', objectives: ['Route messages'], estimated_duration_minutes: 20, position: 2, revision: 2, recommended_prerequisite_keys: [] },
+] }] })
 
 async function renderPage() {
   const currentDraft = ref(draft())
@@ -44,7 +54,10 @@ describe('AuthoringDraftLessonPage', () => {
   beforeEach(() => {
     getAuthoringLessonMock.mockReset()
     updateAuthoringLessonMock.mockReset()
+    getAuthoringStructureMock.mockReset()
+    replaceAuthoringLessonPrerequisitesMock.mockReset()
     getAuthoringLessonMock.mockResolvedValue(lesson())
+    getAuthoringStructureMock.mockResolvedValue(structure())
   })
   afterEach(cleanup)
 
@@ -55,9 +68,79 @@ describe('AuthoringDraftLessonPage', () => {
     expect((screen.getByRole('textbox', { name: /Description/ }) as HTMLTextAreaElement).value).toBe('Start here.')
     expect(screen.getByText('what-is-eai').tagName).toBe('CODE')
     expect(screen.queryByText('LessonContent')).toBeNull()
-    expect(screen.queryByText(/Prerequisite/)).toBeNull()
+    expect(screen.getByRole('heading', { level: 3, name: 'Recommended prerequisites' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Move|Delete lesson|Edit content/ })).toBeNull()
     expect(getAuthoringLessonMock).toHaveBeenCalledWith(draftID, lessonID)
+  })
+
+  it('shows ordered advisory prerequisites and excludes the current and selected Lessons from candidates', async () => {
+    getAuthoringLessonMock.mockResolvedValue(lesson({ recommended_prerequisite_keys: ['routing'] }))
+    await renderPage()
+    expect(await screen.findByRole('list', { name: 'Ordered recommended prerequisites' })).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Ordered recommended prerequisites' }).textContent).toContain('Message routing')
+    const select = await screen.findByRole('combobox', { name: 'Available Lessons' }) as HTMLSelectElement
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(['', 'intro-to-eai'])
+    expect(screen.getByText(/do not restrict access/)).toBeTruthy()
+  })
+
+  it('adds, removes, reorders, and saves the complete ordered prerequisite list', async () => {
+    getAuthoringLessonMock.mockResolvedValue(lesson({ recommended_prerequisite_keys: ['routing'] }))
+    replaceAuthoringLessonPrerequisitesMock.mockResolvedValue({ ...lesson(), revision: 4, draftRevision: 4 })
+    const { currentDraft } = await renderPage()
+    await screen.findByRole('heading', { level: 3, name: 'Recommended prerequisites' })
+    await fireEvent.update(await screen.findByRole('combobox', { name: 'Available Lessons' }), 'intro-to-eai')
+    await fireEvent.click(screen.getByRole('button', { name: 'Add recommended prerequisite' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Move Introduction to EAI up' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save recommended prerequisites' }))
+    await waitFor(() => expect(replaceAuthoringLessonPrerequisitesMock).toHaveBeenCalledWith(draftID, lessonID, {
+      expectedLessonRevision: 3,
+      prerequisiteLessonKeys: ['intro-to-eai', 'routing'],
+    }))
+    expect(currentDraft.value.revision).toBe(4)
+    expect(screen.getByText('Recommended prerequisites saved.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save recommended prerequisites' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('keeps prerequisite changes independent from metadata changes and clears dirty state when reverted', async () => {
+    await renderPage()
+    await screen.findByRole('heading', { level: 3, name: 'Recommended prerequisites' })
+    await fireEvent.update(await screen.findByRole('combobox', { name: 'Available Lessons' }), 'intro-to-eai')
+    await fireEvent.click(screen.getByRole('button', { name: 'Add recommended prerequisite' }))
+    expect(screen.getByRole('button', { name: 'Save recommended prerequisites' }).hasAttribute('disabled')).toBe(false)
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Introduction to EAI' }))
+    expect(screen.getByRole('button', { name: 'Save recommended prerequisites' }).hasAttribute('disabled')).toBe(true)
+    expect(updateAuthoringLessonMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves a local prerequisite order after conflict and reloads only when requested', async () => {
+    replaceAuthoringLessonPrerequisitesMock.mockRejectedValueOnce(new APIProblemError(409, undefined, undefined))
+    getAuthoringLessonMock.mockResolvedValueOnce(lesson()).mockResolvedValueOnce(lesson({ recommended_prerequisite_keys: ['routing'], revision: 4 }))
+    await renderPage()
+    await screen.findByRole('heading', { level: 3, name: 'Recommended prerequisites' })
+    await fireEvent.update(screen.getByRole('textbox', { name: /Title/ }), 'My metadata title')
+    await fireEvent.update(await screen.findByRole('combobox', { name: 'Available Lessons' }), 'intro-to-eai')
+    await fireEvent.click(screen.getByRole('button', { name: 'Add recommended prerequisite' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save recommended prerequisites' }))
+    expect(await screen.findByText(/recommended prerequisites are still here/)).toBeTruthy()
+    expect(screen.getByText('Introduction to EAI')).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: 'Reload latest Lesson' }))
+    await waitFor(() => expect(screen.getByRole('list', { name: 'Ordered recommended prerequisites' }).textContent).not.toContain('Introduction to EAI'))
+    expect(screen.getByRole('list', { name: 'Ordered recommended prerequisites' }).textContent).toContain('Message routing')
+    expect((screen.getByRole('textbox', { name: /Title/ }) as HTMLInputElement).value).toBe('My metadata title')
+  })
+
+  it('keeps prerequisite validation failures recoverable and hides unavailable Draft structure', async () => {
+    replaceAuthoringLessonPrerequisitesMock.mockRejectedValueOnce(new APIProblemError(400, undefined, undefined))
+    await renderPage()
+    await fireEvent.update(await screen.findByRole('combobox', { name: 'Available Lessons' }), 'intro-to-eai')
+    await fireEvent.click(screen.getByRole('button', { name: 'Add recommended prerequisite' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save recommended prerequisites' }))
+    expect(await screen.findByText(/couldn’t save these recommendations/)).toBeTruthy()
+
+    cleanup()
+    getAuthoringStructureMock.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))
+    const { markDraftUnavailable } = await renderPage()
+    await waitFor(() => expect(markDraftUnavailable).toHaveBeenCalledTimes(1))
   })
 
   it('sends only changed metadata using the authoritative Lesson revision and updates the Draft revision', async () => {

@@ -132,6 +132,7 @@ test('Authoring structure controls support keyboard reordering without narrow-sc
 test('Authoring Lesson metadata editor saves with the Lesson revision and remains usable at a narrow width', async ({ page }) => {
   let patchBody: unknown
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/structure**`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => {
     if (route.request().method() === 'PATCH') {
       patchBody = route.request().postDataJSON()
@@ -152,6 +153,48 @@ test('Authoring Lesson metadata editor saves with the Lesson revision and remain
   await expect(page.getByText('Lesson metadata saved.')).toBeVisible()
   expect(patchBody).toEqual({ expectedLessonRevision: 2, title: 'Updated Lesson' })
   await page.getByRole('link', { name: 'Back to structure' }).focus()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring Lesson prerequisites remain advisory, ordered, keyboard-operable, and responsive', async ({ page }) => {
+  let prerequisiteBody: unknown
+  const prerequisiteStructure = {
+    modules: [{
+      ...structure.modules[0],
+      lessons: [
+        structure.modules[0].lessons[0],
+        { id: '66666666-6666-4666-8666-666666666666', stable_key: 'intro-to-eai', title: 'Introduction to EAI', description: 'Begin here.', objectives: ['Recognise EAI'], estimated_duration_minutes: 10, position: 1, revision: 2, recommended_prerequisite_keys: [] },
+        { id: '77777777-7777-4777-8777-777777777777', stable_key: 'routing', title: 'Message routing', description: 'Route safely.', objectives: ['Route messages'], estimated_duration_minutes: 20, position: 2, revision: 2, recommended_prerequisite_keys: [] },
+      ],
+    }],
+  }
+  const lessonWithPrerequisite = { ...lesson, recommended_prerequisite_keys: ['routing'] }
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/structure**`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(prerequisiteStructure) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}**`, (route) => {
+    if (route.request().method() === 'PUT') {
+      prerequisiteBody = route.request().postDataJSON()
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lessonWithPrerequisite, revision: 3, draftRevision: 4 }) })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lessonWithPrerequisite) })
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/lessons/${lesson.id}`)
+  await expect(page.getByRole('heading', { level: 3, name: 'Recommended prerequisites' })).toBeVisible()
+  await expect(page.getByText(/do not restrict access/)).toBeVisible()
+  const available = page.getByRole('combobox', { name: 'Available Lessons' })
+  await expect(available.locator('option')).toHaveCount(2)
+  await available.selectOption('intro-to-eai')
+  await page.getByRole('button', { name: 'Add recommended prerequisite' }).click()
+  const move = page.getByRole('button', { name: 'Move Introduction to EAI up' })
+  await move.focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('button', { name: 'Save recommended prerequisites' }).click()
+
+  await expect(page.getByText('Recommended prerequisites saved.')).toBeVisible()
+  expect(prerequisiteBody).toEqual({ expectedLessonRevision: 2, prerequisiteLessonKeys: ['intro-to-eai', 'routing'] })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

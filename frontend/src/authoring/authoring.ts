@@ -21,6 +21,7 @@ export type AuthoringLessonMetadataPatch = {
   objectives?: string[]
   estimatedDurationMinutes?: number | null
 }
+export type AuthoringLessonPrerequisitesPatch = components['schemas']['AuthoringLessonPrerequisitesRequest']
 
 export type AuthoringDraftMetadataPatch = {
   expectedRevision: number
@@ -115,6 +116,11 @@ export async function getAuthoringLesson(draftID: string, lessonID: string, clie
 export async function updateAuthoringLesson(draftID: string, lessonID: string, input: AuthoringLessonMetadataPatch, client: Pick<AuthService, 'request'> = useAuth()): Promise<components['schemas']['AuthoringLessonMutationResponse']> {
   assertAuthoringID(draftID); assertAuthoringID(lessonID)
   return client.request<components['schemas']['AuthoringLessonMutationResponse']>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}`, jsonRequest('PATCH', input))
+}
+
+export async function replaceAuthoringLessonPrerequisites(draftID: string, lessonID: string, input: AuthoringLessonPrerequisitesPatch, client: Pick<AuthService, 'request'> = useAuth()): Promise<components['schemas']['AuthoringLessonMutationResponse']> {
+  assertAuthoringID(draftID); assertAuthoringID(lessonID)
+  return client.request<components['schemas']['AuthoringLessonMutationResponse']>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}/prerequisites`, jsonRequest('PUT', input))
 }
 
 function jsonRequest(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body: unknown) {

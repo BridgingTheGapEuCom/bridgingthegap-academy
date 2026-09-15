@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createAuthoringModule, getAuthoringDraft, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, reorderAuthoringLessons, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { createAuthoringModule, getAuthoringDraft, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, reorderAuthoringLessons, replaceAuthoringLessonPrerequisites, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated shared request boundary for a bounded Draft ID', async () => {
@@ -38,8 +38,10 @@ describe('Authoring API service', () => {
     const lessonID = '33333333-3333-4333-8333-333333333333'
     await getAuthoringLesson(draftID, lessonID, { request })
     await updateAuthoringLesson(draftID, lessonID, { expectedLessonRevision: 3, title: 'Updated Lesson' }, { request })
+    await replaceAuthoringLessonPrerequisites(draftID, lessonID, { expectedLessonRevision: 3, prerequisiteLessonKeys: ['intro-to-eai'] }, { request })
     expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/lessons/${lessonID}`)
     expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/lessons/${lessonID}`, expect.objectContaining({ method: 'PATCH' }))
+    expect(request).toHaveBeenNthCalledWith(3, `/api/authoring/drafts/${draftID}/lessons/${lessonID}/prerequisites`, expect.objectContaining({ method: 'PUT' }))
     await expect(getAuthoringLesson(draftID, 'not-a-lesson', { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
   })
 })
