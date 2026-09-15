@@ -25,9 +25,25 @@ const draft = {
   updated_at: '2026-09-15T11:00:00Z',
 }
 
+const structure = {
+  modules: [
+    {
+      id: '33333333-3333-4333-8333-333333333333',
+      stable_key: 'foundations',
+      title: 'Foundations',
+      description: 'Core concepts.',
+      position: 0,
+      revision: 2,
+      lessons: [{ id: '44444444-4444-4444-8444-444444444444', stable_key: 'what-is-eai', title: 'What is EAI?', description: 'Start here.', objectives: ['Explain EAI'], estimated_duration_minutes: null, position: 0, revision: 2, recommended_prerequisite_keys: [] }],
+    },
+    { id: '55555555-5555-4555-8555-555555555555', stable_key: 'advanced', title: 'Advanced', description: '', position: 1, revision: 2, lessons: [] },
+  ],
+}
+
 async function serveDraft(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
 }
 
 test('Authoring Draft shell is private, accessible, and responsive', async ({ page }) => {
@@ -70,6 +86,28 @@ test('Authoring metadata editor saves a changed field with its current revision'
 
   await expect(page.getByRole('heading', { level: 1, name: 'Updated foundations' })).toBeVisible()
   expect(patchBody).toEqual({ expectedRevision: 3, title: 'Updated foundations' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring structure controls support keyboard reordering without narrow-screen overflow', async ({ page }) => {
+  let orderBody: unknown
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(structure) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/modules/order`, (route) => {
+    orderBody = route.request().postDataJSON()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draftRevision: 4 }) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/structure`)
+  await expect(page.getByRole('heading', { level: 3, name: 'Foundations' })).toBeVisible()
+  const move = page.getByRole('button', { name: 'Move module down' }).first()
+  await move.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Module order updated.')).toBeVisible()
+  expect(orderBody).toEqual({ expectedDraftRevision: 3, moduleIds: [structure.modules[1]?.id, structure.modules[0]?.id] })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

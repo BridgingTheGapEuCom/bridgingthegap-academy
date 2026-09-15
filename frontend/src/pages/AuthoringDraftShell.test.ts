@@ -17,12 +17,14 @@ const authMock = vi.hoisted(() => ({
 }))
 const getAuthoringDraftMock = vi.hoisted(() => vi.fn())
 const updateAuthoringDraftMock = vi.hoisted(() => vi.fn())
+const getAuthoringStructureMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
 vi.mock('../authoring/authoring', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../authoring/authoring')>()),
   getAuthoringDraft: getAuthoringDraftMock,
   updateAuthoringDraft: updateAuthoringDraftMock,
+  getAuthoringStructure: getAuthoringStructureMock,
 }))
 
 import AuthoringDraftShell from './AuthoringDraftShell.vue'
@@ -80,7 +82,9 @@ describe('AuthoringDraftShell', () => {
     authMock.bootstrapSession.mockReset()
     getAuthoringDraftMock.mockReset()
     updateAuthoringDraftMock.mockReset()
+    getAuthoringStructureMock.mockReset()
     getAuthoringDraftMock.mockResolvedValue(draft())
+    getAuthoringStructureMock.mockResolvedValue({ modules: [] })
   })
 
   afterEach(cleanup)

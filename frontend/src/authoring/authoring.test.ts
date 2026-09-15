@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getAuthoringDraft, isAuthoringDraftID, InvalidAuthoringDraftIDError, updateAuthoringDraft } from './authoring'
+import { createAuthoringModule, getAuthoringDraft, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, reorderAuthoringLessons, updateAuthoringDraft } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated shared request boundary for a bounded Draft ID', async () => {
@@ -17,5 +17,18 @@ describe('Authoring API service', () => {
     const request = vi.fn().mockResolvedValue({})
     await updateAuthoringDraft('11111111-1111-4111-8111-111111111111', { expectedRevision: 3, title: 'Updated' }, { request })
     expect(request).toHaveBeenCalledWith('/api/authoring/drafts/11111111-1111-4111-8111-111111111111', expect.objectContaining({ method: 'PATCH' }))
+  })
+
+  it('uses the authenticated shared request boundary for Draft structure reads and mutations', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const moduleID = '22222222-2222-4222-8222-222222222222'
+    const lessonID = '33333333-3333-4333-8333-333333333333'
+    await getAuthoringStructure(draftID, { request })
+    await createAuthoringModule(draftID, { expectedDraftRevision: 3, stableKey: 'foundations', title: 'Foundations', position: 0 }, { request })
+    await reorderAuthoringLessons(draftID, 4, [{ moduleId: moduleID, lessonIds: [lessonID] }], { request })
+    expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/structure`)
+    expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/modules`, expect.objectContaining({ method: 'POST' }))
+    expect(request).toHaveBeenNthCalledWith(3, `/api/authoring/drafts/${draftID}/lessons/order`, expect.objectContaining({ method: 'PUT' }))
   })
 })

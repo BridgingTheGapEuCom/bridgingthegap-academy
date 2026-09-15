@@ -3,6 +3,16 @@ import type { components } from '../api/generated'
 
 export type AuthoringDraft = components['schemas']['AuthoringDraft']
 export type AuthoringContentLicense = components['schemas']['ContentLicense']
+export type AuthoringStructure = components['schemas']['AuthoringStructure']
+export type AuthoringModuleSummary = components['schemas']['AuthoringModuleSummary']
+export type AuthoringLessonSummary = components['schemas']['AuthoringLessonSummary']
+
+export type AuthoringModuleCreate = components['schemas']['AuthoringModuleCreateRequest']
+export type AuthoringModuleUpdate = { expectedModuleRevision: number; title?: string; description?: string }
+export type AuthoringModuleMutation = components['schemas']['AuthoringModuleMutationResponse']
+export type AuthoringOrderResponse = components['schemas']['AuthoringModuleOrderResponse']
+export type AuthoringLessonCreate = components['schemas']['AuthoringLessonCreateRequest']
+export type AuthoringLessonOrderModule = components['schemas']['AuthoringLessonOrderModule']
 
 export type AuthoringDraftMetadataPatch = {
   expectedRevision: number
@@ -30,13 +40,17 @@ export function isAuthoringDraftID(value: string): boolean {
   return value.length === 36 && draftIDPattern.test(value)
 }
 
+function assertAuthoringID(value: string): void {
+  if (!isAuthoringDraftID(value)) throw new InvalidAuthoringDraftIDError()
+}
+
 export async function getAuthoringDraft(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringDraft> {
   if (!isAuthoringDraftID(draftID)) throw new InvalidAuthoringDraftIDError()
   return client.request<AuthoringDraft>(`/api/authoring/drafts/${encodeURIComponent(draftID)}`)
 }
 
 export async function updateAuthoringDraft(draftID: string, patch: AuthoringDraftMetadataPatch, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringDraft> {
-  if (!isAuthoringDraftID(draftID)) throw new InvalidAuthoringDraftIDError()
+  assertAuthoringID(draftID)
   return client.request<AuthoringDraft>(`/api/authoring/drafts/${encodeURIComponent(draftID)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -44,6 +58,56 @@ export async function updateAuthoringDraft(draftID: string, patch: AuthoringDraf
   })
 }
 
+export async function getAuthoringStructure(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringStructure> {
+  assertAuthoringID(draftID)
+  return client.request<AuthoringStructure>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/structure`)
+}
+
+export async function createAuthoringModule(draftID: string, input: AuthoringModuleCreate, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringModuleMutation> {
+  assertAuthoringID(draftID)
+  return client.request<AuthoringModuleMutation>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/modules`, jsonRequest('POST', input))
+}
+
+export async function updateAuthoringModule(draftID: string, moduleID: string, input: AuthoringModuleUpdate, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringModuleMutation> {
+  assertAuthoringID(draftID); assertAuthoringID(moduleID)
+  return client.request<AuthoringModuleMutation>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/modules/${encodeURIComponent(moduleID)}`, jsonRequest('PATCH', input))
+}
+
+export async function reorderAuthoringModules(draftID: string, expectedDraftRevision: number, moduleIDs: string[], client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringOrderResponse> {
+  assertAuthoringID(draftID); moduleIDs.forEach(assertAuthoringID)
+  return client.request<AuthoringOrderResponse>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/modules/order`, jsonRequest('PUT', { expectedDraftRevision, moduleIds: moduleIDs }))
+}
+
+export async function deleteAuthoringModule(draftID: string, moduleID: string, expectedDraftRevision: number, expectedModuleRevision: number, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringOrderResponse> {
+  assertAuthoringID(draftID); assertAuthoringID(moduleID)
+  return client.request<AuthoringOrderResponse>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/modules/${encodeURIComponent(moduleID)}`, jsonRequest('DELETE', { expectedDraftRevision, expectedModuleRevision }))
+}
+
+export async function createAuthoringLesson(draftID: string, moduleID: string, input: AuthoringLessonCreate, client: Pick<AuthService, 'request'> = useAuth()): Promise<components['schemas']['AuthoringLessonMutationResponse']> {
+  assertAuthoringID(draftID); assertAuthoringID(moduleID)
+  return client.request<components['schemas']['AuthoringLessonMutationResponse']>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/modules/${encodeURIComponent(moduleID)}/lessons`, jsonRequest('POST', input))
+}
+
+export async function reorderAuthoringLessons(draftID: string, expectedDraftRevision: number, modules: AuthoringLessonOrderModule[], client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringOrderResponse> {
+  assertAuthoringID(draftID)
+  modules.forEach(({ moduleId, lessonIds }) => { assertAuthoringID(moduleId); lessonIds.forEach(assertAuthoringID) })
+  return client.request<AuthoringOrderResponse>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/order`, jsonRequest('PUT', { expectedDraftRevision, modules }))
+}
+
+export async function deleteAuthoringLesson(draftID: string, lessonID: string, expectedDraftRevision: number, expectedLessonRevision: number, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringOrderResponse> {
+  assertAuthoringID(draftID); assertAuthoringID(lessonID)
+  return client.request<AuthoringOrderResponse>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}`, jsonRequest('DELETE', { expectedDraftRevision, expectedLessonRevision }))
+}
+
+function jsonRequest(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body: unknown) {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+}
+
 export function authoringDraftPath(draftID: string, section: 'overview' | 'structure' | 'members' = 'overview'): string {
   return `/authoring/drafts/${encodeURIComponent(draftID)}/${section}`
+}
+
+export function authoringDraftLessonPath(draftID: string, lessonID: string): string {
+  assertAuthoringID(draftID); assertAuthoringID(lessonID)
+  return `/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}`
 }
