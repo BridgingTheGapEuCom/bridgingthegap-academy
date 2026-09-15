@@ -212,6 +212,23 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/lessons/{lessonId}/content:
+    put:
+      operationId: replaceAuthoringLessonContent
+      description: Atomically replaces the complete canonical semantic LessonContent document for one draft Lesson using its current revision. Editor state and partial block updates are not accepted.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonContentUpdateRequest' } } }
+      responses:
+        '200': { description: Committed canonical content and current Lesson and Draft revisions, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonContentMutationResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}/structure:
     get:
       operationId: getAuthoringDraftStructure
@@ -444,6 +461,19 @@ components:
       properties:
         expectedDraftRevision: { type: integer, minimum: 1 }
         expectedLessonRevision: { type: integer, minimum: 1 }
+    AuthoringLessonContentUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedLessonRevision, content]
+      properties:
+        expectedLessonRevision: { type: integer, minimum: 1 }
+        content: { $ref: '#/components/schemas/LessonContent' }
+    AuthoringLessonContentMutationResponse:
+      type: object
+      required: [lesson, content]
+      properties:
+        lesson: { $ref: '#/components/schemas/AuthoringLessonMutationResponse' }
+        content: { $ref: '#/components/schemas/LessonContent' }
     AuthoringLessonMutationResponse:
       type: object
       required: [id, draft_id, module_id, stable_key, title, description, objectives, estimated_duration_minutes, position, revision, draftRevision]

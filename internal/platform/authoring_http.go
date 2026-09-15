@@ -166,6 +166,11 @@ type authoringLessonDeleteRequest struct {
 	ExpectedLessonRevision *int64 `json:"expectedLessonRevision"`
 }
 
+type authoringLessonContentRequest struct {
+	ExpectedLessonRevision *int64                `json:"expectedLessonRevision"`
+	Content                courses.LessonContent `json:"content"`
+}
+
 type authoringLessonMutationDTO struct {
 	ID                       string   `json:"id"`
 	DraftID                  string   `json:"draft_id"`
@@ -178,6 +183,11 @@ type authoringLessonMutationDTO struct {
 	Position                 int      `json:"position"`
 	Revision                 int64    `json:"revision"`
 	DraftRevision            int64    `json:"draftRevision"`
+}
+
+type authoringLessonContentMutationDTO struct {
+	Lesson  authoringLessonMutationDTO `json:"lesson"`
+	Content courses.LessonContent      `json:"content"`
 }
 
 // optionalField distinguishes an omitted JSON member from an explicit null.
@@ -457,6 +467,32 @@ func (a *authHTTP) handleAuthoringLessonPrerequisites(w http.ResponseWriter, r *
 		return
 	}
 	writeJSON(w, http.StatusOK, authoringLessonMutation(result))
+}
+
+func (a *authHTTP) handleAuthoringLessonContent(w http.ResponseWriter, r *http.Request) {
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	lessonID, ok := authoringLessonID(w, r)
+	if !ok {
+		return
+	}
+	expected, content, err := decodeAuthoringLessonContent(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid lesson content")
+		return
+	}
+	if a.authoringLessonContent == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	result, err := a.authoringLessonContent.ReplaceContent(r.Context(), actor, draftID, lessonID, expected, content)
+	if err != nil {
+		authoringStructureMutationProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, authoringLessonContentMutationDTO{Lesson: authoringLessonMutation(result), Content: result.Lesson.Content})
 }
 
 func (a *authHTTP) handleAuthoringLessonDelete(w http.ResponseWriter, r *http.Request) {
@@ -878,6 +914,37 @@ func decodeAuthoringLessonDelete(w http.ResponseWriter, r *http.Request) (int64,
 		return 0, 0, errors.New("missing expected revision")
 	}
 	return *input.ExpectedDraftRevision, *input.ExpectedLessonRevision, nil
+}
+
+func decodeAuthoringLessonContent(w http.ResponseWriter, r *http.Request) (int64, courses.LessonContent, error) {
+	var input authoringLessonContentRequest
+	if err := decodeAuthoringLessonContentJSON(w, r, &input); err != nil {
+		return 0, courses.LessonContent{}, err
+	}
+	if input.ExpectedLessonRevision == nil || *input.ExpectedLessonRevision < 1 {
+		return 0, courses.LessonContent{}, errors.New("missing expected lesson revision")
+	}
+	if err := input.Content.Validate(); err != nil {
+		return 0, courses.LessonContent{}, err
+	}
+	return *input.ExpectedLessonRevision, input.Content, nil
+}
+
+func decodeAuthoringLessonContentJSON(w http.ResponseWriter, r *http.Request, value any) error {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return errors.New("invalid content type")
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringLessonContentBodyBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("trailing JSON")
+	}
+	return nil
 }
 
 func decodeAuthoringLessonJSON(w http.ResponseWriter, r *http.Request, value any) error {

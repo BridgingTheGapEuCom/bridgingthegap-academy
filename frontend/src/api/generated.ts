@@ -157,6 +157,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/lessons/{lessonId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Atomically replaces the complete canonical semantic LessonContent document for one draft Lesson using its current revision. Editor state and partial block updates are not accepted. */
+        put: operations["replaceAuthoringLessonContent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}/structure": {
         parameters: {
             query?: never;
@@ -372,6 +389,14 @@ export interface components {
         AuthoringLessonDeleteRequest: {
             expectedDraftRevision: number;
             expectedLessonRevision: number;
+        };
+        AuthoringLessonContentUpdateRequest: {
+            expectedLessonRevision: number;
+            content: components["schemas"]["LessonContent"];
+        };
+        AuthoringLessonContentMutationResponse: {
+            lesson: components["schemas"]["AuthoringLessonMutationResponse"];
+            content: components["schemas"]["LessonContent"];
         };
         AuthoringLessonMutationResponse: {
             /** Format: uuid */
@@ -1224,6 +1249,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthoringLessonMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    replaceAuthoringLessonContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonContentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed canonical content and current Lesson and Draft revisions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringLessonContentMutationResponse"];
                 };
             };
             400: components["responses"]["Problem"];

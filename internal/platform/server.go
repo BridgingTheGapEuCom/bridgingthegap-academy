@@ -81,6 +81,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
 		authoringLessonMutations:    authoring.NewLessonMutationService(authoringRepository, authoringAuthorizer),
+		authoringLessonContent:      authoring.NewLessonContentMutationService(authoringRepository, authoringAuthorizer),
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -163,6 +164,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Patch("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLessonUpdate)
 					protected.Put("/authoring/drafts/{draftId}/lessons/{lessonId}/prerequisites", auth.handleAuthoringLessonPrerequisites)
 					protected.Delete("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLessonDelete)
+				}
+				if auth.authoringLessonContent != nil {
+					protected.Put("/authoring/drafts/{draftId}/lessons/{lessonId}/content", auth.handleAuthoringLessonContent)
 				}
 			})
 			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

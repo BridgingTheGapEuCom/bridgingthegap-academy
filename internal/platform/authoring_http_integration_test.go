@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
@@ -613,5 +614,187 @@ func testAuthoringLessonMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 	}
 	if successes != 1 || conflicts != 1 {
 		t.Fatalf("lesson reorder race successes=%d conflicts=%d", successes, conflicts)
+	}
+}
+
+func testAuthoringLessonContentMutation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	courseRepository := coursespostgres.New(pool)
+	course, err := courseRepository.CreateCourse(ctx, "authoring-lesson-content-mutation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityRepository := identitypostgres.New(pool)
+	user, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := authoringpostgres.New(pool)
+	draft, workspace, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, draft, err := repository.CreateModuleAtPosition(ctx, draft.ID, draft.Revision, authoring.ModuleInput{DraftID: draft.ID, StableKey: "content-module", Title: "Content", Position: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lesson, draft, err := repository.CreateLessonAtPosition(ctx, draft.ID, module.ID, draft.Revision, authoring.NewDraftLessonInput(draft.ID, module.ID, "content-lesson", "Content lesson", "A lesson.", []string{"Understand"}, nil, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizer := authoring.NewAuthorizationService(repository)
+	contentService := authoring.NewLessonContentMutationService(repository, authorizer)
+	sessions := identity.NewSessionService(identityRepository, nil, nil)
+	session, err := sessions.CreateSession(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := authTestRouter(&authHTTP{sessions: sessions, authoringLessonContent: contentService})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: session.Token.Value()}
+	csrf := authTestCSRFToken().Value()
+	path := "/api/authoring/drafts/" + string(draft.ID) + "/lessons/" + string(lesson.ID) + "/content"
+	validContent := `{"schemaVersion":1,"blocks":[{"key":"divider","type":"DIVIDER","payload":{}}]}`
+	body := `{"expectedLessonRevision":1,"content":` + validContent + `}`
+	if response := authRequest(router, http.MethodPut, path, body, nil, csrf); response.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated content replacement = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPut, path, body, cookie); response.Code != http.StatusForbidden {
+		t.Fatalf("missing CSRF content replacement = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPut, path, body, cookie, "wrong"); response.Code != http.StatusForbidden {
+		t.Fatalf("wrong CSRF content replacement = %d", response.Code)
+	}
+	untrusted := httptest.NewRequest(http.MethodPut, path, strings.NewReader(body))
+	untrusted.Header.Set("Content-Type", "application/json")
+	untrusted.Header.Set("Origin", "https://attacker.example")
+	untrusted.Header.Set("X-CSRF-Token", csrf)
+	untrusted.AddCookie(cookie)
+	untrustedResponse := httptest.NewRecorder()
+	router.ServeHTTP(untrustedResponse, untrusted)
+	if untrustedResponse.Code != http.StatusForbidden {
+		t.Fatalf("untrusted Origin content replacement = %d", untrustedResponse.Code)
+	}
+	if response := authRequest(router, http.MethodPut, "/api/authoring/drafts/not-a-uuid/lessons/"+string(lesson.ID)+"/content", body, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("malformed draft identifier = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/not-a-uuid/content", body, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("malformed lesson identifier = %d", response.Code)
+	}
+	if response := authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/55555555-5555-4555-8555-555555555555/content", body, cookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("nonexistent lesson content replacement = %d", response.Code)
+	}
+	response := authRequest(router, http.MethodPut, path, body, cookie, csrf)
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), `"divider"`) || !strings.Contains(response.Body.String(), `"revision":2`) || !strings.Contains(response.Body.String(), `"draftRevision":4`) {
+		t.Fatalf("content replacement = %d: %s", response.Code, response.Body.String())
+	}
+	updated, err := repository.GetLesson(ctx, lesson.ID)
+	if err != nil || updated.Revision != 2 || len(updated.Content.Blocks) != 1 || updated.Content.Blocks[0].Key != "divider" {
+		t.Fatalf("content did not persist canonically: %v %#v", err, updated)
+	}
+	nonmember, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonmemberSession, err := sessions.CreateSession(ctx, nonmember.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonmemberCookie := &http.Cookie{Name: sessionCookieName, Value: nonmemberSession.Token.Value()}
+	if response = authRequest(router, http.MethodPut, path, `{"expectedLessonRevision":2,"content":`+validContent+`}`, nonmemberCookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("nonmember content replacement = %d", response.Code)
+	}
+	draft, _ = repository.GetDraft(ctx, draft.ID)
+	if draft.Revision != 4 {
+		t.Fatalf("content replacement did not increment draft revision: %d", draft.Revision)
+	}
+	for _, request := range []string{
+		`{"expectedLessonRevision":2,"content":{"schemaVersion":2,"blocks":[]}}`,
+		`{"expectedLessonRevision":2,"content":` + validContent + `,"unknown":true}`,
+		`{"expectedLessonRevision":2,"content":` + validContent + `} {}`,
+	} {
+		if response = authRequest(router, http.MethodPut, path, request, cookie, csrf); response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid content request %s = %d", request, response.Code)
+		}
+	}
+	oversized := `{"expectedLessonRevision":2,"content":` + validContent + `,"padding":"` + strings.Repeat("x", maxAuthoringLessonContentBodyBytes) + `"}`
+	if response = authRequest(router, http.MethodPut, path, oversized, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("oversized content request = %d", response.Code)
+	}
+	if response = authRequest(router, http.MethodPut, path, `{"expectedLessonRevision":1,"content":`+validContent+`}`, cookie, csrf); response.Code != http.StatusConflict {
+		t.Fatalf("stale content replacement = %d", response.Code)
+	}
+	unchanged, err := repository.GetLesson(ctx, lesson.ID)
+	if err != nil || unchanged.Revision != 2 || unchanged.Content.Blocks[0].Key != "divider" {
+		t.Fatalf("stale update overwrote content: %v %#v", err, unchanged)
+	}
+
+	other, _, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherModule, other, err := repository.CreateModuleAtPosition(ctx, other.ID, other.Revision, authoring.ModuleInput{DraftID: other.ID, StableKey: "other-content-module", Title: "Other", Position: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherLesson, _, err := repository.CreateLessonAtPosition(ctx, other.ID, otherModule.ID, other.Revision, authoring.NewDraftLessonInput(other.ID, otherModule.ID, "other-content-lesson", "Other lesson", "A lesson.", []string{"Understand"}, nil, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response = authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/"+string(otherLesson.ID)+"/content", `{"expectedLessonRevision":1,"content":`+validContent+`}`, cookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("cross-draft content replacement = %d", response.Code)
+	}
+	if _, err := repository.RevokeMember(ctx, workspace.ID, string(user.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if response = authRequest(router, http.MethodPut, path, `{"expectedLessonRevision":2,"content":`+validContent+`}`, cookie, csrf); response.Code != http.StatusNotFound {
+		t.Fatalf("revoked content replacement = %d", response.Code)
+	}
+
+	raceDraft, _, err := repository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), string(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raceModule, raceDraft, err := repository.CreateModuleAtPosition(ctx, raceDraft.ID, raceDraft.Revision, authoring.ModuleInput{DraftID: raceDraft.ID, StableKey: "race-content-module", Title: "Race", Position: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raceLesson, _, err := repository.CreateLessonAtPosition(ctx, raceDraft.ID, raceModule.ID, raceDraft.Revision, authoring.NewDraftLessonInput(raceDraft.ID, raceModule.ID, "race-content-lesson", "Race lesson", "A lesson.", []string{"Understand"}, nil, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstContent := courses.LessonContent{SchemaVersion: courses.LessonContentSchemaVersion, Blocks: []courses.Block{{Key: "first", Type: courses.BlockDivider, Payload: courses.DividerBlockPayload{}}}}
+	secondContent := courses.LessonContent{SchemaVersion: courses.LessonContentSchemaVersion, Blocks: []courses.Block{{Key: "second", Type: courses.BlockDivider, Payload: courses.DividerBlockPayload{}}}}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, replacement := range []courses.LessonContent{firstContent, secondContent} {
+		replacement := replacement
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			_, _, err := repository.ReplaceLessonContentForDraft(ctx, raceDraft.ID, raceLesson.ID, raceLesson.Revision, replacement)
+			results <- err
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+	successes, conflicts := 0, 0
+	for err := range results {
+		if err == nil {
+			successes++
+		} else if errors.Is(err, authoring.ErrRevisionMismatch) {
+			conflicts++
+		} else {
+			t.Fatalf("concurrent content replacement = %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("content replacement race successes=%d conflicts=%d", successes, conflicts)
+	}
+	finalLesson, err := repository.GetLesson(ctx, raceLesson.ID)
+	if err != nil || finalLesson.Revision != 2 || len(finalLesson.Content.Blocks) != 1 || (finalLesson.Content.Blocks[0].Key != "first" && finalLesson.Content.Blocks[0].Key != "second") {
+		t.Fatalf("concurrent content replacement corrupted lesson: %v %#v", err, finalLesson)
 	}
 }

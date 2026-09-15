@@ -90,12 +90,11 @@ private Authoring responses, mutation results are `Cache-Control: no-store`.
 
 Draft Lesson structural and metadata mutations also require
 `authoring.structure.edit`, the trusted Origin, and the session-bound CSRF
-token. A Lesson is created with an empty valid canonical content document, but
-this slice has no content-edit operation. Ordinary metadata PATCH accepts only
-title, description, objectives, and estimated duration; stable keys, Module
-assignment, position, prerequisites, and content each remain outside that
-operation. Lesson stable keys are immutable semantic identities across the
-whole Draft and survive moves between Modules.
+token. A Lesson is created with an empty valid canonical content document.
+Ordinary metadata PATCH accepts only title, description, objectives, and
+estimated duration; stable keys, Module assignment, position, prerequisites,
+and content each remain outside that operation. Lesson stable keys are immutable
+semantic identities across the whole Draft and survive moves between Modules.
 
 Lesson ordering is replaced as one complete Draft-wide Module-to-Lesson layout.
 It contains every current Module and Lesson exactly once, so moves and
@@ -109,3 +108,13 @@ explicitly removed and their source Lesson revisions advance before the target
 is removed; remaining Lessons in its Module are compacted. These structural
 mutations are future audit candidates, but audit integration remains deferred
 until a shared transaction boundary exists.
+
+Draft LessonContent replacement is a separate `authoring.content.edit` boundary.
+It accepts the complete canonical Courses `LessonContent` document and an
+expected Lesson revision, validates the document with the shared semantic model,
+then atomically replaces it. A successful replacement advances both the Lesson
+and Draft revisions; a stale Lesson revision conflicts without overwriting the
+committed document. The endpoint is private, `no-store`, and inherits the
+trusted-Origin and session-bound CSRF requirements. It deliberately offers no
+block-level editing, editor-state persistence, autosave, locks, history, or
+assessment behavior.

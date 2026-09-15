@@ -9,13 +9,20 @@ import (
 )
 
 // LessonMutationRepository is the focused structural/metadata contract for
-// draft Lessons. Canonical content is deliberately absent until M3.2f.
+// draft Lessons.
 type LessonMutationRepository interface {
 	CreateLessonAtPosition(context.Context, DraftID, ModuleID, int64, LessonInput) (DraftLesson, CourseDraft, error)
 	UpdateLessonMetadataForDraft(context.Context, DraftID, LessonID, int64, DraftLessonPatch) (DraftLesson, CourseDraft, error)
 	ReorderLessonsForDraft(context.Context, DraftID, int64, []ModuleLessonOrder) (CourseDraft, error)
 	ReplaceLessonPrerequisitesForDraft(context.Context, DraftID, LessonID, int64, []string) (DraftLesson, CourseDraft, error)
 	DeleteLessonForDraft(context.Context, DraftID, LessonID, int64, int64) (CourseDraft, error)
+}
+
+// LessonContentMutationRepository isolates the content replacement boundary
+// from structural mutations. It retains the canonical Courses value object,
+// never an editor-specific document representation.
+type LessonContentMutationRepository interface {
+	ReplaceLessonContentForDraft(context.Context, DraftID, LessonID, int64, courses.LessonContent) (DraftLesson, CourseDraft, error)
 }
 
 type LessonMutationResult struct {
@@ -28,8 +35,35 @@ type LessonMutationService struct {
 	authorizer Authorizer
 }
 
+type LessonContentMutationService struct {
+	repository LessonContentMutationRepository
+	authorizer Authorizer
+}
+
 func NewLessonMutationService(repository LessonMutationRepository, authorizer Authorizer) *LessonMutationService {
 	return &LessonMutationService{repository: repository, authorizer: authorizer}
+}
+
+func NewLessonContentMutationService(repository LessonContentMutationRepository, authorizer Authorizer) *LessonContentMutationService {
+	return &LessonContentMutationService{repository: repository, authorizer: authorizer}
+}
+
+func (s *LessonContentMutationService) ReplaceContent(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, lessonID LessonID, expectedLessonRevision int64, content courses.LessonContent) (LessonMutationResult, error) {
+	if expectedLessonRevision < 1 || content.Validate() != nil {
+		return LessonMutationResult{}, ErrInvalidStructure
+	}
+	if s.repository == nil || s.authorizer == nil {
+		return LessonMutationResult{}, ErrAuthorizationUnavailable
+	}
+	err := s.authorizer.Authorize(ctx, actor, CapabilityContentEdit, DraftResource(draftID))
+	if errors.Is(err, ErrAuthorizationDenied) {
+		return LessonMutationResult{}, ErrNotFound
+	}
+	if err != nil {
+		return LessonMutationResult{}, err
+	}
+	lesson, draft, err := s.repository.ReplaceLessonContentForDraft(ctx, draftID, lessonID, expectedLessonRevision, content)
+	return LessonMutationResult{Lesson: lesson, Draft: draft}, err
 }
 
 func (s *LessonMutationService) CreateLesson(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, moduleID ModuleID, expectedDraftRevision int64, input LessonInput) (LessonMutationResult, error) {
@@ -96,9 +130,8 @@ func (s *LessonMutationService) authorize(ctx context.Context, actor identity.Au
 	return err
 }
 
-// NewDraftLessonInput creates a content-less semantic draft lesson. M3.2e
-// cannot accept or alter content; a later content-edit operation will replace
-// this valid empty document through its own concurrency boundary.
+// NewDraftLessonInput creates a content-less semantic draft lesson. Its content
+// is replaced only through the dedicated M3.2f concurrency boundary.
 func NewDraftLessonInput(draftID DraftID, moduleID ModuleID, stableKey, title, description string, objectives []string, durationMinutes *int, position int) LessonInput {
 	return LessonInput{DraftID: draftID, ModuleID: moduleID, StableKey: stableKey, Title: title, Description: description, LearningObjectives: objectives, EstimatedDurationMinutes: durationMinutes, Position: position, Content: courses.LessonContent{SchemaVersion: courses.LessonContentSchemaVersion, Blocks: []courses.Block{}}}
 }

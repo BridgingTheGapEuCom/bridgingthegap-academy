@@ -22,6 +22,11 @@ const maxLoginBodyBytes = 8 * 1024
 const maxAuthoringDraftMetadataBodyBytes = 128 * 1024
 const maxAuthoringModuleBodyBytes = 64 * 1024
 const maxAuthoringLessonBodyBytes = 256 * 1024
+
+// Canonical LessonContent is capped at 1 MiB. This permits its complete
+// semantic document plus a small mutation envelope, never an unbounded editor
+// payload.
+const maxAuthoringLessonContentBodyBytes = courses.MaxLessonContentBytes + 16*1024
 const maxCookieHeaderBytes = 8 * 1024
 const maxSessionCookieValueBytes = 128
 
@@ -55,6 +60,7 @@ type authHTTP struct {
 	authoringMutations          *authoring.DraftMutationService
 	authoringStructureMutations *authoring.ModuleMutationService
 	authoringLessonMutations    *authoring.LessonMutationService
+	authoringLessonContent      *authoring.LessonContentMutationService
 	cookieSecure                bool
 	now                         func() time.Time
 }

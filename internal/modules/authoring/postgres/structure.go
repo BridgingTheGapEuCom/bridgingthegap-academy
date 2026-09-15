@@ -440,6 +440,73 @@ func (r *Repository) UpdateLessonMetadataForDraft(ctx context.Context, draftID a
 	return lesson, draft, nil
 }
 
+// ReplaceLessonContentForDraft atomically replaces the complete canonical
+// semantic document for one draft-scoped Lesson. The Lesson revision is the
+// compare-and-swap guard; the locked Draft receives one aggregate revision.
+func (r *Repository) ReplaceLessonContentForDraft(ctx context.Context, draftID authoring.DraftID, lessonID authoring.LessonID, expected int64, content courses.LessonContent) (authoring.DraftLesson, authoring.CourseDraft, error) {
+	if expected < 1 {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	encoded, err := courses.MarshalLessonContent(content)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	lessonKey, err := uuid(string(lessonID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	defer tx.Rollback(ctx)
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	current, err := q.GetLesson(ctx, lessonKey)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && current.DraftID != draftKey) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	lessonRow, err := q.UpdateLessonContent(ctx, sqlc.UpdateLessonContentParams{ID: lessonKey, Revision: expected, Content: encoded})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	var revision int64
+	if err := tx.QueryRow(ctx, "SELECT revision FROM authoring.course_draft WHERE id = $1", draftKey).Scan(&revision); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: revision})
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	lesson, err := mapLesson(lessonRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	draft, err := mapDraft(draftRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	return lesson, draft, nil
+}
+
 func (r *Repository) ReorderLessonsForDraft(ctx context.Context, draftID authoring.DraftID, expected int64, order []authoring.ModuleLessonOrder) (authoring.CourseDraft, error) {
 	if expected < 1 || authoring.ValidateLessonOrder(order) != nil {
 		return authoring.CourseDraft{}, authoring.ErrInvalidStructure

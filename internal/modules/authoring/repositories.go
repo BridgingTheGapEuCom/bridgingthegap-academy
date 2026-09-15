@@ -39,6 +39,7 @@ type Repository interface {
 	DeleteEmptyModule(context.Context, DraftID, ModuleID, int64, int64) (CourseDraft, error)
 	CreateLessonAtPosition(context.Context, DraftID, ModuleID, int64, LessonInput) (DraftLesson, CourseDraft, error)
 	UpdateLessonMetadataForDraft(context.Context, DraftID, LessonID, int64, DraftLessonPatch) (DraftLesson, CourseDraft, error)
+	ReplaceLessonContentForDraft(context.Context, DraftID, LessonID, int64, courses.LessonContent) (DraftLesson, CourseDraft, error)
 	ReorderLessonsForDraft(context.Context, DraftID, int64, []ModuleLessonOrder) (CourseDraft, error)
 	ReplaceLessonPrerequisitesForDraft(context.Context, DraftID, LessonID, int64, []string) (DraftLesson, CourseDraft, error)
 	DeleteLessonForDraft(context.Context, DraftID, LessonID, int64, int64) (CourseDraft, error)
