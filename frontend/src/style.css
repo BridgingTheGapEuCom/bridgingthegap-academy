@@ -178,6 +178,32 @@
 .authoring-prerequisites__conflict p { margin-bottom: var(--btg-space-3); }
 .authoring-prerequisites__unsaved { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }
 .authoring-prerequisites__save { display: flex; gap: var(--btg-space-3); }
+.authoring-content,
+.authoring-content form,
+.authoring-content__controls,
+.authoring-content__block,
+.authoring-rich-text,
+.authoring-rich-text__list { display: grid; gap: var(--btg-space-4); min-width: 0; }
+.authoring-content { border-block-start: var(--btg-border-width) solid var(--btg-color-border); padding-block-start: var(--btg-space-6); }
+.authoring-content > p,
+.authoring-content__key { color: var(--btg-color-text-secondary); overflow-wrap: anywhere; }
+.authoring-content__controls { border: 0; margin: 0; padding: 0; }
+.authoring-content__blocks { display: grid; gap: var(--btg-space-5); list-style: none; margin: 0; padding: 0; max-width: none; }
+.authoring-content__blocks li { min-width: 0; }
+.authoring-content__block,
+.authoring-rich-text__list { border: var(--btg-border-width) solid var(--btg-color-border); margin: 0; padding: var(--btg-space-4); }
+.authoring-content__block legend { font-weight: var(--btg-font-weight-strong); padding-inline: var(--btg-space-2); }
+.authoring-content textarea { min-height: 6rem; resize: vertical; }
+.authoring-content__payload { overflow: auto; max-height: 18rem; font-size: var(--btg-font-size-small); }
+.authoring-content__actions,
+.authoring-content__add { display: flex; flex-wrap: wrap; align-items: end; gap: var(--btg-space-3); }
+.authoring-content__add > .btg-form-field { flex: 1 1 12rem; }
+.authoring-content__error,
+.authoring-content__conflict,
+.authoring-content__status { border-inline-start: 0.25rem solid var(--btg-color-danger); background: var(--btg-color-surface-muted); padding: var(--btg-space-3) var(--btg-space-4); }
+.authoring-content__conflict { border-inline-start-color: var(--btg-color-warning); }
+.authoring-content__conflict p { margin-bottom: var(--btg-space-3); }
+.authoring-content__status { border-inline-start-color: var(--btg-color-success); }
 .authoring-structure,
 .authoring-structure__header,
 .authoring-structure__modules,

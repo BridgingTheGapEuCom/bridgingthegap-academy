@@ -9,6 +9,7 @@ const getAuthoringLessonMock = vi.hoisted(() => vi.fn())
 const updateAuthoringLessonMock = vi.hoisted(() => vi.fn())
 const getAuthoringStructureMock = vi.hoisted(() => vi.fn())
 const replaceAuthoringLessonPrerequisitesMock = vi.hoisted(() => vi.fn())
+const replaceAuthoringLessonContentMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../authoring/authoring', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../authoring/authoring')>()),
@@ -16,6 +17,7 @@ vi.mock('../authoring/authoring', async (importOriginal) => ({
   updateAuthoringLesson: updateAuthoringLessonMock,
   getAuthoringStructure: getAuthoringStructureMock,
   replaceAuthoringLessonPrerequisites: replaceAuthoringLessonPrerequisitesMock,
+  replaceAuthoringLessonContent: replaceAuthoringLessonContentMock,
 }))
 
 import AuthoringDraftLessonPage from './AuthoringDraftLessonPage.vue'
@@ -37,6 +39,11 @@ const structure = () => ({ modules: [{ id: moduleID, stable_key: 'foundations', 
   { id: secondLessonID, stable_key: 'routing', title: 'Message routing', description: 'Route safely.', objectives: ['Route messages'], estimated_duration_minutes: 20, position: 2, revision: 2, recommended_prerequisite_keys: [] },
 ] }] })
 
+function mutation(overrides = {}) {
+  const { content: _content, recommended_prerequisite_keys: _keys, created_at: _created, updated_at: _updated, ...metadata } = lesson()
+  return { ...metadata, draftRevision: 4, ...overrides }
+}
+
 async function renderPage() {
   const currentDraft = ref(draft())
   const replaceDraft = vi.fn((nextDraft) => { currentDraft.value = nextDraft })
@@ -56,10 +63,55 @@ describe('AuthoringDraftLessonPage', () => {
     updateAuthoringLessonMock.mockReset()
     getAuthoringStructureMock.mockReset()
     replaceAuthoringLessonPrerequisitesMock.mockReset()
+    replaceAuthoringLessonContentMock.mockReset()
     getAuthoringLessonMock.mockResolvedValue(lesson())
     getAuthoringStructureMock.mockResolvedValue(structure())
   })
   afterEach(cleanup)
+
+  it('shares authoritative revisions across metadata, prerequisites, and content without submitting other unsaved sections', async () => {
+    updateAuthoringLessonMock.mockResolvedValueOnce(mutation({ title: 'Saved metadata', revision: 4, draftRevision: 10 }))
+      .mockResolvedValueOnce(mutation({ title: 'Second metadata save', revision: 7, draftRevision: 13 }))
+    replaceAuthoringLessonPrerequisitesMock.mockResolvedValue(mutation({ title: 'Saved metadata', revision: 5, draftRevision: 11 }))
+    replaceAuthoringLessonContentMock.mockImplementation(async (_draft, _lesson, request) => ({
+      lesson: mutation({ title: 'Saved metadata', revision: 6, draftRevision: 12 }), content: request.content,
+    }))
+    const { currentDraft } = await renderPage()
+    const title = await screen.findByRole('textbox', { name: /^Title\b/ })
+    await fireEvent.click(screen.getByRole('button', { name: 'Add block' }))
+    await fireEvent.update(title, 'Saved metadata')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByText('Lesson metadata saved.')
+    await fireEvent.update(await screen.findByRole('combobox', { name: 'Available Lessons' }), 'intro-to-eai')
+    await fireEvent.click(screen.getByRole('button', { name: 'Add recommended prerequisite' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save recommended prerequisites' }))
+    await screen.findByText('Recommended prerequisites saved.')
+    expect(replaceAuthoringLessonPrerequisitesMock.mock.calls[0]![2]).toEqual({ expectedLessonRevision: 4, prerequisiteLessonKeys: ['intro-to-eai'] })
+    await fireEvent.update(title, 'Second metadata save')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText('Lesson content saved.')
+    expect(replaceAuthoringLessonContentMock.mock.calls[0]![2]).toMatchObject({ expectedLessonRevision: 5, content: { schemaVersion: 1, blocks: [{ type: 'TEXT' }] } })
+    expect((title as HTMLInputElement).value).toBe('Second metadata save')
+    expect(currentDraft.value.revision).toBe(12)
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(updateAuthoringLessonMock.mock.calls[1]![2]).toEqual({ expectedLessonRevision: 6, title: 'Second metadata save' }))
+    expect(currentDraft.value.revision).toBe(13)
+    expect(screen.getByRole('list', { name: 'Ordered recommended prerequisites' }).textContent).toContain('Introduction to EAI')
+  })
+
+  it('uses a content save revision for the next prerequisite save and keeps unsaved prerequisites independent', async () => {
+    replaceAuthoringLessonContentMock.mockImplementation(async (_draft, _lesson, request) => ({ lesson: mutation({ revision: 4, draftRevision: 8 }), content: request.content }))
+    replaceAuthoringLessonPrerequisitesMock.mockResolvedValue(mutation({ revision: 5, draftRevision: 9 }))
+    await renderPage()
+    await fireEvent.update(await screen.findByRole('combobox', { name: 'Available Lessons' }), 'intro-to-eai')
+    await fireEvent.click(screen.getByRole('button', { name: 'Add recommended prerequisite' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Add block' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText('Lesson content saved.')
+    expect(replaceAuthoringLessonPrerequisitesMock).not.toHaveBeenCalled()
+    await fireEvent.click(screen.getByRole('button', { name: 'Save recommended prerequisites' }))
+    await waitFor(() => expect(replaceAuthoringLessonPrerequisitesMock.mock.calls[0]![2].expectedLessonRevision).toBe(4))
+  })
 
   it('loads editable Lesson metadata without rendering content or structure controls', async () => {
     await renderPage()

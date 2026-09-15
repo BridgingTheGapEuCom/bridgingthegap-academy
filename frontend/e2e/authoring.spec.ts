@@ -63,6 +63,50 @@ async function serveDraft(page: Page) {
   await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
 }
 
+test('Authoring content edits canonical blocks with keyboard controls and preserves deferred payloads', async ({ page }) => {
+  let contentBody: { expectedLessonRevision: number; content: { schemaVersion: number; blocks: { key: string; type: string; payload: unknown }[] } } | undefined
+  const deferred = { key: 'architecture-diagram', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Architecture diagram', caption: 'Reference' } }
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, content: { schemaVersion: 1, blocks: [deferred] } }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}/content`, (route) => {
+    contentBody = route.request().postDataJSON()
+    expect(route.request().method()).toBe('PUT')
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ lesson: { ...lesson, revision: 3, draftRevision: 4 }, content: contentBody?.content }) })
+  })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`/authoring/drafts/${draftID}/lessons/${lesson.id}`)
+  await expect(page.getByRole('heading', { name: 'Lesson content' })).toBeVisible()
+  await page.getByRole('combobox', { name: 'Block type' }).selectOption('TEXT')
+  await page.getByRole('button', { name: 'Add block' }).focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('textbox', { name: 'Block 2 text · Paragraph 1 · Text 1' }).fill('A semantic lesson paragraph.')
+  await page.getByRole('combobox', { name: 'Block type' }).selectOption('CODE')
+  await page.getByRole('button', { name: 'Add block' }).focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('textbox', { name: 'Code', exact: true }).fill('  const message = "hello";\n')
+  await page.getByRole('button', { name: 'Move block 3 Code up' }).focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('button', { name: 'Save Lesson content' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Lesson content saved.')).toBeVisible()
+  expect(contentBody?.expectedLessonRevision).toBe(2)
+  expect(contentBody?.content.blocks.map((block) => block.type)).toEqual(['IMAGE', 'CODE', 'TEXT'])
+  expect(contentBody?.content.blocks[0]).toEqual(deferred)
+  await expect(page.locator('img[src="diagram"]')).toHaveCount(0)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await page.screenshot({ path: '/tmp/btg-content-editor-desktop.png', fullPage: true })
+  for (const width of [768, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  }
+  await page.screenshot({ path: '/tmp/btg-content-editor-mobile.png', fullPage: true })
+  await page.setViewportSize({ width: 768, height: 844 })
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
 test('Authoring Draft shell is private, accessible, and responsive', async ({ page }) => {
   await serveDraft(page)
   await page.setViewportSize({ width: 1440, height: 1000 })

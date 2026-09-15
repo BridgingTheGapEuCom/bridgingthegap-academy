@@ -88,6 +88,17 @@ watch(() => props.lesson.id, () => {
 }, { immediate: true })
 onBeforeUnmount(() => { active = false })
 
+// A reload in another Lesson section may bring a newer prerequisite snapshot.
+// Keep independent local edits, but require an explicit reload if that list changed.
+watch(() => JSON.stringify(props.lesson.recommended_prerequisite_keys), () => {
+  if (JSON.stringify(props.lesson.recommended_prerequisite_keys) === JSON.stringify(originalKeys.value)) return
+  if (dirty.value) conflict.value = true
+  else {
+    originalKeys.value = [...props.lesson.recommended_prerequisite_keys]
+    selectedKeys.value = [...props.lesson.recommended_prerequisite_keys]
+  }
+})
+
 function candidateFor(key: string) { return candidateByKey.value.get(key) }
 function addPrerequisite() {
   if (!selectedKey.value || selectedKey.value === props.lesson.stable_key || selectedKeys.value.includes(selectedKey.value) || !candidateFor(selectedKey.value)) return

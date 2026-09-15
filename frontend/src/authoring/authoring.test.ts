@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createAuthoringModule, getAuthoringDraft, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, reorderAuthoringLessons, replaceAuthoringLessonPrerequisites, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { createAuthoringModule, getAuthoringDraft, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
+  it('replaces only canonical content through the scoped authenticated PUT boundary', async () => {
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const lessonID = '33333333-3333-4333-8333-333333333333'
+    const request = vi.fn().mockResolvedValue({})
+    const body = { expectedLessonRevision: 9, content: { schemaVersion: 1 as const, blocks: [] } }
+    await replaceAuthoringLessonContent(draftID, lessonID, body, { request })
+    expect(request).toHaveBeenCalledWith(`/api/authoring/drafts/${draftID}/lessons/${lessonID}/content`, expect.objectContaining({ method: 'PUT', body: JSON.stringify(body) }))
+    await expect(replaceAuthoringLessonContent(draftID, 'invalid', body, { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
+    expect(request).toHaveBeenCalledTimes(1)
+  })
   it('uses the authenticated shared request boundary for a bounded Draft ID', async () => {
     const request = vi.fn().mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' })
     await getAuthoringDraft('11111111-1111-4111-8111-111111111111', { request })

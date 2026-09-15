@@ -67,6 +67,7 @@
         @replace-lesson="replaceLesson"
         @unavailable="markDraftUnavailable"
       />
+      <AuthoringLessonContentEditor :draft-id="draft.id" :lesson="state.lesson" @saved="applyContent" @replace-lesson="replaceLesson" @unavailable="markDraftUnavailable" />
     </template>
   </section>
 </template>
@@ -81,6 +82,7 @@ import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
 import AuthoringLessonPrerequisitesEditor from '../components/AuthoringLessonPrerequisitesEditor.vue'
+import AuthoringLessonContentEditor from '../components/AuthoringLessonContentEditor.vue'
 
 type Form = { title: string; description: string; objectives: string[]; estimatedDurationMinutes: string }
 type State = { kind: 'loading' } | { kind: 'ready'; lesson: AuthoringLessonDetail } | { kind: 'unavailable' }
@@ -223,6 +225,13 @@ function replaceLesson(lesson: AuthoringLessonDetail) {
 function applyPrerequisites(result: { lesson: import('../api/generated').components['schemas']['AuthoringLessonMutationResponse']; prerequisiteKeys: string[] }) {
   if (state.value.kind !== 'ready') return
   const lesson = { ...state.value.lesson, ...result.lesson, recommended_prerequisite_keys: result.prerequisiteKeys }
+  state.value = { kind: 'ready', lesson }
+  replaceDraft({ ...draft.value, revision: result.lesson.draftRevision })
+}
+
+function applyContent(result: import('../authoring/authoring').AuthoringLessonContentMutation) {
+  if (state.value.kind !== 'ready') return
+  const lesson = { ...state.value.lesson, ...result.lesson, content: result.content }
   state.value = { kind: 'ready', lesson }
   replaceDraft({ ...draft.value, revision: result.lesson.draftRevision })
 }
