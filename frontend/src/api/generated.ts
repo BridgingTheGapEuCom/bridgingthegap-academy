@@ -417,7 +417,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
-            revokedAt?: string | null;
+            revokedAt: string | null;
             draftRevision: number;
         };
         AuthoringLessonCreateRequest: {
@@ -435,7 +435,7 @@ export interface components {
             description?: string;
             objectives?: string[];
             estimatedDurationMinutes?: number | null;
-        };
+        } | unknown | unknown | unknown | unknown;
         AuthoringLessonOrderModule: {
             /** Format: uuid */
             moduleId: string;
@@ -488,7 +488,7 @@ export interface components {
             expectedModuleRevision: number;
             title?: string;
             description?: string;
-        };
+        } | unknown | unknown;
         AuthoringModuleReorderRequest: {
             expectedDraftRevision: number;
             moduleIds: string[];
@@ -513,7 +513,7 @@ export interface components {
             objectives?: string[];
             changelog?: string;
             license?: components["schemas"]["ContentLicense"];
-        };
+        } | unknown | unknown | unknown | unknown | unknown | unknown | unknown;
         AuthoringDraft: {
             /** Format: uuid */
             id: string;
@@ -902,6 +902,10 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Trusted application Origin required for browser mutations. */
+        AuthoringOrigin: string;
+        /** @description CSRF token bound to the authenticated session. */
+        AuthoringCSRFToken: string;
         AuthoringDraftID: string;
         AuthoringUserID: string;
         AuthoringModuleID: string;
@@ -947,7 +951,12 @@ export interface operations {
     updateAuthoringDraftMetadata: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
             };
@@ -1005,7 +1014,12 @@ export interface operations {
     createAuthoringModule: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
             };
@@ -1037,7 +1051,12 @@ export interface operations {
     addAuthoringMember: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
             };
@@ -1069,7 +1088,12 @@ export interface operations {
     revokeAuthoringMember: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 userId: components["parameters"]["AuthoringUserID"];
@@ -1102,7 +1126,12 @@ export interface operations {
     changeAuthoringMemberRole: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 userId: components["parameters"]["AuthoringUserID"];
@@ -1135,7 +1164,12 @@ export interface operations {
     reorderAuthoringModules: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
             };
@@ -1167,7 +1201,12 @@ export interface operations {
     deleteAuthoringModule: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 moduleId: components["parameters"]["AuthoringModuleID"];
@@ -1200,7 +1239,12 @@ export interface operations {
     updateAuthoringModule: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 moduleId: components["parameters"]["AuthoringModuleID"];
@@ -1233,7 +1277,12 @@ export interface operations {
     createAuthoringLesson: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 moduleId: components["parameters"]["AuthoringModuleID"];
@@ -1266,7 +1315,12 @@ export interface operations {
     reorderAuthoringLessons: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
             };
@@ -1325,7 +1379,12 @@ export interface operations {
     deleteAuthoringLesson: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 lessonId: components["parameters"]["AuthoringLessonID"];
@@ -1358,7 +1417,12 @@ export interface operations {
     updateAuthoringLesson: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 lessonId: components["parameters"]["AuthoringLessonID"];
@@ -1391,7 +1455,12 @@ export interface operations {
     replaceAuthoringLessonPrerequisites: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 lessonId: components["parameters"]["AuthoringLessonID"];
@@ -1424,7 +1493,12 @@ export interface operations {
     replaceAuthoringLessonContent: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 lessonId: components["parameters"]["AuthoringLessonID"];

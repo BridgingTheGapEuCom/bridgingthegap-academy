@@ -201,13 +201,6 @@ DELETE FROM authoring.lesson_prerequisite WHERE lesson_id = $1;
 -- name: DeleteIncomingPrerequisites :exec
 DELETE FROM authoring.lesson_prerequisite WHERE prerequisite_lesson_id = $1;
 
--- name: ListIncomingPrerequisiteLessons :many
-SELECT source.*
-FROM authoring.lesson_prerequisite AS prerequisite
-JOIN authoring.lesson AS source ON source.id = prerequisite.lesson_id
-WHERE prerequisite.prerequisite_lesson_id = $1
-ORDER BY source.id;
-
 -- name: AddPrerequisite :exec
 INSERT INTO authoring.lesson_prerequisite (draft_id, lesson_id, prerequisite_lesson_id, position)
 VALUES ($1, $2, $3, $4);
@@ -236,3 +229,27 @@ UPDATE authoring.module AS m SET revision = m.revision + 1, updated_at = now()
 WHERE m.id = $1 AND m.revision = $2
   AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = m.draft_id AND d.status = 'ACTIVE')
 RETURNING m.*;
+
+-- name: ListLessonSummariesForDraft :many
+SELECT lesson.id, lesson.draft_id, lesson.module_id, lesson.stable_key,
+       lesson.title, lesson.description, lesson.learning_objectives,
+       lesson.estimated_duration_minutes, lesson.position,
+       '{"schemaVersion":1,"blocks":[]}'::jsonb AS content,
+       lesson.revision, lesson.created_at, lesson.updated_at
+FROM authoring.lesson AS lesson
+JOIN authoring.module AS module ON module.id = lesson.module_id
+WHERE lesson.draft_id = $1
+ORDER BY module.position, lesson.position, lesson.id;
+
+-- name: GetLessonForDraft :one
+SELECT * FROM authoring.lesson WHERE draft_id = $1 AND id = $2;
+
+-- name: AdvanceLessonsAfterDeletion :exec
+UPDATE authoring.lesson AS source
+SET position = CASE WHEN source.module_id = $2 AND source.position > $3
+                    THEN source.position - 1 ELSE source.position END,
+    revision = source.revision + 1, updated_at = now()
+WHERE source.id <> $1 AND
+    ((source.module_id = $2 AND source.position > $3) OR EXISTS (
+       SELECT 1 FROM authoring.lesson_prerequisite AS prerequisite
+       WHERE prerequisite.lesson_id = source.id AND prerequisite.prerequisite_lesson_id = $1));

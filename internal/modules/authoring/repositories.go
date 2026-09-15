@@ -24,8 +24,6 @@ type Repository interface {
 	GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error)
 	UpdateDraftMetadata(context.Context, DraftID, int64, DraftMetadata) (CourseDraft, error)
 	AbandonDraft(context.Context, DraftID, int64) (CourseDraft, error)
-	AddMember(context.Context, WorkspaceID, string, MemberRole) (WorkspaceMember, error)
-	RevokeMember(context.Context, WorkspaceID, string) (WorkspaceMember, error)
 	ListMembers(context.Context, WorkspaceID) ([]WorkspaceMember, error)
 	ActiveMembershipForDraft(context.Context, DraftID, string) (MemberRole, bool, error)
 	CreateModule(context.Context, ModuleInput) (DraftModule, error)
@@ -63,11 +61,10 @@ type Repository interface {
 // ReadRepository is the narrow Authoring-owned read contract used by private
 // draft serving. It deliberately contains no membership role interpretation;
 // resource-scoped decisions remain with Authorizer.
+// Snapshot reads keep outline and prerequisites consistent with the returned revisions.
 type ReadRepository interface {
 	GetDraft(context.Context, DraftID) (CourseDraft, error)
 	GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error)
-	ListModules(context.Context, DraftID) ([]DraftModule, error)
-	GetLesson(context.Context, LessonID) (DraftLesson, error)
-	ListLessonsForDraft(context.Context, DraftID) ([]DraftLesson, error)
-	ListPrerequisitesForDraft(context.Context, DraftID) ([]Prerequisite, error)
+	ReadStructure(context.Context, DraftID) ([]ModuleStructure, error)
+	ReadLesson(context.Context, DraftID, LessonID) (DraftLesson, []Prerequisite, error)
 }

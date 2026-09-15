@@ -127,3 +127,25 @@ previous active row and creating a new active row. Revocation preserves the
 historical row. Authoring does not query Identity: member user IDs are opaque
 UUID references. Every mutation is serialized by the Draft transaction and
 will reject a demotion or revocation that would leave no active MAINTAINER.
+
+The complete API shares one bounded strict JSON decoder: duplicate members,
+unknown or incorrectly cased request fields, trailing data, and invalid nulls
+are rejected. Reorder arrays must be explicitly supplied (an empty array is
+valid for an empty structure). Full Lesson layouts have a 1 MiB body budget,
+large enough for the existing 1,000-Module / 10,000-Lesson limits; smaller
+metadata and membership bodies retain their narrower budgets.
+
+Outline and individual Lesson reads use a single read-only PostgreSQL snapshot
+for metadata, ordering, revisions, and prerequisites. Outline/reorder queries
+project Lesson metadata without loading every canonical content document.
+Empty prerequisite lists are JSON arrays, never null. Lesson insertion and
+deletion advance the owning Module revision. Deletion advances each affected
+source/shifted Lesson exactly once, even when it both loses a prerequisite and
+changes position. Failed writes roll back every revision and structural change.
+All membership repository writes require a Draft revision; there is no legacy
+unrevisioned add/revoke path that can bypass last-maintainer protection.
+
+A forward-only migration makes the draft content top-level CHECK fail on
+missing/null fields and require a numeric schema version. Valid empty draft
+documents remain supported; detailed semantic validation stays in the canonical
+Courses value object.

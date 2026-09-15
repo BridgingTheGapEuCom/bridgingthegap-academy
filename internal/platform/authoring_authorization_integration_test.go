@@ -59,7 +59,7 @@ func testAuthoringAuthorization(t *testing.T, ctx context.Context, pool *pgxpool
 	if err := can(authoring.CapabilityDraftEdit, draftA.ID); !errors.Is(err, authoring.ErrAuthorizationDenied) {
 		t.Fatalf("nonmember accessed draft: %v", err)
 	}
-	if _, err := memberRepository.AddMember(ctx, workspaceA.ID, string(user.ID), authoring.MemberAuthor); err != nil {
+	if _, err := addTestAuthoringMember(ctx, pool, memberRepository, workspaceA.ID, string(user.ID), authoring.MemberAuthor); err != nil {
 		t.Fatal(err)
 	}
 	if err := can(authoring.CapabilityDraftEdit, draftA.ID); err != nil {
@@ -77,13 +77,13 @@ func testAuthoringAuthorization(t *testing.T, ctx context.Context, pool *pgxpool
 	if err := can(authoring.CapabilityDraftEdit, draftB.ID); !errors.Is(err, authoring.ErrAuthorizationDenied) {
 		t.Fatalf("global administrator bypassed draft membership: %v", err)
 	}
-	if _, err := memberRepository.RevokeMember(ctx, workspaceA.ID, string(user.ID)); err != nil {
+	if _, err := revokeTestAuthoringMember(ctx, pool, memberRepository, workspaceA.ID, string(user.ID)); err != nil {
 		t.Fatal(err)
 	}
 	if err := can(authoring.CapabilityDraftEdit, draftA.ID); !errors.Is(err, authoring.ErrAuthorizationDenied) {
 		t.Fatalf("revoked author retained access on same session: %v", err)
 	}
-	if _, err := memberRepository.AddMember(ctx, workspaceA.ID, string(user.ID), authoring.MemberMaintainer); err != nil {
+	if _, err := addTestAuthoringMember(ctx, pool, memberRepository, workspaceA.ID, string(user.ID), authoring.MemberMaintainer); err != nil {
 		t.Fatal(err)
 	}
 	if err := can(authoring.CapabilityMembersManage, draftA.ID); err != nil {
@@ -92,7 +92,7 @@ func testAuthoringAuthorization(t *testing.T, ctx context.Context, pool *pgxpool
 	if err := can(authoring.CapabilityMembersManage, draftB.ID); !errors.Is(err, authoring.ErrAuthorizationDenied) {
 		t.Fatalf("maintainer crossed draft boundary: %v", err)
 	}
-	if _, err := memberRepository.RevokeMember(ctx, workspaceA.ID, string(user.ID)); err != nil {
+	if _, err := revokeTestAuthoringMember(ctx, pool, memberRepository, workspaceA.ID, string(user.ID)); err != nil {
 		t.Fatal(err)
 	}
 	if err := can(authoring.CapabilityRead, draftA.ID); !errors.Is(err, authoring.ErrAuthorizationDenied) {

@@ -60,7 +60,7 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := authoringRepository.AddMember(ctx, workspaceA.ID, string(member.ID), authoring.MemberAuthor); err != nil {
+	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, string(member.ID), authoring.MemberAuthor); err != nil {
 		t.Fatal(err)
 	}
 	sessions := identity.NewSessionService(identityRepository, nil, nil)
@@ -89,7 +89,7 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if response := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftB.ID), "", cookie); response.Code != http.StatusNotFound {
 		t.Fatalf("other draft read = %d: %s", response.Code, response.Body.String())
 	}
-	if _, err := authoringRepository.RevokeMember(ctx, workspaceA.ID, string(member.ID)); err != nil {
+	if _, err := revokeTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, string(member.ID)); err != nil {
 		t.Fatal(err)
 	}
 	if response := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA.ID), "", cookie); response.Code != http.StatusNotFound {
@@ -158,7 +158,11 @@ func testAuthoringDraftMetadataMutation(t *testing.T, ctx context.Context, pool 
 	if err != nil || stored.Metadata.Title != "Writer B" || stored.Metadata.Description != draft.Metadata.Description || stored.Revision != 2 || !stored.UpdatedAt.After(draft.UpdatedAt) {
 		t.Fatalf("stale write changed committed draft: err=%v draft=%#v", err, stored)
 	}
-	if _, err := authoringRepository.RevokeMember(ctx, workspace.ID, string(user.ID)); err != nil {
+	// Revocation fixtures retain another maintainer, as production writes require.
+	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspace.ID, "77777777-7777-4777-8777-777777777777", authoring.MemberMaintainer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := revokeTestAuthoringMember(ctx, pool, authoringRepository, workspace.ID, string(user.ID)); err != nil {
 		t.Fatal(err)
 	}
 	response = authRequest(router, http.MethodPatch, "/api/authoring/drafts/"+string(draft.ID), `{"expectedRevision":2,"title":"Revoked"}`, &http.Cookie{Name: sessionCookieName, Value: created.Token.Value()}, authTestCSRFToken().Value())
@@ -334,7 +338,11 @@ func testAuthoringModuleMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("cross-draft module mutation = %d: %s", response.Code, response.Body.String())
 	}
-	if _, err := repository.RevokeMember(ctx, workspace.ID, string(user.ID)); err != nil {
+	// Revocation fixtures retain another maintainer, as production writes require.
+	if _, err := addTestAuthoringMember(ctx, pool, repository, workspace.ID, "77777777-7777-4777-8777-777777777777", authoring.MemberMaintainer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := revokeTestAuthoringMember(ctx, pool, repository, workspace.ID, string(user.ID)); err != nil {
 		t.Fatal(err)
 	}
 	response = authRequest(router, http.MethodPatch, base+"/"+string(basics.ID), `{"expectedModuleRevision":`+strconv.FormatInt(basics.Revision, 10)+`,"title":"Revoked"}`, cookie, csrf)
@@ -427,7 +435,7 @@ func testAuthoringLessonMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.AddMember(ctx, workspace.ID, string(authorUser.ID), authoring.MemberAuthor); err != nil {
+	if _, err := addTestAuthoringMember(ctx, pool, repository, workspace.ID, string(authorUser.ID), authoring.MemberAuthor); err != nil {
 		t.Fatal(err)
 	}
 	authorSession, err := sessions.CreateSession(ctx, authorUser.ID)
@@ -439,6 +447,10 @@ func testAuthoringLessonMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 	authorCookie := &http.Cookie{Name: sessionCookieName, Value: authorSession.Token.Value()}
 	csrf := authTestCSRFToken().Value()
 	createPath := "/api/authoring/drafts/" + string(draft.ID) + "/modules/" + string(moduleA.ID) + "/lessons"
+	draft, err = repository.GetDraft(ctx, draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	createBody := `{"expectedDraftRevision":` + strconv.FormatInt(draft.Revision, 10) + `,"stableKey":"protected-lesson","title":"Protected","description":"A lesson.","objectives":["Understand"],"position":0}`
 	if response := authRequest(router, http.MethodPost, createPath, createBody, nil, csrf); response.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated lesson create = %d", response.Code)
@@ -743,7 +755,11 @@ func testAuthoringLessonContentMutation(t *testing.T, ctx context.Context, pool 
 	if response = authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/"+string(otherLesson.ID)+"/content", `{"expectedLessonRevision":1,"content":`+validContent+`}`, cookie, csrf); response.Code != http.StatusNotFound {
 		t.Fatalf("cross-draft content replacement = %d", response.Code)
 	}
-	if _, err := repository.RevokeMember(ctx, workspace.ID, string(user.ID)); err != nil {
+	// Revocation fixtures retain another maintainer, as production writes require.
+	if _, err := addTestAuthoringMember(ctx, pool, repository, workspace.ID, "77777777-7777-4777-8777-777777777777", authoring.MemberMaintainer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := revokeTestAuthoringMember(ctx, pool, repository, workspace.ID, string(user.ID)); err != nil {
 		t.Fatal(err)
 	}
 	if response = authRequest(router, http.MethodPut, path, `{"expectedLessonRevision":2,"content":`+validContent+`}`, cookie, csrf); response.Code != http.StatusNotFound {

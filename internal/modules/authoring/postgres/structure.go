@@ -71,12 +71,8 @@ func (r *Repository) ReorderModules(ctx context.Context, draftID authoring.Draft
 	}
 	defer tx.Rollback(ctx)
 	q := r.q.WithTx(tx)
-	row, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: id, Revision: expected})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return authoring.CourseDraft{}, r.draftMiss(ctx, id)
-	}
-	if err != nil {
-		return authoring.CourseDraft{}, storageError(err)
+	if err := r.lockActiveDraft(ctx, tx, id); err != nil {
+		return authoring.CourseDraft{}, err
 	}
 	modules, err := q.ListModules(ctx, id)
 	if err != nil {
@@ -86,8 +82,27 @@ func (r *Repository) ReorderModules(ctx context.Context, draftID authoring.Draft
 	for _, m := range modules {
 		got = append(got, authoring.ModuleID(m.ID.String()))
 	}
+	for _, requested := range order {
+		found := false
+		for _, actual := range got {
+			if actual == requested {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return authoring.CourseDraft{}, authoring.ErrNotFound
+		}
+	}
 	if !sameIDs(got, order) {
 		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, id, expected); err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	row, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: id, Revision: expected})
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
 	}
 	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_module_draft_position_unique DEFERRED"); err != nil {
 		return authoring.CourseDraft{}, storageError(err)
@@ -248,7 +263,7 @@ func (r *Repository) DeleteEmptyModule(ctx context.Context, draftID authoring.Dr
 		return authoring.CourseDraft{}, storageError(err)
 	}
 	defer tx.Rollback(ctx)
-	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expectedDraft); err != nil {
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.CourseDraft{}, err
 	}
 	q := r.q.WithTx(tx)
@@ -258,6 +273,9 @@ func (r *Repository) DeleteEmptyModule(ctx context.Context, draftID authoring.Dr
 	}
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expectedDraft); err != nil {
+		return authoring.CourseDraft{}, err
 	}
 	lessons, err := q.CountLessonsForModule(ctx, moduleKey)
 	if err != nil {
@@ -315,7 +333,7 @@ func (r *Repository) CreateLessonAtPosition(ctx context.Context, draftID authori
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
 	}
 	defer tx.Rollback(ctx)
-	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
 	}
 	q := r.q.WithTx(tx)
@@ -325,6 +343,9 @@ func (r *Repository) CreateLessonAtPosition(ctx context.Context, draftID authori
 	}
 	if err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
 	}
 	count, err := q.CountLessonsForModule(ctx, moduleKey)
 	if err != nil {
@@ -345,6 +366,9 @@ func (r *Repository) CreateLessonAtPosition(ctx context.Context, draftID authori
 	}
 	lessonRow, err := q.CreateLesson(ctx, sqlc.CreateLessonParams{ID: moduleKey, DraftID: draftKey, StableKey: input.StableKey, Title: input.Title, Description: input.Description, LearningObjectives: objectives, EstimatedDurationMinutes: duration(input.EstimatedDurationMinutes), Position: int32(input.Position), Content: content})
 	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if _, err := q.BumpModuleRevision(ctx, sqlc.BumpModuleRevisionParams{ID: moduleKey, Revision: module.Revision}); err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
 	}
 	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: expected})
@@ -520,7 +544,7 @@ func (r *Repository) ReorderLessonsForDraft(ctx context.Context, draftID authori
 		return authoring.CourseDraft{}, storageError(err)
 	}
 	defer tx.Rollback(ctx)
-	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.CourseDraft{}, err
 	}
 	q := r.q.WithTx(tx)
@@ -545,7 +569,7 @@ func (r *Repository) ReorderLessonsForDraft(ctx context.Context, draftID authori
 	if !sameIDs(moduleIDs, requestedModules) {
 		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
 	}
-	lessons, err := q.ListLessonsForDraft(ctx, draftKey)
+	lessons, err := q.ListLessonSummariesForDraft(ctx, draftKey)
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
@@ -555,7 +579,7 @@ func (r *Repository) ReorderLessonsForDraft(ctx context.Context, draftID authori
 		requestedLessons = append(requestedLessons, item.LessonIDs...)
 	}
 	for _, lesson := range lessons {
-		lessonRows[authoring.LessonID(lesson.ID.String())] = lesson
+		lessonRows[authoring.LessonID(lesson.ID.String())] = sqlc.AuthoringLesson(lesson)
 	}
 	actualLessons := make([]authoring.LessonID, 0, len(lessons))
 	for _, lesson := range lessons {
@@ -568,6 +592,9 @@ func (r *Repository) ReorderLessonsForDraft(ctx context.Context, draftID authori
 	}
 	if !sameIDs(actualLessons, requestedLessons) {
 		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+		return authoring.CourseDraft{}, err
 	}
 	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_lesson_module_position_unique DEFERRED"); err != nil {
 		return authoring.CourseDraft{}, storageError(err)
@@ -705,7 +732,7 @@ func (r *Repository) DeleteLessonForDraft(ctx context.Context, draftID authoring
 		return authoring.CourseDraft{}, storageError(err)
 	}
 	defer tx.Rollback(ctx)
-	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expectedDraft); err != nil {
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.CourseDraft{}, err
 	}
 	q := r.q.WithTx(tx)
@@ -716,17 +743,14 @@ func (r *Repository) DeleteLessonForDraft(ctx context.Context, draftID authoring
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	incoming, err := q.ListIncomingPrerequisiteLessons(ctx, lessonKey)
-	if err != nil {
-		return authoring.CourseDraft{}, storageError(err)
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expectedDraft); err != nil {
+		return authoring.CourseDraft{}, err
 	}
 	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_lesson_module_position_unique DEFERRED"); err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	for _, source := range incoming {
-		if _, err := q.BumpLessonRevision(ctx, sqlc.BumpLessonRevisionParams{ID: source.ID, Revision: source.Revision}); err != nil {
-			return authoring.CourseDraft{}, storageError(err)
-		}
+	if err := q.AdvanceLessonsAfterDeletion(ctx, sqlc.AdvanceLessonsAfterDeletionParams{ID: lessonKey, ModuleID: current.ModuleID, Position: current.Position}); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
 	}
 	if err := q.DeleteIncomingPrerequisites(ctx, lessonKey); err != nil {
 		return authoring.CourseDraft{}, storageError(err)
@@ -739,7 +763,11 @@ func (r *Repository) DeleteLessonForDraft(ctx context.Context, draftID authoring
 	} else if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	if err := q.CompactLessonPositionsAfter(ctx, sqlc.CompactLessonPositionsAfterParams{ModuleID: current.ModuleID, Position: current.Position}); err != nil {
+	module, err := q.GetModule(ctx, current.ModuleID)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if _, err := q.BumpModuleRevision(ctx, sqlc.BumpModuleRevisionParams{ID: module.ID, Revision: module.Revision}); err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
 	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: expectedDraft})

@@ -44,24 +44,35 @@ func (r authoringHTTPRepository) GetWorkspace(_ context.Context, id authoring.Dr
 	}
 	return value, nil
 }
-func (r authoringHTTPRepository) ListModules(_ context.Context, id authoring.DraftID) ([]authoring.DraftModule, error) {
-	return r.modules[id], r.err
+func (r authoringHTTPRepository) ReadStructure(_ context.Context, id authoring.DraftID) ([]authoring.ModuleStructure, error) {
+	result := make([]authoring.ModuleStructure, 0, len(r.modules[id]))
+	for _, module := range r.modules[id] {
+		item := authoring.ModuleStructure{Module: module}
+		for _, lesson := range r.byDraft[id] {
+			if lesson.ModuleID != module.ID {
+				continue
+			}
+			keys := []string{}
+			for _, p := range r.prerequisites[id] {
+				if p.LessonID == lesson.ID {
+					keys = append(keys, p.TargetStableKey)
+				}
+			}
+			item.Lessons = append(item.Lessons, authoring.LessonStructure{Lesson: lesson, RecommendedPrerequisiteKeys: keys})
+		}
+		result = append(result, item)
+	}
+	return result, r.err
 }
-func (r authoringHTTPRepository) GetLesson(_ context.Context, id authoring.LessonID) (authoring.DraftLesson, error) {
+func (r authoringHTTPRepository) ReadLesson(_ context.Context, draftID authoring.DraftID, id authoring.LessonID) (authoring.DraftLesson, []authoring.Prerequisite, error) {
 	if r.err != nil {
-		return authoring.DraftLesson{}, r.err
+		return authoring.DraftLesson{}, nil, r.err
 	}
-	value, ok := r.lessons[id]
-	if !ok {
-		return authoring.DraftLesson{}, authoring.ErrNotFound
+	lesson, found := r.lessons[id]
+	if !found || lesson.DraftID != draftID {
+		return authoring.DraftLesson{}, nil, authoring.ErrNotFound
 	}
-	return value, nil
-}
-func (r authoringHTTPRepository) ListLessonsForDraft(_ context.Context, id authoring.DraftID) ([]authoring.DraftLesson, error) {
-	return r.byDraft[id], r.err
-}
-func (r authoringHTTPRepository) ListPrerequisitesForDraft(_ context.Context, id authoring.DraftID) ([]authoring.Prerequisite, error) {
-	return r.prerequisites[id], r.err
+	return lesson, r.prerequisites[draftID], nil
 }
 
 func (r *authoringHTTPRepository) UpdateDraftMetadata(_ context.Context, id authoring.DraftID, expected int64, metadata authoring.DraftMetadata) (authoring.CourseDraft, error) {

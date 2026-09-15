@@ -52,7 +52,7 @@ func (r *Repository) mutateMember(ctx context.Context, draftID authoring.DraftID
 		return authoring.WorkspaceMember{}, authoring.CourseDraft{}, storageError(err)
 	}
 	defer tx.Rollback(ctx)
-	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.WorkspaceMember{}, authoring.CourseDraft{}, err
 	}
 	q := r.q.WithTx(tx)
@@ -66,6 +66,9 @@ func (r *Repository) mutateMember(ctx context.Context, draftID authoring.DraftID
 	var member sqlc.AuthoringWorkspaceMember
 	switch operation {
 	case membershipAdd:
+		if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+			return authoring.WorkspaceMember{}, authoring.CourseDraft{}, err
+		}
 		member, err = q.AddMember(ctx, sqlc.AddMemberParams{WorkspaceID: workspace.ID, UserID: userKey, Role: string(nextRole)})
 	case membershipChangeRole, membershipRevoke:
 		current, getErr := q.GetActiveMember(ctx, sqlc.GetActiveMemberParams{WorkspaceID: workspace.ID, UserID: userKey})
@@ -74,6 +77,9 @@ func (r *Repository) mutateMember(ctx context.Context, draftID authoring.DraftID
 		}
 		if getErr != nil {
 			return authoring.WorkspaceMember{}, authoring.CourseDraft{}, storageError(getErr)
+		}
+		if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+			return authoring.WorkspaceMember{}, authoring.CourseDraft{}, err
 		}
 		currentRole := authoring.MemberRole(current.Role)
 		if currentRole == nextRole && operation == membershipChangeRole {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
 	"time"
 
@@ -114,8 +113,8 @@ type authoringModuleUpdateRequest struct {
 }
 
 type authoringModuleReorderRequest struct {
-	ExpectedDraftRevision *int64   `json:"expectedDraftRevision"`
-	ModuleIDs             []string `json:"moduleIds"`
+	ExpectedDraftRevision *int64    `json:"expectedDraftRevision"`
+	ModuleIDs             *[]string `json:"moduleIds"`
 }
 
 type authoringModuleDeleteRequest struct {
@@ -147,13 +146,13 @@ type authoringLessonUpdateRequest struct {
 }
 
 type authoringLessonOrderModuleRequest struct {
-	ModuleID  string   `json:"moduleId"`
-	LessonIDs []string `json:"lessonIds"`
+	ModuleID  string    `json:"moduleId"`
+	LessonIDs *[]string `json:"lessonIds"`
 }
 
 type authoringLessonReorderRequest struct {
-	ExpectedDraftRevision *int64                              `json:"expectedDraftRevision"`
-	Modules               []authoringLessonOrderModuleRequest `json:"modules"`
+	ExpectedDraftRevision *int64                               `json:"expectedDraftRevision"`
+	Modules               *[]authoringLessonOrderModuleRequest `json:"modules"`
 }
 
 type authoringLessonPrerequisitesRequest struct {
@@ -242,6 +241,9 @@ type authoringLicenseRequest struct {
 
 func (l *authoringLicenseRequest) UnmarshalJSON(data []byte) error {
 	type fields authoringLicenseRequest
+	if err := validateAuthoringLicenseJSON(data); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var value fields
@@ -765,19 +767,9 @@ func authoringStructureMutationProblem(w http.ResponseWriter, r *http.Request, e
 }
 
 func decodeAuthoringDraftUpdate(w http.ResponseWriter, r *http.Request) (int64, authoring.DraftMetadataPatch, error) {
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/json" {
-		return 0, authoring.DraftMetadataPatch{}, errors.New("invalid content type")
-	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringDraftMetadataBodyBytes))
-	decoder.DisallowUnknownFields()
 	var input authoringDraftUpdateRequest
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeAuthoringBody(w, r, maxAuthoringDraftMetadataBodyBytes, &input); err != nil {
 		return 0, authoring.DraftMetadataPatch{}, err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		return 0, authoring.DraftMetadataPatch{}, errors.New("trailing JSON")
 	}
 	if input.ExpectedRevision == nil || *input.ExpectedRevision < 1 {
 		return 0, authoring.DraftMetadataPatch{}, errors.New("missing expected revision")
@@ -884,11 +876,11 @@ func decodeAuthoringModuleReorder(w http.ResponseWriter, r *http.Request) (int64
 	if err := decodeAuthoringJSON(w, r, &input); err != nil {
 		return 0, nil, err
 	}
-	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 {
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || input.ModuleIDs == nil {
 		return 0, nil, errors.New("missing expected draft revision")
 	}
-	order := make([]authoring.ModuleID, 0, len(input.ModuleIDs))
-	for _, raw := range input.ModuleIDs {
+	order := make([]authoring.ModuleID, 0, len(*input.ModuleIDs))
+	for _, raw := range *input.ModuleIDs {
 		if !validAuthoringUUID(raw) {
 			return 0, nil, errors.New("invalid module identifier")
 		}
@@ -967,19 +959,19 @@ func decodeAuthoringLessonUpdate(w http.ResponseWriter, r *http.Request) (int64,
 
 func decodeAuthoringLessonReorder(w http.ResponseWriter, r *http.Request) (int64, []authoring.ModuleLessonOrder, error) {
 	var input authoringLessonReorderRequest
-	if err := decodeAuthoringLessonJSON(w, r, &input); err != nil {
+	if err := decodeAuthoringBody(w, r, maxAuthoringLessonOrderBodyBytes, &input); err != nil {
 		return 0, nil, err
 	}
-	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 {
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || input.Modules == nil {
 		return 0, nil, errors.New("missing expected draft revision")
 	}
-	order := make([]authoring.ModuleLessonOrder, 0, len(input.Modules))
-	for _, module := range input.Modules {
-		if !validAuthoringUUID(module.ModuleID) {
+	order := make([]authoring.ModuleLessonOrder, 0, len(*input.Modules))
+	for _, module := range *input.Modules {
+		if !validAuthoringUUID(module.ModuleID) || module.LessonIDs == nil {
 			return 0, nil, errors.New("invalid module identifier")
 		}
-		item := authoring.ModuleLessonOrder{ModuleID: authoring.ModuleID(module.ModuleID), LessonIDs: make([]authoring.LessonID, 0, len(module.LessonIDs))}
-		for _, lessonID := range module.LessonIDs {
+		item := authoring.ModuleLessonOrder{ModuleID: authoring.ModuleID(module.ModuleID), LessonIDs: make([]authoring.LessonID, 0, len(*module.LessonIDs))}
+		for _, lessonID := range *module.LessonIDs {
 			if !validAuthoringUUID(lessonID) {
 				return 0, nil, errors.New("invalid lesson identifier")
 			}
@@ -1034,20 +1026,7 @@ func decodeAuthoringLessonContent(w http.ResponseWriter, r *http.Request) (int64
 }
 
 func decodeAuthoringLessonContentJSON(w http.ResponseWriter, r *http.Request, value any) error {
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/json" {
-		return errors.New("invalid content type")
-	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringLessonContentBodyBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		return errors.New("trailing JSON")
-	}
-	return nil
+	return decodeAuthoringBody(w, r, maxAuthoringLessonContentBodyBytes, value)
 }
 
 func decodeAuthoringMemberAdd(w http.ResponseWriter, r *http.Request) (int64, string, authoring.MemberRole, error) {
@@ -1084,54 +1063,15 @@ func decodeAuthoringMemberRevoke(w http.ResponseWriter, r *http.Request) (int64,
 }
 
 func decodeAuthoringMembershipJSON(w http.ResponseWriter, r *http.Request, value any) error {
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/json" {
-		return errors.New("invalid content type")
-	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringMembershipBodyBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		return errors.New("trailing JSON")
-	}
-	return nil
+	return decodeAuthoringBody(w, r, maxAuthoringMembershipBodyBytes, value)
 }
 
 func decodeAuthoringLessonJSON(w http.ResponseWriter, r *http.Request, value any) error {
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/json" {
-		return errors.New("invalid content type")
-	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringLessonBodyBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		return errors.New("trailing JSON")
-	}
-	return nil
+	return decodeAuthoringBody(w, r, maxAuthoringLessonBodyBytes, value)
 }
 
 func decodeAuthoringJSON(w http.ResponseWriter, r *http.Request, value any) error {
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/json" {
-		return errors.New("invalid content type")
-	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAuthoringModuleBodyBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		return errors.New("trailing JSON")
-	}
-	return nil
+	return decodeAuthoringBody(w, r, maxAuthoringModuleBodyBytes, value)
 }
 
 func validAuthoringUUID(value string) bool {
@@ -1146,7 +1086,7 @@ func authoringDraft(draft authoring.CourseDraft) authoringDraftDTO {
 }
 
 func authoringLessonSummary(lesson authoring.DraftLesson, prerequisites []string) authoringLessonSummaryDTO {
-	return authoringLessonSummaryDTO{ID: string(lesson.ID), StableKey: lesson.StableKey, Title: lesson.Title, Description: lesson.Description, Objectives: lesson.LearningObjectives, EstimatedDurationMinutes: lesson.EstimatedDurationMinutes, Position: lesson.Position, Revision: lesson.Revision, RecommendedPrerequisiteKeys: prerequisites}
+	return authoringLessonSummaryDTO{ID: string(lesson.ID), StableKey: lesson.StableKey, Title: lesson.Title, Description: lesson.Description, Objectives: lesson.LearningObjectives, EstimatedDurationMinutes: lesson.EstimatedDurationMinutes, Position: lesson.Position, Revision: lesson.Revision, RecommendedPrerequisiteKeys: nonNilAuthoringKeys(prerequisites)}
 }
 
 func authoringLessonDetail(lesson authoring.DraftLesson, prerequisites []string) authoringLessonDTO {
@@ -1169,4 +1109,11 @@ func authoringLessonMutation(result authoring.LessonMutationResult) authoringLes
 func authoringMemberMutation(result authoring.MembershipMutationResult) authoringMemberMutationDTO {
 	member := result.Member
 	return authoringMemberMutationDTO{ID: member.ID, UserID: member.UserID, Role: member.Role, CreatedAt: member.CreatedAt, RevokedAt: member.RevokedAt, DraftRevision: result.Draft.Revision}
+}
+
+func nonNilAuthoringKeys(keys []string) []string {
+	if keys == nil {
+		return []string{}
+	}
+	return keys
 }

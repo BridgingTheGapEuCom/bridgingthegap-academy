@@ -113,6 +113,28 @@ func (q *Queries) AddPrerequisite(ctx context.Context, arg AddPrerequisiteParams
 	return err
 }
 
+const advanceLessonsAfterDeletion = `-- name: AdvanceLessonsAfterDeletion :exec
+UPDATE authoring.lesson AS source
+SET position = CASE WHEN source.module_id = $2 AND source.position > $3
+                    THEN source.position - 1 ELSE source.position END,
+    revision = source.revision + 1, updated_at = now()
+WHERE source.id <> $1 AND
+    ((source.module_id = $2 AND source.position > $3) OR EXISTS (
+       SELECT 1 FROM authoring.lesson_prerequisite AS prerequisite
+       WHERE prerequisite.lesson_id = source.id AND prerequisite.prerequisite_lesson_id = $1))
+`
+
+type AdvanceLessonsAfterDeletionParams struct {
+	ID       pgtype.UUID
+	ModuleID pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) AdvanceLessonsAfterDeletion(ctx context.Context, arg AdvanceLessonsAfterDeletionParams) error {
+	_, err := q.db.Exec(ctx, advanceLessonsAfterDeletion, arg.ID, arg.ModuleID, arg.Position)
+	return err
+}
+
 const bumpDraftRevision = `-- name: BumpDraftRevision :one
 UPDATE authoring.course_draft
 SET revision = revision + 1, updated_at = now()
@@ -646,6 +668,36 @@ func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (AuthoringLesso
 	return i, err
 }
 
+const getLessonForDraft = `-- name: GetLessonForDraft :one
+SELECT id, draft_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, content, revision, created_at, updated_at FROM authoring.lesson WHERE draft_id = $1 AND id = $2
+`
+
+type GetLessonForDraftParams struct {
+	DraftID pgtype.UUID
+	ID      pgtype.UUID
+}
+
+func (q *Queries) GetLessonForDraft(ctx context.Context, arg GetLessonForDraftParams) (AuthoringLesson, error) {
+	row := q.db.QueryRow(ctx, getLessonForDraft, arg.DraftID, arg.ID)
+	var i AuthoringLesson
+	err := row.Scan(
+		&i.ID,
+		&i.DraftID,
+		&i.ModuleID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.EstimatedDurationMinutes,
+		&i.Position,
+		&i.Content,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getModule = `-- name: GetModule :one
 SELECT id, draft_id, stable_key, title, description, position, revision, created_at, updated_at FROM authoring.module WHERE id = $1
 `
@@ -684,23 +736,43 @@ func (q *Queries) GetWorkspace(ctx context.Context, draftID pgtype.UUID) (Author
 	return i, err
 }
 
-const listIncomingPrerequisiteLessons = `-- name: ListIncomingPrerequisiteLessons :many
-SELECT source.id, source.draft_id, source.module_id, source.stable_key, source.title, source.description, source.learning_objectives, source.estimated_duration_minutes, source.position, source.content, source.revision, source.created_at, source.updated_at
-FROM authoring.lesson_prerequisite AS prerequisite
-JOIN authoring.lesson AS source ON source.id = prerequisite.lesson_id
-WHERE prerequisite.prerequisite_lesson_id = $1
-ORDER BY source.id
+const listLessonSummariesForDraft = `-- name: ListLessonSummariesForDraft :many
+SELECT lesson.id, lesson.draft_id, lesson.module_id, lesson.stable_key,
+       lesson.title, lesson.description, lesson.learning_objectives,
+       lesson.estimated_duration_minutes, lesson.position,
+       '{"schemaVersion":1,"blocks":[]}'::jsonb AS content,
+       lesson.revision, lesson.created_at, lesson.updated_at
+FROM authoring.lesson AS lesson
+JOIN authoring.module AS module ON module.id = lesson.module_id
+WHERE lesson.draft_id = $1
+ORDER BY module.position, lesson.position, lesson.id
 `
 
-func (q *Queries) ListIncomingPrerequisiteLessons(ctx context.Context, prerequisiteLessonID pgtype.UUID) ([]AuthoringLesson, error) {
-	rows, err := q.db.Query(ctx, listIncomingPrerequisiteLessons, prerequisiteLessonID)
+type ListLessonSummariesForDraftRow struct {
+	ID                       pgtype.UUID
+	DraftID                  pgtype.UUID
+	ModuleID                 pgtype.UUID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []byte
+	EstimatedDurationMinutes pgtype.Int4
+	Position                 int32
+	Content                  []byte
+	Revision                 int64
+	CreatedAt                pgtype.Timestamptz
+	UpdatedAt                pgtype.Timestamptz
+}
+
+func (q *Queries) ListLessonSummariesForDraft(ctx context.Context, draftID pgtype.UUID) ([]ListLessonSummariesForDraftRow, error) {
+	rows, err := q.db.Query(ctx, listLessonSummariesForDraft, draftID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []AuthoringLesson
+	var items []ListLessonSummariesForDraftRow
 	for rows.Next() {
-		var i AuthoringLesson
+		var i ListLessonSummariesForDraftRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.DraftID,

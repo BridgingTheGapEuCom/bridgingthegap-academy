@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: BTG LMS application API
   version: 0.1.0
-  description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads.
+  description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads and mutations. Authoring responses are no-store. Every Authoring mutation requires a trusted Origin and the authenticated session-bound CSRF token; unauthorized resources are hidden as 404.
 paths:
   /api/authoring/drafts/{draftId}:
     get:
@@ -19,7 +19,7 @@ paths:
       operationId: updateAuthoringDraftMetadata
       description: Updates only mutable draft metadata using an explicit optimistic-concurrency revision. The request requires the authenticated session's CSRF token and a trusted same-origin Origin. Responses are private and not cacheable.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content:
@@ -49,7 +49,7 @@ paths:
       operationId: createAuthoringModule
       description: Creates one draft Module at a zero-based position using the current draft revision. The authenticated session must provide a valid CSRF token and trusted same-origin Origin.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content:
@@ -68,7 +68,7 @@ paths:
       operationId: addAuthoringMember
       description: Adds an active AUTHOR or MAINTAINER membership using the Draft revision. The authenticated actor must have authoring.members.manage.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringMemberAddRequest' } } }
@@ -85,7 +85,7 @@ paths:
       operationId: changeAuthoringMemberRole
       description: Replaces one active member role. Demoting the final active MAINTAINER is rejected.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringUserID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringUserID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringMemberRoleRequest' } } }
@@ -101,7 +101,7 @@ paths:
       operationId: revokeAuthoringMember
       description: Revokes one active membership while preserving history. Revoking the final active MAINTAINER is rejected.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringUserID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringUserID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringMemberRevokeRequest' } } }
@@ -118,7 +118,7 @@ paths:
       operationId: reorderAuthoringModules
       description: Atomically replaces the complete ordered Module ID list for one Draft. The list must contain every current Module exactly once.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content:
@@ -137,7 +137,7 @@ paths:
       operationId: updateAuthoringModule
       description: Updates title and description only. Stable key and position are immutable through PATCH.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content:
@@ -155,7 +155,7 @@ paths:
       operationId: deleteAuthoringModule
       description: Deletes an empty Module only. Modules containing Lessons are rejected so the lesson cascade remains unavailable through this API.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content:
@@ -173,7 +173,7 @@ paths:
     post:
       operationId: createAuthoringLesson
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringModuleID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonCreateRequest' } } }
@@ -190,7 +190,7 @@ paths:
       operationId: reorderAuthoringLessons
       description: Atomically replaces the complete ordered Lesson structure for every Module in the Draft; this permits moves without changing Lesson identity or stable key.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonReorderRequest' } } }
@@ -217,7 +217,7 @@ paths:
       operationId: updateAuthoringLesson
       description: Updates Lesson metadata only. Stable key, Module, position, prerequisites, and content have separate boundaries.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonUpdateRequest' } } }
@@ -233,7 +233,7 @@ paths:
       operationId: deleteAuthoringLesson
       description: Deletes one draft Lesson and explicitly removes incoming advisory prerequisite relations, advancing affected source Lesson revisions.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonDeleteRequest' } } }
@@ -250,7 +250,7 @@ paths:
       operationId: replaceAuthoringLessonPrerequisites
       description: Replaces the complete ordered advisory prerequisite stable-key list for one Lesson. Cycles are not evaluated in this slice.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonPrerequisitesRequest' } } }
@@ -267,7 +267,7 @@ paths:
       operationId: replaceAuthoringLessonContent
       description: Atomically replaces the complete canonical semantic LessonContent document for one draft Lesson using its current revision. Editor state and partial block updates are not accepted.
       security: [{ SessionCookie: [] }]
-      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringLessonID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringLessonContentUpdateRequest' } } }
@@ -435,6 +435,8 @@ paths:
                 $ref: '#/components/schemas/Problem'
 components:
   parameters:
+    AuthoringOrigin: { name: Origin, in: header, required: true, schema: { type: string }, description: Trusted application Origin required for browser mutations. }
+    AuthoringCSRFToken: { name: X-CSRF-Token, in: header, required: true, schema: { type: string }, description: CSRF token bound to the authenticated session. }
     AuthoringDraftID: { name: draftId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringUserID: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringModuleID: { name: moduleId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -485,7 +487,7 @@ components:
         expectedDraftRevision: { type: integer, minimum: 1 }
     AuthoringMemberMutationResponse:
       type: object
-      required: [id, userId, role, createdAt, draftRevision]
+      required: [id, userId, role, createdAt, revokedAt, draftRevision]
       properties:
         id: { type: string, format: uuid }
         userId: { type: string, format: uuid }
@@ -499,29 +501,34 @@ components:
       required: [expectedDraftRevision, stableKey, title, description, objectives, position]
       properties:
         expectedDraftRevision: { type: integer, minimum: 1 }
-        stableKey: { type: string }
-        title: { type: string }
-        description: { type: string }
-        objectives: { type: array, items: { type: string } }
-        estimatedDurationMinutes: { type: [integer, 'null'], minimum: 1 }
+        stableKey: { type: string, minLength: 3, maxLength: 96, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
+        objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
+        estimatedDurationMinutes: { type: [integer, 'null'], minimum: 1, maximum: 1440 }
         position: { type: integer, minimum: 0 }
     AuthoringLessonUpdateRequest:
       type: object
       additionalProperties: false
       required: [expectedLessonRevision]
+      anyOf:
+        - required: [title]
+        - required: [description]
+        - required: [objectives]
+        - required: [estimatedDurationMinutes]
       properties:
         expectedLessonRevision: { type: integer, minimum: 1 }
-        title: { type: string }
-        description: { type: string }
-        objectives: { type: array, items: { type: string } }
-        estimatedDurationMinutes: { type: [integer, 'null'], minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
+        objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
+        estimatedDurationMinutes: { type: [integer, 'null'], minimum: 1, maximum: 1440 }
     AuthoringLessonOrderModule:
       type: object
       additionalProperties: false
       required: [moduleId, lessonIds]
       properties:
         moduleId: { type: string, format: uuid }
-        lessonIds: { type: array, maxItems: 10000, items: { type: string, format: uuid } }
+        lessonIds: { type: array, maxItems: 10000, uniqueItems: true, items: { type: string, format: uuid } }
     AuthoringLessonReorderRequest:
       type: object
       additionalProperties: false
@@ -535,7 +542,7 @@ components:
       required: [expectedLessonRevision, prerequisiteLessonKeys]
       properties:
         expectedLessonRevision: { type: integer, minimum: 1 }
-        prerequisiteLessonKeys: { type: array, maxItems: 100, items: { type: string } }
+        prerequisiteLessonKeys: { type: array, maxItems: 100, uniqueItems: true, items: { type: string, minLength: 3, maxLength: 96 } }
     AuthoringLessonDeleteRequest:
       type: object
       additionalProperties: false
@@ -563,11 +570,11 @@ components:
         id: { type: string, format: uuid }
         draft_id: { type: string, format: uuid }
         module_id: { type: string, format: uuid }
-        stable_key: { type: string }
-        title: { type: string }
-        description: { type: string }
-        objectives: { type: array, items: { type: string } }
-        estimated_duration_minutes: { type: [integer, 'null'], minimum: 1 }
+        stable_key: { type: string, minLength: 3, maxLength: 96, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
+        objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
+        estimated_duration_minutes: { type: [integer, 'null'], minimum: 1, maximum: 1440 }
         position: { type: integer, minimum: 0 }
         revision: { type: integer, minimum: 1 }
         draftRevision: { type: integer, minimum: 1 }
@@ -577,25 +584,28 @@ components:
       required: [expectedDraftRevision, stableKey, title, position]
       properties:
         expectedDraftRevision: { type: integer, minimum: 1 }
-        stableKey: { type: string }
-        title: { type: string }
-        description: { type: string }
+        stableKey: { type: string, minLength: 3, maxLength: 96, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
         position: { type: integer, minimum: 0 }
     AuthoringModuleUpdateRequest:
       type: object
       additionalProperties: false
       required: [expectedModuleRevision]
+      anyOf:
+        - required: [title]
+        - required: [description]
       properties:
         expectedModuleRevision: { type: integer, minimum: 1 }
-        title: { type: string }
-        description: { type: string }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
     AuthoringModuleReorderRequest:
       type: object
       additionalProperties: false
       required: [expectedDraftRevision, moduleIds]
       properties:
         expectedDraftRevision: { type: integer, minimum: 1 }
-        moduleIds: { type: array, maxItems: 1000, items: { type: string, format: uuid } }
+        moduleIds: { type: array, maxItems: 1000, uniqueItems: true, items: { type: string, format: uuid } }
     AuthoringModuleDeleteRequest:
       type: object
       additionalProperties: false
@@ -617,14 +627,22 @@ components:
       type: object
       additionalProperties: false
       required: [expectedRevision]
+      anyOf:
+        - required: [intendedVersion]
+        - required: [sourceLanguage]
+        - required: [title]
+        - required: [description]
+        - required: [objectives]
+        - required: [changelog]
+        - required: [license]
       properties:
         expectedRevision: { type: integer, minimum: 1 }
-        intendedVersion: { type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$' }
-        sourceLanguage: { type: string }
-        title: { type: string }
-        description: { type: string }
-        objectives: { type: array, items: { type: string } }
-        changelog: { type: string }
+        intendedVersion: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
+        sourceLanguage: { type: string, maxLength: 64 }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
+        objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
+        changelog: { type: string, minLength: 1, maxLength: 20000 }
         license: { $ref: '#/components/schemas/ContentLicense' }
     AuthoringDraft:
       type: object
@@ -632,12 +650,12 @@ components:
       properties:
         id: { type: string, format: uuid }
         course_id: { type: string, format: uuid }
-        intended_version: { type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$' }
-        source_language: { type: string }
-        title: { type: string }
-        description: { type: string }
-        objectives: { type: array, items: { type: string } }
-        changelog: { type: string }
+        intended_version: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
+        source_language: { type: string, maxLength: 64 }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
+        objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
+        changelog: { type: string, minLength: 1, maxLength: 20000 }
         license: { $ref: '#/components/schemas/ContentLicense' }
         status: { type: string, enum: [ACTIVE, ABANDONED] }
         revision: { type: integer, minimum: 1 }
@@ -656,11 +674,11 @@ components:
       required: [id, stable_key, title, description, objectives, estimated_duration_minutes, position, revision, recommended_prerequisite_keys]
       properties:
         id: { type: string, format: uuid }
-        stable_key: { type: string }
-        title: { type: string }
-        description: { type: string }
-        objectives: { type: array, items: { type: string } }
-        estimated_duration_minutes: { type: [integer, 'null'], minimum: 1 }
+        stable_key: { type: string, minLength: 3, maxLength: 96, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
+        objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
+        estimated_duration_minutes: { type: [integer, 'null'], minimum: 1, maximum: 1440 }
         position: { type: integer, minimum: 0 }
         revision: { type: integer, minimum: 1 }
         recommended_prerequisite_keys: { type: array, items: { type: string } }
@@ -669,9 +687,9 @@ components:
       required: [id, stable_key, title, description, position, revision, lessons]
       properties:
         id: { type: string, format: uuid }
-        stable_key: { type: string }
-        title: { type: string }
-        description: { type: string }
+        stable_key: { type: string, minLength: 3, maxLength: 96, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 20000 }
         position: { type: integer, minimum: 0 }
         revision: { type: integer, minimum: 1 }
         lessons: { type: array, items: { $ref: '#/components/schemas/AuthoringLessonSummary' } }

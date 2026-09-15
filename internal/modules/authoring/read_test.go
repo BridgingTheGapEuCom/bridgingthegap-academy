@@ -24,22 +24,33 @@ func (r readRepositoryFake) GetDraft(context.Context, DraftID) (CourseDraft, err
 func (r readRepositoryFake) GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error) {
 	return r.workspace, r.err
 }
-func (r readRepositoryFake) ListModules(context.Context, DraftID) ([]DraftModule, error) {
-	return r.modules, r.err
+func (r readRepositoryFake) ReadStructure(_ context.Context, _ DraftID) ([]ModuleStructure, error) {
+	result := make([]ModuleStructure, 0, len(r.modules))
+	for _, module := range r.modules {
+		item := ModuleStructure{Module: module}
+		for _, lesson := range r.lessons {
+			if lesson.ModuleID != module.ID {
+				continue
+			}
+			keys := []string{}
+			for _, p := range r.prerequisites {
+				if p.LessonID == lesson.ID {
+					keys = append(keys, p.TargetStableKey)
+				}
+			}
+			item.Lessons = append(item.Lessons, LessonStructure{Lesson: lesson, RecommendedPrerequisiteKeys: keys})
+		}
+		result = append(result, item)
+	}
+	return result, r.err
 }
-func (r readRepositoryFake) GetLesson(_ context.Context, id LessonID) (DraftLesson, error) {
+func (r readRepositoryFake) ReadLesson(_ context.Context, draftID DraftID, id LessonID) (DraftLesson, []Prerequisite, error) {
 	for _, lesson := range r.lessons {
-		if lesson.ID == id {
-			return lesson, r.err
+		if lesson.ID == id && lesson.DraftID == draftID {
+			return lesson, r.prerequisites, r.err
 		}
 	}
-	return DraftLesson{}, ErrNotFound
-}
-func (r readRepositoryFake) ListLessonsForDraft(context.Context, DraftID) ([]DraftLesson, error) {
-	return r.lessons, r.err
-}
-func (r readRepositoryFake) ListPrerequisitesForDraft(context.Context, DraftID) ([]Prerequisite, error) {
-	return r.prerequisites, r.err
+	return DraftLesson{}, nil, ErrNotFound
 }
 
 type readAuthorizerFake struct{ err error }

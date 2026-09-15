@@ -306,41 +306,6 @@ func (r *Repository) AbandonDraft(ctx context.Context, id authoring.DraftID, exp
 	return mapDraft(row)
 }
 
-func (r *Repository) AddMember(ctx context.Context, workspace authoring.WorkspaceID, user string, role authoring.MemberRole) (authoring.WorkspaceMember, error) {
-	if !role.Valid() {
-		return authoring.WorkspaceMember{}, errors.New("invalid member role")
-	}
-	wid, err := uuid(string(workspace))
-	if err != nil {
-		return authoring.WorkspaceMember{}, err
-	}
-	uid, err := uuid(user)
-	if err != nil {
-		return authoring.WorkspaceMember{}, err
-	}
-	row, err := r.q.AddMember(ctx, sqlc.AddMemberParams{WorkspaceID: wid, UserID: uid, Role: string(role)})
-	if err != nil {
-		return authoring.WorkspaceMember{}, storageError(err)
-	}
-	return mapMember(row), nil
-}
-
-func (r *Repository) RevokeMember(ctx context.Context, workspace authoring.WorkspaceID, user string) (authoring.WorkspaceMember, error) {
-	wid, err := uuid(string(workspace))
-	if err != nil {
-		return authoring.WorkspaceMember{}, err
-	}
-	uid, err := uuid(user)
-	if err != nil {
-		return authoring.WorkspaceMember{}, err
-	}
-	row, err := r.q.RevokeMember(ctx, sqlc.RevokeMemberParams{WorkspaceID: wid, UserID: uid})
-	if err != nil {
-		return authoring.WorkspaceMember{}, storageError(err)
-	}
-	return mapMember(row), nil
-}
-
 func (r *Repository) ListMembers(ctx context.Context, workspace authoring.WorkspaceID) ([]authoring.WorkspaceMember, error) {
 	wid, err := uuid(string(workspace))
 	if err != nil {

@@ -23,6 +23,9 @@ const maxAuthoringDraftMetadataBodyBytes = 128 * 1024
 const maxAuthoringModuleBodyBytes = 64 * 1024
 const maxAuthoringLessonBodyBytes = 256 * 1024
 
+// A complete layout of 1,000 Modules and 10,000 UUID Lessons fits within 1 MiB.
+const maxAuthoringLessonOrderBodyBytes = 1 << 20
+
 // Canonical LessonContent is capped at 1 MiB. This permits its complete
 // semantic document plus a small mutation envelope, never an unbounded editor
 // payload.
