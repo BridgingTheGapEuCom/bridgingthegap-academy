@@ -736,6 +736,49 @@ func (q *Queries) GetWorkspace(ctx context.Context, draftID pgtype.UUID) (Author
 	return i, err
 }
 
+const listAccessibleDrafts = `-- name: ListAccessibleDrafts :many
+SELECT draft.id, draft.course_id, draft.intended_version, draft.source_language, draft.title, draft.description, draft.learning_objectives, draft.changelog, draft.license, draft.status, draft.revision, draft.created_at, draft.updated_at
+FROM authoring.course_draft AS draft
+JOIN authoring.workspace AS workspace ON workspace.draft_id = draft.id
+JOIN authoring.workspace_member AS member ON member.workspace_id = workspace.id
+WHERE member.user_id = $1 AND member.revoked_at IS NULL
+ORDER BY draft.updated_at DESC, draft.id DESC
+`
+
+func (q *Queries) ListAccessibleDrafts(ctx context.Context, userID pgtype.UUID) ([]AuthoringCourseDraft, error) {
+	rows, err := q.db.Query(ctx, listAccessibleDrafts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthoringCourseDraft
+	for rows.Next() {
+		var i AuthoringCourseDraft
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.IntendedVersion,
+			&i.SourceLanguage,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.Changelog,
+			&i.License,
+			&i.Status,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveMembersForDraft = `-- name: ListActiveMembersForDraft :many
 SELECT member.id, member.workspace_id, member.user_id, member.role, member.created_at, member.revoked_at
 FROM authoring.workspace_member AS member

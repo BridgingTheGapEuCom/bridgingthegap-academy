@@ -4,6 +4,15 @@ info:
   version: 0.1.0
   description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads and mutations. Authoring responses are no-store. Every Authoring mutation requires a trusted Origin and the authenticated session-bound CSRF token; unauthorized resources are hidden as 404.
 paths:
+  /api/authoring/drafts:
+    get:
+      operationId: listAuthoringDrafts
+      description: Returns minimal mutable Draft summaries for which the authenticated actor currently has an active Authoring membership. Revoked memberships are excluded. Responses are private and not cacheable.
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200': { description: Accessible Draft summaries ordered by most recently updated, then ID, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringDraftList' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}:
     get:
       operationId: getAuthoringDraft
@@ -687,6 +696,22 @@ components:
         revision: { type: integer, minimum: 1 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    AuthoringDraftSummary:
+      type: object
+      additionalProperties: false
+      required: [id, title, intendedVersion, status, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        intendedVersion: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
+        status: { type: string, enum: [ACTIVE, ABANDONED] }
+        updatedAt: { type: string, format: date-time }
+    AuthoringDraftList:
+      type: object
+      additionalProperties: false
+      required: [drafts]
+      properties:
+        drafts: { type: array, items: { $ref: '#/components/schemas/AuthoringDraftSummary' } }
     AuthoringWorkspace:
       type: object
       required: [id, draft_id, created_at, last_activity_at]

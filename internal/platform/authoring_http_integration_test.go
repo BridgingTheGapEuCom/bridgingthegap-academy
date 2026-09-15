@@ -39,6 +39,10 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if err != nil {
 		t.Fatal(err)
 	}
+	draftC, workspaceC, err := authoringRepository.CreateDraft(ctx, draftFixture(t, courses.CourseID(course.ID)), "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	if err != nil {
+		t.Fatal(err)
+	}
 	moduleA, err := authoringRepository.CreateModule(ctx, authoring.ModuleInput{DraftID: draftA.ID, StableKey: "basics", Title: "Basics", Position: 0})
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +67,12 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, string(member.ID), authoring.MemberAuthor); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspaceC.ID, string(member.ID), authoring.MemberAuthor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE authoring.course_draft SET updated_at = now() + interval '1 hour' WHERE id = $1", string(draftC.ID)); err != nil {
+		t.Fatal(err)
+	}
 	revokedMember := "11111111-1111-4111-8111-111111111111"
 	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, revokedMember, authoring.MemberAuthor); err != nil {
 		t.Fatal(err)
@@ -75,6 +85,18 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	readService := authoring.NewReadService(authoringRepository, authoring.NewAuthorizationService(authoringRepository))
 	router := authTestRouter(&authHTTP{sessions: sessions, authoring: readService})
 	cookie := &http.Cookie{Name: sessionCookieName, Value: created.Token.Value()}
+	draftListResponse := authRequest(router, http.MethodGet, "/api/authoring/drafts", "", cookie)
+	var draftList struct {
+		Drafts []struct {
+			ID              string                `json:"id"`
+			Title           string                `json:"title"`
+			IntendedVersion string                `json:"intendedVersion"`
+			Status          authoring.DraftStatus `json:"status"`
+		} `json:"drafts"`
+	}
+	if err := json.Unmarshal(draftListResponse.Body.Bytes(), &draftList); err != nil || draftListResponse.Code != http.StatusOK || draftListResponse.Header().Get("Cache-Control") != "no-store" || len(draftList.Drafts) != 2 || draftList.Drafts[0].ID != string(draftC.ID) || draftList.Drafts[1].ID != string(draftA.ID) || draftList.Drafts[0].Title == "" || draftList.Drafts[0].IntendedVersion == "" || !draftList.Drafts[0].Status.Valid() || strings.Contains(draftListResponse.Body.String(), "course_id") || strings.Contains(draftListResponse.Body.String(), "members") {
+		t.Fatalf("actor-scoped draft list = %d %s err=%v", draftListResponse.Code, draftListResponse.Body.String(), err)
+	}
 
 	for _, path := range []string{
 		"/api/authoring/drafts/" + string(draftA.ID),
@@ -119,6 +141,10 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if _, err := revokeTestAuthoringMember(ctx, pool, authoringRepository, workspaceA.ID, string(member.ID)); err != nil {
 		t.Fatal(err)
 	}
+	draftListResponse = authRequest(router, http.MethodGet, "/api/authoring/drafts", "", cookie)
+	if err := json.Unmarshal(draftListResponse.Body.Bytes(), &draftList); err != nil || draftListResponse.Code != http.StatusOK || len(draftList.Drafts) != 1 || draftList.Drafts[0].ID != string(draftC.ID) {
+		t.Fatalf("revoked actor draft list = %d %s err=%v", draftListResponse.Code, draftListResponse.Body.String(), err)
+	}
 	for _, path := range []string{
 		"/api/authoring/drafts/" + string(draftA.ID),
 		"/api/authoring/drafts/" + string(draftA.ID) + "/members",
@@ -141,6 +167,9 @@ func testAuthoringReadAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	}
 	if response := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA.ID), "", &http.Cookie{Name: sessionCookieName, Value: adminSession.Token.Value()}); response.Code != http.StatusNotFound {
 		t.Fatalf("global administrator bypassed authoring membership = %d: %s", response.Code, response.Body.String())
+	}
+	if response := authRequest(router, http.MethodGet, "/api/authoring/drafts", "", &http.Cookie{Name: sessionCookieName, Value: adminSession.Token.Value()}); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"drafts":[]`) {
+		t.Fatalf("global administrator bypassed draft discovery membership = %d: %s", response.Code, response.Body.String())
 	}
 }
 

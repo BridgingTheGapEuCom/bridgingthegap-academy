@@ -229,6 +229,31 @@ func (r *Repository) GetDraft(ctx context.Context, id authoring.DraftID) (author
 	return mapDraft(row)
 }
 
+// ListAccessibleDrafts is actor-scoped discovery. The active-membership join
+// is the access boundary: no Identity lookup or role bypass is involved.
+func (r *Repository) ListAccessibleDrafts(ctx context.Context, user string) ([]authoring.DraftSummary, error) {
+	userID, err := uuid(user)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListAccessibleDrafts(ctx, userID)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	result := make([]authoring.DraftSummary, 0, len(rows))
+	for _, row := range rows {
+		draft, err := mapDraft(row)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, authoring.DraftSummary{
+			ID: draft.ID, Title: draft.Metadata.Title, IntendedVersion: draft.Metadata.IntendedVersion,
+			Status: draft.Status, UpdatedAt: draft.UpdatedAt,
+		})
+	}
+	return result, nil
+}
+
 func (r *Repository) GetWorkspace(ctx context.Context, id authoring.DraftID) (authoring.AuthoringWorkspace, error) {
 	key, err := uuid(string(id))
 	if err != nil {

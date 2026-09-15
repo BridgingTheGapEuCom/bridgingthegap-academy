@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/authoring/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns minimal mutable Draft summaries for which the authenticated actor currently has an active Authoring membership. Revoked memberships are excluded. Responses are private and not cacheable. */
+        get: operations["listAuthoringDrafts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}": {
         parameters: {
             query?: never;
@@ -544,6 +561,19 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        AuthoringDraftSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            intendedVersion: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "ABANDONED";
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AuthoringDraftList: {
+            drafts: components["schemas"]["AuthoringDraftSummary"][];
+        };
         AuthoringWorkspace: {
             /** Format: uuid */
             id: string;
@@ -932,6 +962,28 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAuthoringDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accessible Draft summaries ordered by most recently updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringDraftList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
     getAuthoringDraft: {
         parameters: {
             query?: never;

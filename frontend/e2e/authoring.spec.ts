@@ -63,6 +63,28 @@ async function serveDraft(page: Page) {
   await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
 }
 
+test('Authoring discovery is reachable from main navigation and opens an accessible Draft workspace', async ({ page }) => {
+  await serveDraft(page)
+  await page.route('**/api/authoring/drafts', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ drafts: [{ id: draftID, title: draft.title, intendedVersion: draft.intended_version, status: draft.status, updatedAt: draft.updated_at }] }),
+  }))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Authoring' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL('/authoring')
+  await expect(page.getByRole('link', { name: 'Authoring' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { level: 1, name: 'Authoring' })).toBeVisible()
+  await expect(page.getByRole('link', { name: `Open Draft: ${draft.title}` })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await page.getByRole('link', { name: `Open Draft: ${draft.title}` }).click()
+  await expect(page).toHaveURL(`/authoring/drafts/${draftID}/overview`)
+  await expect(page.getByRole('heading', { level: 1, name: draft.title })).toBeVisible()
+})
+
 test('Authoring content edits canonical blocks with keyboard controls and preserves deferred payloads', async ({ page }) => {
   let contentBody: { expectedLessonRevision: number; content: { schemaVersion: number; blocks: { key: string; type: string; payload: unknown }[] } } | undefined
   const deferred = { key: 'architecture-diagram', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Architecture diagram', caption: 'Reference' } }

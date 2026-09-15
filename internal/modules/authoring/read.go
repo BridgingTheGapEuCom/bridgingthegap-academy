@@ -31,6 +31,16 @@ func NewReadService(repository ReadRepository, authorizer Authorizer) *ReadServi
 	return &ReadService{repository: repository, authorizer: authorizer}
 }
 
+// Drafts returns only the mutable workspaces to which this trusted actor has a
+// current membership. Listing uses the membership relation directly rather
+// than treating a global role or a client-provided claim as access.
+func (s *ReadService) Drafts(ctx context.Context, actor identity.AuthenticatedActor) ([]DraftSummary, error) {
+	if s.repository == nil || actor.UserID() == "" || actor.SessionID() == "" {
+		return nil, ErrAuthorizationUnavailable
+	}
+	return s.repository.ListAccessibleDrafts(ctx, string(actor.UserID()))
+}
+
 func (s *ReadService) Draft(ctx context.Context, actor identity.AuthenticatedActor, id DraftID) (CourseDraft, error) {
 	if err := s.authorize(ctx, actor, id); err != nil {
 		return CourseDraft{}, err

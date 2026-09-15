@@ -15,6 +15,7 @@ import (
 )
 
 type authoringHTTPRepository struct {
+	accessible    map[string][]authoring.DraftSummary
 	drafts        map[authoring.DraftID]authoring.CourseDraft
 	workspaces    map[authoring.DraftID]authoring.AuthoringWorkspace
 	modules       map[authoring.DraftID][]authoring.DraftModule
@@ -23,6 +24,13 @@ type authoringHTTPRepository struct {
 	prerequisites map[authoring.DraftID][]authoring.Prerequisite
 	members       map[authoring.DraftID][]authoring.WorkspaceMember
 	err           error
+}
+
+func (r authoringHTTPRepository) ListAccessibleDrafts(_ context.Context, userID string) ([]authoring.DraftSummary, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]authoring.DraftSummary(nil), r.accessible[userID]...), nil
 }
 
 func (r authoringHTTPRepository) ActiveMembers(_ context.Context, id authoring.DraftID) ([]authoring.WorkspaceMember, error) {
@@ -383,6 +391,7 @@ func TestAuthoringReadHTTPAuthorizationDTOsAndCachePolicy(t *testing.T) {
 	first := authoring.DraftLesson{ID: lessonA, LessonInput: authoring.LessonInput{DraftID: draftA, ModuleID: moduleA, StableKey: "first-lesson", Title: "First lesson", Description: "Description", LearningObjectives: []string{"Understand"}, Position: 0, Content: content}, Revision: 3}
 	other := authoring.DraftLesson{ID: lessonB, LessonInput: authoring.LessonInput{DraftID: draftB, ModuleID: moduleB, StableKey: "other-lesson", Title: "Other lesson", Description: "Description", LearningObjectives: []string{"Apply"}, Position: 0, Content: content}, Revision: 2}
 	repository := authoringHTTPRepository{
+		accessible:    map[string][]authoring.DraftSummary{string(loginTestUser): {{ID: draftA, Title: draft.Metadata.Title, IntendedVersion: draft.Metadata.IntendedVersion, Status: draft.Status}}},
 		drafts:        map[authoring.DraftID]authoring.CourseDraft{draftA: draft},
 		workspaces:    map[authoring.DraftID]authoring.AuthoringWorkspace{draftA: {ID: "88888888-8888-4888-8888-888888888888", DraftID: draftA}},
 		modules:       map[authoring.DraftID][]authoring.DraftModule{draftA: {{ID: moduleA, ModuleInput: authoring.ModuleInput{DraftID: draftA, StableKey: "first-module", Title: "First module", Position: 0}, Revision: 2}}},
@@ -399,9 +408,15 @@ func TestAuthoringReadHTTPAuthorizationDTOsAndCachePolicy(t *testing.T) {
 	router := authTestRouter(&authHTTP{sessions: resolver, authoring: readService})
 	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
 
-	unauthenticated := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA), "", nil)
-	if unauthenticated.Code != http.StatusUnauthorized {
-		t.Fatalf("unauthenticated draft read = %d", unauthenticated.Code)
+	for _, path := range []string{"/api/authoring/drafts", "/api/authoring/drafts/" + string(draftA)} {
+		unauthenticated := authRequest(router, http.MethodGet, path, "", nil)
+		if unauthenticated.Code != http.StatusUnauthorized || unauthenticated.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("unauthenticated authoring read %s = %d cache=%q", path, unauthenticated.Code, unauthenticated.Header().Get("Cache-Control"))
+		}
+	}
+	listResponse := authRequest(router, http.MethodGet, "/api/authoring/drafts", "", cookie)
+	if listResponse.Code != http.StatusOK || listResponse.Header().Get("Cache-Control") != "no-store" || !strings.Contains(listResponse.Body.String(), `"drafts":[{"id":"`+string(draftA)+`"`) || strings.Contains(listResponse.Body.String(), `"course_id"`) || strings.Contains(listResponse.Body.String(), `"revision"`) {
+		t.Fatalf("draft discovery DTO/cache = %d %q %s", listResponse.Code, listResponse.Header().Get("Cache-Control"), listResponse.Body.String())
 	}
 	for _, path := range []string{
 		"/api/authoring/drafts/" + string(draftA),
@@ -473,6 +488,7 @@ func TestAuthoringReadHTTPAuthorizationDTOsAndCachePolicy(t *testing.T) {
 	storageFailed := authoring.NewReadService(authoringHTTPRepository{err: errors.New("storage unavailable")}, authoring.NewAuthorizationService(authoringMembershipsFake{roles: map[authoring.DraftID]authoring.MemberRole{draftA: authoring.MemberAuthor}}))
 	storageFailedRouter := authTestRouter(&authHTTP{sessions: resolver, authoring: storageFailed})
 	for _, path := range []string{
+		"/api/authoring/drafts",
 		"/api/authoring/drafts/" + string(draftA),
 		"/api/authoring/drafts/" + string(draftA) + "/members",
 	} {

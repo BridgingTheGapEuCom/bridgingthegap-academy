@@ -9,6 +9,7 @@ import AdminPage from './pages/AdminPage.vue'
 import CourseListPage from './pages/CourseListPage.vue'
 import CourseOverviewPage from './pages/CourseOverviewPage.vue'
 import LessonPage from './pages/LessonPage.vue'
+import AuthoringHomePage from './pages/AuthoringHomePage.vue'
 import AuthoringDraftShell from './pages/AuthoringDraftShell.vue'
 import AuthoringDraftOverviewPage from './pages/AuthoringDraftOverviewPage.vue'
 import AuthoringDraftStructurePage from './pages/AuthoringDraftStructurePage.vue'
@@ -19,7 +20,7 @@ import './style.css'
 const i18n = createI18n({
   legacy: false,
   locale: 'en',
-  messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home', courses: 'Courses' } },
+  messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home', courses: 'Courses', authoring: 'Authoring' } },
 })
 
 const router = createRouter({
@@ -31,6 +32,7 @@ const router = createRouter({
     { path: '/courses', component: CourseListPage },
     { path: '/courses/:slug', component: CourseOverviewPage },
     { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPage },
+    { path: '/authoring', name: 'authoring-home', component: AuthoringHomePage },
     {
       path: '/authoring/drafts/:draftId',
       component: AuthoringDraftShell,

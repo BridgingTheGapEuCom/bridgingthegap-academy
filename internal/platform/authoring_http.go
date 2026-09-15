@@ -33,6 +33,16 @@ type authoringDraftDTO struct {
 	UpdatedAt       time.Time             `json:"updated_at"`
 }
 
+// authoringDraftSummaryDTO is the narrow private discovery contract. Full
+// draft metadata remains available only through a draft-scoped read.
+type authoringDraftSummaryDTO struct {
+	ID              string                `json:"id"`
+	Title           string                `json:"title"`
+	IntendedVersion string                `json:"intendedVersion"`
+	Status          authoring.DraftStatus `json:"status"`
+	UpdatedAt       time.Time             `json:"updatedAt"`
+}
+
 type authoringLicenseDTO struct {
 	Kind        courses.ContentLicenseKind `json:"kind"`
 	Identifier  string                     `json:"identifier"`
@@ -276,6 +286,33 @@ func (a *authHTTP) handleAuthoringDraft(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, authoringDraft(draft))
+}
+
+func (a *authHTTP) handleAuthoringDraftList(w http.ResponseWriter, r *http.Request) {
+	actor, ok := currentAuthenticatedActor(r.Context())
+	if !ok {
+		problem(w, r, http.StatusUnauthorized, "Unauthenticated")
+		return
+	}
+	if a.authoring == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	drafts, err := a.authoring.Drafts(r.Context(), actor)
+	if err != nil {
+		authoringProblem(w, r, err)
+		return
+	}
+	items := make([]authoringDraftSummaryDTO, 0, len(drafts))
+	for _, draft := range drafts {
+		items = append(items, authoringDraftSummaryDTO{
+			ID: string(draft.ID), Title: draft.Title, IntendedVersion: draft.IntendedVersion.String(),
+			Status: draft.Status, UpdatedAt: draft.UpdatedAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Drafts []authoringDraftSummaryDTO `json:"drafts"`
+	}{Drafts: items})
 }
 
 func (a *authHTTP) handleAuthoringDraftUpdate(w http.ResponseWriter, r *http.Request) {

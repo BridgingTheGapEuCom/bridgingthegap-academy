@@ -30,7 +30,7 @@
   text-transform: uppercase;
 }
 
-.site-navigation { display: flex; gap: var(--btg-space-4); }
+.site-navigation { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--btg-space-4); }
 
 .home-page { padding-block: clamp(var(--btg-space-7), 10vw, 7rem); }
 .home-page__intro { max-width: var(--btg-width-reading); color: var(--btg-color-text-secondary); font-size: clamp(1.125rem, 2vw, 1.35rem); }
@@ -55,6 +55,21 @@
 .admin-page__state > p { color: var(--btg-color-text-secondary); }
 
 .authoring-shell { padding-block: clamp(var(--btg-space-6), 7vw, var(--btg-space-8)); }
+.authoring-home { padding-block: clamp(var(--btg-space-6), 7vw, var(--btg-space-8)); }
+.authoring-home__content,
+.authoring-home__state { display: grid; gap: var(--btg-space-5); }
+.authoring-home__eyebrow { margin-bottom: calc(-1 * var(--btg-space-3)); color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-strong); letter-spacing: 0.08em; text-transform: uppercase; }
+.authoring-home__intro,
+.authoring-home__empty { color: var(--btg-color-text-secondary); }
+.authoring-home__list { display: grid; gap: var(--btg-space-4); margin: var(--btg-space-4) 0 0; padding: 0; list-style: none; }
+.authoring-home__item { border-inline-start: 0.25rem solid var(--btg-color-border); padding-inline-start: var(--btg-space-4); }
+.authoring-home__item article { display: grid; gap: var(--btg-space-3); }
+.authoring-home__item h3 { margin: 0; }
+.authoring-home__metadata { display: flex; flex-wrap: wrap; gap: var(--btg-space-3) var(--btg-space-6); margin: 0; }
+.authoring-home__metadata div { display: grid; gap: var(--btg-space-1); }
+.authoring-home__metadata dt { color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-medium); }
+.authoring-home__metadata dd { margin: 0; font-weight: var(--btg-font-weight-strong); }
+.authoring-home__open { width: fit-content; }
 .authoring-shell__content,
 .authoring-shell__state,
 .authoring-shell__header,

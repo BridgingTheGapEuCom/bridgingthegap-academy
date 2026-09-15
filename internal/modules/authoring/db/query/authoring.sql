@@ -6,6 +6,14 @@ RETURNING *;
 -- name: GetDraft :one
 SELECT * FROM authoring.course_draft WHERE id = $1;
 
+-- name: ListAccessibleDrafts :many
+SELECT draft.*
+FROM authoring.course_draft AS draft
+JOIN authoring.workspace AS workspace ON workspace.draft_id = draft.id
+JOIN authoring.workspace_member AS member ON member.workspace_id = workspace.id
+WHERE member.user_id = $1 AND member.revoked_at IS NULL
+ORDER BY draft.updated_at DESC, draft.id DESC;
+
 -- name: UpdateDraftMetadata :one
 UPDATE authoring.course_draft
 SET intended_version = $3, source_language = $4, title = $5, description = $6,

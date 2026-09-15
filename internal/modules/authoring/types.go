@@ -135,6 +135,17 @@ type CourseDraft struct {
 	CreatedAt, UpdatedAt time.Time
 }
 
+// DraftSummary is the deliberately small private discovery projection. It is
+// returned only for drafts where the requesting actor has an active workspace
+// membership; it is not a substitute for a draft-scoped capability decision.
+type DraftSummary struct {
+	ID              DraftID
+	Title           string
+	IntendedVersion courses.Version
+	Status          DraftStatus
+	UpdatedAt       time.Time
+}
+
 type AuthoringWorkspace struct {
 	ID              WorkspaceID
 	DraftID         DraftID

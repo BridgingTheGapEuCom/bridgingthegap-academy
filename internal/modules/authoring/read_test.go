@@ -10,6 +10,7 @@ import (
 )
 
 type readRepositoryFake struct {
+	summaries     []DraftSummary
 	draft         CourseDraft
 	workspace     AuthoringWorkspace
 	modules       []DraftModule
@@ -17,6 +18,10 @@ type readRepositoryFake struct {
 	prerequisites []Prerequisite
 	members       []WorkspaceMember
 	err           error
+}
+
+func (r readRepositoryFake) ListAccessibleDrafts(context.Context, string) ([]DraftSummary, error) {
+	return append([]DraftSummary(nil), r.summaries...), r.err
 }
 
 func (r readRepositoryFake) ActiveMembers(context.Context, DraftID) ([]WorkspaceMember, error) {

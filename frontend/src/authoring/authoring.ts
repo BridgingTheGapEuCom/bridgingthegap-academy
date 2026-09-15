@@ -2,6 +2,8 @@ import { useAuth, type AuthService } from '../auth/auth'
 import type { components } from '../api/generated'
 
 export type AuthoringDraft = components['schemas']['AuthoringDraft']
+export type AuthoringDraftSummary = components['schemas']['AuthoringDraftSummary']
+export type AuthoringDraftList = components['schemas']['AuthoringDraftList']
 export type AuthoringContentLicense = components['schemas']['ContentLicense']
 export type AuthoringStructure = components['schemas']['AuthoringStructure']
 export type AuthoringModuleSummary = components['schemas']['AuthoringModuleSummary']
@@ -58,6 +60,12 @@ export function isAuthoringDraftID(value: string): boolean {
 
 function assertAuthoringID(value: string): void {
   if (!isAuthoringDraftID(value)) throw new InvalidAuthoringDraftIDError()
+}
+
+// Discovery remains server-authoritative: the private endpoint filters the
+// current actor's active memberships and never accepts browser-side roles.
+export async function listAuthoringDrafts(client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringDraftList> {
+  return client.request<AuthoringDraftList>('/api/authoring/drafts')
 }
 
 export async function getAuthoringDraft(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringDraft> {

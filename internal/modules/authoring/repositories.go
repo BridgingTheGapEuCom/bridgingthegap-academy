@@ -63,6 +63,7 @@ type Repository interface {
 // resource-scoped decisions remain with Authorizer.
 // Snapshot reads keep outline and prerequisites consistent with the returned revisions.
 type ReadRepository interface {
+	ListAccessibleDrafts(context.Context, string) ([]DraftSummary, error)
 	GetDraft(context.Context, DraftID) (CourseDraft, error)
 	GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error)
 	ActiveMembers(context.Context, DraftID) ([]WorkspaceMember, error)

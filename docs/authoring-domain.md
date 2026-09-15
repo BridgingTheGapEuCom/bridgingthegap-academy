@@ -67,6 +67,14 @@ Identity profile data is included in Draft metadata or structure responses.
 `GET /api/authoring/drafts/{draftId}/members` is a separate `authoring.read`,
 `no-store` projection of only active opaque user IDs and AUTHOR/MAINTAINER
 roles, ordered by user ID. It never exposes revoked membership history.
+`GET /api/authoring/drafts` is the separate Authoring entry-point projection:
+it returns only the current actor's active-membership Draft summaries, ordered
+by most recent update then Draft ID. It has no global-administrator bypass,
+does not inspect Identity profiles, and returns an empty list rather than a
+failed authorization decision when the actor has no active Draft memberships.
+The authenticated `/authoring` frontend route uses this projection as the
+normal entry point and links each summary to its existing Draft-scoped
+workspace route; it does not persist or fabricate Draft discovery data.
 
 The metadata PATCH endpoint accepts only intended version, source language,
 title, description, objectives, changelog, and content license. It requires an

@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, changeAuthoringMemberRole, createAuthoringModule, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, changeAuthoringMemberRole, createAuthoringModule, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
+  it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
+    const request = vi.fn().mockResolvedValue({ drafts: [] })
+    await listAuthoringDrafts({ request })
+    expect(request).toHaveBeenCalledWith('/api/authoring/drafts')
+  })
+
   it('replaces only canonical content through the scoped authenticated PUT boundary', async () => {
     const draftID = '11111111-1111-4111-8111-111111111111'
     const lessonID = '33333333-3333-4333-8333-333333333333'
