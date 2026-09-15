@@ -40,6 +40,23 @@ const structure = {
   ],
 }
 
+const lesson = {
+  id: '44444444-4444-4444-8444-444444444444',
+  draft_id: draftID,
+  module_id: structure.modules[0].id,
+  stable_key: 'what-is-eai',
+  title: 'What is EAI?',
+  description: 'Start here.',
+  objectives: ['Explain EAI'],
+  estimated_duration_minutes: 15,
+  position: 0,
+  revision: 2,
+  recommended_prerequisite_keys: [],
+  content: { schemaVersion: 1, blocks: [] },
+  created_at: '2026-09-15T10:00:00Z',
+  updated_at: '2026-09-15T11:00:00Z',
+}
+
 async function serveDraft(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
@@ -108,6 +125,33 @@ test('Authoring structure controls support keyboard reordering without narrow-sc
   await page.keyboard.press('Enter')
   await expect(page.getByText('Module order updated.')).toBeVisible()
   expect(orderBody).toEqual({ expectedDraftRevision: 3, moduleIds: [structure.modules[1]?.id, structure.modules[0]?.id] })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring Lesson metadata editor saves with the Lesson revision and remains usable at a narrow width', async ({ page }) => {
+  let patchBody: unknown
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patchBody = route.request().postDataJSON()
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, title: 'Updated Lesson', revision: 3, draftRevision: 4 }) })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lesson) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/lessons/${lesson.id}`)
+  await expect(page.getByRole('heading', { level: 2, name: 'Lesson metadata' })).toBeVisible()
+  await expect(page.getByText('what-is-eai')).toBeVisible()
+  const title = page.getByRole('textbox', { name: /^Title\b/ })
+  await title.fill('Updated Lesson')
+  await page.getByRole('button', { name: 'Save changes' }).click()
+
+  await expect(page.getByText('Lesson metadata saved.')).toBeVisible()
+  expect(patchBody).toEqual({ expectedLessonRevision: 2, title: 'Updated Lesson' })
+  await page.getByRole('link', { name: 'Back to structure' }).focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

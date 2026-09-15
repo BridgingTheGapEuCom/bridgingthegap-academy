@@ -137,6 +137,27 @@
 .authoring-metadata-form__conflict p { margin-bottom: var(--btg-space-3); }
 .authoring-metadata-form__unsaved { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }
 .authoring-metadata-form__actions { display: flex; gap: var(--btg-space-3); }
+.authoring-lesson-editor__header,
+.authoring-lesson-editor__form,
+.authoring-lesson-editor__objectives,
+.authoring-lesson-editor__state { display: grid; gap: var(--btg-space-4); }
+.authoring-lesson-editor__key { color: var(--btg-color-text-secondary); }
+.authoring-lesson-editor__key span { font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-medium); }
+.authoring-lesson-editor__form textarea { min-height: 8rem; resize: vertical; }
+.authoring-lesson-editor__objectives { margin: 0; border: var(--btg-border-width) solid var(--btg-color-border); padding: var(--btg-space-4); }
+.authoring-lesson-editor__objectives legend { padding-inline: var(--btg-space-2); font-weight: var(--btg-font-weight-strong); }
+.authoring-lesson-editor__objectives > p { color: var(--btg-color-text-secondary); }
+.authoring-lesson-editor__objectives ol { display: grid; gap: var(--btg-space-3); margin: 0; padding-inline-start: var(--btg-space-5); }
+.authoring-lesson-editor__objectives li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--btg-space-3); }
+.authoring-lesson-editor__error,
+.authoring-lesson-editor__conflict,
+.authoring-lesson-editor__state,
+.authoring-lesson-editor__status { border-inline-start: 0.25rem solid var(--btg-color-danger); background: var(--btg-color-surface-muted); padding: var(--btg-space-3) var(--btg-space-4); }
+.authoring-lesson-editor__conflict { border-inline-start-color: var(--btg-color-warning); }
+.authoring-lesson-editor__status { border-inline-start-color: var(--btg-color-success); }
+.authoring-lesson-editor__conflict p { margin-bottom: var(--btg-space-3); }
+.authoring-lesson-editor__unsaved { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }
+.authoring-lesson-editor__actions { display: flex; gap: var(--btg-space-3); }
 .authoring-structure,
 .authoring-structure__header,
 .authoring-structure__modules,
@@ -175,6 +196,7 @@
 @media (max-width: 30rem) {
   .authoring-shell__navigation a { flex: 1 1 auto; justify-content: center; }
   .authoring-structure-module__header { grid-template-columns: 1fr; }
+  .authoring-lesson-editor__objectives li { grid-template-columns: 1fr; align-items: stretch; }
 }
 .admin-page__status { border-inline-start: 0.25rem solid var(--btg-color-success); background: var(--btg-color-surface-muted); font-weight: var(--btg-font-weight-medium); padding: var(--btg-space-3) var(--btg-space-4); }
 .admin-page__actions { display: flex; flex-wrap: wrap; gap: var(--btg-space-3); }

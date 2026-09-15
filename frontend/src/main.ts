@@ -13,7 +13,7 @@ import AuthoringDraftShell from './pages/AuthoringDraftShell.vue'
 import AuthoringDraftOverviewPage from './pages/AuthoringDraftOverviewPage.vue'
 import AuthoringDraftStructurePage from './pages/AuthoringDraftStructurePage.vue'
 import AuthoringDraftMembersPage from './pages/AuthoringDraftMembersPage.vue'
-import AuthoringDraftLessonPlaceholderPage from './pages/AuthoringDraftLessonPlaceholderPage.vue'
+import AuthoringDraftLessonPage from './pages/AuthoringDraftLessonPage.vue'
 import './style.css'
 
 const i18n = createI18n({
@@ -38,7 +38,7 @@ const router = createRouter({
         { path: '', redirect: (to) => ({ name: 'authoring-draft-overview', params: { draftId: to.params.draftId } }) },
         { path: 'overview', name: 'authoring-draft-overview', component: AuthoringDraftOverviewPage },
         { path: 'structure', name: 'authoring-draft-structure', component: AuthoringDraftStructurePage },
-        { path: 'lessons/:lessonId', name: 'authoring-draft-lesson', component: AuthoringDraftLessonPlaceholderPage },
+        { path: 'lessons/:lessonId', name: 'authoring-draft-lesson', component: AuthoringDraftLessonPage },
         { path: 'members', name: 'authoring-draft-members', component: AuthoringDraftMembersPage },
       ],
     },

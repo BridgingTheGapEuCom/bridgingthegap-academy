@@ -6,6 +6,7 @@ export type AuthoringContentLicense = components['schemas']['ContentLicense']
 export type AuthoringStructure = components['schemas']['AuthoringStructure']
 export type AuthoringModuleSummary = components['schemas']['AuthoringModuleSummary']
 export type AuthoringLessonSummary = components['schemas']['AuthoringLessonSummary']
+export type AuthoringLessonDetail = components['schemas']['AuthoringLessonDetail']
 
 export type AuthoringModuleCreate = components['schemas']['AuthoringModuleCreateRequest']
 export type AuthoringModuleUpdate = { expectedModuleRevision: number; title?: string; description?: string }
@@ -13,6 +14,13 @@ export type AuthoringModuleMutation = components['schemas']['AuthoringModuleMuta
 export type AuthoringOrderResponse = components['schemas']['AuthoringModuleOrderResponse']
 export type AuthoringLessonCreate = components['schemas']['AuthoringLessonCreateRequest']
 export type AuthoringLessonOrderModule = components['schemas']['AuthoringLessonOrderModule']
+export type AuthoringLessonMetadataPatch = {
+  expectedLessonRevision: number
+  title?: string
+  description?: string
+  objectives?: string[]
+  estimatedDurationMinutes?: number | null
+}
 
 export type AuthoringDraftMetadataPatch = {
   expectedRevision: number
@@ -97,6 +105,16 @@ export async function reorderAuthoringLessons(draftID: string, expectedDraftRevi
 export async function deleteAuthoringLesson(draftID: string, lessonID: string, expectedDraftRevision: number, expectedLessonRevision: number, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringOrderResponse> {
   assertAuthoringID(draftID); assertAuthoringID(lessonID)
   return client.request<AuthoringOrderResponse>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}`, jsonRequest('DELETE', { expectedDraftRevision, expectedLessonRevision }))
+}
+
+export async function getAuthoringLesson(draftID: string, lessonID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringLessonDetail> {
+  assertAuthoringID(draftID); assertAuthoringID(lessonID)
+  return client.request<AuthoringLessonDetail>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}`)
+}
+
+export async function updateAuthoringLesson(draftID: string, lessonID: string, input: AuthoringLessonMetadataPatch, client: Pick<AuthService, 'request'> = useAuth()): Promise<components['schemas']['AuthoringLessonMutationResponse']> {
+  assertAuthoringID(draftID); assertAuthoringID(lessonID)
+  return client.request<components['schemas']['AuthoringLessonMutationResponse']>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}`, jsonRequest('PATCH', input))
 }
 
 function jsonRequest(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body: unknown) {
