@@ -242,18 +242,23 @@ trusted decision-actor identities for per-cycle policy evaluation.
 `BTG_LMS_REQUIRE_INDEPENDENT_REVIEW` defaults to `true`. It configures the
 Authoring `ReviewDecisionPolicy`, which compares only the trusted authenticated
 decision actor ID with the immutable submitter ID recorded on that individual
-Review cycle. When enabled, a submitter cannot decide their own cycle and the
-policy returns `ErrIndependentReviewerRequired`; when explicitly set to
-`false`, the policy permits that relationship. This policy is separate from
-the resource-scoped `authoring.review.decide` authorization capability. Both
-approval and change-request application paths authorize first, load the exact
-Draft-scoped Review, reject stale or terminal state, then apply independence to
-that cycle's immutable submitter before invoking the transactional decision.
-Persistence repeats lifecycle and revision CAS checks under the Review lock, so
-concurrent decisions still have one winner. HTTP-specific representation of
-`ErrIndependentReviewerRequired` is a `409 Conflict` Problem Details response
-with code `independent_reviewer_required`; it remains distinct from hidden
-authorization failures and generic stale or terminal conflicts. An APPROVED
-Review remains only an approved frozen Draft snapshot, not a published Course.
-The policy does not inspect roles, query Identity, or infer broader contributor
-independence.
+Review cycle. Its current rule is `decision actor != Review submitter`. When
+enabled, a submitter cannot decide their own cycle and the policy returns
+`ErrIndependentReviewerRequired`; self-hosted deployments may explicitly set
+the variable to `false`, which permits that relationship only and does not
+grant `authoring.review.decide`. This policy is separate from the
+resource-scoped authorization capability. Both approval and change-request
+application paths authorize first, load the exact Draft-scoped Review, reject
+stale revision or terminal state, then apply independence to that cycle's
+immutable submitter before invoking the transactional decision. Stale and
+terminal state therefore take precedence over policy rejection. Persistence
+repeats lifecycle and revision CAS checks under the Review lock, so concurrent
+decisions still have one winner.
+
+`ErrIndependentReviewerRequired` is exposed as a `409 Conflict` Problem
+Details response with code `independent_reviewer_required`; it remains distinct
+from hidden authorization failures and generic stale or terminal conflicts. An
+APPROVED Review remains only an approved frozen Draft snapshot, not a published
+Course. The policy does not inspect roles, query Identity, or infer broader
+contributor independence. Reviewer assignment and broader contributor-
+independence rules are not implemented.

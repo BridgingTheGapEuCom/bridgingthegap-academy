@@ -199,3 +199,45 @@ func TestReviewApplicationChecksAuthorizationAndMutableStateBeforePolicy(t *test
 		t.Fatal("authorization failure reached Review persistence")
 	}
 }
+
+func TestReviewApplicationStaleAndTerminalStatePrecedePolicyForBothDecisions(t *testing.T) {
+	actor := resolvedActor(t)
+	actorID := string(actor.UserID())
+	reviewID := ReviewID("44444444-4444-4444-8444-444444444444")
+	for _, test := range []struct {
+		name      string
+		status    ReviewStatus
+		expected  int64
+		wantError error
+	}{
+		{name: "stale", status: ReviewInReview, expected: 2, wantError: ErrReviewStale},
+		{name: "terminal", status: ReviewApproved, expected: 1, wantError: ErrReviewInvalidState},
+	} {
+		for _, decision := range []struct {
+			name string
+			call func(*ReviewApplicationService) error
+		}{
+			{name: "approve", call: func(service *ReviewApplicationService) error {
+				_, err := service.Approve(context.Background(), actor, testDraftA, reviewID, test.expected, "")
+				return err
+			}},
+			{name: "request changes", call: func(service *ReviewApplicationService) error {
+				_, err := service.RequestChanges(context.Background(), actor, testDraftA, reviewID, test.expected, "")
+				return err
+			}},
+		} {
+			t.Run(test.name+" "+decision.name, func(t *testing.T) {
+				repository := &reviewRepositoryFake{cycle: ReviewCycle{ID: reviewID, DraftID: testDraftA, Status: test.status, Revision: 1, SubmittedByUserID: actorID}}
+				memberships := &membershipReaderFake{roles: map[DraftID]MemberRole{testDraftA: MemberMaintainer}}
+				service := NewReviewApplicationServiceWithDecisionPolicy(repository, NewAuthorizationService(memberships), NewReviewDecisionPolicy(true))
+
+				if err := decision.call(service); !errors.Is(err, test.wantError) {
+					t.Fatalf("decision error = %v, want %v", err, test.wantError)
+				}
+				if repository.decisionCalls != 0 || repository.cycle.Revision != 1 || repository.cycle.Status != test.status {
+					t.Fatalf("pre-policy conflict reached persistence mutation: %#v", repository)
+				}
+			})
+		}
+	}
+}

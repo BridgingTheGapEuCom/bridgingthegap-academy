@@ -83,7 +83,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringLessonMutations:    authoring.NewLessonMutationService(authoringRepository, authoringAuthorizer),
 		authoringLessonContent:      authoring.NewLessonContentMutationService(authoringRepository, authoringAuthorizer),
 		authoringMemberships:        authoring.NewMembershipMutationService(authoringRepository, authoringAuthorizer),
-		authoringReviews:            authoring.NewReviewApplicationServiceWithDecisionPolicy(authoringRepository, authoringAuthorizer, authoring.NewReviewDecisionPolicy(cfg.RequireIndependentReview)),
+		authoringReviews:            newAuthoringReviewApplicationService(cfg, authoringRepository, authoringAuthorizer),
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -105,6 +105,13 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		}
 		return err
 	}
+}
+
+// newAuthoringReviewApplicationService keeps independent-review configuration
+// at composition time. The Review application remains responsible for the
+// decision policy itself; transports never receive deployment policy details.
+func newAuthoringReviewApplicationService(cfg Config, repository authoring.ReviewRepository, authorizer authoring.Authorizer) *authoring.ReviewApplicationService {
+	return authoring.NewReviewApplicationServiceWithDecisionPolicy(repository, authorizer, authoring.NewReviewDecisionPolicy(cfg.RequireIndependentReview))
 }
 
 func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.CounterVec, latency *prometheus.HistogramVec, auth *authHTTP) http.Handler {

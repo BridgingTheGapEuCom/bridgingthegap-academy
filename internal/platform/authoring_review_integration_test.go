@@ -472,6 +472,20 @@ func testAuthoringReviewDecisionPolicy(t *testing.T, ctx context.Context, pool *
 	if _, err = required.Approve(ctx, actorB, resubmitDraft.ID, secondCycle.ID, secondCycle.Revision, ""); !errors.Is(err, authoring.ErrIndependentReviewerRequired) {
 		t.Fatalf("second-cycle submitter decided own Review: %v", err)
 	}
+	// Membership history changes do not rewrite immutable per-cycle submitter
+	// provenance. A remains a MAINTAINER and may still decide B's cycle.
+	_, resubmitDraft, err = repository.ChangeMemberRoleForDraft(ctx, resubmitDraft.ID, resubmitDraft.Revision, string(userB.ID), authoring.MemberAuthor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedFirst, _, err := repository.GetReview(ctx, firstCycle.ID)
+	if err != nil || storedFirst.SubmittedByUserID != string(userA.ID) {
+		t.Fatalf("first-cycle submitter provenance changed: %v %#v", err, storedFirst)
+	}
+	storedSecond, _, err := repository.GetReview(ctx, secondCycle.ID)
+	if err != nil || storedSecond.SubmittedByUserID != string(userB.ID) {
+		t.Fatalf("second-cycle submitter provenance changed: %v %#v", err, storedSecond)
+	}
 	if _, err = required.Approve(ctx, actorA, resubmitDraft.ID, secondCycle.ID, secondCycle.Revision, ""); err != nil {
 		t.Fatalf("independent first-cycle submitter could not decide second cycle: %v", err)
 	}

@@ -128,24 +128,59 @@ func TestAuthoringReviewHTTPAuthorizationSecurityAndStrictJSON(t *testing.T) {
 	if response = authRequest(router, http.MethodPost, base+"/"+string(reviewID)+"/approve", `{"expectedReviewRevision":1}`, cookie, csrf); response.Code != http.StatusNotFound {
 		t.Fatalf("AUTHOR decision = %d", response.Code)
 	}
+	for _, suffix := range []string{"approve", "request-changes"} {
+		decisionPath := base + "/" + string(reviewID) + "/" + suffix
+		if got := authRequest(router, http.MethodPost, decisionPath, `{"expectedReviewRevision":1}`, nil, csrf); got.Code != http.StatusUnauthorized {
+			t.Fatalf("unauthenticated %s = %d", suffix, got.Code)
+		}
+		if got := authRequest(router, http.MethodPost, decisionPath, `{"expectedReviewRevision":1}`, cookie); got.Code != http.StatusForbidden {
+			t.Fatalf("missing CSRF %s = %d", suffix, got.Code)
+		}
+		if got := authRequest(router, http.MethodPost, decisionPath, `{"expectedReviewRevision":1}`, cookie, "wrong"); got.Code != http.StatusForbidden {
+			t.Fatalf("invalid CSRF %s = %d", suffix, got.Code)
+		}
+		missingOriginDecision := httptest.NewRequest(http.MethodPost, decisionPath, strings.NewReader(`{"expectedReviewRevision":1}`))
+		missingOriginDecision.Header.Set("Content-Type", "application/json")
+		missingOriginDecision.Header.Set("X-CSRF-Token", csrf)
+		missingOriginDecision.AddCookie(cookie)
+		missingOriginDecisionResponse := httptest.NewRecorder()
+		router.ServeHTTP(missingOriginDecisionResponse, missingOriginDecision)
+		if missingOriginDecisionResponse.Code != http.StatusForbidden {
+			t.Fatalf("missing Origin %s = %d", suffix, missingOriginDecisionResponse.Code)
+		}
+		untrustedDecision := httptest.NewRequest(http.MethodPost, decisionPath, strings.NewReader(`{"expectedReviewRevision":1}`))
+		untrustedDecision.Header.Set("Content-Type", "application/json")
+		untrustedDecision.Header.Set("Origin", "https://attacker.example")
+		untrustedDecision.Header.Set("X-CSRF-Token", csrf)
+		untrustedDecision.AddCookie(cookie)
+		untrustedDecisionResponse := httptest.NewRecorder()
+		router.ServeHTTP(untrustedDecisionResponse, untrustedDecision)
+		if untrustedDecisionResponse.Code != http.StatusForbidden {
+			t.Fatalf("untrusted Origin %s = %d", suffix, untrustedDecisionResponse.Code)
+		}
+	}
 
 	// The remaining decision transport checks model an independent maintainer.
 	repository.cycle.SubmittedByUserID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 	memberships.roles[draftID] = authoring.MemberMaintainer
-	for _, body := range []string{
-		`{"expectedReviewRevision":null}`,
-		`{"ExpectedReviewRevision":1}`,
-		`{"expectedReviewRevision":1,"unknown":true}`,
-		`{"expectedReviewRevision":1,"expectedReviewRevision":1}`,
-		`{"expectedReviewRevision":1} {}`,
-		`{`,
-	} {
-		if got := authRequest(router, http.MethodPost, base+"/"+string(reviewID)+"/approve", body, cookie, csrf); got.Code != http.StatusBadRequest {
-			t.Fatalf("strict body %q = %d", body, got.Code)
+	for _, suffix := range []string{"approve", "request-changes"} {
+		decisionPath := base + "/" + string(reviewID) + "/" + suffix
+		for _, body := range []string{
+			`{}`,
+			`{"expectedReviewRevision":null}`,
+			`{"ExpectedReviewRevision":1}`,
+			`{"expectedReviewRevision":1,"unknown":true}`,
+			`{"expectedReviewRevision":1,"expectedReviewRevision":1}`,
+			`{"expectedReviewRevision":1} {}`,
+			`{`,
+		} {
+			if got := authRequest(router, http.MethodPost, decisionPath, body, cookie, csrf); got.Code != http.StatusBadRequest {
+				t.Fatalf("strict %s body %q = %d", suffix, body, got.Code)
+			}
 		}
-	}
-	if got := authRequest(router, http.MethodPost, base+"/"+string(reviewID)+"/approve", strings.Repeat(" ", int(maxAuthoringReviewBodyBytes))+`{"expectedReviewRevision":1}`, cookie, csrf); got.Code != http.StatusBadRequest {
-		t.Fatalf("oversized body = %d", got.Code)
+		if got := authRequest(router, http.MethodPost, decisionPath, strings.Repeat(" ", int(maxAuthoringReviewBodyBytes))+`{"expectedReviewRevision":1}`, cookie, csrf); got.Code != http.StatusBadRequest {
+			t.Fatalf("oversized %s body = %d", suffix, got.Code)
+		}
 	}
 	response = authRequest(router, http.MethodPost, base+"/"+string(reviewID)+"/approve", `{"expectedReviewRevision":1,"message":"Approved"}`, cookie, csrf)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"status":"APPROVED"`) {
@@ -174,6 +209,12 @@ func TestAuthoringReviewHTTPAuthorizationSecurityAndStrictJSON(t *testing.T) {
 	memberships.roles[authoring.DraftID(otherDraft)] = authoring.MemberMaintainer
 	if response = authRequest(router, http.MethodGet, "/api/authoring/drafts/"+otherDraft+"/reviews/"+string(reviewID), "", cookie); response.Code != http.StatusNotFound {
 		t.Fatalf("cross-Draft review = %d", response.Code)
+	}
+	for _, suffix := range []string{"approve", "request-changes"} {
+		response = authRequest(router, http.MethodPost, "/api/authoring/drafts/"+otherDraft+"/reviews/"+string(reviewID)+"/"+suffix, `{"expectedReviewRevision":1}`, cookie, csrf)
+		if response.Code != http.StatusNotFound || strings.Contains(response.Body.String(), `"code":"independent_reviewer_required"`) {
+			t.Fatalf("cross-Draft %s policy leak = %d %s", suffix, response.Code, response.Body.String())
+		}
 	}
 	delete(memberships.roles, draftID)
 	if response = authRequest(router, http.MethodGet, base+"/latest", "", cookie); response.Code != http.StatusNotFound {
