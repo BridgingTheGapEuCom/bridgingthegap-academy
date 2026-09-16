@@ -19,7 +19,7 @@ func (r *Repository) ReadStructure(ctx context.Context, draftID authoring.DraftI
 	if err != nil {
 		return nil, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := r.q.WithTx(tx)
 	if _, err := q.GetDraft(ctx, id); err != nil {
 		return nil, storageError(err)
@@ -79,7 +79,7 @@ func (r *Repository) ReadLesson(ctx context.Context, draftID authoring.DraftID, 
 	if err != nil {
 		return authoring.DraftLesson{}, nil, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := r.q.WithTx(tx)
 	row, err := q.GetLessonForDraft(ctx, sqlc.GetLessonForDraftParams{DraftID: draftKey, ID: lessonKey})
 	if err != nil {

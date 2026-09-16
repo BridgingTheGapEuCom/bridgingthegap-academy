@@ -66,6 +66,8 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 
 	authoringRepository := authoringpostgres.New(pool)
 	authoringAuthorizer := authoring.NewAuthorizationService(authoringRepository)
+	coursesRepository := coursespostgres.New(pool)
+	publicationService := authoring.NewPublicationService(authoringRepository, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
 		sessions:                    identity.NewSessionService(identitypostgres.New(pool), nil, nil),
@@ -76,7 +78,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		loginMetrics:                loginAttempts,
 		loginRejects:                loginRejections,
 		authorizer:                  identity.NewAuthorizationService(identitypostgres.New(pool)),
-		courses:                     courses.NewReadService(coursespostgres.New(pool)),
+		courses:                     courses.NewReadService(coursesRepository),
 		authoring:                   authoring.NewReadService(authoringRepository, authoringAuthorizer),
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
@@ -84,6 +86,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringLessonContent:      authoring.NewLessonContentMutationService(authoringRepository, authoringAuthorizer),
 		authoringMemberships:        authoring.NewMembershipMutationService(authoringRepository, authoringAuthorizer),
 		authoringReviews:            newAuthoringReviewApplicationService(cfg, authoringRepository, authoringAuthorizer),
+		authoringPublications:       authoring.NewPublicationApplicationService(publicationService, authoringAuthorizer, time.Now),
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -192,6 +195,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Get("/authoring/drafts/{draftId}/reviews/{reviewId}", auth.handleAuthoringReview)
 					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/approve", auth.handleAuthoringReviewApprove)
 					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/request-changes", auth.handleAuthoringReviewRequestChanges)
+				}
+				if auth.authoringPublications != nil {
+					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/publish", auth.handleAuthoringReviewPublish)
 				}
 			})
 			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

@@ -67,6 +67,7 @@ type authHTTP struct {
 	authoringLessonContent      *authoring.LessonContentMutationService
 	authoringMemberships        *authoring.MembershipMutationService
 	authoringReviews            *authoring.ReviewApplicationService
+	authoringPublications       *authoring.PublicationApplicationService
 	cookieSecure                bool
 	now                         func() time.Time
 }

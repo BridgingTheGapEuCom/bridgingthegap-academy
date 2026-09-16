@@ -100,10 +100,10 @@ const createCourseVersionPublicationProvenance = `-- name: CreateCourseVersionPu
 INSERT INTO courses.course_version_publication_provenance (
     course_version_id, review_id, review_revision, draft_id, draft_revision,
     snapshot_schema_version, submitted_by_user_id, submitted_at,
-    approved_by_user_id, approved_at
+    approved_by_user_id, approved_at, published_by_user_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING course_version_id, review_id, review_revision, draft_id, draft_revision, snapshot_schema_version, submitted_by_user_id, submitted_at, approved_by_user_id, approved_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING course_version_id, review_id, review_revision, draft_id, draft_revision, snapshot_schema_version, submitted_by_user_id, submitted_at, approved_by_user_id, approved_at, published_by_user_id
 `
 
 type CreateCourseVersionPublicationProvenanceParams struct {
@@ -117,6 +117,7 @@ type CreateCourseVersionPublicationProvenanceParams struct {
 	SubmittedAt           pgtype.Timestamptz
 	ApprovedByUserID      pgtype.UUID
 	ApprovedAt            pgtype.Timestamptz
+	PublishedByUserID     pgtype.UUID
 }
 
 func (q *Queries) CreateCourseVersionPublicationProvenance(ctx context.Context, arg CreateCourseVersionPublicationProvenanceParams) (CoursesCourseVersionPublicationProvenance, error) {
@@ -131,6 +132,7 @@ func (q *Queries) CreateCourseVersionPublicationProvenance(ctx context.Context, 
 		arg.SubmittedAt,
 		arg.ApprovedByUserID,
 		arg.ApprovedAt,
+		arg.PublishedByUserID,
 	)
 	var i CoursesCourseVersionPublicationProvenance
 	err := row.Scan(
@@ -144,6 +146,7 @@ func (q *Queries) CreateCourseVersionPublicationProvenance(ctx context.Context, 
 		&i.SubmittedAt,
 		&i.ApprovedByUserID,
 		&i.ApprovedAt,
+		&i.PublishedByUserID,
 	)
 	return i, err
 }
@@ -455,8 +458,21 @@ func (q *Queries) GetCourseVersionByCourseAndVersion(ctx context.Context, arg Ge
 	return i, err
 }
 
+const getCourseVersionIDByReviewID = `-- name: GetCourseVersionIDByReviewID :one
+SELECT course_version_id
+FROM courses.course_version_publication_provenance
+WHERE review_id = $1
+`
+
+func (q *Queries) GetCourseVersionIDByReviewID(ctx context.Context, reviewID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getCourseVersionIDByReviewID, reviewID)
+	var course_version_id pgtype.UUID
+	err := row.Scan(&course_version_id)
+	return course_version_id, err
+}
+
 const getCourseVersionPublicationProvenance = `-- name: GetCourseVersionPublicationProvenance :one
-SELECT course_version_id, review_id, review_revision, draft_id, draft_revision, snapshot_schema_version, submitted_by_user_id, submitted_at, approved_by_user_id, approved_at
+SELECT course_version_id, review_id, review_revision, draft_id, draft_revision, snapshot_schema_version, submitted_by_user_id, submitted_at, approved_by_user_id, approved_at, published_by_user_id
 FROM courses.course_version_publication_provenance
 WHERE course_version_id = $1
 `
@@ -475,6 +491,7 @@ func (q *Queries) GetCourseVersionPublicationProvenance(ctx context.Context, cou
 		&i.SubmittedAt,
 		&i.ApprovedByUserID,
 		&i.ApprovedAt,
+		&i.PublishedByUserID,
 	)
 	return i, err
 }

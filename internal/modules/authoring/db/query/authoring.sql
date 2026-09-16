@@ -6,6 +6,18 @@ RETURNING *;
 -- name: GetDraft :one
 SELECT * FROM authoring.course_draft WHERE id = $1;
 
+-- name: CreateReviewPublication :one
+INSERT INTO authoring.review_publication (
+    review_id, review_revision, draft_id, draft_revision, course_id,
+    course_version, course_version_id, published_at, published_by_user_id
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (review_id) DO NOTHING
+RETURNING *;
+
+-- name: GetReviewPublication :one
+SELECT * FROM authoring.review_publication WHERE review_id = $1;
+
 -- name: ListAccessibleDrafts :many
 SELECT draft.*
 FROM authoring.course_draft AS draft

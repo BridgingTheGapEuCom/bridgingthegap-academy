@@ -142,6 +142,7 @@ func immutableCourseVersionFixture(t *testing.T, courseID courses.CourseID, vers
 			DraftID: "73000000-0000-4000-8000-000000000001", DraftRevision: 11, SnapshotSchemaVersion: 1,
 			SubmittedByUserID: "72000000-0000-4000-8000-000000000001", SubmittedAt: time.Date(2026, time.September, 13, 10, 0, 0, 0, time.UTC),
 			ApprovedByUserID: "72000000-0000-4000-8000-000000000002", ApprovedAt: &approvedAt,
+			PublishedByUserID: "72000000-0000-4000-8000-000000000003",
 		},
 		Modules: []courses.ImmutableCourseVersionModule{
 			{

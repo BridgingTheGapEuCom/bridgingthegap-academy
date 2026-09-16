@@ -5,6 +5,11 @@ export type LoginRequest = components['schemas']['LoginRequest']
 export type AuthenticatedSessionResponse = components['schemas']['AuthenticatedSession']
 export type AdminStatusResponse = components['schemas']['AdminStatus']
 export type ProblemDetails = components['schemas']['Problem']
+// Some endpoints extend the shared Problem Details envelope with structured
+// domain data. Keep that data intact for the feature that owns its display.
+export type APIProblemDetails = ProblemDetails
+  | components['schemas']['PublicationConflictProblem']
+  | components['schemas']['PublicationValidationProblem']
 
 type Fetcher = typeof fetch
 type UnsafeMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -21,7 +26,7 @@ export type APIRequestOptions = Omit<RequestInit, 'body' | 'credentials' | 'head
 export class APIProblemError extends Error {
   constructor(
     readonly status: number,
-    readonly problem: ProblemDetails | undefined,
+    readonly problem: APIProblemDetails | undefined,
     readonly retryAfterSeconds: number | undefined,
   ) {
     super(problem?.title ?? `Request failed with status ${status}`)
@@ -113,7 +118,7 @@ function parseRetryAfter(value: string | null): number | undefined {
   return Number.isSafeInteger(seconds) ? seconds : undefined
 }
 
-async function parseProblemDetails(response: Response): Promise<ProblemDetails | undefined> {
+async function parseProblemDetails(response: Response): Promise<APIProblemDetails | undefined> {
   try {
     const value: unknown = await response.json()
     return isProblemDetails(value) ? value : undefined

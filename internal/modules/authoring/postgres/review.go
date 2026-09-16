@@ -69,7 +69,7 @@ func (r *Repository) SubmitReview(ctx context.Context, draftID authoring.DraftID
 	if err != nil {
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, err
 	}
@@ -228,7 +228,7 @@ func (r *Repository) decideReview(ctx context.Context, draft authoring.DraftID, 
 	if err != nil {
 		return authoring.ReviewCycle{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	query := `SELECT ` + reviewColumns + ` FROM authoring.review_cycle WHERE id=$1`
 	arguments := []any{reviewKey}
 	if draft != "" {

@@ -49,6 +49,22 @@ type Repository interface {
 type ImmutableCourseVersionRepository interface {
 	StoreImmutableCourseVersion(context.Context, ImmutableCourseVersion) (ImmutableCourseVersion, error)
 	GetImmutableCourseVersion(context.Context, CourseVersionID) (ImmutableCourseVersion, error)
+	GetImmutableCourseVersionByReviewID(context.Context, string) (ImmutableCourseVersion, error)
+	GetImmutableCourseVersionByCourseAndVersion(context.Context, CourseID, Version) (ImmutableCourseVersion, error)
+}
+
+func (s *CourseVersionStore) GetByReviewID(ctx context.Context, reviewID string) (ImmutableCourseVersion, error) {
+	if s == nil || s.repository == nil || reviewID == "" {
+		return ImmutableCourseVersion{}, ErrNotFound
+	}
+	return s.repository.GetImmutableCourseVersionByReviewID(ctx, reviewID)
+}
+
+func (s *CourseVersionStore) GetByCourseAndVersion(ctx context.Context, courseID CourseID, version Version) (ImmutableCourseVersion, error) {
+	if s == nil || s.repository == nil || courseID == "" {
+		return ImmutableCourseVersion{}, ErrNotFound
+	}
+	return s.repository.GetImmutableCourseVersionByCourseAndVersion(ctx, courseID, version)
 }
 
 type CourseVersionStore struct {

@@ -1,4 +1,7 @@
-.PHONY: install generate build test test-integration test-e2e check dev db-up migrate doctor
+.PHONY: install generate build test test-integration test-e2e lint check dev db-up migrate doctor
+
+GOLANGCI_LINT_VERSION := $(shell cat tools/golangci-lint-version)
+GO_TOOLCHAIN_VERSION := $(shell go list -m -f '{{.GoVersion}}')
 
 install:
 	pnpm install --frozen-lockfile
@@ -21,7 +24,10 @@ test-integration:
 test-e2e:
 	pnpm test:e2e
 
-check:
+lint:
+	GOTOOLCHAIN=go$(GO_TOOLCHAIN_VERSION) go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run
+
+check: lint
 	go run ./tools/archcheck
 	go vet ./...
 	pnpm build

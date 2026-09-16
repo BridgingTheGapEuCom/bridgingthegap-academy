@@ -101,6 +101,30 @@ func (r *Repository) GetImmutableCourseVersion(ctx context.Context, id courses.C
 	return getImmutableCourseVersion(ctx, r.q, key)
 }
 
+func (r *Repository) GetImmutableCourseVersionByReviewID(ctx context.Context, reviewID string) (courses.ImmutableCourseVersion, error) {
+	key, err := uuid(reviewID)
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, err
+	}
+	versionID, err := r.q.GetCourseVersionIDByReviewID(ctx, key)
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, storageError(err)
+	}
+	return getImmutableCourseVersion(ctx, r.q, versionID)
+}
+
+func (r *Repository) GetImmutableCourseVersionByCourseAndVersion(ctx context.Context, courseID courses.CourseID, version courses.Version) (courses.ImmutableCourseVersion, error) {
+	courseKey, err := uuid(string(courseID))
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, err
+	}
+	row, err := r.q.GetCourseVersionByCourseAndVersion(ctx, sqlc.GetCourseVersionByCourseAndVersionParams{CourseID: courseKey, Version: version.String()})
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, storageError(err)
+	}
+	return getImmutableCourseVersion(ctx, r.q, row.ID)
+}
+
 func storePublicationProvenance(ctx context.Context, q *sqlc.Queries, courseVersionID pgtype.UUID, provenance courses.CourseVersionProvenance) error {
 	reviewID, err := uuid(provenance.ReviewID)
 	if err != nil {
@@ -118,6 +142,10 @@ func storePublicationProvenance(ctx context.Context, q *sqlc.Queries, courseVers
 	if err != nil || provenance.ApprovedAt == nil {
 		return courses.ErrInvalidImmutableCourseVersion
 	}
+	publisherID, err := uuid(provenance.PublishedByUserID)
+	if err != nil {
+		return courses.ErrInvalidImmutableCourseVersion
+	}
 	_, err = q.CreateCourseVersionPublicationProvenance(ctx, sqlc.CreateCourseVersionPublicationProvenanceParams{
 		CourseVersionID:       courseVersionID,
 		ReviewID:              reviewID,
@@ -129,6 +157,7 @@ func storePublicationProvenance(ctx context.Context, q *sqlc.Queries, courseVers
 		SubmittedAt:           pgtype.Timestamptz{Time: provenance.SubmittedAt, Valid: true},
 		ApprovedByUserID:      approverID,
 		ApprovedAt:            pgtype.Timestamptz{Time: *provenance.ApprovedAt, Valid: true},
+		PublishedByUserID:     publisherID,
 	})
 	return err
 }
@@ -201,6 +230,7 @@ func getImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, versionID p
 			SubmittedAt:           provenanceRow.SubmittedAt.Time.UTC(),
 			ApprovedByUserID:      provenanceRow.ApprovedByUserID.String(),
 			ApprovedAt:            cloneTime(provenanceRow.ApprovedAt.Time.UTC()),
+			PublishedByUserID:     provenanceRow.PublishedByUserID.String(),
 		},
 		Modules: []courses.ImmutableCourseVersionModule{},
 	}

@@ -47,14 +47,6 @@ func clonePublicationSnapshot(t *testing.T, snapshot ReviewSnapshot) ReviewSnaps
 	return clone
 }
 
-func issueCodes(result PublicationValidationResult) []PublicationValidationCode {
-	codes := make([]PublicationValidationCode, 0, len(result.Issues))
-	for _, issue := range result.Issues {
-		codes = append(codes, issue.Code)
-	}
-	return codes
-}
-
 func hasPublicationIssue(result PublicationValidationResult, code PublicationValidationCode) bool {
 	for _, issue := range result.Issues {
 		if issue.Code == code {

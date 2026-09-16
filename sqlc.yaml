@@ -34,6 +34,7 @@ sql:
       - internal/modules/infrastructure/postgres/db/migrations/00007_course_structure.sql
       - internal/modules/infrastructure/postgres/db/migrations/00008_lesson_content.sql
       - internal/modules/infrastructure/postgres/db/migrations/00012_course_version_publication.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00013_course_version_publication_actor.sql
     queries: internal/modules/courses/db/query
     gen:
       go:
@@ -46,6 +47,7 @@ sql:
       - internal/modules/infrastructure/postgres/db/migrations/00009_authoring.sql
       - internal/modules/infrastructure/postgres/db/migrations/00010_authoring_content_integrity.sql
       - internal/modules/infrastructure/postgres/db/migrations/00011_authoring_review.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00014_authoring_publication.sql
     queries: internal/modules/authoring/db/query
     gen:
       go:

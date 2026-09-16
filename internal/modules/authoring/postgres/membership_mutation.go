@@ -51,7 +51,7 @@ func (r *Repository) mutateMember(ctx context.Context, draftID authoring.DraftID
 	if err != nil {
 		return authoring.WorkspaceMember{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.WorkspaceMember{}, authoring.CourseDraft{}, err
 	}

@@ -23,6 +23,14 @@ func (r *immutableCourseVersionRepositoryFake) GetImmutableCourseVersion(context
 	return r.stored, r.err
 }
 
+func (r *immutableCourseVersionRepositoryFake) GetImmutableCourseVersionByReviewID(context.Context, string) (ImmutableCourseVersion, error) {
+	return r.stored, r.err
+}
+
+func (r *immutableCourseVersionRepositoryFake) GetImmutableCourseVersionByCourseAndVersion(context.Context, CourseID, Version) (ImmutableCourseVersion, error) {
+	return r.stored, r.err
+}
+
 func validImmutableCourseVersion(t *testing.T) ImmutableCourseVersion {
 	t.Helper()
 	version, err := ParseVersion("1.2.3")
@@ -44,6 +52,7 @@ func validImmutableCourseVersion(t *testing.T) ImmutableCourseVersion {
 			DraftID: "30000000-0000-4000-8000-000000000001", DraftRevision: 7, SnapshotSchemaVersion: 1,
 			SubmittedByUserID: "40000000-0000-4000-8000-000000000001", SubmittedAt: time.Date(2026, time.September, 10, 12, 0, 0, 0, time.UTC),
 			ApprovedByUserID: "40000000-0000-4000-8000-000000000002", ApprovedAt: &approvedAt,
+			PublishedByUserID: "40000000-0000-4000-8000-000000000003",
 		},
 		Modules: []ImmutableCourseVersionModule{},
 	}

@@ -69,7 +69,7 @@ func (r *Repository) ReorderModules(ctx context.Context, draftID authoring.Draft
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := r.q.WithTx(tx)
 	if err := r.lockActiveDraft(ctx, tx, id); err != nil {
 		return authoring.CourseDraft{}, err
@@ -140,7 +140,7 @@ func (r *Repository) CreateModuleAtPosition(ctx context.Context, draftID authori
 	if err != nil {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraftRevision(ctx, tx, id, expected); err != nil {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, err
 	}
@@ -197,7 +197,7 @@ func (r *Repository) UpdateModuleMetadata(ctx context.Context, draftID authoring
 	if err != nil {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, err
 	}
@@ -262,7 +262,7 @@ func (r *Repository) DeleteEmptyModule(ctx context.Context, draftID authoring.Dr
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.CourseDraft{}, err
 	}
@@ -332,7 +332,7 @@ func (r *Repository) CreateLessonAtPosition(ctx context.Context, draftID authori
 	if err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
 	}
@@ -408,7 +408,7 @@ func (r *Repository) UpdateLessonMetadataForDraft(ctx context.Context, draftID a
 	if err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
 	}
@@ -487,7 +487,7 @@ func (r *Repository) ReplaceLessonContentForDraft(ctx context.Context, draftID a
 	if err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
 	}
@@ -543,7 +543,7 @@ func (r *Repository) ReorderLessonsForDraft(ctx context.Context, draftID authori
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.CourseDraft{}, err
 	}
@@ -649,7 +649,7 @@ func (r *Repository) ReplaceLessonPrerequisitesForDraft(ctx context.Context, dra
 	if err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
 	}
@@ -731,7 +731,7 @@ func (r *Repository) DeleteLessonForDraft(ctx context.Context, draftID authoring
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.CourseDraft{}, err
 	}
@@ -800,7 +800,7 @@ func (r *Repository) ReorderLessons(ctx context.Context, moduleID authoring.Modu
 	if err != nil {
 		return authoring.DraftModule{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftModule{}, err
 	}
@@ -864,7 +864,7 @@ func (r *Repository) DeleteModule(ctx context.Context, moduleID authoring.Module
 	if err != nil {
 		return storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return err
 	}
@@ -902,7 +902,7 @@ func (r *Repository) DeleteLesson(ctx context.Context, lessonID authoring.Lesson
 	if err != nil {
 		return storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return err
 	}
@@ -943,7 +943,7 @@ func (r *Repository) ReplacePrerequisites(ctx context.Context, lessonID authorin
 	if err != nil {
 		return authoring.DraftLesson{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftLesson{}, err
 	}
@@ -1051,7 +1051,7 @@ func (r *Repository) MoveLesson(ctx context.Context, lessonID authoring.LessonID
 	if err != nil {
 		return authoring.DraftLesson{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftLesson{}, err
 	}

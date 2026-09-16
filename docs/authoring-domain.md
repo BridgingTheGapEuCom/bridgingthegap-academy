@@ -49,6 +49,7 @@ branch on MAINTAINER/AUTHOR roles. The policy is:
 | `authoring.review.read` | Allow | Allow |
 | `authoring.review.submit` | Allow | Allow |
 | `authoring.review.decide` | Deny | Allow |
+| `authoring.publish` | Deny | Allow |
 
 Membership is read on every authorization decision; revoked rows grant nothing.
 An in-flight check may observe the prior committed membership if it races with
@@ -298,9 +299,37 @@ requires a successful publication-validation result, and constructs a complete
 Courses-domain `ImmutableCourseVersion`. The value preserves Review and Draft
 revision provenance, canonical metadata, ordered Modules and Lessons, advisory
 prerequisites, and canonical LessonContent without reading the mutable Draft.
-Publication time and contributor attribution are explicit conversion inputs
+Publication time, publication actor, and contributor attribution are explicit conversion inputs
 because the Review snapshot does not contain them; the converter never generates
 timestamps, identifiers, or attribution. The resulting value is isolated from
 later mutations of its inputs. Courses can now persist this value atomically and
-assign database row identifiers, while Authoring-to-Courses orchestration,
-Review mutation, and the publication API remain later work.
+assign database row identifiers.
+
+The M4.5d `PublicationService` loads the exact Draft-scoped Review and requires
+the caller's expected Review revision before composing validation, conversion,
+and the Courses atomic store. Only after Courses succeeds does Authoring record
+a separate immutable publication fact containing the Review revision, resulting
+CourseVersion ID and SemVer, publication actor, and publication time. Review
+status and snapshot remain unchanged.
+
+Authoring and Courses commits are deliberately not presented as one distributed
+transaction. Courses uniquely records both logical Course plus SemVer and Review
+provenance. If the Courses commit succeeds but the Authoring fact write fails, a
+retry loads the Courses aggregate by exact Review provenance, verifies that its
+frozen publication source matches, and repairs the missing Authoring fact. A
+SemVer owned by another Review remains a conflict. Thus one exact Review can
+converge on at most one publication result without deleting or rolling back an
+immutable Courses artifact.
+
+`POST /api/authoring/drafts/{draftId}/reviews/{reviewId}/publish` exposes that
+orchestration to an authenticated actor with current `authoring.publish` access
+to the exact Draft. The request contains only `expectedReviewRevision`;
+publisher identity comes from the resolved session and publication time from the
+server clock. The current server-owned attribution fallback records the frozen
+Review submitter's opaque ID without an Identity lookup. Successful initial and
+reconciled publications return the same CourseVersion identity and SemVer.
+Stale or non-approved Reviews and foreign Course/SemVer ownership are explicit
+conflicts, while publication-readiness failures return their ordered domain
+issue codes and canonical snapshot paths. Authorization denial remains an
+opaque 404, and all responses remain `no-store`. Frontend publication controls
+remain later work.

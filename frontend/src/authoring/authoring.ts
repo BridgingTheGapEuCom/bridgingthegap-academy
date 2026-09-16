@@ -24,6 +24,9 @@ export type AuthoringReviewDecision = components['schemas']['AuthoringReviewDeci
 export type AuthoringReviewSnapshot = components['schemas']['AuthoringReviewSnapshot']
 export type AuthoringReviewSnapshotModule = components['schemas']['AuthoringReviewSnapshotModule']
 export type AuthoringReviewSnapshotLesson = components['schemas']['AuthoringReviewSnapshotLesson']
+export type AuthoringPublicationRequest = components['schemas']['AuthoringPublicationRequest']
+export type AuthoringPublication = components['schemas']['AuthoringPublication']
+export type PublicationValidationIssue = components['schemas']['PublicationValidationIssue']
 
 export type AuthoringModuleCreate = components['schemas']['AuthoringModuleCreateRequest']
 export type AuthoringModuleUpdate = { expectedModuleRevision: number; title?: string; description?: string }
@@ -149,6 +152,15 @@ export async function requestAuthoringReviewChanges(draftID: string, reviewID: s
   assertAuthoringID(draftID)
   assertAuthoringID(reviewID)
   return client.request<AuthoringReview>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}/request-changes`, jsonRequest('POST', input))
+}
+
+// Publishing uses the immutable Review's own revision for CAS. The server
+// derives publisher attribution, time, and the CourseVersion from its frozen
+// snapshot; none of those values are browser input.
+export async function publishAuthoringDraftReview(draftID: string, reviewID: string, input: AuthoringPublicationRequest, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringPublication> {
+  assertAuthoringID(draftID)
+  assertAuthoringID(reviewID)
+  return client.request<AuthoringPublication>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}/publish`, jsonRequest('POST', input))
 }
 
 export async function addAuthoringMember(draftID: string, input: AuthoringMemberAdd, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringMemberMutation> {

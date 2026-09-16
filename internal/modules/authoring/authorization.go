@@ -20,6 +20,7 @@ const (
 	CapabilityReviewRead    Capability = "authoring.review.read"
 	CapabilityReviewSubmit  Capability = "authoring.review.submit"
 	CapabilityReviewDecide  Capability = "authoring.review.decide"
+	CapabilityPublish       Capability = "authoring.publish"
 )
 
 var (
@@ -75,7 +76,8 @@ func knownCapability(capability Capability) bool {
 	switch capability {
 	case CapabilityRead, CapabilityDraftEdit, CapabilityStructureEdit,
 		CapabilityContentEdit, CapabilityMembersManage, CapabilityDraftAbandon,
-		CapabilityReviewRead, CapabilityReviewSubmit, CapabilityReviewDecide:
+		CapabilityReviewRead, CapabilityReviewSubmit, CapabilityReviewDecide,
+		CapabilityPublish:
 		return true
 	default:
 		return false

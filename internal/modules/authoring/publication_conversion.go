@@ -17,8 +17,9 @@ var (
 // Courses model that are deliberately not invented by the frozen Review
 // snapshot. The publishing orchestrator will provide them explicitly.
 type PublicationConversionMetadata struct {
-	PublishedAt time.Time
-	Attribution []courses.ContributorSnapshot
+	PublishedAt       time.Time
+	PublishedByUserID string
+	Attribution       []courses.ContributorSnapshot
 }
 
 // PublicationValidationFailure preserves every deterministic M4.5a issue for
@@ -89,6 +90,7 @@ func buildImmutableCourseVersion(cycle ReviewCycle, snapshot ReviewSnapshot, met
 			SubmittedAt:           cycle.SubmittedAt,
 			ApprovedByUserID:      cycle.DecidedByUserID,
 			ApprovedAt:            cloneTime(cycle.DecidedAt),
+			PublishedByUserID:     metadata.PublishedByUserID,
 		},
 		Modules: make([]courses.ImmutableCourseVersionModule, 0, len(snapshot.Modules)),
 	}

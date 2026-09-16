@@ -31,15 +31,20 @@ RETURNING *;
 INSERT INTO courses.course_version_publication_provenance (
     course_version_id, review_id, review_revision, draft_id, draft_revision,
     snapshot_schema_version, submitted_by_user_id, submitted_at,
-    approved_by_user_id, approved_at
+    approved_by_user_id, approved_at, published_by_user_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: GetCourseVersionPublicationProvenance :one
 SELECT *
 FROM courses.course_version_publication_provenance
 WHERE course_version_id = $1;
+
+-- name: GetCourseVersionIDByReviewID :one
+SELECT course_version_id
+FROM courses.course_version_publication_provenance
+WHERE review_id = $1;
 
 -- name: GetCourseVersion :one
 SELECT *

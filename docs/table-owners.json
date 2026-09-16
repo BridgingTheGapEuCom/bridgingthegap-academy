@@ -8,6 +8,7 @@
   "authoring.lesson_prerequisite": "authoring",
   "authoring.review_cycle": "authoring",
   "authoring.review_event": "authoring",
+  "authoring.review_publication": "authoring",
   "courses.course": "courses",
   "courses.course_version": "courses",
   "courses.course_version_publication_provenance": "courses",

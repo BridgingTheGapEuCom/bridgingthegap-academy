@@ -240,6 +240,11 @@ test('Authoring decides an in-review snapshot with the authoritative Review revi
   let review = { ...reviewCycle }
   let decisionBody: unknown
   await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/members`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ members: [{ userId: session.user_id, role: 'MAINTAINER' }] }),
+  }))
   await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}/approve`, (route) => {
     decisionBody = route.request().postDataJSON()
     expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
@@ -266,6 +271,7 @@ test('Authoring decides an in-review snapshot with the authoritative Review revi
   await expect(page.getByText('Frozen semantic content.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Request changes' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Publish course version' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

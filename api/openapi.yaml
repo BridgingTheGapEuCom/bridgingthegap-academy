@@ -401,6 +401,22 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/reviews/{reviewId}/publish:
+    post:
+      operationId: publishAuthoringDraftReview
+      description: Publishes the exact APPROVED Review revision through the Authoring publication orchestration boundary. Requires current authoring.publish authorization, trusted Origin, and the session CSRF token. Exact replay/reconciliation returns the same successful representation; stale Review state and a Course/SemVer owned by another Review return stable conflicts.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringReviewID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringPublicationRequest' } } } }
+      responses:
+        '200': { description: Immutable CourseVersion publication result, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringPublication' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { description: 'Stale Review revision, non-approved Review, publication provenance conflict, or foreign Course/SemVer conflict', content: { application/problem+json: { schema: { $ref: '#/components/schemas/PublicationConflictProblem' } } } }
+        '422': { description: Deterministic publication-readiness issues from the frozen Review snapshot, content: { application/problem+json: { schema: { $ref: '#/components/schemas/PublicationValidationProblem' } } } }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/courses:
     get:
       operationId: listPublishedCourses
@@ -588,6 +604,47 @@ components:
       properties:
         expectedReviewRevision: { type: integer, minimum: 1 }
         message: { type: string, maxLength: 20000 }
+    AuthoringPublicationRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedReviewRevision]
+      properties: { expectedReviewRevision: { type: integer, minimum: 1 } }
+    AuthoringPublication:
+      type: object
+      additionalProperties: false
+      required: [reviewId, reviewRevision, courseId, courseVersion, courseVersionId, publishedAt]
+      properties:
+        reviewId: { type: string, format: uuid }
+        reviewRevision: { type: integer, minimum: 1 }
+        courseId: { type: string, format: uuid }
+        courseVersion: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
+        courseVersionId: { type: string, format: uuid }
+        publishedAt: { type: string, format: date-time }
+    PublicationValidationIssue:
+      type: object
+      additionalProperties: false
+      required: [code, path, message]
+      properties:
+        code: { type: string, description: Stable publication-validation issue code. }
+        path: { type: string, description: Deterministic canonical Review snapshot location. }
+        message: { type: string, description: Safe human-readable issue detail. }
+    PublicationValidationProblem:
+      allOf:
+        - { $ref: '#/components/schemas/Problem' }
+        - type: object
+          required: [code, issues]
+          properties:
+            code: { type: string, const: publication_validation_failed }
+            issues: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PublicationValidationIssue' } }
+    PublicationConflictProblem:
+      allOf:
+        - { $ref: '#/components/schemas/Problem' }
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [review_revision_conflict, review_not_approved, course_version_already_exists, publication_conflict]
     AuthoringReview:
       type: object
       additionalProperties: false

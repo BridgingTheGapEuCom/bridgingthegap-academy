@@ -20,6 +20,7 @@ type CourseVersionProvenance struct {
 	SubmittedAt           time.Time
 	ApprovedByUserID      string
 	ApprovedAt            *time.Time
+	PublishedByUserID     string
 }
 
 // ImmutableCourseVersion is the complete Courses-domain publication value.
@@ -66,7 +67,8 @@ func (v ImmutableCourseVersion) ValidateForPersistence() error {
 	if !uuidPattern.MatchString(v.Provenance.ReviewID) || v.Provenance.ReviewRevision < 1 ||
 		!uuidPattern.MatchString(v.Provenance.DraftID) || v.Provenance.DraftRevision < 1 || v.Provenance.SnapshotSchemaVersion < 1 ||
 		!uuidPattern.MatchString(v.Provenance.SubmittedByUserID) || v.Provenance.SubmittedAt.IsZero() ||
-		!uuidPattern.MatchString(v.Provenance.ApprovedByUserID) || v.Provenance.ApprovedAt == nil || v.Provenance.ApprovedAt.IsZero() {
+		!uuidPattern.MatchString(v.Provenance.ApprovedByUserID) || v.Provenance.ApprovedAt == nil || v.Provenance.ApprovedAt.IsZero() ||
+		!uuidPattern.MatchString(v.Provenance.PublishedByUserID) {
 		return ErrInvalidImmutableCourseVersion
 	}
 

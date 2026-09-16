@@ -21,7 +21,12 @@ transaction. Course identity plus SemVer is unique, and Review ID is separately
 unique to prevent replay under another version. Any parent, child, provenance,
 or prerequisite failure rolls the transaction back. Once stored, the immutable
 aggregate can be reconstructed entirely from Courses without consulting
-Authoring. Publication orchestration and Review mutation remain separate work.
+Authoring. Courses also retains the publication actor so cross-module recovery
+can recreate an Authoring publication fact from the already-committed immutable
+aggregate. Authoring orchestration treats an exact Review-provenance replay as
+reconciliation while preserving a Course plus SemVer collision owned by another
+Review as a conflict. Review mutation and public publication APIs remain separate
+work.
 
 The content schema version is technical storage format versioning, separate from CourseVersion SemVer. Unknown versions and block types fail closed. External widgets, asset storage, Tiptap, rendering, and assessment resolution remain post-v1 or later milestones.
 

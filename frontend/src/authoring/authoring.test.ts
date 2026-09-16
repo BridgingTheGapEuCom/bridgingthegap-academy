@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -104,6 +104,20 @@ describe('Authoring API service', () => {
     expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/reviews/${reviewID}/approve`, expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }))
     expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/reviews/${reviewID}/request-changes`, expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }))
     await expect(approveAuthoringReview(draftID, 'not-a-review', input, { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
+  })
+
+  it('publishes an exact Review using only its authoritative revision', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const reviewID = '22222222-2222-4222-8222-222222222222'
+    await publishAuthoringDraftReview(draftID, reviewID, { expectedReviewRevision: 8 }, { request })
+    expect(request).toHaveBeenCalledWith(
+      `/api/authoring/drafts/${draftID}/reviews/${reviewID}/publish`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedReviewRevision: 8 }) }),
+    )
+    const body = JSON.parse(request.mock.calls[0][1].body)
+    expect(body).toEqual({ expectedReviewRevision: 8 })
+    await expect(publishAuthoringDraftReview(draftID, 'not-a-review', { expectedReviewRevision: 8 }, { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
   })
 
   it('keeps Lesson reads and metadata patches scoped to both bounded IDs', async () => {

@@ -19,7 +19,8 @@ func publicationConversionFixture(t *testing.T) (ReviewCycle, ReviewSnapshot, Pu
 	cycle.DecidedAt = &approvedAt
 	cycle.DecidedByUserID = "60000000-0000-4000-8000-000000000002"
 	metadata := PublicationConversionMetadata{
-		PublishedAt: time.Date(2026, time.September, 12, 12, 0, 0, 0, time.UTC),
+		PublishedAt:       time.Date(2026, time.September, 12, 12, 0, 0, 0, time.UTC),
+		PublishedByUserID: "60000000-0000-4000-8000-000000000003",
 		Attribution: []courses.ContributorSnapshot{{
 			UserID:      "60000000-0000-4000-8000-000000000001",
 			DisplayName: "Course author",
@@ -46,7 +47,7 @@ func TestPublicationConverterConvertsApprovedFrozenReview(t *testing.T) {
 	if !reflect.DeepEqual(version.LearningObjectives, snapshot.Draft.Objectives) || !reflect.DeepEqual(version.Attribution, metadata.Attribution) || version.PublishedAt != metadata.PublishedAt {
 		t.Fatalf("publication metadata not preserved: %#v", version)
 	}
-	if converted.Provenance.ReviewID != string(cycle.ID) || converted.Provenance.ReviewRevision != cycle.Revision || converted.Provenance.DraftID != string(cycle.DraftID) || converted.Provenance.DraftRevision != cycle.DraftRevision || converted.Provenance.SnapshotSchemaVersion != snapshot.SchemaVersion || converted.Provenance.SubmittedByUserID != cycle.SubmittedByUserID || converted.Provenance.ApprovedByUserID != cycle.DecidedByUserID || converted.Provenance.ApprovedAt == nil || *converted.Provenance.ApprovedAt != *cycle.DecidedAt {
+	if converted.Provenance.ReviewID != string(cycle.ID) || converted.Provenance.ReviewRevision != cycle.Revision || converted.Provenance.DraftID != string(cycle.DraftID) || converted.Provenance.DraftRevision != cycle.DraftRevision || converted.Provenance.SnapshotSchemaVersion != snapshot.SchemaVersion || converted.Provenance.SubmittedByUserID != cycle.SubmittedByUserID || converted.Provenance.ApprovedByUserID != cycle.DecidedByUserID || converted.Provenance.ApprovedAt == nil || *converted.Provenance.ApprovedAt != *cycle.DecidedAt || converted.Provenance.PublishedByUserID != metadata.PublishedByUserID {
 		t.Fatalf("Review provenance not preserved: %#v", converted.Provenance)
 	}
 	if len(converted.Modules) != len(snapshot.Modules) || converted.Modules[0].StableKey != snapshot.Modules[0].StableKey || converted.Modules[1].Position != 1 {
@@ -161,7 +162,7 @@ func TestPublicationConverterIsDeterministicAndIsolatesOutputFromInput(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.CourseVersion.Title == snapshot.Draft.Title || first.CourseVersion.LearningObjectives[0] == snapshot.Draft.Objectives[0] || first.Modules[0].Title == snapshot.Modules[0].Title || first.Modules[0].Lessons[0].LearningObjectives[0] == snapshot.Modules[0].Lessons[0].Objectives[0] || first.Modules[1].Lessons[0].PrerequisiteStableKeys[0] == snapshot.Modules[1].Lessons[0].PrerequisiteStableKeys[0] || first.CourseVersion.Attribution[0].DisplayName == metadata.Attribution[0].DisplayName || first.Provenance.ApprovedByUserID == cycle.DecidedByUserID || first.Provenance.ApprovedAt == cycle.DecidedAt || *first.Provenance.ApprovedAt == *cycle.DecidedAt || string(encodedBefore) != string(encodedAfter) {
+	if first.CourseVersion.Title == snapshot.Draft.Title || first.CourseVersion.LearningObjectives[0] == snapshot.Draft.Objectives[0] || first.Modules[0].Title == snapshot.Modules[0].Title || first.Modules[0].Lessons[0].LearningObjectives[0] == snapshot.Modules[0].Lessons[0].Objectives[0] || first.Modules[1].Lessons[0].PrerequisiteStableKeys[0] == snapshot.Modules[1].Lessons[0].PrerequisiteStableKeys[0] || first.CourseVersion.Attribution[0].DisplayName == metadata.Attribution[0].DisplayName || first.Provenance.ApprovedByUserID == cycle.DecidedByUserID || first.Provenance.ApprovedAt == cycle.DecidedAt || first.Provenance.ApprovedAt.Equal(*cycle.DecidedAt) || string(encodedBefore) != string(encodedAfter) {
 		t.Fatal("converted CourseVersion retained mutable Review/conversion input aliases")
 	}
 }

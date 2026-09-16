@@ -48,6 +48,7 @@ type CoursesCourseVersionPublicationProvenance struct {
 	SubmittedAt           pgtype.Timestamptz
 	ApprovedByUserID      pgtype.UUID
 	ApprovedAt            pgtype.Timestamptz
+	PublishedByUserID     pgtype.UUID
 }
 
 type CoursesLesson struct {

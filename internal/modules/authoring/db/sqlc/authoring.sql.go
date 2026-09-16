@@ -445,6 +445,56 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Aut
 	return i, err
 }
 
+const createReviewPublication = `-- name: CreateReviewPublication :one
+INSERT INTO authoring.review_publication (
+    review_id, review_revision, draft_id, draft_revision, course_id,
+    course_version, course_version_id, published_at, published_by_user_id
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (review_id) DO NOTHING
+RETURNING review_id, review_revision, draft_id, draft_revision, course_id, course_version, course_version_id, published_at, published_by_user_id, recorded_at
+`
+
+type CreateReviewPublicationParams struct {
+	ReviewID          pgtype.UUID
+	ReviewRevision    int64
+	DraftID           pgtype.UUID
+	DraftRevision     int64
+	CourseID          pgtype.UUID
+	CourseVersion     string
+	CourseVersionID   pgtype.UUID
+	PublishedAt       pgtype.Timestamptz
+	PublishedByUserID pgtype.UUID
+}
+
+func (q *Queries) CreateReviewPublication(ctx context.Context, arg CreateReviewPublicationParams) (AuthoringReviewPublication, error) {
+	row := q.db.QueryRow(ctx, createReviewPublication,
+		arg.ReviewID,
+		arg.ReviewRevision,
+		arg.DraftID,
+		arg.DraftRevision,
+		arg.CourseID,
+		arg.CourseVersion,
+		arg.CourseVersionID,
+		arg.PublishedAt,
+		arg.PublishedByUserID,
+	)
+	var i AuthoringReviewPublication
+	err := row.Scan(
+		&i.ReviewID,
+		&i.ReviewRevision,
+		&i.DraftID,
+		&i.DraftRevision,
+		&i.CourseID,
+		&i.CourseVersion,
+		&i.CourseVersionID,
+		&i.PublishedAt,
+		&i.PublishedByUserID,
+		&i.RecordedAt,
+	)
+	return i, err
+}
+
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO authoring.workspace (draft_id, created_by_user_id)
 VALUES ($1, $2) RETURNING id, draft_id, created_by_user_id, created_at, last_activity_at
@@ -715,6 +765,28 @@ func (q *Queries) GetModule(ctx context.Context, id pgtype.UUID) (AuthoringModul
 		&i.Revision,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getReviewPublication = `-- name: GetReviewPublication :one
+SELECT review_id, review_revision, draft_id, draft_revision, course_id, course_version, course_version_id, published_at, published_by_user_id, recorded_at FROM authoring.review_publication WHERE review_id = $1
+`
+
+func (q *Queries) GetReviewPublication(ctx context.Context, reviewID pgtype.UUID) (AuthoringReviewPublication, error) {
+	row := q.db.QueryRow(ctx, getReviewPublication, reviewID)
+	var i AuthoringReviewPublication
+	err := row.Scan(
+		&i.ReviewID,
+		&i.ReviewRevision,
+		&i.DraftID,
+		&i.DraftRevision,
+		&i.CourseID,
+		&i.CourseVersion,
+		&i.CourseVersionID,
+		&i.PublishedAt,
+		&i.PublishedByUserID,
+		&i.RecordedAt,
 	)
 	return i, err
 }

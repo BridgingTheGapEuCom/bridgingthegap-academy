@@ -345,6 +345,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/reviews/{reviewId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Publishes the exact APPROVED Review revision through the Authoring publication orchestration boundary. Requires current authoring.publish authorization, trusted Origin, and the session CSRF token. Exact replay/reconciliation returns the same successful representation; stale Review state and a Course/SemVer owned by another Review return stable conflicts. */
+        post: operations["publishAuthoringDraftReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses": {
         parameters: {
             query?: never;
@@ -518,6 +535,38 @@ export interface components {
         AuthoringReviewDecisionRequest: {
             expectedReviewRevision: number;
             message?: string;
+        };
+        AuthoringPublicationRequest: {
+            expectedReviewRevision: number;
+        };
+        AuthoringPublication: {
+            /** Format: uuid */
+            reviewId: string;
+            reviewRevision: number;
+            /** Format: uuid */
+            courseId: string;
+            courseVersion: string;
+            /** Format: uuid */
+            courseVersionId: string;
+            /** Format: date-time */
+            publishedAt: string;
+        };
+        PublicationValidationIssue: {
+            /** @description Stable publication-validation issue code. */
+            code: string;
+            /** @description Deterministic canonical Review snapshot location. */
+            path: string;
+            /** @description Safe human-readable issue detail. */
+            message: string;
+        };
+        PublicationValidationProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            code: "publication_validation_failed";
+            issues: components["schemas"]["PublicationValidationIssue"][];
+        };
+        PublicationConflictProblem: components["schemas"]["Problem"] & {
+            /** @enum {string} */
+            code: "review_revision_conflict" | "review_not_approved" | "course_version_already_exists" | "publication_conflict";
         };
         AuthoringReview: {
             /** Format: uuid */
@@ -2044,6 +2093,61 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    publishAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                reviewId: components["parameters"]["AuthoringReviewID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringPublicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Immutable CourseVersion publication result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringPublication"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description Stale Review revision, non-approved Review, publication provenance conflict, or foreign Course/SemVer conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["PublicationConflictProblem"];
+                };
+            };
+            /** @description Deterministic publication-readiness issues from the frozen Review snapshot */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["PublicationValidationProblem"];
+                };
+            };
             500: components["responses"]["Problem"];
         };
     };

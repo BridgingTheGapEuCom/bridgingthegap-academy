@@ -82,6 +82,19 @@ type AuthoringReviewEvent struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type AuthoringReviewPublication struct {
+	ReviewID          pgtype.UUID
+	ReviewRevision    int64
+	DraftID           pgtype.UUID
+	DraftRevision     int64
+	CourseID          pgtype.UUID
+	CourseVersion     string
+	CourseVersionID   pgtype.UUID
+	PublishedAt       pgtype.Timestamptz
+	PublishedByUserID pgtype.UUID
+	RecordedAt        pgtype.Timestamptz
+}
+
 type AuthoringWorkspace struct {
 	ID              pgtype.UUID
 	DraftID         pgtype.UUID

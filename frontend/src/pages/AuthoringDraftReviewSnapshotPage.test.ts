@@ -15,14 +15,18 @@ type AuthenticationState =
 
 const authMock = vi.hoisted(() => ({ state: { value: { status: 'authenticated' } as AuthenticationState } }))
 const getAuthoringDraftReviewMock = vi.hoisted(() => vi.fn())
+const getAuthoringDraftMembersMock = vi.hoisted(() => vi.fn())
 const approveAuthoringReviewMock = vi.hoisted(() => vi.fn())
 const requestAuthoringReviewChangesMock = vi.hoisted(() => vi.fn())
+const publishAuthoringDraftReviewMock = vi.hoisted(() => vi.fn())
 vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
 vi.mock('../authoring/authoring', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../authoring/authoring')>()),
   getAuthoringDraftReview: getAuthoringDraftReviewMock,
+  getAuthoringDraftMembers: getAuthoringDraftMembersMock,
   approveAuthoringReview: approveAuthoringReviewMock,
   requestAuthoringReviewChanges: requestAuthoringReviewChangesMock,
+  publishAuthoringDraftReview: publishAuthoringDraftReviewMock,
 }))
 
 const draftID = '11111111-1111-4111-8111-111111111111'
@@ -96,8 +100,10 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
   beforeEach(() => {
     authMock.state = shallowRef<AuthenticationState>({ status: 'authenticated', userId: actor, expiresAt: '2026-09-15T16:00:00Z' })
     getAuthoringDraftReviewMock.mockReset().mockResolvedValue(detail())
+    getAuthoringDraftMembersMock.mockReset().mockResolvedValue({ members: [{ userId: actor, role: 'MAINTAINER' }] })
     approveAuthoringReviewMock.mockReset()
     requestAuthoringReviewChangesMock.mockReset()
+    publishAuthoringDraftReviewMock.mockReset()
   })
   afterEach(cleanup)
 
@@ -208,6 +214,127 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(await screen.findByText('Changes requested')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull()
+  })
+
+  it('shows publishing only to a current MAINTAINER viewing an exact approved Review', async () => {
+    await renderPage()
+    expect(await screen.findByRole('button', { name: 'Publish course version' })).toBeTruthy()
+    expect(getAuthoringDraftMembersMock).toHaveBeenCalledWith(draftID)
+
+    cleanup()
+    getAuthoringDraftMembersMock.mockResolvedValueOnce({ members: [{ userId: actor, role: 'AUTHOR' }] })
+    await renderPage()
+    await screen.findByText('Frozen integration foundations')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull())
+  })
+
+  it('does not offer publishing for an in-review or changes-requested cycle', async () => {
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5))
+    await renderPage()
+    await screen.findByText('In review')
+    expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
+
+    cleanup()
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'CHANGES_REQUESTED', 6))
+    await renderPage()
+    await screen.findByText('Changes requested')
+    expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
+  })
+
+  it('publishes only the exact current Review revision and refreshes its authoritative state', async () => {
+    const approved = detail(firstReviewID, 'Frozen integration foundations', 'APPROVED', 5)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(approved).mockResolvedValueOnce(detail(firstReviewID, 'Refetched frozen snapshot', 'APPROVED', 5))
+    publishAuthoringDraftReviewMock.mockResolvedValueOnce({ reviewId: firstReviewID, reviewRevision: 5 })
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Publish course version' })).click()
+    expect(publishAuthoringDraftReviewMock).toHaveBeenCalledWith(draftID, firstReviewID, { expectedReviewRevision: 5 })
+    expect(await screen.findByText('Refetched frozen snapshot')).toBeTruthy()
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Approved Review is not a published Course.')).toBeTruthy()
+  })
+
+  it('guards duplicate publication while the exact Review request is pending', async () => {
+    let resolvePublication: (value: unknown) => void = () => undefined
+    publishAuthoringDraftReviewMock.mockImplementationOnce(() => new Promise((resolve) => { resolvePublication = resolve }))
+    await renderPage()
+    const publish = await screen.findByRole('button', { name: 'Publish course version' })
+    await publish.click()
+    expect(screen.getByText('Publishing this Review…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Publishing…' })).toHaveProperty('disabled', true)
+    await screen.getByRole('button', { name: 'Publishing…' }).click()
+    expect(publishAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
+    resolvePublication({})
+    await waitFor(() => expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(2))
+  })
+
+  it('refreshes the exact Review after stale or non-approved publication conflicts without retrying', async () => {
+    const approved = detail(firstReviewID, 'Frozen integration foundations', 'APPROVED', 5)
+    const changed = detail(firstReviewID, 'Frozen integration foundations', 'CHANGES_REQUESTED', 6)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(approved).mockResolvedValueOnce(changed)
+    publishAuthoringDraftReviewMock.mockRejectedValueOnce(new APIProblemError(409, {
+      type: 'https://academy.example/problems/review-revision-conflict', title: 'Review revision conflict', status: 409,
+      instance: '/api/authoring/drafts/example/reviews/example/publish', request_id: 'request-id', code: 'review_revision_conflict',
+    }, undefined))
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Publish course version' })).click()
+    expect(await screen.findByText('Changes requested')).toBeTruthy()
+    expect(publishAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
+  })
+
+  it('refreshes the exact Review after a non-approved publication conflict without retrying', async () => {
+    const approved = detail(firstReviewID, 'Frozen integration foundations', 'APPROVED', 5)
+    const inReview = detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 6)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(approved).mockResolvedValueOnce(inReview)
+    publishAuthoringDraftReviewMock.mockRejectedValueOnce(new APIProblemError(409, {
+      type: 'https://academy.example/problems/review-not-approved', title: 'Review not approved', status: 409,
+      instance: '/api/authoring/drafts/example/reviews/example/publish', request_id: 'request-id', code: 'review_not_approved',
+    }, undefined))
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Publish course version' })).click()
+    expect(await screen.findByText('In review')).toBeTruthy()
+    expect(publishAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
+  })
+
+  it('keeps validation issues and distinct publication conflicts available without manufacturing Review state', async () => {
+    const issues = [{ code: 'unresolved_asset_reference', path: 'modules[0]', message: 'Asset unavailable.' }]
+    publishAuthoringDraftReviewMock.mockRejectedValueOnce(new APIProblemError(422, {
+      type: 'https://academy.example/problems/publication-validation-failed', title: 'Publication validation failed', status: 422,
+      instance: '/api/authoring/drafts/example/reviews/example/publish', request_id: 'request-id', code: 'publication_validation_failed', issues,
+    }, undefined))
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Publish course version' })).click()
+    expect(await screen.findByText('We couldn’t publish this Review right now. Please try again.')).toBeTruthy()
+    expect(screen.getByText('Frozen integration foundations')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Publish course version' })).toBeTruthy()
+
+    // The classification module preserves the 422 issue array for M4.5f2;
+    // this page intentionally does not render its detailed issue list yet.
+    expect(issues).toEqual([{ code: 'unresolved_asset_reference', path: 'modules[0]', message: 'Asset unavailable.' }])
+  })
+
+  it('does not let a late publication response affect a newly selected Review route', async () => {
+    const first = detail(firstReviewID, 'First frozen snapshot', 'APPROVED', 5)
+    const second = detail(secondReviewID, 'Second frozen snapshot', 'APPROVED', 7)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    let resolvePublication: (value: unknown) => void = () => undefined
+    publishAuthoringDraftReviewMock.mockImplementationOnce(() => new Promise((resolve) => { resolvePublication = resolve }))
+    const { router } = await renderPage()
+    await (await screen.findByRole('button', { name: 'Publish course version' })).click()
+    await router.push(`/authoring/drafts/${draftID}/reviews/${secondReviewID}`)
+    expect(await screen.findByText('Second frozen snapshot')).toBeTruthy()
+    resolvePublication({})
+    await waitFor(() => expect(screen.queryByText('First frozen snapshot')).toBeNull())
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a hidden publication denial opaque', async () => {
+    publishAuthoringDraftReviewMock.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))
+    const page = await renderPage()
+    await (await screen.findByRole('button', { name: 'Publish course version' })).click()
+    await waitFor(() => expect(page.markDraftUnavailable).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText(/authoring.publish|permission|maintainer/i)).toBeNull()
   })
 
   it('approves using the exact authoritative Review revision then reloads the frozen Review', async () => {
