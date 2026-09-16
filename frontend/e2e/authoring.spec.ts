@@ -57,10 +57,29 @@ const lesson = {
   updated_at: '2026-09-15T11:00:00Z',
 }
 
+const reviewCycle = {
+  id: '99999999-9999-4999-8999-999999999999',
+  draftId: draftID,
+  draftRevision: 3,
+  snapshotSchemaVersion: 1,
+  status: 'IN_REVIEW',
+  reviewRevision: 1,
+  submittedBy: '66666666-6666-4666-8666-666666666666',
+  submittedAt: '2026-09-15T12:00:00Z',
+  decidedBy: null,
+  decidedAt: null,
+}
+
 async function serveDraft(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
   await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
+}
+
+async function serveReviewOverview(page: Page) {
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ reviews: [reviewCycle] }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/active`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewCycle) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/latest`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewCycle) }))
 }
 
 test('Authoring discovery is reachable from main navigation and opens an accessible Draft workspace', async ({ page }) => {
@@ -144,6 +163,27 @@ test('Authoring Draft shell is private, accessible, and responsive', async ({ pa
 
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('Authoring Review overview is read-only, keyboard reachable, and responsive', async ({ page }) => {
+  await serveDraft(page)
+  await serveReviewOverview(page)
+  let snapshotRequests = 0
+  page.on('request', (request) => {
+    if (request.url().includes(`/reviews/${reviewCycle.id}`)) snapshotRequests += 1
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/review`)
+  await expect(page.getByRole('heading', { level: 2, name: 'Review' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Review' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByText('In review').first()).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Review history' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /submit|approve|request changes/i })).toHaveCount(0)
+  expect(snapshotRequests).toBe(0)
+  await page.getByRole('link', { name: 'Review' }).focus()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
 test('Authoring metadata editor saves a changed field with its current revision', async ({ page }) => {
@@ -322,11 +362,12 @@ test('Authoring member management uses opaque IDs, authoritative reloads, and ke
 
 test('Authoring routes reflow at 320px and 390px with enlarged text', async ({ page }) => {
   await serveDraft(page)
+  await serveReviewOverview(page)
   await page.route('**/api/authoring/drafts', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ drafts: [{ id: draftID, title: draft.title, intendedVersion: draft.intended_version, status: draft.status, updatedAt: draft.updated_at }] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(structure) }))
   await page.route(`**/api/authoring/drafts/${draftID}/members`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ members: [{ userId: '77777777-7777-4777-8777-777777777777', role: 'MAINTAINER' }] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, content: { schemaVersion: 1, blocks: [{ key: 'long-stable-block-key-for-reflow', type: 'CODE', payload: { code: 'const example = "unbroken-content-that-must-not-widen-the-page";' } }] } }) }))
-  const routes = ['/authoring', `/authoring/drafts/${draftID}/overview`, `/authoring/drafts/${draftID}/structure`, `/authoring/drafts/${draftID}/lessons/${lesson.id}`, `/authoring/drafts/${draftID}/members`]
+  const routes = ['/authoring', `/authoring/drafts/${draftID}/overview`, `/authoring/drafts/${draftID}/structure`, `/authoring/drafts/${draftID}/lessons/${lesson.id}`, `/authoring/drafts/${draftID}/members`, `/authoring/drafts/${draftID}/review`]
   for (const path of routes) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: path === '/authoring' ? 1 : 2 }).first()).toBeVisible()

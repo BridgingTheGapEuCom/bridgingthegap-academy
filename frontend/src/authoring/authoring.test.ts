@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, changeAuthoringMemberRole, createAuthoringModule, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -61,6 +61,17 @@ describe('Authoring API service', () => {
     expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/structure`)
     expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/modules`, expect.objectContaining({ method: 'POST' }))
     expect(request).toHaveBeenNthCalledWith(3, `/api/authoring/drafts/${draftID}/lessons/order`, expect.objectContaining({ method: 'PUT' }))
+  })
+
+  it('reads Review metadata through exact Draft-scoped endpoints without snapshots', async () => {
+    const request = vi.fn().mockResolvedValue({ reviews: [] })
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    await getAuthoringDraftReviewHistory(draftID, { request })
+    await getAuthoringActiveDraftReview(draftID, { request })
+    await getAuthoringLatestDraftReview(draftID, { request })
+    expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/reviews`)
+    expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/reviews/active`)
+    expect(request).toHaveBeenNthCalledWith(3, `/api/authoring/drafts/${draftID}/reviews/latest`)
   })
 
   it('keeps Lesson reads and metadata patches scoped to both bounded IDs', async () => {

@@ -48,6 +48,7 @@
           <li><RouterLink :to="authoringDraftPath(state.draft.id, 'overview')">Overview</RouterLink></li>
           <li><RouterLink :to="authoringDraftPath(state.draft.id, 'structure')">Structure</RouterLink></li>
           <li><RouterLink :to="authoringDraftPath(state.draft.id, 'members')">Members</RouterLink></li>
+          <li><RouterLink :to="authoringDraftPath(state.draft.id, 'review')">Review</RouterLink></li>
         </ul>
       </nav>
 

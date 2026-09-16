@@ -16,6 +16,8 @@ export type AuthoringActiveMemberList = components['schemas']['AuthoringActiveMe
 export type AuthoringMemberAdd = components['schemas']['AuthoringMemberAddRequest']
 export type AuthoringMemberRoleChange = components['schemas']['AuthoringMemberRoleRequest']
 export type AuthoringMemberMutation = components['schemas']['AuthoringMemberMutationResponse']
+export type AuthoringReview = components['schemas']['AuthoringReview']
+export type AuthoringReviewList = components['schemas']['AuthoringReviewList']
 
 export type AuthoringModuleCreate = components['schemas']['AuthoringModuleCreateRequest']
 export type AuthoringModuleUpdate = { expectedModuleRevision: number; title?: string; description?: string }
@@ -95,6 +97,23 @@ export async function getAuthoringDraftMembers(draftID: string, client: Pick<Aut
   return client.request<AuthoringActiveMemberList>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/members`)
 }
 
+// Review overview reads only immutable cycle metadata. Snapshot reads remain
+// deliberately separate until a later, explicit Review-detail route exists.
+export async function getAuthoringDraftReviewHistory(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReviewList> {
+  assertAuthoringID(draftID)
+  return client.request<AuthoringReviewList>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews`)
+}
+
+export async function getAuthoringActiveDraftReview(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReview> {
+  assertAuthoringID(draftID)
+  return client.request<AuthoringReview>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/active`)
+}
+
+export async function getAuthoringLatestDraftReview(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReview> {
+  assertAuthoringID(draftID)
+  return client.request<AuthoringReview>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/latest`)
+}
+
 export async function addAuthoringMember(draftID: string, input: AuthoringMemberAdd, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringMemberMutation> {
   assertAuthoringID(draftID)
   assertAuthoringID(input.userId)
@@ -171,7 +190,7 @@ function jsonRequest(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body: unknown)
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
 }
 
-export function authoringDraftPath(draftID: string, section: 'overview' | 'structure' | 'members' = 'overview'): string {
+export function authoringDraftPath(draftID: string, section: 'overview' | 'structure' | 'members' | 'review' = 'overview'): string {
   return `/authoring/drafts/${encodeURIComponent(draftID)}/${section}`
 }
 

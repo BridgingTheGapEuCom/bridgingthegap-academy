@@ -65,6 +65,7 @@ function routerFor() {
           { path: 'overview', name: 'overview', component: AuthoringDraftOverviewPage },
           { path: 'structure', name: 'structure', component: AuthoringDraftStructurePage },
           { path: 'members', name: 'members', component: AuthoringDraftMembersPage },
+          { path: 'review', name: 'review', component: { template: '<h2>Review</h2>' } },
         ],
       },
     ],
@@ -115,6 +116,12 @@ describe('AuthoringDraftShell', () => {
     await waitFor(() => expect(router.currentRoute.value.path).toBe(`/authoring/drafts/${firstID}/structure`))
     expect(screen.getByRole('heading', { level: 2, name: 'Structure' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Structure' }).getAttribute('aria-current')).toBe('page')
+
+    const review = screen.getByRole('link', { name: 'Review' })
+    review.focus()
+    await fireEvent.click(review)
+    await waitFor(() => expect(router.currentRoute.value.path).toBe(`/authoring/drafts/${firstID}/review`))
+    expect(screen.getByRole('link', { name: 'Review' }).getAttribute('aria-current')).toBe('page')
   })
 
   it('keeps unavailable and hidden Draft responses distinct without revealing access details', async () => {

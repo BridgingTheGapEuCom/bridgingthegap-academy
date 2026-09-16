@@ -15,6 +15,7 @@ import AuthoringDraftOverviewPage from './pages/AuthoringDraftOverviewPage.vue'
 import AuthoringDraftStructurePage from './pages/AuthoringDraftStructurePage.vue'
 import AuthoringDraftMembersPage from './pages/AuthoringDraftMembersPage.vue'
 import AuthoringDraftLessonPage from './pages/AuthoringDraftLessonPage.vue'
+import AuthoringDraftReviewPage from './pages/AuthoringDraftReviewPage.vue'
 import './style.css'
 
 const i18n = createI18n({
@@ -42,6 +43,7 @@ const router = createRouter({
         { path: 'structure', name: 'authoring-draft-structure', component: AuthoringDraftStructurePage },
         { path: 'lessons/:lessonId', name: 'authoring-draft-lesson', component: AuthoringDraftLessonPage },
         { path: 'members', name: 'authoring-draft-members', component: AuthoringDraftMembersPage },
+        { path: 'review', name: 'authoring-draft-review', component: AuthoringDraftReviewPage },
       ],
     },
   ],
