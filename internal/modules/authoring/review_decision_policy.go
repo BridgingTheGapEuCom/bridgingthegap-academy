@@ -32,8 +32,7 @@ type independentReviewPolicy struct {
 }
 
 // NewReviewDecisionPolicy creates the deployment-configured independence
-// policy. M4.3b will apply it after review.decide authorization and before a
-// Review decision reaches persistence.
+// policy applied after review.decide authorization and before persistence.
 func NewReviewDecisionPolicy(requireIndependentReview bool) ReviewDecisionPolicy {
 	return independentReviewPolicy{required: requireIndependentReview}
 }

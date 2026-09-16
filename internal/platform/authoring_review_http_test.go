@@ -81,7 +81,7 @@ func (r *authoringReviewRepositoryFake) ApprovedReviewForRevision(context.Contex
 func TestAuthoringReviewHTTPAuthorizationSecurityAndStrictJSON(t *testing.T) {
 	draftID := authoring.DraftID("11111111-1111-4111-8111-111111111111")
 	reviewID := authoring.ReviewID("22222222-2222-4222-8222-222222222222")
-	repository := &authoringReviewRepositoryFake{cycle: authoring.ReviewCycle{ID: reviewID, DraftID: draftID, DraftRevision: 4, SnapshotSchemaVersion: 1, Status: authoring.ReviewInReview, Revision: 1, SubmittedByUserID: string(loginTestUser), SubmittedAt: time.Now().UTC()}, snapshot: authoring.ReviewSnapshot{SchemaVersion: 1}, history: []authoring.ReviewCycle{}}
+	repository := &authoringReviewRepositoryFake{cycle: authoring.ReviewCycle{ID: reviewID, DraftID: draftID, DraftRevision: 4, SnapshotSchemaVersion: 1, Status: authoring.ReviewInReview, Revision: 1, SubmittedByUserID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", SubmittedAt: time.Now().UTC()}, snapshot: authoring.ReviewSnapshot{SchemaVersion: 1}, history: []authoring.ReviewCycle{}}
 	memberships := authoringMembershipsFake{roles: map[authoring.DraftID]authoring.MemberRole{draftID: authoring.MemberAuthor}}
 	service := authoring.NewReviewApplicationService(repository, authoring.NewAuthorizationService(&memberships))
 	resolver := &authResolverFake{current: loginTestCurrent(t)}
@@ -129,6 +129,8 @@ func TestAuthoringReviewHTTPAuthorizationSecurityAndStrictJSON(t *testing.T) {
 		t.Fatalf("AUTHOR decision = %d", response.Code)
 	}
 
+	// The remaining decision transport checks model an independent maintainer.
+	repository.cycle.SubmittedByUserID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 	memberships.roles[draftID] = authoring.MemberMaintainer
 	for _, body := range []string{
 		`{"expectedReviewRevision":null}`,

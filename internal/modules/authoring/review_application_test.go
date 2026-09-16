@@ -7,15 +7,17 @@ import (
 )
 
 type reviewRepositoryFake struct {
-	cycle        ReviewCycle
-	snapshot     ReviewSnapshot
-	history      []ReviewCycle
-	err          error
-	lastDraft    DraftID
-	lastReview   ReviewID
-	lastActor    string
-	lastStatus   ReviewStatus
-	lastExpected int64
+	cycle          ReviewCycle
+	snapshot       ReviewSnapshot
+	history        []ReviewCycle
+	err            error
+	lastDraft      DraftID
+	lastReview     ReviewID
+	lastActor      string
+	lastStatus     ReviewStatus
+	lastExpected   int64
+	decisionCalls  int
+	getReviewCalls int
 }
 
 func (r *reviewRepositoryFake) SubmitReview(_ context.Context, draft DraftID, expected int64, actor string) (ReviewCycle, ReviewSnapshot, error) {
@@ -26,6 +28,7 @@ func (r *reviewRepositoryFake) GetReview(context.Context, ReviewID) (ReviewCycle
 	return r.cycle, r.snapshot, r.err
 }
 func (r *reviewRepositoryFake) GetReviewForDraft(_ context.Context, draft DraftID, review ReviewID) (ReviewCycle, ReviewSnapshot, error) {
+	r.getReviewCalls++
 	r.lastDraft, r.lastReview = draft, review
 	return r.cycle, r.snapshot, r.err
 }
@@ -45,7 +48,12 @@ func (r *reviewRepositoryFake) DecideReview(context.Context, ReviewID, int64, Re
 	return r.cycle, r.err
 }
 func (r *reviewRepositoryFake) DecideReviewForDraft(_ context.Context, draft DraftID, review ReviewID, expected int64, status ReviewStatus, actor, _ string) (ReviewCycle, error) {
+	r.decisionCalls++
 	r.lastDraft, r.lastReview, r.lastExpected, r.lastStatus, r.lastActor = draft, review, expected, status, actor
+	if r.err == nil {
+		r.cycle.Status = status
+		r.cycle.Revision = expected + 1
+	}
 	return r.cycle, r.err
 }
 func (r *reviewRepositoryFake) ListReviewEvents(context.Context, ReviewID) ([]ReviewEvent, error) {
@@ -58,7 +66,7 @@ func (r *reviewRepositoryFake) ApprovedReviewForRevision(context.Context, DraftI
 func TestReviewApplicationAuthorizationAndScope(t *testing.T) {
 	actor := resolvedActor(t)
 	reviewID := ReviewID("44444444-4444-4444-8444-444444444444")
-	repository := &reviewRepositoryFake{cycle: ReviewCycle{ID: reviewID, DraftID: testDraftA, Status: ReviewInReview, Revision: 1}}
+	repository := &reviewRepositoryFake{cycle: ReviewCycle{ID: reviewID, DraftID: testDraftA, Status: ReviewInReview, Revision: 1, SubmittedByUserID: "different-user"}}
 	memberships := &membershipReaderFake{roles: map[DraftID]MemberRole{testDraftA: MemberAuthor}}
 	service := NewReviewApplicationService(repository, NewAuthorizationService(memberships))
 
@@ -100,13 +108,94 @@ func TestReviewApplicationAuthorizationFailureIsUnavailable(t *testing.T) {
 	}
 }
 
-func TestReviewApplicationAcceptsPolicyWithoutEnforcingItBeforeM43b(t *testing.T) {
+func TestReviewApplicationEnforcesDecisionPolicyForBothDecisions(t *testing.T) {
 	actor := resolvedActor(t)
-	repository := &reviewRepositoryFake{cycle: ReviewCycle{ID: ReviewID("44444444-4444-4444-8444-444444444444"), DraftID: testDraftA, Status: ReviewInReview, Revision: 1}}
-	memberships := &membershipReaderFake{roles: map[DraftID]MemberRole{testDraftA: MemberMaintainer}}
+	actorID := string(actor.UserID())
+	reviewID := ReviewID("44444444-4444-4444-8444-444444444444")
+	for _, test := range []struct {
+		name        string
+		decision    ReviewStatus
+		required    bool
+		submitter   string
+		wantErr     error
+		wantPersist bool
+	}{
+		{"approve rejects submitter when enabled", ReviewApproved, true, actorID, ErrIndependentReviewerRequired, false},
+		{"approve allows independent actor", ReviewApproved, true, "other-user", nil, true},
+		{"approve allows submitter when disabled", ReviewApproved, false, actorID, nil, true},
+		{"request changes rejects submitter when enabled", ReviewChangesRequested, true, actorID, ErrIndependentReviewerRequired, false},
+		{"request changes allows independent actor", ReviewChangesRequested, true, "other-user", nil, true},
+		{"request changes allows submitter when disabled", ReviewChangesRequested, false, actorID, nil, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &reviewRepositoryFake{cycle: ReviewCycle{ID: reviewID, DraftID: testDraftA, Status: ReviewInReview, Revision: 1, SubmittedByUserID: test.submitter}}
+			memberships := &membershipReaderFake{roles: map[DraftID]MemberRole{testDraftA: MemberMaintainer}}
+			service := NewReviewApplicationServiceWithDecisionPolicy(repository, NewAuthorizationService(memberships), NewReviewDecisionPolicy(test.required))
+
+			var err error
+			if test.decision == ReviewApproved {
+				_, err = service.Approve(context.Background(), actor, testDraftA, reviewID, 1, "")
+			} else {
+				_, err = service.RequestChanges(context.Background(), actor, testDraftA, reviewID, 1, "")
+			}
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("decision error = %v, want %v", err, test.wantErr)
+			}
+			if repository.getReviewCalls != 1 || (repository.decisionCalls == 1) != test.wantPersist {
+				t.Fatalf("reads=%d decision writes=%d", repository.getReviewCalls, repository.decisionCalls)
+			}
+			if !test.wantPersist && (repository.cycle.Status != ReviewInReview || repository.cycle.Revision != 1) {
+				t.Fatalf("policy rejection mutated Review: %#v", repository.cycle)
+			}
+		})
+	}
+}
+
+func TestReviewApplicationChecksAuthorizationAndMutableStateBeforePolicy(t *testing.T) {
+	actor := resolvedActor(t)
+	actorID := string(actor.UserID())
+	reviewID := ReviewID("44444444-4444-4444-8444-444444444444")
+	repository := &reviewRepositoryFake{cycle: ReviewCycle{ID: reviewID, DraftID: testDraftA, Status: ReviewInReview, Revision: 1, SubmittedByUserID: actorID}}
+	memberships := &membershipReaderFake{roles: map[DraftID]MemberRole{testDraftA: MemberAuthor}}
 	service := NewReviewApplicationServiceWithDecisionPolicy(repository, NewAuthorizationService(memberships), NewReviewDecisionPolicy(true))
 
-	if _, err := service.Approve(context.Background(), actor, testDraftA, repository.cycle.ID, 1, ""); err != nil {
-		t.Fatalf("M4.3a policy changed M4.2 decision behavior: %v", err)
+	if _, err := service.Approve(context.Background(), actor, testDraftA, reviewID, 1, ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("authorization was masked by policy: %v", err)
+	}
+	if repository.getReviewCalls != 0 || repository.decisionCalls != 0 {
+		t.Fatal("denied authorization reached Review persistence")
+	}
+
+	memberships.roles[testDraftA] = MemberMaintainer
+	if _, err := service.Approve(context.Background(), actor, testDraftA, reviewID, 2, ""); !errors.Is(err, ErrReviewStale) {
+		t.Fatalf("stale state did not win before policy: %v", err)
+	}
+	if repository.decisionCalls != 0 {
+		t.Fatal("stale decision reached mutation")
+	}
+
+	repository.cycle.Status = ReviewApproved
+	if _, err := service.RequestChanges(context.Background(), actor, testDraftA, reviewID, 1, ""); !errors.Is(err, ErrReviewInvalidState) {
+		t.Fatalf("terminal state did not win before policy: %v", err)
+	}
+	if repository.decisionCalls != 0 {
+		t.Fatal("terminal decision reached mutation")
+	}
+
+	repository.cycle.Status = ReviewInReview
+	readsBeforeDenial := repository.getReviewCalls
+	delete(memberships.roles, testDraftA)
+	if _, err := service.Approve(context.Background(), actor, testDraftA, reviewID, 1, ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("revoked decision was not denied before policy: %v", err)
+	}
+	if repository.getReviewCalls != readsBeforeDenial {
+		t.Fatal("revoked decision loaded Review provenance")
+	}
+	memberships.err = errors.New("authorization storage unavailable")
+	if _, err := service.Approve(context.Background(), actor, testDraftA, reviewID, 1, ""); !errors.Is(err, ErrAuthorizationUnavailable) {
+		t.Fatalf("authorization failure was masked by policy: %v", err)
+	}
+	if repository.getReviewCalls != readsBeforeDenial {
+		t.Fatal("authorization failure reached Review persistence")
 	}
 }

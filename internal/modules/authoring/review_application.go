@@ -7,9 +7,8 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 )
 
-// ReviewApplicationService is the resource-scoped boundary used by future
-// transports. Reviewer-independence policy can be inserted here before a
-// decision without changing persistence or trusting transport claims.
+// ReviewApplicationService is the resource-scoped boundary used by transports.
+// Authorization and per-cycle decision policy remain separate checks.
 type ReviewApplicationService struct {
 	repository     ReviewRepository
 	authorizer     Authorizer
@@ -17,13 +16,13 @@ type ReviewApplicationService struct {
 }
 
 func NewReviewApplicationService(repository ReviewRepository, authorizer Authorizer) *ReviewApplicationService {
-	return NewReviewApplicationServiceWithDecisionPolicy(repository, authorizer, nil)
+	return NewReviewApplicationServiceWithDecisionPolicy(repository, authorizer, NewReviewDecisionPolicy(true))
 }
 
-// NewReviewApplicationServiceWithDecisionPolicy accepts deployment policy at
-// the composition boundary. M4.3a intentionally does not invoke it during
-// decisions; M4.3b will apply it after authorization and before persistence.
 func NewReviewApplicationServiceWithDecisionPolicy(repository ReviewRepository, authorizer Authorizer, decisionPolicy ReviewDecisionPolicy) *ReviewApplicationService {
+	if decisionPolicy == nil {
+		decisionPolicy = NewReviewDecisionPolicy(true)
+	}
 	return &ReviewApplicationService{repository: repository, authorizer: authorizer, decisionPolicy: decisionPolicy}
 }
 
@@ -80,7 +79,24 @@ func (s *ReviewApplicationService) decide(ctx context.Context, actor identity.Au
 	if err := s.authorize(ctx, actor, draft, CapabilityReviewDecide); err != nil {
 		return ReviewCycle{}, err
 	}
-	return s.repository.DecideReviewForDraft(ctx, draft, review, expected, decision, string(actor.UserID()), message)
+	cycle, _, err := s.repository.GetReviewForDraft(ctx, draft, review)
+	if err != nil {
+		return ReviewCycle{}, err
+	}
+	// Mutable state is checked before policy, so a stale or terminal request
+	// does not reveal policy outcome. Persistence repeats these checks under its
+	// Review lock; submitter provenance is immutable, so policy cannot race.
+	if err := cycle.CanDecide(expected); err != nil {
+		return ReviewCycle{}, err
+	}
+	actorID := string(actor.UserID())
+	if err := s.decisionPolicy.Check(ReviewDecisionPolicyInput{
+		DecisionActorUserID:     actorID,
+		ReviewSubmittedByUserID: cycle.SubmittedByUserID,
+	}); err != nil {
+		return ReviewCycle{}, err
+	}
+	return s.repository.DecideReviewForDraft(ctx, draft, review, expected, decision, actorID, message)
 }
 
 func (s *ReviewApplicationService) authorize(ctx context.Context, actor identity.AuthenticatedActor, draft DraftID, capability Capability) error {

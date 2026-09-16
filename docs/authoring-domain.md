@@ -234,9 +234,8 @@ revisions. Stale submission, an existing active cycle, stale Review decisions,
 and terminal re-decisions return conflict without retry. All responses are
 private `no-store`. A change request remains terminal for its frozen cycle;
 resubmission uses `POST /reviews` to create a new cycle for a later Draft
-revision. Independent-reviewer and contributor-separation policy is explicitly
-not enforced in M4.2; the application decision boundary retains the submitted
-and deciding actor identities so that policy can be added before persistence.
+revision. The application decision boundary retains immutable submitter and
+trusted decision-actor identities for per-cycle policy evaluation.
 
 ## Independent-review policy configuration
 
@@ -246,7 +245,11 @@ decision actor ID with the immutable submitter ID recorded on that individual
 Review cycle. When enabled, a submitter cannot decide their own cycle and the
 policy returns `ErrIndependentReviewerRequired`; when explicitly set to
 `false`, the policy permits that relationship. This policy is separate from
-the resource-scoped `authoring.review.decide` authorization capability and is
-not yet enforced by the Review HTTP endpoints; M4.3b will place it after
-authorization and before decision persistence. It does not inspect roles,
-query Identity, or infer broader contributor independence.
+the resource-scoped `authoring.review.decide` authorization capability. Both
+approval and change-request application paths authorize first, load the exact
+Draft-scoped Review, reject stale or terminal state, then apply independence to
+that cycle's immutable submitter before invoking the transactional decision.
+Persistence repeats lifecycle and revision CAS checks under the Review lock, so
+concurrent decisions still have one winner. HTTP-specific representation of
+`ErrIndependentReviewerRequired` remains deferred to M4.3c. The policy does not
+inspect roles, query Identity, or infer broader contributor independence.

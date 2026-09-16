@@ -55,5 +55,6 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("authoring API hardening", func(t *testing.T) { testAuthoringHardening(t, ctx, pool) })
 	t.Run("authoring membership mutation", func(t *testing.T) { testAuthoringMembershipMutation(t, ctx, pool) })
 	t.Run("authoring review persistence", func(t *testing.T) { testAuthoringReviewPersistence(t, ctx, pool) })
+	t.Run("authoring review decision policy", func(t *testing.T) { testAuthoringReviewDecisionPolicy(t, ctx, pool) })
 	t.Run("authoring review API", func(t *testing.T) { testAuthoringReviewAPI(t, ctx, pool) })
 }

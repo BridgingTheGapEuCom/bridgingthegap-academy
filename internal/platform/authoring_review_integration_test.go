@@ -5,6 +5,7 @@ package platform
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -12,6 +13,8 @@ import (
 	authoringpostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
+	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -243,5 +246,251 @@ func testAuthoringReviewPersistence(t *testing.T, ctx context.Context, pool *pgx
 		}
 	} else if !errors.Is(submitErr, authoring.ErrRevisionMismatch) {
 		t.Fatalf("unexpected racing submission result: %v", submitErr)
+	}
+}
+
+type coordinatedSelfReviewPolicy struct {
+	base    authoring.ReviewDecisionPolicy
+	self    string
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (p *coordinatedSelfReviewPolicy) Check(input authoring.ReviewDecisionPolicyInput) error {
+	if input.DecisionActorUserID == p.self && input.ReviewSubmittedByUserID == p.self {
+		p.once.Do(func() { close(p.entered) })
+		<-p.release
+	}
+	return p.base.Check(input)
+}
+
+func testAuthoringReviewDecisionPolicy(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	course, err := coursespostgres.New(pool).CreateCourse(ctx, "authoring-review-decision-policy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityRepository := identitypostgres.New(pool)
+	sessions := identity.NewSessionService(identityRepository, nil, nil)
+	newActor := func() (identity.User, identity.AuthenticatedActor) {
+		user, createErr := identityRepository.CreateUser(ctx, identity.UserActive)
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		created, createErr := sessions.CreateSession(ctx, user.ID)
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		resolved, resolveErr := sessions.ResolveSession(ctx, created.Token.Value())
+		if resolveErr != nil {
+			t.Fatal(resolveErr)
+		}
+		actor, actorErr := identity.ActorFromResolvedSession(resolved)
+		if actorErr != nil {
+			t.Fatal(actorErr)
+		}
+		return user, actor
+	}
+	userA, actorA := newActor()
+	userB, actorB := newActor()
+	userC, actorC := newActor()
+	repository := authoringpostgres.New(pool)
+	authorizer := authoring.NewAuthorizationService(repository)
+	required := authoring.NewReviewApplicationServiceWithDecisionPolicy(repository, authorizer, authoring.NewReviewDecisionPolicy(true))
+	disabled := authoring.NewReviewApplicationServiceWithDecisionPolicy(repository, authorizer, authoring.NewReviewDecisionPolicy(false))
+
+	newDraft := func(members ...identity.User) authoring.CourseDraft {
+		draft, workspace, createErr := repository.CreateDraft(ctx, draftFixture(t, course.ID), string(userA.ID))
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		for _, member := range members {
+			if _, addErr := addTestAuthoringMember(ctx, pool, repository, workspace.ID, string(member.ID), authoring.MemberMaintainer); addErr != nil {
+				t.Fatal(addErr)
+			}
+		}
+		draft, createErr = repository.GetDraft(ctx, draft.ID)
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		return draft
+	}
+
+	// Policy rejection is read-only, including under two concurrent self decisions.
+	draft := newDraft(userB, userC)
+	cycle, snapshot, err := required.Submit(ctx, actorA, draft.ID, draft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, decide := range []func() error{
+		func() error {
+			_, decideErr := required.Approve(ctx, actorA, draft.ID, cycle.ID, cycle.Revision, "")
+			return decideErr
+		},
+		func() error {
+			_, decideErr := required.RequestChanges(ctx, actorA, draft.ID, cycle.ID, cycle.Revision, "")
+			return decideErr
+		},
+	} {
+		if decideErr := decide(); !errors.Is(decideErr, authoring.ErrIndependentReviewerRequired) {
+			t.Fatalf("self decision was not rejected: %v", decideErr)
+		}
+	}
+	selfBarrier := make(chan struct{})
+	selfResults := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, decision := range []authoring.ReviewStatus{authoring.ReviewApproved, authoring.ReviewChangesRequested} {
+		decision := decision
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-selfBarrier
+			if decision == authoring.ReviewApproved {
+				_, decideErr := required.Approve(ctx, actorA, draft.ID, cycle.ID, cycle.Revision, "")
+				selfResults <- decideErr
+				return
+			}
+			_, decideErr := required.RequestChanges(ctx, actorA, draft.ID, cycle.ID, cycle.Revision, "")
+			selfResults <- decideErr
+		}()
+	}
+	close(selfBarrier)
+	wait.Wait()
+	close(selfResults)
+	for result := range selfResults {
+		if !errors.Is(result, authoring.ErrIndependentReviewerRequired) {
+			t.Fatalf("concurrent self decision = %v", result)
+		}
+	}
+	unchanged, unchangedSnapshot, err := repository.GetReview(ctx, cycle.ID)
+	if err != nil || unchanged.Status != authoring.ReviewInReview || unchanged.Revision != cycle.Revision || !reflect.DeepEqual(unchangedSnapshot, snapshot) {
+		t.Fatalf("policy rejection mutated Review: %v %#v", err, unchanged)
+	}
+	events, err := repository.ListReviewEvents(ctx, cycle.ID)
+	if err != nil || len(events) != 1 || events[0].Type != authoring.ReviewSubmittedEvent {
+		t.Fatalf("policy rejection appended event: %v %#v", err, events)
+	}
+
+	// Two independent reviewers still share the persistence CAS: exactly one wins.
+	decisionBarrier := make(chan struct{})
+	decisionResults := make(chan error, 2)
+	for index, actor := range []identity.AuthenticatedActor{actorB, actorC} {
+		index, actor := index, actor
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-decisionBarrier
+			if index == 0 {
+				_, decideErr := required.Approve(ctx, actor, draft.ID, cycle.ID, cycle.Revision, "")
+				decisionResults <- decideErr
+				return
+			}
+			_, decideErr := required.RequestChanges(ctx, actor, draft.ID, cycle.ID, cycle.Revision, "")
+			decisionResults <- decideErr
+		}()
+	}
+	close(decisionBarrier)
+	wait.Wait()
+	close(decisionResults)
+	assertOneReviewDecisionWinner(t, decisionResults)
+
+	// A submitter policy rejection cannot append an event while an independent
+	// reviewer commits a concurrent decision.
+	raceDraft := newDraft(userB)
+	raceCycle, _, err := required.Submit(ctx, actorA, raceDraft.ID, raceDraft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinated := &coordinatedSelfReviewPolicy{base: authoring.NewReviewDecisionPolicy(true), self: string(userA.ID), entered: make(chan struct{}), release: make(chan struct{})}
+	raceService := authoring.NewReviewApplicationServiceWithDecisionPolicy(repository, authorizer, coordinated)
+	selfResult := make(chan error, 1)
+	go func() {
+		_, decideErr := raceService.Approve(ctx, actorA, raceDraft.ID, raceCycle.ID, raceCycle.Revision, "")
+		selfResult <- decideErr
+	}()
+	<-coordinated.entered
+	if _, err = raceService.RequestChanges(ctx, actorB, raceDraft.ID, raceCycle.ID, raceCycle.Revision, ""); err != nil {
+		t.Fatalf("independent racer failed: %v", err)
+	}
+	close(coordinated.release)
+	if err = <-selfResult; !errors.Is(err, authoring.ErrIndependentReviewerRequired) {
+		t.Fatalf("racing submitter was not policy-rejected: %v", err)
+	}
+	raceEvents, err := repository.ListReviewEvents(ctx, raceCycle.ID)
+	if err != nil || len(raceEvents) != 2 || raceEvents[1].ActorUserID != string(userB.ID) {
+		t.Fatalf("rejected self decision persisted: %v %#v", err, raceEvents)
+	}
+
+	// Disabling independence changes only policy; existing CAS still admits one decision.
+	disabledDraft := newDraft(userB)
+	disabledCycle, _, err := disabled.Submit(ctx, actorA, disabledDraft.ID, disabledDraft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabledBarrier := make(chan struct{})
+	disabledResults := make(chan error, 2)
+	for index, actor := range []identity.AuthenticatedActor{actorA, actorB} {
+		index, actor := index, actor
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-disabledBarrier
+			if index == 0 {
+				_, decideErr := disabled.Approve(ctx, actor, disabledDraft.ID, disabledCycle.ID, disabledCycle.Revision, "")
+				disabledResults <- decideErr
+				return
+			}
+			_, decideErr := disabled.RequestChanges(ctx, actor, disabledDraft.ID, disabledCycle.ID, disabledCycle.Revision, "")
+			disabledResults <- decideErr
+		}()
+	}
+	close(disabledBarrier)
+	wait.Wait()
+	close(disabledResults)
+	assertOneReviewDecisionWinner(t, disabledResults)
+
+	// Independence is evaluated from each cycle's immutable submitter.
+	resubmitDraft := newDraft(userB)
+	firstCycle, _, err := required.Submit(ctx, actorA, resubmitDraft.ID, resubmitDraft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = required.RequestChanges(ctx, actorB, resubmitDraft.ID, firstCycle.ID, firstCycle.Revision, "Revise"); err != nil {
+		t.Fatal(err)
+	}
+	metadata := resubmitDraft.Metadata
+	metadata.Title = "Revised for another cycle"
+	resubmitDraft, err = repository.UpdateDraftMetadata(ctx, resubmitDraft.ID, resubmitDraft.Revision, metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondCycle, _, err := required.Submit(ctx, actorB, resubmitDraft.ID, resubmitDraft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = required.Approve(ctx, actorB, resubmitDraft.ID, secondCycle.ID, secondCycle.Revision, ""); !errors.Is(err, authoring.ErrIndependentReviewerRequired) {
+		t.Fatalf("second-cycle submitter decided own Review: %v", err)
+	}
+	if _, err = required.Approve(ctx, actorA, resubmitDraft.ID, secondCycle.ID, secondCycle.Revision, ""); err != nil {
+		t.Fatalf("independent first-cycle submitter could not decide second cycle: %v", err)
+	}
+}
+
+func assertOneReviewDecisionWinner(t *testing.T, results <-chan error) {
+	t.Helper()
+	succeeded, conflicted := 0, 0
+	for result := range results {
+		switch {
+		case result == nil:
+			succeeded++
+		case errors.Is(result, authoring.ErrReviewStale), errors.Is(result, authoring.ErrReviewInvalidState):
+			conflicted++
+		default:
+			t.Fatalf("unexpected concurrent decision result: %v", result)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("concurrent decisions: success=%d conflicts=%d", succeeded, conflicted)
 	}
 }
