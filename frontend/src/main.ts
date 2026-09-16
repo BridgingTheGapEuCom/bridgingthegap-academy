@@ -9,7 +9,7 @@ import AdminPage from './pages/AdminPage.vue'
 import CourseListPage from './pages/CourseListPage.vue'
 import CourseOverviewPage from './pages/CourseOverviewPage.vue'
 import LessonPage from './pages/LessonPage.vue'
-import PublishedCoursePlaceholderPage from './pages/PublishedCoursePlaceholderPage.vue'
+import PublishedCourseReaderPage from './pages/PublishedCourseReaderPage.vue'
 import AuthoringHomePage from './pages/AuthoringHomePage.vue'
 import AuthoringDraftShell from './pages/AuthoringDraftShell.vue'
 import AuthoringDraftOverviewPage from './pages/AuthoringDraftOverviewPage.vue'
@@ -33,7 +33,8 @@ const router = createRouter({
     { path: '/login', component: LoginPage },
     { path: '/admin', component: AdminPage },
     { path: '/courses', component: CourseListPage },
-    { path: '/courses/by-id/:courseId', component: PublishedCoursePlaceholderPage },
+    { path: '/courses/by-id/:courseId/versions/:version', name: 'published-course-version', component: PublishedCourseReaderPage },
+    { path: '/courses/by-id/:courseId', name: 'published-course-latest', component: PublishedCourseReaderPage },
     { path: '/courses/:slug', component: CourseOverviewPage },
     { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPage },
     { path: '/authoring', name: 'authoring-home', component: AuthoringHomePage },
@@ -55,8 +56,15 @@ const router = createRouter({
 
 // Give client-side navigation the same clear reading start as a new document.
 // Initial loading and in-page authorization checks leave focus undisturbed.
-router.afterEach((_to, from) => {
+router.afterEach((to, from) => {
   if (from.matched.length === 0) return
+  const isPublishedReaderLessonChange =
+    (to.name === 'published-course-latest' || to.name === 'published-course-version') &&
+    to.path === from.path &&
+    to.query.lesson !== from.query.lesson
+  if (isPublishedReaderLessonChange) {
+    return
+  }
   void nextTick(() => document.getElementById('main')?.focus())
 })
 

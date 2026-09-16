@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { catalogOffsetFromRoute, getCourse, getCourseVersion, getLesson, formatDuration, isCourseSlug, isCourseVersion, lessonPath, listCourses, listPublishedCourseCatalog, publishedCoursePath } from './courses'
+import { catalogOffsetFromRoute, getCourse, getCourseVersion, getLatestPublishedCourse, getLesson, getPublishedCourseVersionByID, formatDuration, isCourseSlug, isCourseVersion, lessonPath, listCourses, listPublishedCourseCatalog, publishedCoursePath, publishedCourseVersionPath, publishedLessonKeyFromRoute } from './courses'
 
 describe('Courses service', () => {
   it('uses the shared API client and validates public course paths', async () => {
@@ -43,5 +43,18 @@ describe('Courses service', () => {
     expect(catalogOffsetFromRoute('-1')).toBeUndefined()
     expect(catalogOffsetFromRoute(['20'])).toBeUndefined()
     await expect(listPublishedCourseCatalog({ offset: -1 }, { request })).rejects.toThrow('Invalid course route')
+  })
+
+  it('uses exact Courses-owned endpoints for immutable published versions', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    const courseID = '10000000-0000-4000-8000-000000000001'
+    await getLatestPublishedCourse(courseID, { request })
+    expect(request).toHaveBeenCalledWith(`/api/courses/by-id/${courseID}/latest`)
+    await getPublishedCourseVersionByID(courseID, '1.10.0', { request })
+    expect(request).toHaveBeenLastCalledWith(`/api/courses/by-id/${courseID}/versions/1.10.0`)
+    expect(publishedCourseVersionPath(courseID, '1.10.0')).toBe(`/courses/by-id/${courseID}/versions/1.10.0`)
+    expect(publishedLessonKeyFromRoute('sync-vs-async')).toBe('sync-vs-async')
+    expect(publishedLessonKeyFromRoute('not valid')).toBeUndefined()
+    await expect(getLatestPublishedCourse('not-a-uuid', { request })).rejects.toThrow('Invalid course route')
   })
 })

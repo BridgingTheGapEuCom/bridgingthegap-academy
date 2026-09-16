@@ -9,12 +9,14 @@ export type CourseVersionSummary = components['schemas']['CourseVersionSummary']
 export type LessonSummary = components['schemas']['LessonSummary']
 export type PublishedCourseCatalogPage = components['schemas']['PublishedCourseCatalogPage']
 export type PublishedCourseCatalogItem = components['schemas']['PublishedCourseCatalogItem']
+export type PublishedCourseVersionDetail = components['schemas']['PublishedCourseVersionDetail']
 
 export const publishedCatalogPageSize = 20
 export const maxPublishedCatalogOffset = 2_147_483_647
 
 const courseSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const courseVersionPattern = /^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$/
+const courseIDPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 // This mirrors the public API's conservative slug contract so malformed route
 // values never become arbitrary or unbounded API paths.
@@ -44,6 +46,10 @@ export function isLessonKey(key: string): boolean {
   return isCourseSlug(key)
 }
 
+export function isPublishedCourseID(courseID: string): boolean {
+  return courseIDPattern.test(courseID)
+}
+
 export async function listCourses(client: APIClient = apiClient): Promise<CourseList> {
   return client.request<CourseList>('/api/courses')
 }
@@ -67,6 +73,24 @@ export async function listPublishedCourseCatalog(query: PublishedCatalogQuery = 
 
 export function publishedCoursePath(courseID: string): string {
   return `/courses/by-id/${encodeURIComponent(courseID)}`
+}
+
+export function publishedCourseVersionPath(courseID: string, version: string): string {
+  return `/courses/by-id/${encodeURIComponent(courseID)}/versions/${encodeURIComponent(version)}`
+}
+
+export async function getLatestPublishedCourse(courseID: string, client: APIClient = apiClient): Promise<PublishedCourseVersionDetail> {
+  if (!isPublishedCourseID(courseID)) throw new InvalidCourseRouteError()
+  return client.request<PublishedCourseVersionDetail>(`/api/courses/by-id/${encodeURIComponent(courseID)}/latest`)
+}
+
+export async function getPublishedCourseVersionByID(courseID: string, version: string, client: APIClient = apiClient): Promise<PublishedCourseVersionDetail> {
+  if (!isPublishedCourseID(courseID) || !isCourseVersion(version)) throw new InvalidCourseRouteError()
+  return client.request<PublishedCourseVersionDetail>(`/api/courses/by-id/${encodeURIComponent(courseID)}/versions/${encodeURIComponent(version)}`)
+}
+
+export function publishedLessonKeyFromRoute(value: unknown): string | undefined {
+  return typeof value === 'string' && isLessonKey(value) ? value : undefined
 }
 
 export function catalogOffsetFromRoute(value: unknown): number | undefined {
