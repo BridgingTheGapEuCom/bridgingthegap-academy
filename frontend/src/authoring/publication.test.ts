@@ -19,7 +19,7 @@ describe('publication mutation error classification', () => {
       type: 'https://academy.example/problems/publication-validation-failed', title: 'Publication validation failed', status: 422,
       instance: '/publish', request_id: 'request-id', code: 'publication_validation_failed', issues,
     }, undefined))
-    expect(failure).toEqual({ kind: 'validation', issues })
+    expect(failure).toEqual({ kind: 'validation-failure', issues })
   })
 
   it('retains distinct machine-readable publication conflicts', () => {

@@ -496,6 +496,21 @@ func (q *Queries) GetCourseVersionPublicationProvenance(ctx context.Context, cou
 	return i, err
 }
 
+const getLatestPublishedCourseVersionID = `-- name: GetLatestPublishedCourseVersionID :one
+SELECT id
+FROM courses.course_version
+WHERE course_id = $1 AND status = 'PUBLISHED'
+ORDER BY version_major DESC, version_minor DESC, version_patch DESC, id DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestPublishedCourseVersionID(ctx context.Context, courseID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getLatestPublishedCourseVersionID, courseID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getLesson = `-- name: GetLesson :one
 SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 FROM courses.lesson
@@ -600,6 +615,24 @@ func (q *Queries) GetModuleByCourseVersionAndKey(ctx context.Context, arg GetMod
 		&i.SourceModuleID,
 	)
 	return i, err
+}
+
+const getPublishedCourseVersionIDByCourseAndVersion = `-- name: GetPublishedCourseVersionIDByCourseAndVersion :one
+SELECT id
+FROM courses.course_version
+WHERE course_id = $1 AND version = $2 AND status = 'PUBLISHED'
+`
+
+type GetPublishedCourseVersionIDByCourseAndVersionParams struct {
+	CourseID pgtype.UUID
+	Version  string
+}
+
+func (q *Queries) GetPublishedCourseVersionIDByCourseAndVersion(ctx context.Context, arg GetPublishedCourseVersionIDByCourseAndVersionParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getPublishedCourseVersionIDByCourseAndVersion, arg.CourseID, arg.Version)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const listCourseVersions = `-- name: ListCourseVersions :many
@@ -809,6 +842,46 @@ func (q *Queries) ListLessonSummariesForCourseVersion(ctx context.Context, cours
 			&i.LearningObjectives,
 			&i.EstimatedDurationMinutes,
 			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLessonsForCourseVersion = `-- name: ListLessonsForCourseVersion :many
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
+FROM courses.lesson
+WHERE course_version_id = $1
+ORDER BY module_id ASC, position ASC, id ASC
+`
+
+func (q *Queries) ListLessonsForCourseVersion(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesLesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsForCourseVersion, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesLesson
+	for rows.Next() {
+		var i CoursesLesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseVersionID,
+			&i.ModuleID,
+			&i.StableKey,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.EstimatedDurationMinutes,
+			&i.Position,
+			&i.CreatedAt,
+			&i.Content,
+			&i.SourceLessonID,
 		); err != nil {
 			return nil, err
 		}

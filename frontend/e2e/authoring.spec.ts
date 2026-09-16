@@ -70,6 +70,14 @@ const reviewCycle = {
   decidedAt: null,
 }
 
+const approvedReviewCycle = {
+  ...reviewCycle,
+  status: 'APPROVED',
+  reviewRevision: 2,
+  decidedBy: session.user_id,
+  decidedAt: '2026-09-15T13:00:00Z',
+}
+
 const reviewSnapshot = {
   schemaVersion: 1,
   draft: {
@@ -96,6 +104,20 @@ async function serveReviewOverview(page: Page) {
   await page.route(`**/api/authoring/drafts/${draftID}/reviews`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ reviews: [reviewCycle] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/reviews/active`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewCycle) }))
   await page.route(`**/api/authoring/drafts/${draftID}/reviews/latest`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewCycle) }))
+}
+
+async function serveApprovedReviewSnapshot(page: Page) {
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/members`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ members: [{ userId: session.user_id, role: 'MAINTAINER' }] }),
+  }))
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ review: approvedReviewCycle, snapshot: reviewSnapshot }),
+  }))
 }
 
 test('Authoring discovery is reachable from main navigation and opens an accessible Draft workspace', async ({ page }) => {
@@ -273,6 +295,73 @@ test('Authoring decides an in-review snapshot with the authoritative Review revi
   await expect(page.getByRole('button', { name: 'Request changes' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Publish course version' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring publishes an approved Review with keyboard and focuses authoritative success', async ({ page }) => {
+  let publicationBody: unknown
+  let releasePublication: () => void = () => undefined
+  const publicationGate = new Promise<void>((resolve) => { releasePublication = resolve })
+  await serveApprovedReviewSnapshot(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}/publish`, async (route) => {
+    publicationBody = route.request().postDataJSON()
+    await publicationGate
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        reviewId: reviewCycle.id,
+        reviewRevision: 2,
+        courseId: draft.course_id,
+        courseVersion: '1.0.0',
+        courseVersionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        publishedAt: '2026-09-16T14:30:00Z',
+      }),
+    })
+  })
+
+  await page.goto(`/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`)
+  const publish = page.getByRole('button', { name: 'Publish course version' })
+  await publish.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Publishing course version…')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Publishing…' })).toBeDisabled()
+  releasePublication()
+  const success = page.getByRole('heading', { level: 4, name: 'Course version published' })
+  await expect(success).toBeVisible()
+  await expect(page.getByText('Course version 1.0.0 was published successfully.')).toBeVisible()
+  await expect(success).toBeFocused()
+  expect(publicationBody).toEqual({ expectedReviewRevision: 2 })
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring exposes and focuses blocking publication validation issues', async ({ page }) => {
+  await serveApprovedReviewSnapshot(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}/publish`, (route) => route.fulfill({
+    status: 422,
+    contentType: 'application/problem+json',
+    body: JSON.stringify({
+      type: 'https://academy.example/problems/publication-validation-failed',
+      title: 'Publication validation failed',
+      status: 422,
+      instance: route.request().url(),
+      request_id: 'publication-validation-request',
+      code: 'publication_validation_failed',
+      issues: [
+        { code: 'unresolved_asset_reference', path: 'modules[0].lessons[0].content.blocks[1]', message: 'The image asset is not available.' },
+        { code: 'unresolved_assessment_reference', path: 'modules[0].lessons[0].content.blocks[2]', message: 'The assessment is not available.' },
+      ],
+    }),
+  }))
+
+  await page.goto(`/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`)
+  await page.getByRole('button', { name: 'Publish course version' }).focus()
+  await page.keyboard.press('Enter')
+  const summary = page.getByRole('heading', { level: 4, name: 'Publication validation issues' })
+  await expect(summary).toBeVisible()
+  await expect(page.getByText('The image asset is not available.')).toBeVisible()
+  await expect(page.getByText('The assessment is not available.')).toBeVisible()
+  await expect(summary).toBeFocused()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 

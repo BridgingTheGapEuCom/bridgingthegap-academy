@@ -45,6 +45,7 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("courses persistence", func(t *testing.T) { testCoursesPersistence(t, ctx, pool) })
 	t.Run("course structure persistence", func(t *testing.T) { testCourseStructurePersistence(t, ctx, pool) })
 	t.Run("immutable course version publication persistence", func(t *testing.T) { testImmutableCourseVersionPersistence(t, ctx, pool) })
+	t.Run("immutable published course version reads", func(t *testing.T) { testImmutablePublishedCourseVersionReads(t, ctx, pool) })
 	t.Run("publication orchestration and recovery", func(t *testing.T) { testPublicationOrchestration(t, ctx, pool) })
 	t.Run("authoring publication API", func(t *testing.T) { testAuthoringPublicationAPI(t, ctx, pool) })
 	t.Run("course public read service", func(t *testing.T) { testCourseReadService(t, ctx, pool) })

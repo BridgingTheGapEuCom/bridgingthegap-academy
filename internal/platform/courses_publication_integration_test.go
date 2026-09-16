@@ -108,6 +108,60 @@ func testImmutableCourseVersionPersistence(t *testing.T, ctx context.Context, po
 	assertImmutableCourseVersionRoundTrip(t, concurrent, concurrentReloaded)
 }
 
+func testImmutablePublishedCourseVersionReads(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	repository := coursespostgres.New(pool)
+	store := courses.NewCourseVersionStore(repository)
+	service := courses.NewPublishedReadService(repository)
+	course, err := repository.CreateCourse(ctx, "immutable-published-read")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	older := immutableCourseVersionFixture(t, course.ID, "1.9.0", "81000000-0000-4000-8000-000000000001")
+	older.Modules[0].Title = "Older foundations"
+	if _, err := store.Store(ctx, older); err != nil {
+		t.Fatal(err)
+	}
+	latest := immutableCourseVersionFixture(t, course.ID, "1.10.0", "81000000-0000-4000-8000-000000000002")
+	latest.Modules[0].Title = "Latest foundations"
+	latest.Modules[0].Lessons[0].Title = "Latest introduction"
+	if _, err := store.Store(ctx, latest); err != nil {
+		t.Fatal(err)
+	}
+
+	exact, err := service.Exact(ctx, course.ID, older.CourseVersion.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exact.Version.String() != "1.9.0" || exact.Modules[0].Title != "Older foundations" || exact.Modules[0].Lessons[0].Title != "Introduction" {
+		t.Fatalf("exact read mixed immutable versions: %#v", exact)
+	}
+	selected, err := service.Latest(ctx, course.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.Version.String() != "1.10.0" || selected.Modules[0].Title != "Latest foundations" || selected.Modules[0].Lessons[0].Title != "Latest introduction" {
+		t.Fatalf("latest read did not use numeric SemVer and one aggregate: %#v", selected)
+	}
+	if len(selected.Modules) != 2 || selected.Modules[0].Position != 0 || selected.Modules[1].Position != 1 || len(selected.Modules[0].Lessons) != 2 || selected.Modules[0].Lessons[1].PrerequisiteStableKeys[0] != "introduction" {
+		t.Fatalf("published structure ordering or prerequisites were not preserved: %#v", selected.Modules)
+	}
+	if len(selected.Modules[0].Lessons[0].Content.Blocks) != 2 || selected.Modules[0].Lessons[0].Content.Blocks[0].Type != courses.BlockImage || selected.Modules[0].Lessons[0].Content.Blocks[1].Type != courses.BlockKnowledgeCheck {
+		t.Fatalf("canonical accessibility, asset, or assessment content was not preserved: %#v", selected.Modules[0].Lessons[0].Content)
+	}
+	missingVersion, err := courses.ParseVersion("1.11.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Exact(ctx, course.ID, missingVersion); !errors.Is(err, courses.ErrNotFound) {
+		t.Fatalf("unknown exact version error = %v, want not found", err)
+	}
+	if _, err := service.Latest(ctx, courses.CourseID("82000000-0000-4000-8000-000000000001")); !errors.Is(err, courses.ErrNotFound) {
+		t.Fatalf("no published version error = %v, want not found", err)
+	}
+}
+
 func immutableCourseVersionFixture(t *testing.T, courseID courses.CourseID, versionText, reviewID string) courses.ImmutableCourseVersion {
 	t.Helper()
 	version, err := courses.ParseVersion(versionText)

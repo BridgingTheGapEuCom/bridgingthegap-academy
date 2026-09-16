@@ -56,6 +56,18 @@ SELECT *
 FROM courses.course_version
 WHERE course_id = $1 AND version = $2;
 
+-- name: GetPublishedCourseVersionIDByCourseAndVersion :one
+SELECT id
+FROM courses.course_version
+WHERE course_id = $1 AND version = $2 AND status = 'PUBLISHED';
+
+-- name: GetLatestPublishedCourseVersionID :one
+SELECT id
+FROM courses.course_version
+WHERE course_id = $1 AND status = 'PUBLISHED'
+ORDER BY version_major DESC, version_minor DESC, version_patch DESC, id DESC
+LIMIT 1;
+
 -- name: ListCourseVersions :many
 SELECT *
 FROM courses.course_version
@@ -131,6 +143,12 @@ SELECT *
 FROM courses.lesson
 WHERE module_id = $1
 ORDER BY position ASC, id ASC;
+
+-- name: ListLessonsForCourseVersion :many
+SELECT *
+FROM courses.lesson
+WHERE course_version_id = $1
+ORDER BY module_id ASC, position ASC, id ASC;
 
 -- name: ListLessonSummariesForCourseVersion :many
 SELECT id, course_version_id, module_id, stable_key, title, description,

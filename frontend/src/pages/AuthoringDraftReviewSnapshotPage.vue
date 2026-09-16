@@ -43,9 +43,9 @@
       />
 
       <AuthoringReviewPublicationAction
-        v-if="canPublishReview"
-        :busy="publishing"
-        :error="publicationFailure !== undefined"
+        v-if="canPublishReview || publicationState.kind !== 'idle'"
+        :can-publish="canPublishReview"
+        :state="publicationState"
         @publish="publishReview"
       />
 
@@ -85,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
@@ -99,7 +99,7 @@ import {
   requestAuthoringReviewChanges,
   type AuthoringReviewDetail,
 } from '../authoring/authoring'
-import { canDisplayAuthoringPublication, classifyAuthoringPublicationFailure, type AuthoringPublicationFailure } from '../authoring/publication'
+import { canDisplayAuthoringPublication, classifyAuthoringPublicationFailure, type AuthoringPublicationState } from '../authoring/publication'
 import { useAuth } from '../auth/auth'
 import { useAuthoringDraftContext } from '../authoring/draftContext'
 import AuthoringReviewDecisionActions from '../components/AuthoringReviewDecisionActions.vue'
@@ -135,8 +135,7 @@ const decisionConflict = ref(false)
 const decisionError = ref<string>()
 const decisionStatus = ref<string>()
 const publishCapability = ref(false)
-const publishing = ref(false)
-const publicationFailure = ref<AuthoringPublicationFailure>()
+const publicationState = ref<AuthoringPublicationState>({ kind: 'idle' })
 const canPublishReview = computed(() => {
   if (state.value.kind !== 'ready') return false
   const review = state.value.detail.review
@@ -152,9 +151,8 @@ watch([routeDraftID, reviewID, () => auth.state.value], () => {
   pendingDecision.value = undefined
   reloading.value = false
   decisionStatus.value = undefined
-  publishing.value = false
   publishCapability.value = false
-  publicationFailure.value = undefined
+  publicationState.value = { kind: 'idle' }
   clearDecisionFeedback()
   void load()
 }, { immediate: true })
@@ -165,12 +163,18 @@ async function load(): Promise<boolean> {
   const generation = ++requestVersion
   const draftID = routeDraftID()
   const exactReviewID = reviewID()
+  const previousReview = state.value.kind === 'ready' ? state.value.detail.review : undefined
   state.value = { kind: 'loading' }
   try {
     const detail = await getAuthoringDraftReview(draftID, exactReviewID)
     if (!isCurrent() || !active || generation !== requestVersion) return false
     // The client supports the same snapshot version persisted by Authoring;
     // never reinterpret an unknown historical format as the current Draft.
+    if (previousReview?.id === detail.review.id
+      && previousReview.reviewRevision !== detail.review.reviewRevision
+      && publicationState.value.kind !== 'submitting') {
+      publicationState.value = { kind: 'idle' }
+    }
     state.value = detail.snapshot.schemaVersion === 1 ? { kind: 'ready', detail } : { kind: 'unsupported' }
     if (state.value.kind === 'ready') void loadPublishCapability(detail)
     return state.value.kind === 'ready'
@@ -262,34 +266,46 @@ async function reloadReview() {
 }
 
 async function publishReview() {
-  if (publishing.value || !canPublishReview.value || state.value.kind !== 'ready') return
+  if (publicationState.value.kind === 'submitting' || !canPublishReview.value || state.value.kind !== 'ready') return
   const isCurrent = captureScope()
   const detail = state.value.detail
   const draftID = routeDraftID()
   const exactReviewID = reviewID()
-  publishing.value = true
-  publicationFailure.value = undefined
+  publicationState.value = { kind: 'submitting' }
   try {
     // Only the exact authoritative Review revision is browser input. The API
     // derives publisher identity, publication time, provenance, and snapshot.
-    await publishAuthoringDraftReview(draftID, exactReviewID, { expectedReviewRevision: detail.review.reviewRevision })
+    const result = await publishAuthoringDraftReview(draftID, exactReviewID, { expectedReviewRevision: detail.review.reviewRevision })
     if (!isCurrent() || !active) return
     // The Review itself remains APPROVED; publication is a separate immutable
     // fact. Re-read this exact resource rather than inventing PUBLISHED state.
-    await load()
+    if (await load() && isCurrent()) {
+      publicationState.value = { kind: 'success', result }
+      await focusPublicationFeedback(isCurrent)
+    }
   } catch (error) {
     if (!isCurrent() || !active) return
-    if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
+    if (error instanceof APIProblemError && error.status === 404) {
+      publicationState.value = { kind: 'idle' }
+      markDraftUnavailable()
+      return
+    }
     const failure = classifyAuthoringPublicationFailure(error)
-    publicationFailure.value = failure
     if (failure.kind === 'conflict' && (failure.code === 'review_revision_conflict' || failure.code === 'review_not_approved')) {
       // Refresh the authoritative exact Review, but never replay publication
       // with a revision the user did not explicitly submit.
-      await load()
+      if (!await load() || !isCurrent()) return
     }
-  } finally {
-    if (isCurrent()) publishing.value = false
+    if (!isCurrent() || !active) return
+    publicationState.value = failure
+    if (failure.kind !== 'operational-failure') await focusPublicationFeedback(isCurrent)
   }
+}
+
+async function focusPublicationFeedback(isCurrent: () => boolean) {
+  await nextTick()
+  if (!isCurrent() || !active) return
+  document.getElementById('authoring-review-publication-feedback-title')?.focus()
 }
 
 function statusLabel(status: AuthoringReviewDetail['review']['status']): string {

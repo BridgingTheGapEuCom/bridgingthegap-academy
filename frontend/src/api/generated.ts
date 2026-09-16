@@ -426,6 +426,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/by-id/{courseId}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns one complete immutable PUBLISHED CourseVersion by Courses-owned ID and constrained SemVer. The response never consults or exposes Authoring Review or Draft provenance. */
+        get: operations["getPublishedCourseVersionById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the complete immutable PUBLISHED CourseVersion with the highest constrained SemVer. Pre-release metadata is not part of the current SemVer model. */
+        get: operations["getLatestPublishedCourseVersionById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -868,6 +902,53 @@ export interface components {
             version: components["schemas"]["CourseVersionSummary"];
             modules: components["schemas"]["ModuleStructure"][];
         };
+        PublishedCourseVersionDetail: {
+            /** Format: uuid */
+            courseId: string;
+            version: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            sourceLanguage: string;
+            changelog: string;
+            license: components["schemas"]["PublishedContentLicense"];
+            contributors: components["schemas"]["PublishedContributor"][];
+            /** Format: date-time */
+            publishedAt: string;
+            modules: components["schemas"]["PublishedCourseModule"][];
+        };
+        PublishedContentLicense: {
+            /** @enum {string} */
+            kind: "STANDARD" | "ALL_RIGHTS_RESERVED" | "CUSTOM";
+            identifier: string;
+            displayName: string;
+            /** @description Empty when no public license URL is present. */
+            url: string;
+            customText: string;
+        };
+        PublishedContributor: {
+            displayName: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+            order: number;
+        };
+        PublishedCourseModule: {
+            stableKey: string;
+            title: string;
+            description: string;
+            position: number;
+            lessons: components["schemas"]["PublishedCourseLesson"][];
+        };
+        PublishedCourseLesson: {
+            stableKey: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimatedDurationMinutes: number | null;
+            position: number;
+            prerequisiteStableKeys: string[];
+            content: components["schemas"]["LessonContent"];
+        };
         CourseVersionSummary: {
             version: string;
             /** @enum {string} */
@@ -1186,6 +1267,7 @@ export interface components {
         AuthoringModuleID: string;
         AuthoringLessonID: string;
         AuthoringReviewID: string;
+        CourseID: string;
         CourseSlug: string;
         CourseVersion: string;
         LessonKey: string;
@@ -2245,6 +2327,57 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getPublishedCourseVersionById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete immutable published CourseVersion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedCourseVersionDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getLatestPublishedCourseVersionById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete latest immutable published CourseVersion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedCourseVersionDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
     loginWithPassword: {

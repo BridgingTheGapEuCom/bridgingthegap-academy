@@ -60,6 +60,7 @@ type authHTTP struct {
 	authorizer                  identity.Authorizer
 	authzMetrics                *prometheus.CounterVec
 	courses                     *courses.ReadService
+	publishedCourses            *courses.PublishedReadService
 	authoring                   *authoring.ReadService
 	authoringMutations          *authoring.DraftMutationService
 	authoringStructureMutations *authoring.ModuleMutationService

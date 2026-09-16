@@ -449,6 +449,26 @@ paths:
         '200': { description: Canonical published lesson content, content: { application/json: { schema: { $ref: '#/components/schemas/LessonDetail' } } } }
         '400': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/versions/{version}:
+    get:
+      operationId: getPublishedCourseVersionById
+      description: Returns one complete immutable PUBLISHED CourseVersion by Courses-owned ID and constrained SemVer. The response never consults or exposes Authoring Review or Draft provenance.
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }]
+      responses:
+        '200': { description: Complete immutable published CourseVersion, content: { application/json: { schema: { $ref: '#/components/schemas/PublishedCourseVersionDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/latest:
+    get:
+      operationId: getLatestPublishedCourseVersionById
+      description: Returns the complete immutable PUBLISHED CourseVersion with the highest constrained SemVer. Pre-release metadata is not part of the current SemVer model.
+      parameters: [{ $ref: '#/components/parameters/CourseID' }]
+      responses:
+        '200': { description: Complete latest immutable published CourseVersion, content: { application/json: { schema: { $ref: '#/components/schemas/PublishedCourseVersionDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/auth/login:
     post:
       operationId: loginWithPassword
@@ -569,6 +589,7 @@ components:
     AuthoringModuleID: { name: moduleId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringLessonID: { name: lessonId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringReviewID: { name: reviewId, in: path, required: true, schema: { type: string, format: uuid } }
+    CourseID: { name: courseId, in: path, required: true, schema: { type: string, format: uuid } }
     CourseSlug: { name: slug, in: path, required: true, schema: { type: string } }
     CourseVersion: { name: version, in: path, required: true, schema: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$' } }
     LessonKey: { name: lessonKey, in: path, required: true, schema: { type: string } }
@@ -1008,6 +1029,26 @@ components:
     CourseSummary: { type: object, required: [slug, version], properties: { slug: { type: string }, version: { $ref: '#/components/schemas/CourseVersionSummary' } } }
     CourseIdentity: { type: object, required: [slug], properties: { slug: { type: string } } }
     CourseDetail: { type: object, required: [course, version, modules], properties: { course: { $ref: '#/components/schemas/CourseIdentity' }, version: { $ref: '#/components/schemas/CourseVersionSummary' }, modules: { type: array, items: { $ref: '#/components/schemas/ModuleStructure' } } } }
+    PublishedCourseVersionDetail:
+      type: object
+      additionalProperties: false
+      required: [courseId, version, title, description, objectives, sourceLanguage, changelog, license, contributors, publishedAt, modules]
+      properties:
+        courseId: { type: string, format: uuid }
+        version: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        sourceLanguage: { type: string }
+        changelog: { type: string }
+        license: { $ref: '#/components/schemas/PublishedContentLicense' }
+        contributors: { type: array, items: { $ref: '#/components/schemas/PublishedContributor' } }
+        publishedAt: { type: string, format: date-time }
+        modules: { type: array, items: { $ref: '#/components/schemas/PublishedCourseModule' } }
+    PublishedContentLicense: { type: object, additionalProperties: false, required: [kind, identifier, displayName, url, customText], properties: { kind: { type: string, enum: [STANDARD, ALL_RIGHTS_RESERVED, CUSTOM] }, identifier: { type: string }, displayName: { type: string }, url: { type: string, description: Empty when no public license URL is present. }, customText: { type: string } } }
+    PublishedContributor: { type: object, additionalProperties: false, required: [displayName, role, order], properties: { displayName: { type: string }, role: { type: string, enum: [AUTHOR, MAINTAINER] }, order: { type: integer, minimum: 0 } } }
+    PublishedCourseModule: { type: object, additionalProperties: false, required: [stableKey, title, description, position, lessons], properties: { stableKey: { type: string }, title: { type: string }, description: { type: string }, position: { type: integer, minimum: 0 }, lessons: { type: array, items: { $ref: '#/components/schemas/PublishedCourseLesson' } } } }
+    PublishedCourseLesson: { type: object, additionalProperties: false, required: [stableKey, title, description, objectives, estimatedDurationMinutes, position, prerequisiteStableKeys, content], properties: { stableKey: { type: string }, title: { type: string }, description: { type: string }, objectives: { type: array, items: { type: string } }, estimatedDurationMinutes: { type: [integer, 'null'], minimum: 1 }, position: { type: integer, minimum: 0 }, prerequisiteStableKeys: { type: array, items: { type: string } }, content: { $ref: '#/components/schemas/LessonContent' } } }
     CourseVersionSummary: { type: object, required: [version, status, title, description, objectives, source_language, license, contributors], properties: { version: { type: string }, status: { type: string, enum: [PUBLISHED, DEPRECATED, ARCHIVED] }, title: { type: string }, description: { type: string }, objectives: { type: array, items: { type: string } }, source_language: { type: string }, license: { $ref: '#/components/schemas/ContentLicense' }, contributors: { type: array, items: { $ref: '#/components/schemas/Contributor' } } } }
     Contributor: { type: object, required: [display_name, role, order], properties: { display_name: { type: string }, role: { type: string, enum: [AUTHOR, MAINTAINER] }, order: { type: integer, minimum: 0 } } }
     ContentLicense: { type: object, required: [kind, identifier, display_name, url, custom_text], properties: { kind: { type: string, enum: [STANDARD, ALL_RIGHTS_RESERVED, CUSTOM] }, identifier: { type: string }, display_name: { type: string }, url: { type: string, description: Empty when no public license URL is present. }, custom_text: { type: string } } }

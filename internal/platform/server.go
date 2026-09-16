@@ -79,6 +79,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		loginRejects:                loginRejections,
 		authorizer:                  identity.NewAuthorizationService(identitypostgres.New(pool)),
 		courses:                     courses.NewReadService(coursesRepository),
+		publishedCourses:            courses.NewPublishedReadService(coursesRepository),
 		authoring:                   authoring.NewReadService(authoringRepository, authoringAuthorizer),
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
@@ -147,6 +148,13 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				api.Get("/courses/{slug}", auth.handleCourseCurrent)
 				api.Get("/courses/{slug}/versions/{version}", auth.handleCourseVersion)
 				api.Get("/courses/{slug}/versions/{version}/lessons/{lessonKey}", auth.handleLesson)
+			}
+			if auth.publishedCourses != nil {
+				// The legacy public Courses routes are slug-addressed. The ID
+				// namespace keeps those stable while exposing complete immutable
+				// M4.5 publications through exact Courses-owned IDs.
+				api.Get("/courses/by-id/{courseId}/versions/{version}", auth.handlePublishedCourseVersion)
+				api.Get("/courses/by-id/{courseId}/latest", auth.handleLatestPublishedCourseVersion)
 			}
 			api.With(auth.resolveSession(false), auth.csrfProtection).Post("/auth/logout", auth.handleLogout)
 			api.Group(func(protected chi.Router) {

@@ -13,6 +13,7 @@ import (
 )
 
 var _ courses.ImmutableCourseVersionRepository = (*Repository)(nil)
+var _ courses.PublishedCourseVersionRepository = (*Repository)(nil)
 
 func (r *Repository) StoreImmutableCourseVersion(ctx context.Context, input courses.ImmutableCourseVersion) (courses.ImmutableCourseVersion, error) {
 	if input.ValidateForPersistence() != nil {
@@ -123,6 +124,30 @@ func (r *Repository) GetImmutableCourseVersionByCourseAndVersion(ctx context.Con
 		return courses.ImmutableCourseVersion{}, storageError(err)
 	}
 	return getImmutableCourseVersion(ctx, r.q, row.ID)
+}
+
+func (r *Repository) GetPublishedImmutableCourseVersionByCourseAndVersion(ctx context.Context, courseID courses.CourseID, version courses.Version) (courses.ImmutableCourseVersion, error) {
+	courseKey, err := uuid(string(courseID))
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, err
+	}
+	versionID, err := r.q.GetPublishedCourseVersionIDByCourseAndVersion(ctx, sqlc.GetPublishedCourseVersionIDByCourseAndVersionParams{CourseID: courseKey, Version: version.String()})
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, storageError(err)
+	}
+	return getImmutableCourseVersion(ctx, r.q, versionID)
+}
+
+func (r *Repository) GetLatestPublishedImmutableCourseVersion(ctx context.Context, courseID courses.CourseID) (courses.ImmutableCourseVersion, error) {
+	courseKey, err := uuid(string(courseID))
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, err
+	}
+	versionID, err := r.q.GetLatestPublishedCourseVersionID(ctx, courseKey)
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, storageError(err)
+	}
+	return getImmutableCourseVersion(ctx, r.q, versionID)
 }
 
 func storePublicationProvenance(ctx context.Context, q *sqlc.Queries, courseVersionID pgtype.UUID, provenance courses.CourseVersionProvenance) error {
@@ -238,6 +263,7 @@ func getImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, versionID p
 	if err != nil {
 		return courses.ImmutableCourseVersion{}, storageError(err)
 	}
+	moduleIndexes := make(map[string]int, len(moduleRows))
 	for _, moduleRow := range moduleRows {
 		if !moduleRow.SourceModuleID.Valid {
 			return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
@@ -251,48 +277,45 @@ func getImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, versionID p
 			Position:    int(moduleRow.Position),
 			Lessons:     []courses.ImmutableCourseVersionLesson{},
 		}
-		lessonRows, err := q.ListLessonsForModule(ctx, moduleRow.ID)
-		if err != nil {
-			return courses.ImmutableCourseVersion{}, storageError(err)
-		}
-		for _, lessonRow := range lessonRows {
-			if !lessonRow.SourceLessonID.Valid {
-				return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
-			}
-			lesson, err := mapLesson(lessonRow)
-			if err != nil {
-				return courses.ImmutableCourseVersion{}, err
-			}
-			prerequisites, err := listLessonPrerequisites(ctx, q, lessonRow.ID)
-			if err != nil {
-				return courses.ImmutableCourseVersion{}, err
-			}
-			module.Lessons = append(module.Lessons, courses.ImmutableCourseVersionLesson{
-				ID:                       lesson.ID,
-				SourceID:                 lessonRow.SourceLessonID.String(),
-				StableKey:                lesson.StableKey,
-				Title:                    lesson.Title,
-				Description:              lesson.Description,
-				LearningObjectives:       lesson.LearningObjectives,
-				EstimatedDurationMinutes: lesson.EstimatedDurationMinutes,
-				Position:                 lesson.Position,
-				PrerequisiteStableKeys:   prerequisites,
-				Content:                  lesson.Content,
-			})
-		}
 		result.Modules = append(result.Modules, module)
+		moduleIndexes[moduleRow.ID.String()] = len(result.Modules) - 1
 	}
-	return result, nil
-}
-
-func listLessonPrerequisites(ctx context.Context, q *sqlc.Queries, lessonID pgtype.UUID) ([]string, error) {
-	rows, err := q.ListLessonPrerequisites(ctx, lessonID)
+	lessonRows, err := q.ListLessonsForCourseVersion(ctx, versionID)
 	if err != nil {
-		return nil, storageError(err)
+		return courses.ImmutableCourseVersion{}, storageError(err)
 	}
-	result := make([]string, 0, len(rows))
-	for _, row := range rows {
-		result = append(result, row.PrerequisiteStableKey)
+	prerequisiteRows, err := q.ListLessonPrerequisitesForCourseVersion(ctx, versionID)
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, storageError(err)
+	}
+	prerequisites := make(map[string][]string, len(lessonRows))
+	for _, row := range prerequisiteRows {
+		prerequisites[row.LessonID.String()] = append(prerequisites[row.LessonID.String()], row.PrerequisiteStableKey)
+	}
+	for _, lessonRow := range lessonRows {
+		if !lessonRow.SourceLessonID.Valid {
+			return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
+		}
+		moduleIndex, ok := moduleIndexes[lessonRow.ModuleID.String()]
+		if !ok {
+			return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
+		}
+		lesson, err := mapLesson(lessonRow)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, err
+		}
+		result.Modules[moduleIndex].Lessons = append(result.Modules[moduleIndex].Lessons, courses.ImmutableCourseVersionLesson{
+			ID:                       lesson.ID,
+			SourceID:                 lessonRow.SourceLessonID.String(),
+			StableKey:                lesson.StableKey,
+			Title:                    lesson.Title,
+			Description:              lesson.Description,
+			LearningObjectives:       lesson.LearningObjectives,
+			EstimatedDurationMinutes: lesson.EstimatedDurationMinutes,
+			Position:                 lesson.Position,
+			PrerequisiteStableKeys:   append([]string{}, prerequisites[lessonRow.ID.String()]...),
+			Content:                  lesson.Content,
+		})
 	}
 	return result, nil
 }
