@@ -45,6 +45,7 @@ describe('LessonBlockRenderer', () => {
     renderBlock({ key: 'table', type: 'TABLE', payload: { caption: 'Terms', headers: ['Term'], rows: [['Meaning']] } })
     expect(screen.getByRole('table')).toBeTruthy()
     expect(screen.getByRole('columnheader', { name: 'Term' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Scrollable table: Terms' }).getAttribute('tabindex')).toBe('0')
     cleanup()
     renderBlock({ key: 'divider', type: 'DIVIDER', payload: {} })
     expect(document.querySelector('hr')).toBeTruthy()

@@ -60,7 +60,13 @@ function assetIsUnresolved(asset: { assetKey: string }): boolean {
     <LessonRichText :content="block.payload.content" />
   </div>
 
-  <div v-else-if="block.type === 'TABLE'" class="lesson-block lesson-table-scroll" tabindex="0">
+  <div
+    v-else-if="block.type === 'TABLE'"
+    class="lesson-block lesson-table-scroll"
+    role="region"
+    :aria-label="block.payload.caption ? `Scrollable table: ${block.payload.caption}` : 'Scrollable lesson table'"
+    tabindex="0"
+  >
     <table>
       <caption v-if="block.payload.caption">{{ block.payload.caption }}</caption>
       <thead><tr><th v-for="header in block.payload.headers" :key="header" scope="col">{{ header }}</th></tr></thead>

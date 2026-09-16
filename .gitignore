@@ -4,6 +4,7 @@ test-results/
 .env
 .env.*.local
 btg-lms
+/internal/web/dist/
 !cmd/btg-lms/
 !cmd/btg-lms/*.go
 coverage/

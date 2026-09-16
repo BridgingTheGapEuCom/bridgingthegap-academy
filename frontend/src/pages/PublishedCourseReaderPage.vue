@@ -1,27 +1,27 @@
 <template>
   <BtgPageContainer as="section" class="published-course-reader" width="application" aria-labelledby="published-course-title">
     <div v-if="state.kind === 'loading'" class="published-course-reader__state" role="status" aria-live="polite">
-      <h1 id="published-course-title">Loading course…</h1>
+      <h1 id="published-course-title" ref="courseTitle" tabindex="-1">Loading course…</h1>
       <p>One moment while we load this published course.</p>
     </div>
 
     <div v-else-if="state.kind === 'not-found'" class="published-course-reader__state">
-      <h1 id="published-course-title">Course not found</h1>
+      <h1 id="published-course-title" ref="courseTitle" tabindex="-1">Course not found</h1>
       <p>This published course is not available.</p>
       <RouterLink to="/courses">Browse courses</RouterLink>
     </div>
 
     <div v-else-if="state.kind === 'unavailable'" class="published-course-reader__state" role="alert">
-      <h1 id="published-course-title">Course unavailable</h1>
+      <h1 id="published-course-title" ref="courseTitle" tabindex="-1">Course unavailable</h1>
       <p>We couldn’t load this course right now. Please try again.</p>
-      <BtgButton variant="secondary" @click="load">Try again</BtgButton>
+      <BtgButton variant="secondary" @click="retryLoad">Try again</BtgButton>
     </div>
 
     <template v-else>
       <header class="published-course-reader__header">
         <RouterLink class="published-course-reader__back" to="/courses">Browse courses</RouterLink>
         <p class="published-course-reader__eyebrow">Bridging the Gap Academy</p>
-        <h1 id="published-course-title">{{ state.course.title }}</h1>
+        <h1 id="published-course-title" ref="courseTitle" tabindex="-1">{{ state.course.title }}</h1>
         <p v-if="state.course.description" class="published-course-reader__description">{{ state.course.description }}</p>
         <dl class="published-course-reader__metadata">
           <div><dt>Version</dt><dd>{{ state.course.version }}</dd></div>
@@ -59,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import BtgButton from '../components/BtgButton.vue'
@@ -70,6 +70,7 @@ import {
   getLatestPublishedCourse,
   getPublishedCourseVersionByID,
   InvalidCourseRouteError,
+  isCourseVersion,
   publishedLessonKeyFromRoute,
   type PublishedCourseVersionDetail,
 } from '../courses/courses'
@@ -84,6 +85,7 @@ type State =
 const route = useRoute()
 const router = useRouter()
 const state = ref<State>({ kind: 'loading' })
+const courseTitle = ref<HTMLHeadingElement | null>(null)
 let requestVersion = 0
 let active = true
 
@@ -95,7 +97,7 @@ watch(() => route.query.lesson, () => {
 
 onBeforeUnmount(() => { active = false })
 
-async function load() {
+async function load(): Promise<boolean> {
   const generation = ++requestVersion
   const courseID = routeParameter('courseId')
   const version = routeParameter('version')
@@ -105,14 +107,17 @@ async function load() {
     const course = version
       ? await getPublishedCourseVersionByID(courseID, version)
       : await getLatestPublishedCourse(courseID)
-    if (!active || generation !== requestVersion || !isCurrentRoute(courseID, version)) return
+    if (!active || generation !== requestVersion || !isCurrentRoute(courseID, version)) return false
+    if (!courseMatchesRoute(course, courseID, version)) throw new Error('published course response does not match route')
     state.value = { kind: 'ready', course, selectedLesson: null }
     reconcileLessonSelection(course)
+    return true
   } catch (error) {
-    if (!active || generation !== requestVersion || !isCurrentRoute(courseID, version)) return
+    if (!active || generation !== requestVersion || !isCurrentRoute(courseID, version)) return false
     state.value = error instanceof InvalidCourseRouteError || (error instanceof APIProblemError && error.status === 404)
       ? { kind: 'not-found' }
       : { kind: 'unavailable' }
+    return true
   }
 }
 
@@ -123,9 +128,17 @@ function reconcileLessonSelection(course: PublishedCourseVersionDetail) {
   const selectedLesson = lessons.find((lesson) => lesson.stableKey === requestedLessonKey) ?? lessons[0] ?? null
   state.value = { kind: 'ready', course, selectedLesson }
 
-  if (selectedLesson && route.query.lesson !== selectedLesson.stableKey) {
-    void router.replace({ path: route.path, query: { lesson: selectedLesson.stableKey } })
+  const normalizedLessonKey = selectedLesson?.stableKey
+  if (route.query.lesson !== normalizedLessonKey) {
+    void router.replace({ path: route.path, query: normalizedLessonKey ? { lesson: normalizedLessonKey } : {} })
   }
+}
+
+async function retryLoad() {
+  const applied = await load()
+  if (!active || !applied) return
+  await nextTick()
+  courseTitle.value?.focus()
 }
 
 function routeParameter(name: 'courseId' | 'version'): string {
@@ -136,6 +149,11 @@ function isCurrentRoute(courseID: string, version: string): boolean {
   return routeParameter('courseId') === courseID && routeParameter('version') === version
 }
 
+function courseMatchesRoute(course: PublishedCourseVersionDetail, courseID: string, version: string): boolean {
+  return course.courseId.toLowerCase() === courseID.toLowerCase()
+    && isCourseVersion(course.version)
+    && (!version || course.version === version)
+}
 
 function formatPublishedDate(value: string): string {
   const date = new Date(value)

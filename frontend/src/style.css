@@ -399,6 +399,8 @@
 .course-list__metadata dd { margin: 0; }
 
 .published-course-reader {
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding-block: clamp(var(--btg-space-6), 8vw, var(--btg-space-8));
 }
 
@@ -466,6 +468,8 @@
   margin-top: var(--btg-space-5);
   align-items: start;
 }
+
+.published-course-reader :where(div, section, article, nav, ol, li) { min-width: 0; }
 
 .published-course-reader-navigation { padding: var(--btg-space-5); }
 .published-course-reader-navigation__module + .published-course-reader-navigation__module {

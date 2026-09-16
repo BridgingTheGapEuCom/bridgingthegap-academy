@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vu
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
+import { InvalidCourseRouteError } from '../courses/courses'
 
 const getLatestPublishedCourseMock = vi.hoisted(() => vi.fn())
 const getPublishedCourseVersionByIDMock = vi.hoisted(() => vi.fn())
@@ -56,6 +57,12 @@ async function renderPage(path = `/courses/by-id/${courseID}`) {
   await router.push(path)
   await router.isReady()
   return { ...render(PublishedCourseReaderPage, { global: { plugins: [router] } }), router }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((settle) => { resolve = settle })
+  return { promise, resolve }
 }
 
 describe('PublishedCourseReaderPage', () => {
@@ -132,8 +139,9 @@ describe('PublishedCourseReaderPage', () => {
 
     cleanup()
     getLatestPublishedCourseMock.mockResolvedValueOnce({ ...course, modules: [{ stableKey: 'empty-module', title: 'Empty module', description: '', position: 0, lessons: [] }] })
-    await renderPage()
+    const empty = await renderPage(`/courses/by-id/${courseID}?lesson=removed-lesson`)
     expect(await screen.findByText('This course does not contain any lessons yet.')).toBeTruthy()
+    await waitFor(() => expect(empty.router.currentRoute.value.query.lesson).toBeUndefined())
 
     cleanup()
     getLatestPublishedCourseMock.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))
@@ -146,7 +154,36 @@ describe('PublishedCourseReaderPage', () => {
     await screen.findByRole('alert')
     expect(document.body.textContent).not.toContain('private database failure')
     await fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('heading', { level: 1, name: 'Event-driven architecture' })).toBeTruthy()
+    const reloadedHeading = await screen.findByRole('heading', { level: 1, name: 'Event-driven architecture' })
+    await waitFor(() => expect(document.activeElement).toBe(reloadedHeading))
+  })
+
+  it('fails closed when a published response does not match the requested Course or exact version', async () => {
+    getLatestPublishedCourseMock.mockResolvedValueOnce({ ...course, courseId: '10000000-0000-4000-8000-000000000002' })
+    await renderPage()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Course unavailable' })).toBeTruthy()
+    expect(screen.queryByText('Exact version one content')).toBeNull()
+
+    cleanup()
+    getPublishedCourseVersionByIDMock.mockResolvedValueOnce({ ...course, version: '2.0.0' })
+    await renderPage(`/courses/by-id/${courseID}/versions/1.10.0`)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Course unavailable' })).toBeTruthy()
+    expect(screen.queryByText('Exact version one content')).toBeNull()
+  })
+
+  it('never falls back to latest for malformed or unavailable exact-version routes', async () => {
+    getPublishedCourseVersionByIDMock
+      .mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))
+      .mockRejectedValueOnce(new InvalidCourseRouteError())
+    await renderPage(`/courses/by-id/${courseID}/versions/9.9.9`)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Course not found' })).toBeTruthy()
+    expect(getLatestPublishedCourseMock).not.toHaveBeenCalled()
+
+    cleanup()
+    await renderPage(`/courses/by-id/${courseID}/versions/01.0.0`)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Course not found' })).toBeTruthy()
+    expect(getPublishedCourseVersionByIDMock).toHaveBeenCalledTimes(2)
+    expect(getLatestPublishedCourseMock).not.toHaveBeenCalled()
   })
 
   it('discards a late course response and does not retain a lesson from another course', async () => {
@@ -164,5 +201,62 @@ describe('PublishedCourseReaderPage', () => {
     resolveFirst?.(course)
     await waitFor(() => expect(screen.queryByRole('heading', { level: 2, name: 'What is EAI?' })).toBeNull())
     expect(screen.getByRole('heading', { level: 1, name: 'Second course' })).toBeTruthy()
+  })
+
+  it('keeps exact-version routes isolated from late latest and other-version responses', async () => {
+    const lateLatest = deferred<typeof course>()
+    const lateVersionOne = deferred<typeof course>()
+    const versionTwo = {
+      ...course,
+      version: '2.0.0',
+      title: 'Version two',
+      modules: [{
+        ...course.modules[0],
+        lessons: [{
+          ...course.modules[0].lessons[0],
+          content: { schemaVersion: 1, blocks: [{ key: 'version-two', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Version two only', marks: [] }] }] } } }] },
+        }],
+      }],
+    }
+    getLatestPublishedCourseMock.mockReturnValueOnce(lateLatest.promise)
+    getPublishedCourseVersionByIDMock.mockImplementation((_requestedCourseID: string, version: string) => {
+      if (version === '1.10.0') return lateVersionOne.promise
+      return Promise.resolve(versionTwo)
+    })
+
+    const { router } = await renderPage()
+    await router.push(`/courses/by-id/${courseID}/versions/1.10.0`)
+    await router.push(`/courses/by-id/${courseID}/versions/2.0.0`)
+    expect(await screen.findByText('Version two only')).toBeTruthy()
+
+    lateLatest.resolve({ ...course, title: 'Late latest' })
+    lateVersionOne.resolve(course)
+    await waitFor(() => expect(screen.queryByText('Exact version one content')).toBeNull())
+    expect(screen.getByRole('heading', { level: 1, name: 'Version two' })).toBeTruthy()
+    expect(router.currentRoute.value.params.version).toBe('2.0.0')
+    expect(getLatestPublishedCourseMock).toHaveBeenCalledTimes(1)
+    expect(getPublishedCourseVersionByIDMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not restore focus or state from a retry that finishes after navigation', async () => {
+    const retry = deferred<typeof course>()
+    const secondCourseID = '10000000-0000-4000-8000-000000000002'
+    const secondCourse = { ...course, courseId: secondCourseID, title: 'Current course' }
+    getLatestPublishedCourseMock
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockReturnValueOnce(retry.promise)
+      .mockResolvedValueOnce(secondCourse)
+
+    const { router } = await renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Course unavailable' })
+    await fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await router.push(`/courses/by-id/${secondCourseID}`)
+    const currentHeading = await screen.findByRole('heading', { level: 1, name: 'Current course' })
+    currentHeading.focus()
+
+    retry.resolve(course)
+    await waitFor(() => expect(document.activeElement).toBe(currentHeading))
+    expect(screen.queryByText('Exact version one content')).toBeTruthy()
+    expect(screen.queryByRole('heading', { level: 1, name: 'Event-driven architecture' })).toBeNull()
   })
 })

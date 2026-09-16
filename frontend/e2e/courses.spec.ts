@@ -38,6 +38,20 @@ const publishedCourse = {
     ],
   }],
 }
+const historicalCourse = {
+  ...publishedCourse,
+  version: '1.0.0',
+  modules: [{
+    ...publishedCourse.modules[0],
+    lessons: [{
+      ...publishedCourse.modules[0].lessons[0],
+      content: {
+        schemaVersion: 1,
+        blocks: [{ key: 'historical', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Historical version content.', marks: [] }] }] } } }],
+      },
+    }],
+  }],
+}
 
 async function servePublicCourses(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 401, contentType: 'application/problem+json', body: JSON.stringify(unauthenticated) }))
@@ -45,6 +59,7 @@ async function servePublicCourses(page: Page) {
   await page.route('**/api/courses/event-driven-architecture', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(courseDetail) }))
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/latest`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(publishedCourse) }))
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(publishedCourse) }))
+  await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/1.0.0`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(historicalCourse) }))
   await page.route('**/api/courses/catalog**', (route) => {
     const offset = new URL(route.request().url()).searchParams.get('offset')
     return route.fulfill({
@@ -85,6 +100,26 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await expect(page.getByRole('link', { name: 'What is EAI?, estimated duration 10 min' })).toHaveAttribute('aria-current', 'page')
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expect(page.getByRole('heading', { level: 1, name: 'Event-driven architecture' })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await expect(page.getByRole('region', { name: 'Scrollable table: Terms' })).toBeVisible()
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await expect(page.getByRole('navigation', { name: 'Course lessons' })).toBeVisible()
+  await page.evaluate(() => { document.documentElement.style.fontSize = '' })
+
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`/courses/by-id/${catalogFirst.courseId}/versions/1.0.0?lesson=what-is-eai`)
+  await expect(page.getByText('Historical version content.')).toBeVisible()
+  await expect(page.getByText('Published canonical lesson content.')).toHaveCount(0)
+  await expect(page.getByText('1.0.0')).toBeVisible()
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+
   await page.getByRole('link', { name: 'Browse courses' }).click()
   await page.getByRole('button', { name: 'Next' }).focus()
   await page.keyboard.press('Enter')
@@ -92,9 +127,4 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await expect(page.getByRole('link', { name: 'Boundary design' })).toBeVisible()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 
-  for (const width of [390, 320]) {
-    await page.setViewportSize({ width, height: 844 })
-    await expect(page.getByRole('heading', { level: 1, name: 'Courses' })).toBeVisible()
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  }
 })
