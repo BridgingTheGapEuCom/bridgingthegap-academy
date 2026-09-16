@@ -46,6 +46,9 @@ branch on MAINTAINER/AUTHOR roles. The policy is:
 | `authoring.content.edit` | Allow | Allow |
 | `authoring.members.manage` | Deny | Allow |
 | `authoring.draft.abandon` | Deny | Allow |
+| `authoring.review.read` | Allow | Allow |
+| `authoring.review.submit` | Allow | Allow |
+| `authoring.review.decide` | Deny | Allow |
 
 Membership is read on every authorization decision; revoked rows grant nothing.
 An in-flight check may observe the prior committed membership if it races with
@@ -215,3 +218,22 @@ Review authorization capabilities, reviewer assignment, notifications, Audit
 integration, publishing validation, and conversion into immutable CourseVersion
 artifacts remain outside M4.1. Review persistence remains wholly owned by
 Authoring and never writes Courses tables.
+
+The authenticated Review API is nested under the exact Draft resource. AUTHOR
+and MAINTAINER members may submit the caller's expected current Draft revision,
+read active/latest cycle metadata, list newest-first history without snapshots,
+and read one exact stored snapshot. Only MAINTAINER has
+`authoring.review.decide`; handlers ask the centralized Authoring authorizer and
+never interpret roles. Every decision rechecks current active membership, and
+revoked, unauthorized, absent, and cross-Draft resources share the same hidden
+404 response. Infrastructure failures remain 500.
+
+Submission, approval, and change-request writes use the existing trusted-Origin
+and session-bound CSRF boundary, strict bounded JSON, and explicit expected
+revisions. Stale submission, an existing active cycle, stale Review decisions,
+and terminal re-decisions return conflict without retry. All responses are
+private `no-store`. A change request remains terminal for its frozen cycle;
+resubmission uses `POST /reviews` to create a new cycle for a later Draft
+revision. Independent-reviewer and contributor-separation policy is explicitly
+not enforced in M4.2; the application decision boundary retains the submitted
+and deciding actor identities so that policy can be added before persistence.

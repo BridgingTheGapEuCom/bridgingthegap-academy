@@ -83,6 +83,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringLessonMutations:    authoring.NewLessonMutationService(authoringRepository, authoringAuthorizer),
 		authoringLessonContent:      authoring.NewLessonContentMutationService(authoringRepository, authoringAuthorizer),
 		authoringMemberships:        authoring.NewMembershipMutationService(authoringRepository, authoringAuthorizer),
+		authoringReviews:            authoring.NewReviewApplicationService(authoringRepository, authoringAuthorizer),
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -175,6 +176,15 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Post("/authoring/drafts/{draftId}/members", auth.handleAuthoringMemberAdd)
 					protected.Patch("/authoring/drafts/{draftId}/members/{userId}", auth.handleAuthoringMemberRole)
 					protected.Delete("/authoring/drafts/{draftId}/members/{userId}", auth.handleAuthoringMemberRevoke)
+				}
+				if auth.authoringReviews != nil {
+					protected.Post("/authoring/drafts/{draftId}/reviews", auth.handleAuthoringReviewSubmit)
+					protected.Get("/authoring/drafts/{draftId}/reviews", auth.handleAuthoringReviewHistory)
+					protected.Get("/authoring/drafts/{draftId}/reviews/active", auth.handleAuthoringReviewActive)
+					protected.Get("/authoring/drafts/{draftId}/reviews/latest", auth.handleAuthoringReviewLatest)
+					protected.Get("/authoring/drafts/{draftId}/reviews/{reviewId}", auth.handleAuthoringReview)
+					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/approve", auth.handleAuthoringReviewApprove)
+					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/request-changes", auth.handleAuthoringReviewRequestChanges)
 				}
 			})
 			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

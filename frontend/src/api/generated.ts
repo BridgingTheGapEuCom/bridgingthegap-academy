@@ -243,6 +243,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns newest-first Review cycle metadata without historical snapshots. */
+        get: operations["listAuthoringDraftReviews"];
+        put?: never;
+        /** @description Atomically freezes the authoritative exact Draft revision. Requires trusted Origin and session CSRF token. */
+        post: operations["submitAuthoringDraftReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the current IN_REVIEW cycle metadata; 404 when no active cycle exists. */
+        get: operations["getActiveAuthoringDraftReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLatestAuthoringDraftReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/{reviewId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns immutable Review provenance and the exact stored canonical snapshot. */
+        get: operations["getAuthoringDraftReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/{reviewId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Terminally approves one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. */
+        post: operations["approveAuthoringDraftReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/{reviewId}/request-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Terminally requests changes on one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. */
+        post: operations["requestAuthoringDraftReviewChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses": {
         parameters: {
             query?: never;
@@ -410,6 +512,88 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthoringReviewSubmitRequest: {
+            expectedDraftRevision: number;
+        };
+        AuthoringReviewDecisionRequest: {
+            expectedReviewRevision: number;
+            message?: string;
+        };
+        AuthoringReview: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            draftId: string;
+            draftRevision: number;
+            /** @constant */
+            snapshotSchemaVersion: 1;
+            /** @enum {string} */
+            status: "IN_REVIEW" | "APPROVED" | "CHANGES_REQUESTED";
+            reviewRevision: number;
+            /** Format: uuid */
+            submittedBy: string;
+            /** Format: date-time */
+            submittedAt: string;
+            /** Format: uuid */
+            decidedBy: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+        };
+        AuthoringReviewList: {
+            reviews: components["schemas"]["AuthoringReview"][];
+        };
+        AuthoringReviewDetail: {
+            review: components["schemas"]["AuthoringReview"];
+            snapshot: components["schemas"]["AuthoringReviewSnapshot"];
+        };
+        AuthoringReviewSnapshot: {
+            /** @constant */
+            schemaVersion: 1;
+            draft: components["schemas"]["AuthoringReviewSnapshotDraft"];
+            modules: components["schemas"]["AuthoringReviewSnapshotModule"][];
+        };
+        AuthoringReviewSnapshotDraft: {
+            /** Format: uuid */
+            id: string;
+            revision: number;
+            /** Format: uuid */
+            courseId: string;
+            intendedVersion: string;
+            sourceLanguage: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            changelog: string;
+            license: {
+                /** @enum {string} */
+                Kind: "STANDARD" | "ALL_RIGHTS_RESERVED" | "CUSTOM";
+                Identifier: string;
+                DisplayName: string;
+                URL: string;
+                CustomText: string;
+            };
+        };
+        AuthoringReviewSnapshotModule: {
+            /** Format: uuid */
+            id: string;
+            stableKey: string;
+            title: string;
+            description: string;
+            position: number;
+            lessons: components["schemas"]["AuthoringReviewSnapshotLesson"][];
+        };
+        AuthoringReviewSnapshotLesson: {
+            /** Format: uuid */
+            id: string;
+            stableKey: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimatedDurationMinutes: number | null;
+            position: number;
+            prerequisiteStableKeys: string[];
+            content: components["schemas"]["LessonContent"];
+        };
         AuthoringActiveMember: {
             /** Format: uuid */
             userId: string;
@@ -950,6 +1134,7 @@ export interface components {
         AuthoringUserID: string;
         AuthoringModuleID: string;
         AuthoringLessonID: string;
+        AuthoringReviewID: string;
         CourseSlug: string;
         CourseVersion: string;
         LessonKey: string;
@@ -1639,6 +1824,224 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringDraftReviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReviewList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    submitAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringReviewSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Frozen Review cycle */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReviewDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getActiveAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active Review metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getLatestAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Most recently submitted Review metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                reviewId: components["parameters"]["AuthoringReviewID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review and frozen snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReviewDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    approveAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                reviewId: components["parameters"]["AuthoringReviewID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringReviewDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Approved Review metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    requestAuthoringDraftReviewChanges: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                reviewId: components["parameters"]["AuthoringReviewID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringReviewDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Change-requested Review metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

@@ -257,10 +257,12 @@ func ValidateReviewMessage(message string) error {
 type ReviewRepository interface {
 	SubmitReview(context.Context, DraftID, int64, string) (ReviewCycle, ReviewSnapshot, error)
 	GetReview(context.Context, ReviewID) (ReviewCycle, ReviewSnapshot, error)
+	GetReviewForDraft(context.Context, DraftID, ReviewID) (ReviewCycle, ReviewSnapshot, error)
 	LatestReview(context.Context, DraftID) (ReviewCycle, ReviewSnapshot, error)
 	ActiveReview(context.Context, DraftID) (ReviewCycle, ReviewSnapshot, error)
 	ListReviewHistory(context.Context, DraftID) ([]ReviewCycle, error)
 	DecideReview(context.Context, ReviewID, int64, ReviewStatus, string, string) (ReviewCycle, error)
+	DecideReviewForDraft(context.Context, DraftID, ReviewID, int64, ReviewStatus, string, string) (ReviewCycle, error)
 	ListReviewEvents(context.Context, ReviewID) ([]ReviewEvent, error)
 	ApprovedReviewForRevision(context.Context, DraftID, int64) (ReviewCycle, ReviewSnapshot, error)
 }

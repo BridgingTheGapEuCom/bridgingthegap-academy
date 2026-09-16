@@ -144,6 +144,18 @@ func (r *Repository) GetReview(ctx context.Context, id authoring.ReviewID) (auth
 	return scanReview(r.pool.QueryRow(ctx, `SELECT `+reviewColumns+` FROM authoring.review_cycle WHERE id=$1`, key))
 }
 
+func (r *Repository) GetReviewForDraft(ctx context.Context, draft authoring.DraftID, id authoring.ReviewID) (authoring.ReviewCycle, authoring.ReviewSnapshot, error) {
+	draftKey, err := uuid(string(draft))
+	if err != nil {
+		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, err
+	}
+	reviewKey, err := uuid(string(id))
+	if err != nil {
+		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, err
+	}
+	return scanReview(r.pool.QueryRow(ctx, `SELECT `+reviewColumns+` FROM authoring.review_cycle WHERE id=$1 AND draft_id=$2`, reviewKey, draftKey))
+}
+
 func (r *Repository) LatestReview(ctx context.Context, draft authoring.DraftID) (authoring.ReviewCycle, authoring.ReviewSnapshot, error) {
 	key, err := uuid(string(draft))
 	if err != nil {
@@ -193,6 +205,14 @@ func (r *Repository) ListReviewHistory(ctx context.Context, draft authoring.Draf
 }
 
 func (r *Repository) DecideReview(ctx context.Context, id authoring.ReviewID, expected int64, decision authoring.ReviewStatus, actor, message string) (authoring.ReviewCycle, error) {
+	return r.decideReview(ctx, "", id, expected, decision, actor, message)
+}
+
+func (r *Repository) DecideReviewForDraft(ctx context.Context, draft authoring.DraftID, id authoring.ReviewID, expected int64, decision authoring.ReviewStatus, actor, message string) (authoring.ReviewCycle, error) {
+	return r.decideReview(ctx, draft, id, expected, decision, actor, message)
+}
+
+func (r *Repository) decideReview(ctx context.Context, draft authoring.DraftID, id authoring.ReviewID, expected int64, decision authoring.ReviewStatus, actor, message string) (authoring.ReviewCycle, error) {
 	if decision != authoring.ReviewApproved && decision != authoring.ReviewChangesRequested || expected < 1 || authoring.ValidateReviewActor(actor) != nil || authoring.ValidateReviewMessage(message) != nil {
 		return authoring.ReviewCycle{}, authoring.ErrReviewInvalidState
 	}
@@ -209,7 +229,18 @@ func (r *Repository) DecideReview(ctx context.Context, id authoring.ReviewID, ex
 		return authoring.ReviewCycle{}, storageError(err)
 	}
 	defer tx.Rollback(ctx)
-	cycle, _, err := scanReview(tx.QueryRow(ctx, `SELECT `+reviewColumns+` FROM authoring.review_cycle WHERE id=$1 FOR UPDATE`, reviewKey))
+	query := `SELECT ` + reviewColumns + ` FROM authoring.review_cycle WHERE id=$1`
+	arguments := []any{reviewKey}
+	if draft != "" {
+		draftKey, draftErr := uuid(string(draft))
+		if draftErr != nil {
+			return authoring.ReviewCycle{}, draftErr
+		}
+		query += ` AND draft_id=$2`
+		arguments = append(arguments, draftKey)
+	}
+	query += ` FOR UPDATE`
+	cycle, _, err := scanReview(tx.QueryRow(ctx, query, arguments...))
 	if err != nil {
 		return authoring.ReviewCycle{}, err
 	}

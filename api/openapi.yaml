@@ -310,6 +310,97 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/reviews:
+    get:
+      operationId: listAuthoringDraftReviews
+      description: Returns newest-first Review cycle metadata without historical snapshots.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Review history, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewList' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: submitAuthoringDraftReview
+      description: Atomically freezes the authoritative exact Draft revision. Requires trusted Origin and session CSRF token.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewSubmitRequest' } } } }
+      responses:
+        '201': { description: Frozen Review cycle, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/reviews/active:
+    get:
+      operationId: getActiveAuthoringDraftReview
+      description: Returns the current IN_REVIEW cycle metadata; 404 when no active cycle exists.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Active Review metadata, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReview' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/reviews/latest:
+    get:
+      operationId: getLatestAuthoringDraftReview
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Most recently submitted Review metadata, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReview' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/reviews/{reviewId}:
+    get:
+      operationId: getAuthoringDraftReview
+      description: Returns immutable Review provenance and the exact stored canonical snapshot.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringReviewID' }]
+      responses:
+        '200': { description: Review and frozen snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/reviews/{reviewId}/approve:
+    post:
+      operationId: approveAuthoringDraftReview
+      description: Terminally approves one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringReviewID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewDecisionRequest' } } } }
+      responses:
+        '200': { description: Approved Review metadata, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReview' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/reviews/{reviewId}/request-changes:
+    post:
+      operationId: requestAuthoringDraftReviewChanges
+      description: Terminally requests changes on one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringReviewID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewDecisionRequest' } } } }
+      responses:
+        '200': { description: Change-requested Review metadata, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReview' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/courses:
     get:
       operationId: listPublishedCourses
@@ -461,6 +552,7 @@ components:
     AuthoringUserID: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringModuleID: { name: moduleId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringLessonID: { name: lessonId, in: path, required: true, schema: { type: string, format: uuid } }
+    AuthoringReviewID: { name: reviewId, in: path, required: true, schema: { type: string, format: uuid } }
     CourseSlug: { name: slug, in: path, required: true, schema: { type: string } }
     CourseVersion: { name: version, in: path, required: true, schema: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$' } }
     LessonKey: { name: lessonKey, in: path, required: true, schema: { type: string } }
@@ -484,6 +576,102 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    AuthoringReviewSubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedDraftRevision]
+      properties: { expectedDraftRevision: { type: integer, minimum: 1 } }
+    AuthoringReviewDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedReviewRevision]
+      properties:
+        expectedReviewRevision: { type: integer, minimum: 1 }
+        message: { type: string, maxLength: 20000 }
+    AuthoringReview:
+      type: object
+      additionalProperties: false
+      required: [id, draftId, draftRevision, snapshotSchemaVersion, status, reviewRevision, submittedBy, submittedAt, decidedBy, decidedAt]
+      properties:
+        id: { type: string, format: uuid }
+        draftId: { type: string, format: uuid }
+        draftRevision: { type: integer, minimum: 1 }
+        snapshotSchemaVersion: { type: integer, const: 1 }
+        status: { type: string, enum: [IN_REVIEW, APPROVED, CHANGES_REQUESTED] }
+        reviewRevision: { type: integer, minimum: 1 }
+        submittedBy: { type: string, format: uuid }
+        submittedAt: { type: string, format: date-time }
+        decidedBy: { type: [string, 'null'], format: uuid }
+        decidedAt: { type: [string, 'null'], format: date-time }
+    AuthoringReviewList:
+      type: object
+      additionalProperties: false
+      required: [reviews]
+      properties: { reviews: { type: array, items: { $ref: '#/components/schemas/AuthoringReview' } } }
+    AuthoringReviewDetail:
+      type: object
+      additionalProperties: false
+      required: [review, snapshot]
+      properties:
+        review: { $ref: '#/components/schemas/AuthoringReview' }
+        snapshot: { $ref: '#/components/schemas/AuthoringReviewSnapshot' }
+    AuthoringReviewSnapshot:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, draft, modules]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        draft: { $ref: '#/components/schemas/AuthoringReviewSnapshotDraft' }
+        modules: { type: array, items: { $ref: '#/components/schemas/AuthoringReviewSnapshotModule' } }
+    AuthoringReviewSnapshotDraft:
+      type: object
+      additionalProperties: false
+      required: [id, revision, courseId, intendedVersion, sourceLanguage, title, description, objectives, changelog, license]
+      properties:
+        id: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        courseId: { type: string, format: uuid }
+        intendedVersion: { type: string }
+        sourceLanguage: { type: string }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        changelog: { type: string }
+        license:
+          type: object
+          additionalProperties: false
+          required: [Kind, Identifier, DisplayName, URL, CustomText]
+          properties:
+            Kind: { type: string, enum: [STANDARD, ALL_RIGHTS_RESERVED, CUSTOM] }
+            Identifier: { type: string }
+            DisplayName: { type: string }
+            URL: { type: string }
+            CustomText: { type: string }
+    AuthoringReviewSnapshotModule:
+      type: object
+      additionalProperties: false
+      required: [id, stableKey, title, description, position, lessons]
+      properties:
+        id: { type: string, format: uuid }
+        stableKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        position: { type: integer, minimum: 0 }
+        lessons: { type: array, items: { $ref: '#/components/schemas/AuthoringReviewSnapshotLesson' } }
+    AuthoringReviewSnapshotLesson:
+      type: object
+      additionalProperties: false
+      required: [id, stableKey, title, description, objectives, estimatedDurationMinutes, position, prerequisiteStableKeys, content]
+      properties:
+        id: { type: string, format: uuid }
+        stableKey: { type: string }
+        title: { type: string }
+        description: { type: string }
+        objectives: { type: array, items: { type: string } }
+        estimatedDurationMinutes: { type: [integer, 'null'] }
+        position: { type: integer, minimum: 0 }
+        prerequisiteStableKeys: { type: array, items: { type: string } }
+        content: { $ref: '#/components/schemas/LessonContent' }
     AuthoringActiveMember:
       type: object
       additionalProperties: false

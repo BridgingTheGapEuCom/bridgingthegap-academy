@@ -92,13 +92,13 @@ func (f *membershipReaderFake) ActiveMembershipForDraft(_ context.Context, draft
 }
 
 func TestAuthoringCapabilityMatrix(t *testing.T) {
-	capabilities := []Capability{CapabilityRead, CapabilityDraftEdit, CapabilityStructureEdit, CapabilityContentEdit, CapabilityMembersManage, CapabilityDraftAbandon}
+	capabilities := []Capability{CapabilityRead, CapabilityDraftEdit, CapabilityStructureEdit, CapabilityContentEdit, CapabilityMembersManage, CapabilityDraftAbandon, CapabilityReviewRead, CapabilityReviewSubmit, CapabilityReviewDecide}
 	for _, tc := range []struct {
 		role    MemberRole
 		allowed []bool
 	}{
-		{MemberAuthor, []bool{true, true, true, true, false, false}},
-		{MemberMaintainer, []bool{true, true, true, true, true, true}},
+		{MemberAuthor, []bool{true, true, true, true, false, false, true, true, false}},
+		{MemberMaintainer, []bool{true, true, true, true, true, true, true, true, true}},
 	} {
 		for i, capability := range capabilities {
 			if got := roleAllows(tc.role, capability); got != tc.allowed[i] {
