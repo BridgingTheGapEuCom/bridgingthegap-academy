@@ -29,10 +29,10 @@
         </div>
 
         <BtgFormField label="Title" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }">
-          <BtgTextInput :id="controlId" v-model="form.title" :aria-describedby="describedBy" :invalid="invalid" required />
+          <BtgTextInput :id="controlId" v-model="form.title" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
         </BtgFormField>
         <BtgFormField label="Description" required :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
-          <textarea :id="controlId" v-model="form.description" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
+          <textarea :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
         </BtgFormField>
 
         <fieldset class="authoring-lesson-editor__objectives" :aria-describedby="errors.objectives ? 'authoring-lesson-objectives-error' : undefined">
@@ -42,22 +42,22 @@
             <li v-for="(_objective, index) in form.objectives" :key="`objective-${index}`">
               <BtgFormField :label="`Learning objective ${index + 1}`" :error="errors[`objective-${index}`]">
                 <template #default="{ controlId, describedBy, invalid }">
-                  <BtgTextInput :id="controlId" v-model="form.objectives[index]" :aria-describedby="describedBy" :invalid="invalid" required />
+                  <BtgTextInput :id="controlId" v-model="form.objectives[index]" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
                 </template>
               </BtgFormField>
-              <BtgButton variant="secondary" :disabled="form.objectives.length === 1" :aria-label="`Remove learning objective ${index + 1}`" @click="removeObjective(index)">Remove</BtgButton>
+              <BtgButton variant="secondary" :disabled="saving || reloading || form.objectives.length === 1" :aria-label="`Remove learning objective ${index + 1}`" @click="removeObjective(index)">Remove</BtgButton>
             </li>
           </ol>
           <p v-if="errors.objectives" id="authoring-lesson-objectives-error" class="btg-form-field__error">{{ errors.objectives }}</p>
-          <BtgButton variant="secondary" @click="addObjective">Add learning objective</BtgButton>
+          <BtgButton variant="secondary" :disabled="saving || reloading" @click="addObjective">Add learning objective</BtgButton>
         </fieldset>
 
         <BtgFormField label="Estimated duration (minutes)" description="Optional. Enter whole minutes." :error="errors.estimatedDurationMinutes" v-slot="{ controlId, describedBy, invalid }">
-          <BtgTextInput :id="controlId" v-model="form.estimatedDurationMinutes" :aria-describedby="describedBy" :invalid="invalid" type="number" inputmode="numeric" min="1" max="1440" step="1" />
+          <BtgTextInput :id="controlId" v-model="form.estimatedDurationMinutes" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" type="number" inputmode="numeric" min="1" max="1440" step="1" />
         </BtgFormField>
 
         <p v-if="dirty" class="authoring-lesson-editor__unsaved" role="status">You have unsaved changes.</p>
-        <div class="authoring-lesson-editor__actions"><BtgButton type="submit" :disabled="!dirty || saving || conflict">{{ saving ? 'Saving…' : 'Save changes' }}</BtgButton></div>
+        <div class="authoring-lesson-editor__actions"><BtgButton type="submit" :disabled="!dirty || saving || reloading || conflict">{{ saving ? 'Saving…' : 'Save changes' }}</BtgButton></div>
       </form>
 
       <AuthoringLessonPrerequisitesEditor
@@ -76,6 +76,8 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { APIProblemError } from '../api/client'
+import { preserveFocusAfterRemoval } from '../authoring/focus'
+import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { authoringDraftPath, getAuthoringLesson, InvalidAuthoringDraftIDError, updateAuthoringLesson, type AuthoringLessonDetail, type AuthoringLessonMetadataPatch } from '../authoring/authoring'
 import { useAuthoringDraftContext } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
@@ -103,8 +105,11 @@ const dirty = computed(() => original.value !== undefined && JSON.stringify(norm
 let requestVersion = 0
 let active = true
 
+const captureScope = useAuthoringAsyncScope(() => `${draft.value.id}/${lessonID()}`)
+
 watch(() => route.params.lessonId, () => { void load() }, { immediate: true })
 onBeforeUnmount(() => { active = false })
+
 
 function lessonID(): string { return typeof route.params.lessonId === 'string' ? route.params.lessonId : '' }
 function toForm(lesson: AuthoringLessonDetail): Form {
@@ -125,8 +130,13 @@ function normalized(value: Form) {
 }
 function replaceForm(next: Form) { Object.assign(form, { ...next, objectives: [...next.objectives] }) }
 function clearErrors() { for (const key of Object.keys(errors)) delete errors[key]; formError.value = undefined }
-function addObjective() { form.objectives.push('') }
-function removeObjective(index: number) { if (form.objectives.length > 1) form.objectives.splice(index, 1) }
+function addObjective() { if (!saving.value && !reloading.value) form.objectives.push('') }
+function removeObjective(index: number) {
+  if (saving.value || reloading.value || form.objectives.length <= 1) return
+  const restoreFocus = preserveFocusAfterRemoval(() => document.querySelector<HTMLElement>('.authoring-lesson-editor__objectives > button'))
+  form.objectives.splice(index, 1)
+  void restoreFocus()
+}
 
 function validate(): boolean {
   clearErrors()
@@ -153,18 +163,24 @@ function patch(lesson: AuthoringLessonDetail): AuthoringLessonMetadataPatch {
 }
 
 async function load() {
+  const isCurrent = captureScope()
   const generation = ++requestVersion
   state.value = { kind: 'loading' }
+  saving.value = false
+  reloading.value = false
+  saveMessage.value = undefined
   conflict.value = false
   clearErrors()
   try {
     const lesson = await getAuthoringLesson(draft.value.id, lessonID())
+    if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     const nextForm = toForm(lesson)
     state.value = { kind: 'ready', lesson }
     original.value = nextForm
     replaceForm(nextForm)
   } catch (error) {
+    if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     if (error instanceof InvalidAuthoringDraftIDError || (error instanceof APIProblemError && error.status === 404)) {
       markDraftUnavailable()
@@ -175,11 +191,14 @@ async function load() {
 }
 
 async function save() {
-  if (saving.value || conflict.value || state.value.kind !== 'ready' || !dirty.value || !validate()) return
+  const isCurrent = captureScope()
+  if (saving.value || reloading.value || conflict.value || state.value.kind !== 'ready' || !dirty.value || !validate()) return
   saving.value = true
   saveMessage.value = undefined
   try {
     const updated = await updateAuthoringLesson(draft.value.id, state.value.lesson.id, patch(state.value.lesson))
+    if (!isCurrent()) return
+    if (state.value.kind !== 'ready' || updated.revision < state.value.lesson.revision) return
     const lesson = { ...state.value.lesson, ...updated }
     const nextForm = toForm(lesson)
     state.value = { kind: 'ready', lesson }
@@ -188,33 +207,42 @@ async function save() {
     replaceDraft({ ...draft.value, revision: updated.draftRevision })
     saveMessage.value = 'Lesson metadata saved.'
   } catch (error) {
+    if (!isCurrent()) return
     if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
     if (error instanceof APIProblemError && error.status === 409) { conflict.value = true; return }
     formError.value = error instanceof APIProblemError && error.status === 400
       ? 'We couldn’t save these changes. Check the fields and try again.'
       : 'We couldn’t save this Lesson right now. Please try again.'
-  } finally { saving.value = false }
+  } finally { if (isCurrent()) saving.value = false }
 }
 
 async function reloadLatest() {
-  if (reloading.value) return
+  const isCurrent = captureScope()
+  if (reloading.value || saving.value) return
   reloading.value = true
   clearErrors()
   saveMessage.value = undefined
   try {
     const latest = await getAuthoringLesson(draft.value.id, lessonID())
+    if (!isCurrent()) return
+    if (state.value.kind === 'ready' && latest.revision < state.value.lesson.revision) {
+      conflict.value = true
+      return
+    }
     const nextForm = toForm(latest)
     state.value = { kind: 'ready', lesson: latest }
     original.value = nextForm
     replaceForm(nextForm)
     conflict.value = false
   } catch (error) {
+    if (!isCurrent()) return
     if (error instanceof InvalidAuthoringDraftIDError || (error instanceof APIProblemError && error.status === 404)) markDraftUnavailable()
     else formError.value = 'We couldn’t reload this Lesson right now. Please try again.'
-  } finally { reloading.value = false }
+  } finally { if (isCurrent()) reloading.value = false }
 }
 
 function replaceLesson(lesson: AuthoringLessonDetail) {
+  if (state.value.kind !== 'ready' || lesson.id !== state.value.lesson.id || lesson.revision < state.value.lesson.revision) return
   const metadataWasDirty = dirty.value
   state.value = { kind: 'ready', lesson }
   const nextForm = toForm(lesson)
@@ -224,6 +252,7 @@ function replaceLesson(lesson: AuthoringLessonDetail) {
 
 function applyPrerequisites(result: { lesson: import('../api/generated').components['schemas']['AuthoringLessonMutationResponse']; prerequisiteKeys: string[] }) {
   if (state.value.kind !== 'ready') return
+  if (result.lesson.id !== state.value.lesson.id || result.lesson.revision < state.value.lesson.revision) return
   const lesson = { ...state.value.lesson, ...result.lesson, recommended_prerequisite_keys: result.prerequisiteKeys }
   state.value = { kind: 'ready', lesson }
   replaceDraft({ ...draft.value, revision: result.lesson.draftRevision })
@@ -231,6 +260,7 @@ function applyPrerequisites(result: { lesson: import('../api/generated').compone
 
 function applyContent(result: import('../authoring/authoring').AuthoringLessonContentMutation) {
   if (state.value.kind !== 'ready') return
+  if (result.lesson.id !== state.value.lesson.id || result.lesson.revision < state.value.lesson.revision) return
   const lesson = { ...state.value.lesson, ...result.lesson, content: result.content }
   state.value = { kind: 'ready', lesson }
   replaceDraft({ ...draft.value, revision: result.lesson.draftRevision })

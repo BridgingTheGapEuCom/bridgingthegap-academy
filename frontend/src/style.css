@@ -9,6 +9,7 @@
 
 .site-header__inner {
   display: flex;
+  flex-wrap: wrap;
   min-height: inherit;
   align-items: center;
   justify-content: space-between;
@@ -16,6 +17,8 @@
 }
 
 .site-brand {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--btg-color-text);
   font-size: 1.05rem;
   text-decoration: none;
@@ -30,7 +33,13 @@
   text-transform: uppercase;
 }
 
-.site-navigation { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--btg-space-4); }
+.site-navigation { display: flex; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: var(--btg-space-4); }
+
+/* Intrinsic grid/fieldset minima must not impose a viewport width when text grows. */
+.authoring-home,
+.authoring-shell { min-width: 0; overflow-wrap: anywhere; }
+.authoring-home :where(div, section, article, ol, li),
+.authoring-shell :where(div, section, article, form, fieldset, ol, li) { min-width: 0; }
 
 .home-page { padding-block: clamp(var(--btg-space-7), 10vw, 7rem); }
 .home-page__intro { max-width: var(--btg-width-reading); color: var(--btg-color-text-secondary); font-size: clamp(1.125rem, 2vw, 1.35rem); }

@@ -21,12 +21,12 @@
 
       <div v-if="availableCandidates.length" class="authoring-prerequisites__add">
         <BtgFormField label="Available Lessons" description="Choose a Lesson to recommend before this one." v-slot="{ controlId, describedBy }">
-          <select :id="controlId" v-model="selectedKey" :aria-describedby="describedBy">
+          <select :id="controlId" v-model="selectedKey" :disabled="saving || reloading" :aria-describedby="describedBy">
             <option value="">Choose a Lesson</option>
             <option v-for="candidate in availableCandidates" :key="candidate.stable_key" :value="candidate.stable_key">{{ candidate.title }} ({{ candidate.stable_key }})</option>
           </select>
         </BtgFormField>
-        <BtgButton variant="secondary" :disabled="!selectedKey" @click="addPrerequisite">Add recommended prerequisite</BtgButton>
+        <BtgButton variant="secondary" :disabled="saving || reloading || !selectedKey" @click="addPrerequisite">Add recommended prerequisite</BtgButton>
       </div>
       <p v-else class="authoring-prerequisites__empty">No other Lessons are available to recommend.</p>
 
@@ -34,9 +34,9 @@
         <li v-for="(key, index) in selectedKeys" :key="key">
           <div><strong>{{ candidateFor(key)?.title || key }}</strong> <code>{{ key }}</code></div>
           <div class="authoring-prerequisites__actions">
-            <BtgButton variant="secondary" :disabled="index === 0" :aria-label="`Move ${candidateFor(key)?.title || key} up`" @click="move(index, -1)">Move up</BtgButton>
-            <BtgButton variant="secondary" :disabled="index === selectedKeys.length - 1" :aria-label="`Move ${candidateFor(key)?.title || key} down`" @click="move(index, 1)">Move down</BtgButton>
-            <BtgButton variant="secondary" :aria-label="`Remove ${candidateFor(key)?.title || key}`" @click="removePrerequisite(index)">Remove</BtgButton>
+            <BtgButton variant="secondary" :disabled="saving || reloading || index === 0" :aria-label="`Move ${candidateFor(key)?.title || key} up`" @click="move(index, -1)">Move up</BtgButton>
+            <BtgButton variant="secondary" :disabled="saving || reloading || index === selectedKeys.length - 1" :aria-label="`Move ${candidateFor(key)?.title || key} down`" @click="move(index, 1)">Move down</BtgButton>
+            <BtgButton variant="secondary" :disabled="saving || reloading" :aria-label="`Remove ${candidateFor(key)?.title || key}`" @click="removePrerequisite(index)">Remove</BtgButton>
           </div>
         </li>
       </ol>
@@ -51,6 +51,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { APIProblemError } from '../api/client'
+import { preserveFocusAfterRemoval } from '../authoring/focus'
+import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { getAuthoringLesson, getAuthoringStructure, InvalidAuthoringDraftIDError, replaceAuthoringLessonPrerequisites, type AuthoringLessonDetail, type AuthoringLessonSummary } from '../authoring/authoring'
 import BtgButton from './BtgButton.vue'
 import BtgFormField from './BtgFormField.vue'
@@ -79,6 +81,8 @@ const availableCandidates = computed(() => candidates.value.filter((candidate) =
 let requestVersion = 0
 let active = true
 
+const captureScope = useAuthoringAsyncScope(() => `${props.draftId}/${props.lesson.id}`)
+
 watch(() => props.lesson.id, () => {
   originalKeys.value = [...props.lesson.recommended_prerequisite_keys]
   selectedKeys.value = [...props.lesson.recommended_prerequisite_keys]
@@ -99,14 +103,22 @@ watch(() => JSON.stringify(props.lesson.recommended_prerequisite_keys), () => {
   }
 })
 
+
 function candidateFor(key: string) { return candidateByKey.value.get(key) }
 function addPrerequisite() {
+  if (saving.value || reloading.value) return
   if (!selectedKey.value || selectedKey.value === props.lesson.stable_key || selectedKeys.value.includes(selectedKey.value) || !candidateFor(selectedKey.value)) return
   selectedKeys.value.push(selectedKey.value)
   selectedKey.value = ''
 }
-function removePrerequisite(index: number) { selectedKeys.value.splice(index, 1) }
+function removePrerequisite(index: number) {
+  if (saving.value || reloading.value) return
+  const restoreFocus = preserveFocusAfterRemoval(() => document.querySelector<HTMLElement>('.authoring-prerequisites__add select, .authoring-prerequisites__save button'))
+  selectedKeys.value.splice(index, 1)
+  void restoreFocus()
+}
 function move(index: number, direction: -1 | 1) {
+  if (saving.value || reloading.value) return
   const destination = index + direction
   if (destination < 0 || destination >= selectedKeys.value.length) return
   const next = [...selectedKeys.value]
@@ -117,14 +129,17 @@ function move(index: number, direction: -1 | 1) {
 function clearError() { formError.value = undefined }
 
 async function loadCandidates() {
+  const isCurrent = captureScope()
   const generation = ++requestVersion
   state.value = 'loading'
   try {
     const structure = await getAuthoringStructure(props.draftId)
+    if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     candidates.value = structure.modules.flatMap((module) => module.lessons)
     state.value = 'ready'
   } catch (error) {
+    if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     if (error instanceof InvalidAuthoringDraftIDError || (error instanceof APIProblemError && error.status === 404)) { emit('unavailable'); return }
     state.value = 'unavailable'
@@ -132,7 +147,8 @@ async function loadCandidates() {
 }
 
 async function save() {
-  if (saving.value || conflict.value || !dirty.value) return
+  const isCurrent = captureScope()
+  if (saving.value || reloading.value || conflict.value || !dirty.value) return
   if (selectedKeys.value.includes(props.lesson.stable_key) || new Set(selectedKeys.value).size !== selectedKeys.value.length || selectedKeys.value.some((key) => !candidateFor(key))) {
     formError.value = 'Reload the available Lessons before saving these recommendations.'
     return
@@ -143,32 +159,37 @@ async function save() {
   try {
     const keys = [...selectedKeys.value]
     const lesson = await replaceAuthoringLessonPrerequisites(props.draftId, props.lesson.id, { expectedLessonRevision: props.lesson.revision, prerequisiteLessonKeys: keys })
+    if (!isCurrent()) return
     originalKeys.value = keys
     emit('saved', { lesson, prerequisiteKeys: keys })
     saveMessage.value = 'Recommended prerequisites saved.'
   } catch (error) {
+    if (!isCurrent()) return
     if (error instanceof APIProblemError && error.status === 404) { emit('unavailable'); return }
     if (error instanceof APIProblemError && error.status === 409) { conflict.value = true; return }
     formError.value = error instanceof APIProblemError && error.status === 400
       ? 'We couldn’t save these recommendations. Check the selected Lessons and try again.'
       : 'We couldn’t save recommended prerequisites right now. Please try again.'
-  } finally { saving.value = false }
+  } finally { if (isCurrent()) saving.value = false }
 }
 
 async function reloadLatest() {
-  if (reloading.value) return
+  const isCurrent = captureScope()
+  if (reloading.value || saving.value) return
   reloading.value = true
   clearError()
   saveMessage.value = undefined
   try {
     const latest = await getAuthoringLesson(props.draftId, props.lesson.id)
+    if (!isCurrent()) return
     originalKeys.value = [...latest.recommended_prerequisite_keys]
     selectedKeys.value = [...latest.recommended_prerequisite_keys]
     conflict.value = false
     emit('replaceLesson', latest)
   } catch (error) {
+    if (!isCurrent()) return
     if (error instanceof InvalidAuthoringDraftIDError || (error instanceof APIProblemError && error.status === 404)) emit('unavailable')
     else formError.value = 'We couldn’t reload this Lesson right now. Please try again.'
-  } finally { reloading.value = false }
+  } finally { if (isCurrent()) reloading.value = false }
 }
 </script>

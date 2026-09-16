@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { shallowRef } from 'vue'
+import { nextTick, shallowRef } from 'vue'
 import { APIProblemError } from '../api/client'
 
 type AuthenticationState =
@@ -17,6 +17,7 @@ const authMock = vi.hoisted(() => ({
 }))
 const getAuthoringDraftMock = vi.hoisted(() => vi.fn())
 const updateAuthoringDraftMock = vi.hoisted(() => vi.fn())
+const createAuthoringModuleMock = vi.hoisted(() => vi.fn())
 const getAuthoringStructureMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
@@ -25,6 +26,7 @@ vi.mock('../authoring/authoring', async (importOriginal) => ({
   getAuthoringDraft: getAuthoringDraftMock,
   updateAuthoringDraft: updateAuthoringDraftMock,
   getAuthoringStructure: getAuthoringStructureMock,
+  createAuthoringModule: createAuthoringModuleMock,
 }))
 
 import AuthoringDraftShell from './AuthoringDraftShell.vue'
@@ -83,6 +85,7 @@ describe('AuthoringDraftShell', () => {
     getAuthoringDraftMock.mockReset()
     updateAuthoringDraftMock.mockReset()
     getAuthoringStructureMock.mockReset()
+    createAuthoringModuleMock.mockReset()
     getAuthoringDraftMock.mockResolvedValue(draft())
     getAuthoringStructureMock.mockResolvedValue({ modules: [] })
   })
@@ -206,4 +209,57 @@ describe('AuthoringDraftShell', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Draft unavailable' })).toBeTruthy()
   })
+  it.each(['success', 'hidden-404'])('ignores a late metadata %s after switching Drafts', async (outcome) => {
+    let resolveSave!: (value: ReturnType<typeof draft>) => void
+    let rejectSave!: (error: Error) => void
+    updateAuthoringDraftMock.mockImplementationOnce(() => new Promise((resolve, reject) => { resolveSave = resolve; rejectSave = reject }))
+    getAuthoringDraftMock.mockResolvedValueOnce(draft()).mockResolvedValueOnce(draft(secondID, 'Second Draft'))
+    const { router } = await renderShell()
+    await fireEvent.update(await screen.findByRole('textbox', { name: /Title/ }), 'Old local edits')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await router.push(`/authoring/drafts/${secondID}/overview`)
+    await screen.findByRole('heading', { level: 1, name: 'Second Draft' })
+    if (outcome === 'success') resolveSave({ ...draft(), title: 'Old response', revision: 4 })
+    else rejectSave(new APIProblemError(404, undefined, undefined))
+    await nextTick()
+    expect(screen.getByRole('heading', { level: 1, name: 'Second Draft' })).toBeTruthy()
+    expect(screen.queryByText('Draft unavailable')).toBeNull()
+    expect(screen.queryByDisplayValue('Old response')).toBeNull()
+  })
+
+  it('clears private Draft context when another account becomes authenticated and ignores the old save', async () => {
+    let resolveSave!: (value: ReturnType<typeof draft>) => void
+    updateAuthoringDraftMock.mockImplementationOnce(() => new Promise((resolve) => { resolveSave = resolve }))
+    getAuthoringDraftMock.mockResolvedValueOnce(draft()).mockResolvedValueOnce({ ...draft(), title: 'New account Draft', revision: 8 })
+    await renderShell()
+    await fireEvent.update(await screen.findByRole('textbox', { name: /Title/ }), 'Private old edits')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    authMock.state.value = { status: 'authenticated', userId: '55555555-5555-4555-8555-555555555555', expiresAt: 'later' }
+    await screen.findByRole('heading', { level: 1, name: 'New account Draft' })
+    resolveSave({ ...draft(), title: 'Previous account response', revision: 9 })
+    await nextTick()
+    expect(screen.getByRole('heading', { level: 1, name: 'New account Draft' })).toBeTruthy()
+    expect(screen.queryByDisplayValue('Private old edits')).toBeNull()
+  })
+
+  it('shares authoritative Draft revisions across metadata and structure mutations', async () => {
+    updateAuthoringDraftMock.mockResolvedValueOnce({ ...draft(), title: 'Saved Draft', revision: 10 })
+      .mockResolvedValueOnce({ ...draft(), title: 'Saved again', revision: 21 })
+    createAuthoringModuleMock.mockResolvedValue({ draftRevision: 20 })
+    const { router } = await renderShell()
+    await fireEvent.update(await screen.findByRole('textbox', { name: /Title/ }), 'Saved Draft')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByRole('heading', { level: 1, name: 'Saved Draft' })
+    await router.push(`/authoring/drafts/${firstID}/structure`)
+    await fireEvent.update(await screen.findByRole('textbox', { name: /Module stable key/ }), 'new-module')
+    await fireEvent.update(screen.getByRole('textbox', { name: /Module title/ }), 'New Module')
+    await fireEvent.click(screen.getByRole('button', { name: 'Create module' }))
+    await screen.findByText('Module created.')
+    expect(createAuthoringModuleMock.mock.calls[0]![1].expectedDraftRevision).toBe(10)
+    await router.push(`/authoring/drafts/${firstID}/overview`)
+    await fireEvent.update(await screen.findByRole('textbox', { name: /Title/ }), 'Saved again')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(updateAuthoringDraftMock).toHaveBeenLastCalledWith(firstID, { expectedRevision: 20, title: 'Saved again' }))
+  })
+
 })

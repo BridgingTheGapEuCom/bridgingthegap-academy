@@ -1,5 +1,5 @@
 <template>
-  <li class="authoring-members__item">
+  <li ref="item" class="authoring-members__item">
     <div class="authoring-members__identity">
       <p class="authoring-members__user-id"><span>User ID</span> <code>{{ member.userId }}</code></p>
       <p class="authoring-members__role">Current role: <strong>{{ roleLabel(member.role) }}</strong></p>
@@ -16,15 +16,16 @@
       <template v-if="confirming">
         <p class="authoring-members__confirm" role="status">Revoke access for <code>{{ member.userId }}</code>?</p>
         <BtgButton variant="destructive" :disabled="busy" :aria-label="`Confirm revoke access for ${member.userId}`" @click="emit('revoke', member.userId)">Confirm revoke</BtgButton>
-        <BtgButton variant="secondary" :disabled="busy" @click="emit('cancel-revoke')">Cancel</BtgButton>
+        <BtgButton variant="secondary" :disabled="busy" @click="cancelRevoke">Cancel</BtgButton>
       </template>
-      <BtgButton v-else variant="destructive" :disabled="busy" :aria-label="`Revoke access for ${member.userId}`" @click="emit('confirm-revoke', member.userId)">Revoke access</BtgButton>
+      <BtgButton v-else variant="destructive" :disabled="busy" :aria-label="`Revoke access for ${member.userId}`" @click="confirmRevoke">Revoke access</BtgButton>
     </div>
   </li>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { preserveFocusAfterRemoval } from '../authoring/focus'
 import type { AuthoringActiveMember } from '../authoring/authoring'
 import BtgButton from './BtgButton.vue'
 import BtgFormField from './BtgFormField.vue'
@@ -37,8 +38,20 @@ const emit = defineEmits<{
   revoke: [userID: string]
 }>()
 
+const item = ref<HTMLElement>()
 const selectedRole = ref<AuthoringActiveMember['role']>(props.member.role)
 watch(() => props.member.role, (role) => { selectedRole.value = role })
+
+function confirmRevoke() {
+  const restoreFocus = preserveFocusAfterRemoval(() => item.value?.querySelector<HTMLElement>('.btg-button--destructive'))
+  emit('confirm-revoke', props.member.userId)
+  void restoreFocus()
+}
+function cancelRevoke() {
+  const restoreFocus = preserveFocusAfterRemoval(() => item.value?.querySelector<HTMLElement>('.btg-button--destructive'))
+  emit('cancel-revoke')
+  void restoreFocus()
+}
 
 function roleLabel(role: AuthoringActiveMember['role']): string {
   return role === 'MAINTAINER' ? 'Maintainer' : 'Author'

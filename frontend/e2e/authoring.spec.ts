@@ -319,3 +319,30 @@ test('Authoring member management uses opaque IDs, authoritative reloads, and ke
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
+
+test('Authoring routes reflow at 320px and 390px with enlarged text', async ({ page }) => {
+  await serveDraft(page)
+  await page.route('**/api/authoring/drafts', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ drafts: [{ id: draftID, title: draft.title, intendedVersion: draft.intended_version, status: draft.status, updatedAt: draft.updated_at }] }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(structure) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/members`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ members: [{ userId: '77777777-7777-4777-8777-777777777777', role: 'MAINTAINER' }] }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, content: { schemaVersion: 1, blocks: [{ key: 'long-stable-block-key-for-reflow', type: 'CODE', payload: { code: 'const example = "unbroken-content-that-must-not-widen-the-page";' } }] } }) }))
+  const routes = ['/authoring', `/authoring/drafts/${draftID}/overview`, `/authoring/drafts/${draftID}/structure`, `/authoring/drafts/${draftID}/lessons/${lesson.id}`, `/authoring/drafts/${draftID}/members`]
+  for (const path of routes) {
+    await page.goto(path)
+    await expect(page.getByRole('heading', { level: path === '/authoring' ? 1 : 2 }).first()).toBeVisible()
+    if (path.includes('/lessons/')) await expect(page.getByRole('heading', { name: 'Lesson content' })).toBeVisible()
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      for (const fontSize of ['100%', '200%']) {
+        await page.evaluate((size) => { document.documentElement.style.fontSize = size }, fontSize)
+        const overflow = await page.evaluate(() => ({
+          width: document.documentElement.scrollWidth,
+          offenders: [...document.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1).map((el) => `${el.tagName}.${el.className}`).slice(0, 15),
+        }))
+        expect(overflow.width, `${path} at ${width}px / ${fontSize}: ${overflow.offenders.join(', ')}`).toBeLessThanOrEqual(width)
+      }
+    }
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  }
+  await page.screenshot({ path: '/tmp/btg-authoring-hardening-members-reflow.png', fullPage: true })
+})

@@ -12,9 +12,13 @@ export const authoringDraftContextKey: InjectionKey<AuthoringDraftContext> = Sym
 export function useAuthoringDraftContext(): AuthoringDraftContext & { draft: ComputedRef<AuthoringDraft> } {
   const context = inject(authoringDraftContextKey)
   if (!context) throw new Error('Authoring draft context is unavailable')
+  let lastDraft = context.draft.value
   const draft = computed(() => {
-    if (!context.draft.value) throw new Error('Authoring draft context is unavailable')
-    return context.draft.value
+    // Keep an unmounting child's getter stable while the shell removes private
+    // context. New children are mounted only after the next Draft is loaded.
+    if (context.draft.value) lastDraft = context.draft.value
+    if (!lastDraft) throw new Error('Authoring draft context is unavailable')
+    return lastDraft
   })
   return { ...context, draft }
 }

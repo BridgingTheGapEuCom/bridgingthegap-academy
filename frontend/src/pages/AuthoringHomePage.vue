@@ -62,8 +62,9 @@ let requestVersion = 0
 let active = true
 
 watch(
-  () => [auth.state.value.status, auth.state.value.status === 'authenticated' ? auth.state.value.userId : ''],
-  ([status]) => {
+  () => auth.state.value,
+  (session) => {
+    const status = session.status
     if (status === 'authenticated') {
       void load()
       return
@@ -72,7 +73,7 @@ watch(
     state.value = { kind: 'loading' }
     if (status === 'unauthenticated') void router.replace('/login')
   },
-  { immediate: true },
+  { immediate: true, flush: 'sync' },
 )
 onBeforeUnmount(() => { active = false })
 

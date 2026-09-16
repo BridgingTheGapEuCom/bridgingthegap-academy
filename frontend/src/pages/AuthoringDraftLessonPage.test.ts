@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { APIProblemError } from '../api/client'
 import { authoringDraftContextKey } from '../authoring/draftContext'
 
@@ -280,4 +280,25 @@ describe('AuthoringDraftLessonPage', () => {
     resolveFirst(lesson())
     await waitFor(() => expect(screen.queryByDisplayValue('What is EAI?')).toBeNull())
   })
+  it.each(['success', 'hidden-404'])('ignores a late Lesson metadata %s after route switching and permits the new Lesson to save', async (outcome) => {
+    let resolveSave!: (value: ReturnType<typeof mutation>) => void
+    let rejectSave!: (error: Error) => void
+    updateAuthoringLessonMock.mockImplementationOnce(() => new Promise((resolve, reject) => { resolveSave = resolve; rejectSave = reject }))
+      .mockResolvedValueOnce(mutation({ id: secondLessonID, title: 'New edits', revision: 4 }))
+    getAuthoringLessonMock.mockResolvedValueOnce(lesson()).mockResolvedValueOnce(lesson({ id: secondLessonID, title: 'Second Lesson' }))
+    const { router, markDraftUnavailable } = await renderPage()
+    await fireEvent.update(await screen.findByRole('textbox', { name: /^Title/ }), 'Old edits')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await router.push(`/authoring/drafts/${draftID}/lessons/${secondLessonID}`)
+    await screen.findByDisplayValue('Second Lesson')
+    if (outcome === 'success') resolveSave(mutation({ title: 'Old result', revision: 4 }))
+    else rejectSave(new APIProblemError(404, undefined, undefined))
+    await nextTick()
+    expect(screen.getByDisplayValue('Second Lesson')).toBeTruthy()
+    expect(markDraftUnavailable).not.toHaveBeenCalled()
+    await fireEvent.update(screen.getByRole('textbox', { name: /^Title/ }), 'New edits')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(updateAuthoringLessonMock).toHaveBeenLastCalledWith(draftID, secondLessonID, { expectedLessonRevision: 3, title: 'New edits' }))
+  })
+
 })

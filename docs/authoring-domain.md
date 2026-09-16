@@ -167,3 +167,15 @@ A forward-only migration makes the draft content top-level CHECK fail on
 missing/null fields and require a numeric schema version. Valid empty draft
 documents remain supported; detailed semantic validation stays in the canonical
 Courses value object.
+
+The Authoring frontend scopes reads and mutations to the current authenticated
+session and route resource. Responses from an earlier account, Draft, or Lesson
+are discarded, and shared Draft/Lesson revisions only move forward from
+authoritative server responses. Conflict reloads remain explicit and never
+replay a failed mutation. Private Authoring data is not persisted in browser
+storage.
+
+Authoring layouts impose no minimum viewport width. Flexible containers and
+long opaque identifiers reflow at narrow widths and enlarged text. Keyboard
+focus is repaired only when its active control is removed; saves and live status
+messages do not steal focus.

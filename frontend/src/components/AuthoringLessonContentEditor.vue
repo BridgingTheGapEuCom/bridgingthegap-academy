@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { APIProblemError } from '../api/client'
+import { preserveFocusAfterRemoval } from '../authoring/focus'
+import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { getAuthoringLesson, replaceAuthoringLessonContent, type AuthoringLessonContent, type AuthoringLessonContentMutation, type AuthoringLessonDetail } from '../authoring/authoring'
 import { contentEditorError, contentEditorLimits, contentFingerprint, copyContent, createContentBlock, editableBlockTypes, type CanonicalBlock, type EditableBlockType } from '../authoring/contentEditor'
 import { decodeLessonContent } from '../lesson/content'
@@ -24,6 +26,7 @@ let loadedLessonID = ''
 let requestVersion = 0
 let active = true
 
+
 function initialize(content: AuthoringLessonContent) {
   document.value = copyContent(content)
   baseline.value = contentFingerprint(content)
@@ -33,6 +36,8 @@ function initialize(content: AuthoringLessonContent) {
   formError.value = undefined
   message.value = undefined
 }
+const captureScope = useAuthoringAsyncScope(() => `${props.draftId}/${props.lesson.id}`)
+
 watch(() => [props.lesson.id, contentFingerprint(props.lesson.content)], () => {
   if (loadedLessonID !== props.lesson.id) {
     requestVersion += 1
@@ -72,11 +77,14 @@ function move(index: number, direction: -1 | 1) {
 }
 function removeBlock(index: number) {
   if (saving.value) return
+  const restoreFocus = preserveFocusAfterRemoval(() => globalThis.document.querySelector<HTMLElement>('.authoring-content__add button'))
   document.value.blocks.splice(index, 1)
+  void restoreFocus()
   message.value = undefined
 }
 
 async function save() {
+  const isCurrent = captureScope()
   if (saving.value || reloading.value || conflict.value || !supported.value || !dirty.value) return
   formError.value = contentEditorError(document.value)
   if (formError.value) return
@@ -85,11 +93,13 @@ async function save() {
   message.value = undefined
   try {
     const result = await replaceAuthoringLessonContent(props.draftId, props.lesson.id, { expectedLessonRevision: props.lesson.revision, content: copyContent(document.value) })
+    if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     initialize(result.content)
     emit('saved', result)
     message.value = 'Lesson content saved.'
   } catch (error) {
+    if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     if (error instanceof APIProblemError && error.status === 404) { emit('unavailable'); return }
     if (error instanceof APIProblemError && error.status === 409) { conflict.value = true; return }
@@ -99,16 +109,19 @@ async function save() {
   } finally { if (generation === requestVersion) saving.value = false }
 }
 async function reloadLatest() {
+  const isCurrent = captureScope()
   if (reloading.value || saving.value) return
   const generation = requestVersion
   reloading.value = true
   formError.value = undefined
   try {
     const latest = await getAuthoringLesson(props.draftId, props.lesson.id)
+    if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     initialize(latest.content)
     emit('replaceLesson', latest)
   } catch (error) {
+    if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     if (error instanceof APIProblemError && error.status === 404) emit('unavailable')
     else formError.value = 'We couldn’t reload Lesson content right now. Please try again.'

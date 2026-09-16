@@ -59,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, provide, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { useAuth } from '../auth/auth'
@@ -82,29 +82,31 @@ let active = true
 provide(authoringDraftContextKey, {
   draft,
   replaceDraft: (nextDraft) => {
+    if (!active || !draft.value || nextDraft.id !== draft.value.id || nextDraft.revision < draft.value.revision) return
     draft.value = nextDraft
     state.value = { kind: 'ready', draft: nextDraft }
   },
   markDraftUnavailable: () => {
     requestVersion += 1
-    draft.value = undefined
     state.value = { kind: 'not-found' }
+    void nextTick(() => { draft.value = undefined })
   },
 })
 
 watch(
-  () => [auth.state.value.status, route.params.draftId],
-  ([status]) => {
+  [() => auth.state.value, () => route.params.draftId],
+  ([session]) => {
+    const status = session.status
     if (status === 'authenticated') {
       void load()
       return
     }
     requestVersion += 1
-    draft.value = undefined
     state.value = { kind: 'loading' }
+    void nextTick(() => { draft.value = undefined })
     if (status === 'unauthenticated') void router.replace('/login')
   },
-  { immediate: true },
+  { immediate: true, flush: 'sync' },
 )
 
 onBeforeUnmount(() => { active = false })
@@ -113,8 +115,10 @@ async function load() {
   const generation = ++requestVersion
   if (auth.state.value.status !== 'authenticated') return
   const draftID = typeof route.params.draftId === 'string' ? route.params.draftId : ''
-  draft.value = undefined
   state.value = { kind: 'loading' }
+  await nextTick()
+  if (!active || generation !== requestVersion) return
+  draft.value = undefined
   try {
     const loadedDraft = await getAuthoringDraft(draftID)
     if (!active || generation !== requestVersion || auth.state.value.status !== 'authenticated') return
