@@ -186,6 +186,45 @@ test('Authoring Review overview is read-only, keyboard reachable, and responsive
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
+test('Authoring submits the current Draft revision for Review and reloads authoritative state', async ({ page }) => {
+  let reviews: typeof reviewCycle[] = []
+  let submissionBody: unknown
+  let snapshotReads = 0
+  const submitted = { ...reviewCycle, draftRevision: 3 }
+  await serveDraft(page)
+  page.on('request', (request) => {
+    if (request.url().includes(`/reviews/${reviewCycle.id}`)) snapshotReads += 1
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews`, (route) => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ reviews }) })
+    submissionBody = route.request().postDataJSON()
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
+    reviews = [submitted]
+    return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ review: submitted, snapshot: { schemaVersion: 1, draft: {}, modules: [] } }) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/active`, (route) => {
+    if (!reviews.length) return route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({}) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviews[0]) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/latest`, (route) => {
+    if (!reviews.length) return route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({}) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviews[0]) })
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/review`)
+  const submit = page.getByRole('button', { name: 'Submit for review' })
+  await submit.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Draft submitted for review.')).toBeVisible()
+  expect(submissionBody).toEqual({ expectedDraftRevision: 3 })
+  await expect(page.getByText('In review').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Submit for review' })).toHaveCount(0)
+  expect(snapshotReads).toBe(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
 test('Authoring metadata editor saves a changed field with its current revision', async ({ page }) => {
   let patchBody: unknown
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))

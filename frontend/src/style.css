@@ -294,14 +294,17 @@
 .authoring-members__conflict p { margin-bottom: var(--btg-space-3); }
 .authoring-review,
 .authoring-review__header,
+.authoring-review__submission,
 .authoring-review__summary,
 .authoring-review__history,
 .authoring-review__history-list,
 .authoring-review__history-list article { display: grid; gap: var(--btg-space-4); }
 .authoring-review__summary,
 .authoring-review__history,
+.authoring-review__submission,
 .authoring-review__state { border: var(--btg-border-width) solid var(--btg-color-border); padding: var(--btg-space-4); }
 .authoring-review__summary h3,
+.authoring-review__submission h3,
 .authoring-review__history h3,
 .authoring-review__history h4 { margin: 0; }
 .authoring-review__status { margin: 0; font-weight: var(--btg-font-weight-strong); }
@@ -314,6 +317,8 @@
 .authoring-review__history-list > li { border-inline-start: 0.25rem solid var(--btg-color-border); padding-inline-start: var(--btg-space-4); }
 .authoring-review__empty { color: var(--btg-color-text-secondary); }
 .authoring-review__state { border-inline-start: 0.25rem solid var(--btg-color-border-strong); }
+.authoring-review__conflict { border-inline-start: 0.25rem solid var(--btg-color-warning); padding-inline-start: var(--btg-space-3); }
+.authoring-review__error { border-inline-start: 0.25rem solid var(--btg-color-danger); padding-inline-start: var(--btg-space-3); }
 
 @media (max-width: 30rem) {
   .authoring-shell__navigation a { flex: 1 1 auto; justify-content: center; }

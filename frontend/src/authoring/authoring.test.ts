@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -72,6 +72,16 @@ describe('Authoring API service', () => {
     expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/reviews`)
     expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/reviews/active`)
     expect(request).toHaveBeenNthCalledWith(3, `/api/authoring/drafts/${draftID}/reviews/latest`)
+  })
+
+  it('submits only the authoritative expected Draft revision through the authenticated Review boundary', async () => {
+    const request = vi.fn().mockResolvedValue({ review: {}, snapshot: {} })
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    await submitAuthoringDraftReview(draftID, { expectedDraftRevision: 7 }, { request })
+    expect(request).toHaveBeenCalledWith(
+      `/api/authoring/drafts/${draftID}/reviews`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedDraftRevision: 7 }) }),
+    )
   })
 
   it('keeps Lesson reads and metadata patches scoped to both bounded IDs', async () => {

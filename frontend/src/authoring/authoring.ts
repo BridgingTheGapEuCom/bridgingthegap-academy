@@ -18,6 +18,8 @@ export type AuthoringMemberRoleChange = components['schemas']['AuthoringMemberRo
 export type AuthoringMemberMutation = components['schemas']['AuthoringMemberMutationResponse']
 export type AuthoringReview = components['schemas']['AuthoringReview']
 export type AuthoringReviewList = components['schemas']['AuthoringReviewList']
+export type AuthoringReviewDetail = components['schemas']['AuthoringReviewDetail']
+export type AuthoringReviewSubmit = components['schemas']['AuthoringReviewSubmitRequest']
 
 export type AuthoringModuleCreate = components['schemas']['AuthoringModuleCreateRequest']
 export type AuthoringModuleUpdate = { expectedModuleRevision: number; title?: string; description?: string }
@@ -112,6 +114,14 @@ export async function getAuthoringActiveDraftReview(draftID: string, client: Pic
 export async function getAuthoringLatestDraftReview(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReview> {
   assertAuthoringID(draftID)
   return client.request<AuthoringReview>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/latest`)
+}
+
+// The server freezes the canonical snapshot from the authoritative Draft. The
+// frontend sends only the Draft revision it intends to submit and does not use
+// the snapshot response until a later explicit Review-detail experience.
+export async function submitAuthoringDraftReview(draftID: string, input: AuthoringReviewSubmit, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReviewDetail> {
+  assertAuthoringID(draftID)
+  return client.request<AuthoringReviewDetail>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews`, jsonRequest('POST', input))
 }
 
 export async function addAuthoringMember(draftID: string, input: AuthoringMemberAdd, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringMemberMutation> {
