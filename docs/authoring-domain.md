@@ -29,7 +29,7 @@ and use target stable keys in the domain API. Draft deletion is hard deletion:
 deleting a lesson or Module cascades to its draft-owned children and prerequisite
 references. No published CourseVersion deletion or mutation path is added.
 
-Locks, autosave, revision history, comments, review states, and publication
+Locks, autosave, general revision history, comments, and publication
 orchestration are separate future boundaries. Authoring imports Courses'
 canonical value objects and Identity's trusted actor type, never their
 persistence adapters.
@@ -179,3 +179,39 @@ Authoring layouts impose no minimum viewport width. Flexible containers and
 long opaque identifiers reflow at narrow widths and enlarged text. Keyboard
 focus is repaired only when its active control is removed; saves and live status
 messages do not steal focus.
+
+## Review cycles and frozen snapshots
+
+`EDITING` is the derived state when a Draft has no active submitted review. A
+persisted Review cycle begins in `IN_REVIEW` and binds one Draft ID to one exact
+Draft revision. Because Authoring stores current mutable rows rather than general
+revision history, submission also captures a versioned, immutable canonical JSON
+snapshot. It contains Draft metadata, ordered Modules and Lessons, stable keys,
+ordered advisory prerequisites, and canonical LessonContent. It contains no
+editor, browser, HTML, CSS, lock, comment, or suggestion state.
+
+Draft editing remains available while a frozen snapshot is reviewed. Later edits
+advance the current Draft without changing the cycle's revision or snapshot.
+`IN_REVIEW` may transition exactly once to `APPROVED` or
+`CHANGES_REQUESTED`; both are terminal for that cycle. After requested changes,
+a later Draft revision is submitted as a new cycle, preserving the former cycle
+and its append-only submission and decision events. Approval therefore names
+the exact canonical material reviewed, rather than the latest mutable Draft.
+Reviewed Drafts cannot be hard-deleted through the database cascade because
+that would erase the provenance this history exists to preserve.
+
+Review submission locks and compares the Draft revision, reads its complete
+structure while holding that Draft lock, then stores the snapshot and
+submission event atomically. Reviewer decisions lock the Review and use its own
+revision as a compare-and-swap token, so approval and change requests cannot
+both win. Repository reads distinguish the latest cycle, the active
+`IN_REVIEW` cycle, complete history, and an approved cycle for one exact Draft
+revision.
+
+Review actors are opaque user IDs without Identity foreign keys. The persisted
+submitter and decision actor allow a later deployment policy to require an
+independent reviewer without hard-coding that policy into storage. Review HTTP,
+Review authorization capabilities, reviewer assignment, notifications, Audit
+integration, publishing validation, and conversion into immutable CourseVersion
+artifacts remain outside M4.1. Review persistence remains wholly owned by
+Authoring and never writes Courses tables.

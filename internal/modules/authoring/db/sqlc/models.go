@@ -59,6 +59,29 @@ type AuthoringModule struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type AuthoringReviewCycle struct {
+	ID                    pgtype.UUID
+	DraftID               pgtype.UUID
+	DraftRevision         int64
+	SnapshotSchemaVersion int32
+	Snapshot              []byte
+	Status                string
+	Revision              int64
+	SubmittedByUserID     pgtype.UUID
+	SubmittedAt           pgtype.Timestamptz
+	DecidedByUserID       pgtype.UUID
+	DecidedAt             pgtype.Timestamptz
+}
+
+type AuthoringReviewEvent struct {
+	ID          pgtype.UUID
+	ReviewID    pgtype.UUID
+	EventType   string
+	ActorUserID pgtype.UUID
+	Message     pgtype.Text
+	CreatedAt   pgtype.Timestamptz
+}
+
 type AuthoringWorkspace struct {
 	ID              pgtype.UUID
 	DraftID         pgtype.UUID

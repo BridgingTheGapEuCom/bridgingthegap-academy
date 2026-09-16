@@ -13,7 +13,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-const schemaVersion int64 = 10
+const schemaVersion int64 = 11
 
 func OpenPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)

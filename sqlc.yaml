@@ -44,6 +44,7 @@ sql:
       - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
       - internal/modules/infrastructure/postgres/db/migrations/00009_authoring.sql
       - internal/modules/infrastructure/postgres/db/migrations/00010_authoring_content_integrity.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00011_authoring_review.sql
     queries: internal/modules/authoring/db/query
     gen:
       go:
