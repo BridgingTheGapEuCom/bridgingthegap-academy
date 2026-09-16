@@ -8,6 +8,7 @@
           <h4>Review cycle for Draft revision {{ review.draftRevision }}</h4>
           <p class="authoring-review__status">{{ statusLabel(review.status) }}</p>
           <AuthoringReviewMetadata :review="review" />
+          <RouterLink :to="authoringDraftReviewPath(draftId, review.id)">View review</RouterLink>
         </article>
       </li>
     </ol>
@@ -15,10 +16,10 @@
 </template>
 
 <script setup lang="ts">
-import type { AuthoringReview } from '../authoring/authoring'
+import { authoringDraftReviewPath, type AuthoringReview } from '../authoring/authoring'
 import AuthoringReviewMetadata from './AuthoringReviewMetadata.vue'
 
-defineProps<{ reviews: AuthoringReview[] }>()
+defineProps<{ draftId: string; reviews: AuthoringReview[] }>()
 
 function statusLabel(status: AuthoringReview['status']): string {
   switch (status) {

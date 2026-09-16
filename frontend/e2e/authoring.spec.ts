@@ -70,6 +70,22 @@ const reviewCycle = {
   decidedAt: null,
 }
 
+const reviewSnapshot = {
+  schemaVersion: 1,
+  draft: {
+    id: draftID, revision: 3, courseId: draft.course_id, intendedVersion: '1.0.0', sourceLanguage: 'en',
+    title: 'Frozen integration foundations', description: 'Captured for Review.', objectives: ['Explain ownership'], changelog: 'Frozen submission.',
+    license: { Kind: 'STANDARD', Identifier: 'CC-BY-4.0', DisplayName: 'Creative Commons Attribution 4.0', URL: '', CustomText: '' },
+  },
+  modules: [{
+    id: structure.modules[0].id, stableKey: 'foundations', title: 'Frozen foundations', description: 'Historical module.', position: 0,
+    lessons: [{
+      id: lesson.id, stableKey: lesson.stable_key, title: 'Frozen lesson', description: 'Historical lesson.', objectives: ['Explain EAI'], estimatedDurationMinutes: 15, position: 0,
+      prerequisiteStableKeys: [], content: { schemaVersion: 1, blocks: [{ key: 'snapshot-text', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Frozen semantic content.', marks: [] }] }] } } }] },
+    }],
+  }],
+}
+
 async function serveDraft(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
@@ -176,13 +192,45 @@ test('Authoring Review overview is read-only, keyboard reachable, and responsive
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`/authoring/drafts/${draftID}/review`)
   await expect(page.getByRole('heading', { level: 2, name: 'Review' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Review' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: 'Review', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('In review').first()).toBeVisible()
   await expect(page.getByRole('list', { name: 'Review history' })).toBeVisible()
   await expect(page.getByRole('button', { name: /submit|approve|request changes/i })).toHaveCount(0)
   expect(snapshotRequests).toBe(0)
-  await page.getByRole('link', { name: 'Review' }).focus()
+  await page.getByRole('link', { name: 'Review', exact: true }).focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring Review history opens an exact read-only frozen snapshot', async ({ page }) => {
+  let snapshotRequests = 0
+  let structureRequests = 0
+  await serveDraft(page)
+  await serveReviewOverview(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => {
+    structureRequests += 1
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(structure) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => {
+    snapshotRequests += 1
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: reviewCycle, snapshot: reviewSnapshot }) })
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/review`)
+  await page.getByRole('link', { name: 'View review' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(`/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`)
+  await expect(page.getByRole('heading', { level: 2, name: 'Reviewing Draft revision 3' })).toBeVisible()
+  await expect(page.getByText('Frozen integration foundations')).toBeVisible()
+  await expect(page.getByText('Frozen semantic content.')).toBeVisible()
+  await expect(page.getByRole('button', { name: /save|submit|approve|request changes/i })).toHaveCount(0)
+  expect(snapshotRequests).toBe(1)
+  expect(structureRequests).toBe(0)
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  }
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 

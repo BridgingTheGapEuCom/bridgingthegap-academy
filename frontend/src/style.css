@@ -298,7 +298,14 @@
 .authoring-review__summary,
 .authoring-review__history,
 .authoring-review__history-list,
-.authoring-review__history-list article { display: grid; gap: var(--btg-space-4); }
+.authoring-review__history-list article,
+.authoring-review-snapshot,
+.authoring-review-snapshot__header,
+.authoring-review-snapshot__draft,
+.authoring-review-snapshot__structure,
+.authoring-review-snapshot__module,
+.authoring-review-snapshot__lesson,
+.authoring-review-snapshot__content { display: grid; gap: var(--btg-space-4); }
 .authoring-review__summary,
 .authoring-review__history,
 .authoring-review__submission,
@@ -319,6 +326,21 @@
 .authoring-review__state { border-inline-start: 0.25rem solid var(--btg-color-border-strong); }
 .authoring-review__conflict { border-inline-start: 0.25rem solid var(--btg-color-warning); padding-inline-start: var(--btg-space-3); }
 .authoring-review__error { border-inline-start: 0.25rem solid var(--btg-color-danger); padding-inline-start: var(--btg-space-3); }
+.authoring-review-snapshot__header,
+.authoring-review-snapshot__draft,
+.authoring-review-snapshot__structure,
+.authoring-review-snapshot__module,
+.authoring-review-snapshot__lesson { border: var(--btg-border-width) solid var(--btg-color-border); padding: var(--btg-space-4); }
+.authoring-review-snapshot__header h2,
+.authoring-review-snapshot__draft h3,
+.authoring-review-snapshot__draft h4,
+.authoring-review-snapshot__structure h3,
+.authoring-review-snapshot__module h3,
+.authoring-review-snapshot__lesson h4,
+.authoring-review-snapshot__lesson h5 { margin: 0; }
+.authoring-review-snapshot__eyebrow { color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-medium); margin: 0; }
+.authoring-review-snapshot__eyebrow code { overflow-wrap: anywhere; user-select: all; }
+.authoring-review-snapshot__block { min-width: 0; }
 
 @media (max-width: 30rem) {
   .authoring-shell__navigation a { flex: 1 1 auto; justify-content: center; }

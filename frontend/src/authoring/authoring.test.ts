@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -82,6 +82,16 @@ describe('Authoring API service', () => {
       `/api/authoring/drafts/${draftID}/reviews`,
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedDraftRevision: 7 }) }),
     )
+  })
+
+  it('reads an immutable Review snapshot through both exact bounded route IDs', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const reviewID = '22222222-2222-4222-8222-222222222222'
+    await getAuthoringDraftReview(draftID, reviewID, { request })
+    expect(request).toHaveBeenCalledWith(`/api/authoring/drafts/${draftID}/reviews/${reviewID}`)
+    expect(authoringDraftReviewPath(draftID, reviewID)).toBe(`/authoring/drafts/${draftID}/reviews/${reviewID}`)
+    await expect(getAuthoringDraftReview(draftID, 'not-a-review', { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
   })
 
   it('keeps Lesson reads and metadata patches scoped to both bounded IDs', async () => {

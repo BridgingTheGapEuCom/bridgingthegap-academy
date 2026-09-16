@@ -20,6 +20,9 @@ export type AuthoringReview = components['schemas']['AuthoringReview']
 export type AuthoringReviewList = components['schemas']['AuthoringReviewList']
 export type AuthoringReviewDetail = components['schemas']['AuthoringReviewDetail']
 export type AuthoringReviewSubmit = components['schemas']['AuthoringReviewSubmitRequest']
+export type AuthoringReviewSnapshot = components['schemas']['AuthoringReviewSnapshot']
+export type AuthoringReviewSnapshotModule = components['schemas']['AuthoringReviewSnapshotModule']
+export type AuthoringReviewSnapshotLesson = components['schemas']['AuthoringReviewSnapshotLesson']
 
 export type AuthoringModuleCreate = components['schemas']['AuthoringModuleCreateRequest']
 export type AuthoringModuleUpdate = { expectedModuleRevision: number; title?: string; description?: string }
@@ -116,6 +119,15 @@ export async function getAuthoringLatestDraftReview(draftID: string, client: Pic
   return client.request<AuthoringReview>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/latest`)
 }
 
+// A Review snapshot is historical evidence. It is read only through both its
+// enclosing Draft and its exact Review ID; it is never reconstructed from the
+// current mutable Draft.
+export async function getAuthoringDraftReview(draftID: string, reviewID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReviewDetail> {
+  assertAuthoringID(draftID)
+  assertAuthoringID(reviewID)
+  return client.request<AuthoringReviewDetail>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}`)
+}
+
 // The server freezes the canonical snapshot from the authoritative Draft. The
 // frontend sends only the Draft revision it intends to submit and does not use
 // the snapshot response until a later explicit Review-detail experience.
@@ -202,6 +214,12 @@ function jsonRequest(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body: unknown)
 
 export function authoringDraftPath(draftID: string, section: 'overview' | 'structure' | 'members' | 'review' = 'overview'): string {
   return `/authoring/drafts/${encodeURIComponent(draftID)}/${section}`
+}
+
+export function authoringDraftReviewPath(draftID: string, reviewID: string): string {
+  assertAuthoringID(draftID)
+  assertAuthoringID(reviewID)
+  return `/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}`
 }
 
 export function authoringDraftLessonPath(draftID: string, lessonID: string): string {

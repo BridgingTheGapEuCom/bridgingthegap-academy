@@ -23,7 +23,7 @@
         @reload="reloadReviewState"
       />
       <AuthoringReviewStatusSummary :active-review="state.activeReview" :latest-review="state.latestReview" />
-      <AuthoringReviewHistory :reviews="state.reviews" />
+      <AuthoringReviewHistory :draft-id="draft.id" :reviews="state.reviews" />
     </template>
   </section>
 </template>
