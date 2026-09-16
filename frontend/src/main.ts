@@ -9,6 +9,7 @@ import AdminPage from './pages/AdminPage.vue'
 import CourseListPage from './pages/CourseListPage.vue'
 import CourseOverviewPage from './pages/CourseOverviewPage.vue'
 import LessonPage from './pages/LessonPage.vue'
+import PublishedCoursePlaceholderPage from './pages/PublishedCoursePlaceholderPage.vue'
 import AuthoringHomePage from './pages/AuthoringHomePage.vue'
 import AuthoringDraftShell from './pages/AuthoringDraftShell.vue'
 import AuthoringDraftOverviewPage from './pages/AuthoringDraftOverviewPage.vue'
@@ -32,6 +33,7 @@ const router = createRouter({
     { path: '/login', component: LoginPage },
     { path: '/admin', component: AdminPage },
     { path: '/courses', component: CourseListPage },
+    { path: '/courses/by-id/:courseId', component: PublishedCoursePlaceholderPage },
     { path: '/courses/:slug', component: CourseOverviewPage },
     { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPage },
     { path: '/authoring', name: 'authoring-home', component: AuthoringHomePage },

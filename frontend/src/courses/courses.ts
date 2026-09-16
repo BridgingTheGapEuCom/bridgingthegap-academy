@@ -7,6 +7,11 @@ export type CourseDetail = components['schemas']['CourseDetail']
 export type LessonDetail = components['schemas']['LessonDetail']
 export type CourseVersionSummary = components['schemas']['CourseVersionSummary']
 export type LessonSummary = components['schemas']['LessonSummary']
+export type PublishedCourseCatalogPage = components['schemas']['PublishedCourseCatalogPage']
+export type PublishedCourseCatalogItem = components['schemas']['PublishedCourseCatalogItem']
+
+export const publishedCatalogPageSize = 20
+export const maxPublishedCatalogOffset = 2_147_483_647
 
 const courseSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const courseVersionPattern = /^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$/
@@ -41,6 +46,34 @@ export function isLessonKey(key: string): boolean {
 
 export async function listCourses(client: APIClient = apiClient): Promise<CourseList> {
   return client.request<CourseList>('/api/courses')
+}
+
+export type PublishedCatalogQuery = {
+  limit?: number
+  offset?: number
+  language?: string
+}
+
+export async function listPublishedCourseCatalog(query: PublishedCatalogQuery = {}, client: APIClient = apiClient): Promise<PublishedCourseCatalogPage> {
+  const limit = query.limit ?? publishedCatalogPageSize
+  const offset = query.offset ?? 0
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0 || offset > maxPublishedCatalogOffset) {
+    throw new InvalidCourseRouteError()
+  }
+  const parameters = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (query.language) parameters.set('language', query.language)
+  return client.request<PublishedCourseCatalogPage>(`/api/courses/catalog?${parameters.toString()}`)
+}
+
+export function publishedCoursePath(courseID: string): string {
+  return `/courses/by-id/${encodeURIComponent(courseID)}`
+}
+
+export function catalogOffsetFromRoute(value: unknown): number | undefined {
+  if (value === undefined) return 0
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) return undefined
+  const offset = Number(value)
+  return Number.isSafeInteger(offset) && offset <= maxPublishedCatalogOffset ? offset : undefined
 }
 
 export async function getCourse(slug: string, client: APIClient = apiClient): Promise<CourseDetail> {
