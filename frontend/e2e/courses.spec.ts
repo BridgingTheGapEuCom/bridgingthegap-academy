@@ -22,7 +22,18 @@ const publishedCourse = {
   modules: [{
     stableKey: 'fundamentals', title: 'Fundamentals', description: 'Core concepts.', position: 0,
     lessons: [
-      { stableKey: 'what-is-eai', title: 'What is EAI?', description: 'A starting point.', objectives: ['Recognise integration'], estimatedDurationMinutes: 10, position: 0, prerequisiteStableKeys: [], content: { schemaVersion: 1, blocks: [] } },
+      {
+        stableKey: 'what-is-eai', title: 'What is EAI?', description: 'A starting point.', objectives: ['Recognise integration'], estimatedDurationMinutes: 10, position: 0, prerequisiteStableKeys: [],
+        content: {
+          schemaVersion: 1,
+          blocks: [
+            { key: 'intro', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Published canonical lesson content.', marks: [{ type: 'strong' }] }] }] } } },
+            { key: 'code', type: 'CODE', payload: { language: 'go', code: 'fmt.Println("inert")' } },
+            { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Event flow' } },
+            { key: 'table', type: 'TABLE', payload: { caption: 'Terms', headers: ['Term'], rows: [['Event']] } },
+          ],
+        },
+      },
       { stableKey: 'sync-vs-async', title: 'Synchronous and asynchronous', description: 'Compare approaches.', objectives: [], estimatedDurationMinutes: 75, position: 1, prerequisiteStableKeys: [], content: { schemaVersion: 1, blocks: [] } },
     ],
   }],
@@ -60,6 +71,10 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await expect(page.getByRole('heading', { level: 1, name: 'Event-driven architecture' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Course lessons' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'What is EAI?, estimated duration 10 min' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByText('Published canonical lesson content.')).toBeVisible()
+  await expect(page.locator('pre code')).toContainText('fmt.Println')
+  await expect(page.getByRole('img', { name: 'Event flow' })).toBeVisible()
+  await expect(page.getByRole('table')).toBeVisible()
   await page.getByRole('link', { name: 'Synchronous and asynchronous, estimated duration 1 hr 15 min' }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/lesson=sync-vs-async/)

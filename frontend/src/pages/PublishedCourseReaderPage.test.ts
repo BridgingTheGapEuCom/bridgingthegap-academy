@@ -29,7 +29,10 @@ const course = {
     {
       stableKey: 'fundamentals', title: 'Fundamentals', description: 'Core concepts.', position: 0,
       lessons: [
-        { stableKey: 'what-is-eai', title: 'What is EAI?', description: 'A starting point.', objectives: ['Recognise integration'], estimatedDurationMinutes: 10, position: 0, prerequisiteStableKeys: [], content: { schemaVersion: 1, blocks: [{ stableKey: 'hidden-block', type: 'PARAGRAPH', payload: { text: 'Raw canonical payload must not render.' } }] } },
+        { stableKey: 'what-is-eai', title: 'What is EAI?', description: 'A starting point.', objectives: ['Recognise integration'], estimatedDurationMinutes: 10, position: 0, prerequisiteStableKeys: [], content: { schemaVersion: 1, blocks: [
+          { key: 'intro', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Exact version one content', marks: [{ type: 'strong' }] }, { type: 'hard_break' }, { type: 'text', text: 'Read more', marks: [{ type: 'link', href: 'https://example.test/read-more' }] }] }] } } },
+          { key: 'hidden-block', type: 'SCRIPT', payload: { source: '<script>window.executed = true</script>' } },
+        ] } },
         { stableKey: 'sync-vs-async', title: 'Synchronous and asynchronous', description: 'Compare approaches.', objectives: [], estimatedDurationMinutes: 75, position: 1, prerequisiteStableKeys: ['what-is-eai'], content: { schemaVersion: 1, blocks: [] } },
       ],
     },
@@ -62,7 +65,7 @@ describe('PublishedCourseReaderPage', () => {
   })
   afterEach(cleanup)
 
-  it('loads the latest immutable version and preserves module and lesson order without rendering canonical content', async () => {
+  it('loads the latest immutable version and renders only its canonical content in module and lesson order', async () => {
     getLatestPublishedCourseMock.mockResolvedValue(course)
     const { router } = await renderPage()
     expect(await screen.findByRole('heading', { level: 1, name: 'Event-driven architecture' })).toBeTruthy()
@@ -76,13 +79,33 @@ describe('PublishedCourseReaderPage', () => {
     expect(links.map((link) => link.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['What is EAI?10 min', 'Synchronous and asynchronous1 hr 15 min', 'Event contracts'])
     expect(links[0].getAttribute('aria-current')).toBe('page')
     await waitFor(() => expect(router.currentRoute.value.query.lesson).toBe('what-is-eai'))
-    expect(screen.getByText('Lesson content will be available here.')).toBeTruthy()
-    expect(document.body.textContent).not.toContain('Raw canonical payload must not render.')
+    expect(screen.getByText('Exact version one content')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Read more' }).getAttribute('href')).toBe('https://example.test/read-more')
+    expect(screen.getByRole('alert').textContent).toContain('cannot be displayed safely')
+    expect(document.body.textContent).not.toContain('window.executed = true')
+    expect(document.querySelector('script')).toBeNull()
     expect(screen.getByRole('link', { name: 'Browse courses' }).getAttribute('href')).toBe('/courses')
   })
 
   it('loads an exact version, honors a valid lesson URL, and updates URL/current semantics on lesson navigation', async () => {
-    const secondVersion = { ...course, version: '2.0.0', modules: [course.modules[1]] }
+    const secondVersion = {
+      ...course,
+      version: '2.0.0',
+      modules: [{
+        ...course.modules[0],
+        lessons: [{
+          ...course.modules[0].lessons[1],
+          content: {
+            schemaVersion: 1,
+            blocks: [{
+              key: 'version-two',
+              type: 'TEXT',
+              payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Exact version two content', marks: [] }] }] } },
+            }],
+          },
+        }],
+      }],
+    }
     getPublishedCourseVersionByIDMock.mockResolvedValueOnce(course).mockResolvedValueOnce(secondVersion)
     const { router } = await renderPage(`/courses/by-id/${courseID}/versions/1.10.0?lesson=sync-vs-async`)
     expect(await screen.findByRole('heading', { level: 2, name: 'Synchronous and asynchronous' })).toBeTruthy()
@@ -90,13 +113,15 @@ describe('PublishedCourseReaderPage', () => {
     expect(screen.getByRole('link', { name: 'Synchronous and asynchronous, estimated duration 1 hr 15 min' }).getAttribute('aria-current')).toBe('page')
     await fireEvent.click(screen.getByRole('link', { name: 'Event contracts' }))
     await waitFor(() => expect(router.currentRoute.value.query.lesson).toBe('event-contracts'))
+    expect(getPublishedCourseVersionByIDMock).toHaveBeenCalledTimes(1)
     expect(await screen.findByRole('heading', { level: 2, name: 'Event contracts' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: 'Event contracts' }).getAttribute('tabindex')).toBe('-1')
 
     await router.push(`/courses/by-id/${courseID}/versions/2.0.0?lesson=sync-vs-async`)
     expect(await screen.findByText('2.0.0')).toBeTruthy()
-    expect(await screen.findByRole('heading', { level: 2, name: 'Event contracts' })).toBeTruthy()
-    await waitFor(() => expect(router.currentRoute.value.query.lesson).toBe('event-contracts'))
+    expect(await screen.findByText('Exact version two content')).toBeTruthy()
+    expect(screen.queryByText('Exact version one content')).toBeNull()
+    await waitFor(() => expect(router.currentRoute.value.query.lesson).toBe('sync-vs-async'))
   })
 
   it('normalizes an invalid lesson for a loaded version and handles empty, unavailable, and not-found courses safely', async () => {

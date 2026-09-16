@@ -14,21 +14,29 @@
       <ul><li v-for="objective in lesson.objectives" :key="objective">{{ objective }}</li></ul>
     </div>
 
-    <section class="published-course-reader-lesson__placeholder" aria-labelledby="published-lesson-content-title">
+    <section class="published-course-reader-lesson__content" aria-labelledby="published-lesson-content-title">
       <h3 id="published-lesson-content-title">Lesson content</h3>
-      <p>Lesson content will be available here.</p>
+      <p v-if="content.kind === 'unsupported-schema'" role="note">This lesson uses a content format this version of the Academy cannot display.</p>
+      <p v-else-if="content.kind === 'invalid-content'" role="note">This lesson content cannot be displayed safely.</p>
+      <p v-else-if="!content.blocks.length">This lesson has no published content yet.</p>
+      <div v-else v-for="block in content.blocks" :key="block.key" class="published-course-reader-lesson__block">
+        <LessonBlockRenderer :block="block" />
+      </div>
     </section>
   </article>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUpdated, ref } from 'vue'
+import { computed, onMounted, onUpdated, ref } from 'vue'
+import LessonBlockRenderer from './LessonBlockRenderer.vue'
 import type { PublishedCourseVersionDetail } from '../courses/courses'
 import { formatDuration } from '../courses/courses'
+import { decodeLessonContent } from '../lesson/content'
 
 const props = defineProps<{ lesson: PublishedCourseVersionDetail['modules'][number]['lessons'][number] | null }>()
 const lessonTitle = ref<HTMLHeadingElement | null>(null)
 let previousLessonStableKey: string | undefined
+const content = computed(() => props.lesson ? decodeLessonContent(props.lesson.content) : { kind: 'invalid-content' } as const)
 
 onMounted(() => { previousLessonStableKey = props.lesson?.stableKey })
 onUpdated(() => {

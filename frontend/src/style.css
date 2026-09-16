@@ -491,10 +491,15 @@
 }
 .published-course-reader-navigation__empty { color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); }
 .published-course-reader-lesson > * + * { margin-top: var(--btg-space-6); }
-.published-course-reader-lesson__placeholder {
+.published-course-reader-lesson__content {
+  display: grid;
+  gap: var(--btg-space-5);
+  max-width: 72ch;
   border-top: var(--btg-border-width) solid var(--btg-color-border);
   padding-top: var(--btg-space-5);
 }
+.published-course-reader-lesson__content > * { min-width: 0; }
+.published-course-reader-lesson__block { min-width: 0; }
 .published-course-reader__empty { margin: 0; }
 
 @media (max-width: 48rem) {
