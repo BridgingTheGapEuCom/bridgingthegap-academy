@@ -96,13 +96,156 @@ func (q *Queries) CreateCourseVersion(ctx context.Context, arg CreateCourseVersi
 	return i, err
 }
 
+const createCourseVersionPublicationProvenance = `-- name: CreateCourseVersionPublicationProvenance :one
+INSERT INTO courses.course_version_publication_provenance (
+    course_version_id, review_id, review_revision, draft_id, draft_revision,
+    snapshot_schema_version, submitted_by_user_id, submitted_at,
+    approved_by_user_id, approved_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING course_version_id, review_id, review_revision, draft_id, draft_revision, snapshot_schema_version, submitted_by_user_id, submitted_at, approved_by_user_id, approved_at
+`
+
+type CreateCourseVersionPublicationProvenanceParams struct {
+	CourseVersionID       pgtype.UUID
+	ReviewID              pgtype.UUID
+	ReviewRevision        int64
+	DraftID               pgtype.UUID
+	DraftRevision         int64
+	SnapshotSchemaVersion int32
+	SubmittedByUserID     pgtype.UUID
+	SubmittedAt           pgtype.Timestamptz
+	ApprovedByUserID      pgtype.UUID
+	ApprovedAt            pgtype.Timestamptz
+}
+
+func (q *Queries) CreateCourseVersionPublicationProvenance(ctx context.Context, arg CreateCourseVersionPublicationProvenanceParams) (CoursesCourseVersionPublicationProvenance, error) {
+	row := q.db.QueryRow(ctx, createCourseVersionPublicationProvenance,
+		arg.CourseVersionID,
+		arg.ReviewID,
+		arg.ReviewRevision,
+		arg.DraftID,
+		arg.DraftRevision,
+		arg.SnapshotSchemaVersion,
+		arg.SubmittedByUserID,
+		arg.SubmittedAt,
+		arg.ApprovedByUserID,
+		arg.ApprovedAt,
+	)
+	var i CoursesCourseVersionPublicationProvenance
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.ReviewID,
+		&i.ReviewRevision,
+		&i.DraftID,
+		&i.DraftRevision,
+		&i.SnapshotSchemaVersion,
+		&i.SubmittedByUserID,
+		&i.SubmittedAt,
+		&i.ApprovedByUserID,
+		&i.ApprovedAt,
+	)
+	return i, err
+}
+
+const createImmutableCourseVersionLesson = `-- name: CreateImmutableCourseVersionLesson :one
+INSERT INTO courses.lesson (
+    course_version_id, module_id, source_lesson_id, stable_key, title,
+    description, learning_objectives, estimated_duration_minutes, position, content
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
+`
+
+type CreateImmutableCourseVersionLessonParams struct {
+	CourseVersionID          pgtype.UUID
+	ModuleID                 pgtype.UUID
+	SourceLessonID           pgtype.UUID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []byte
+	EstimatedDurationMinutes pgtype.Int4
+	Position                 int32
+	Content                  []byte
+}
+
+func (q *Queries) CreateImmutableCourseVersionLesson(ctx context.Context, arg CreateImmutableCourseVersionLessonParams) (CoursesLesson, error) {
+	row := q.db.QueryRow(ctx, createImmutableCourseVersionLesson,
+		arg.CourseVersionID,
+		arg.ModuleID,
+		arg.SourceLessonID,
+		arg.StableKey,
+		arg.Title,
+		arg.Description,
+		arg.LearningObjectives,
+		arg.EstimatedDurationMinutes,
+		arg.Position,
+		arg.Content,
+	)
+	var i CoursesLesson
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.ModuleID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.EstimatedDurationMinutes,
+		&i.Position,
+		&i.CreatedAt,
+		&i.Content,
+		&i.SourceLessonID,
+	)
+	return i, err
+}
+
+const createImmutableCourseVersionModule = `-- name: CreateImmutableCourseVersionModule :one
+INSERT INTO courses.module (course_version_id, source_module_id, stable_key, title, description, position)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, course_version_id, stable_key, title, description, position, created_at, source_module_id
+`
+
+type CreateImmutableCourseVersionModuleParams struct {
+	CourseVersionID pgtype.UUID
+	SourceModuleID  pgtype.UUID
+	StableKey       string
+	Title           string
+	Description     string
+	Position        int32
+}
+
+func (q *Queries) CreateImmutableCourseVersionModule(ctx context.Context, arg CreateImmutableCourseVersionModuleParams) (CoursesModule, error) {
+	row := q.db.QueryRow(ctx, createImmutableCourseVersionModule,
+		arg.CourseVersionID,
+		arg.SourceModuleID,
+		arg.StableKey,
+		arg.Title,
+		arg.Description,
+		arg.Position,
+	)
+	var i CoursesModule
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.SourceModuleID,
+	)
+	return i, err
+}
+
 const createLesson = `-- name: CreateLesson :one
 INSERT INTO courses.lesson (
     course_version_id, module_id, stable_key, title, description,
     learning_objectives, estimated_duration_minutes, position, content
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 `
 
 type CreateLessonParams struct {
@@ -142,6 +285,7 @@ func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) (Cou
 		&i.Position,
 		&i.CreatedAt,
 		&i.Content,
+		&i.SourceLessonID,
 	)
 	return i, err
 }
@@ -179,7 +323,7 @@ func (q *Queries) CreateLessonPrerequisite(ctx context.Context, arg CreateLesson
 const createModule = `-- name: CreateModule :one
 INSERT INTO courses.module (course_version_id, stable_key, title, description, position)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, course_version_id, stable_key, title, description, position, created_at
+RETURNING id, course_version_id, stable_key, title, description, position, created_at, source_module_id
 `
 
 type CreateModuleParams struct {
@@ -207,6 +351,7 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Cou
 		&i.Description,
 		&i.Position,
 		&i.CreatedAt,
+		&i.SourceModuleID,
 	)
 	return i, err
 }
@@ -310,8 +455,32 @@ func (q *Queries) GetCourseVersionByCourseAndVersion(ctx context.Context, arg Ge
 	return i, err
 }
 
+const getCourseVersionPublicationProvenance = `-- name: GetCourseVersionPublicationProvenance :one
+SELECT course_version_id, review_id, review_revision, draft_id, draft_revision, snapshot_schema_version, submitted_by_user_id, submitted_at, approved_by_user_id, approved_at
+FROM courses.course_version_publication_provenance
+WHERE course_version_id = $1
+`
+
+func (q *Queries) GetCourseVersionPublicationProvenance(ctx context.Context, courseVersionID pgtype.UUID) (CoursesCourseVersionPublicationProvenance, error) {
+	row := q.db.QueryRow(ctx, getCourseVersionPublicationProvenance, courseVersionID)
+	var i CoursesCourseVersionPublicationProvenance
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.ReviewID,
+		&i.ReviewRevision,
+		&i.DraftID,
+		&i.DraftRevision,
+		&i.SnapshotSchemaVersion,
+		&i.SubmittedByUserID,
+		&i.SubmittedAt,
+		&i.ApprovedByUserID,
+		&i.ApprovedAt,
+	)
+	return i, err
+}
+
 const getLesson = `-- name: GetLesson :one
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 FROM courses.lesson
 WHERE id = $1
 `
@@ -331,12 +500,13 @@ func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (CoursesLesson,
 		&i.Position,
 		&i.CreatedAt,
 		&i.Content,
+		&i.SourceLessonID,
 	)
 	return i, err
 }
 
 const getLessonByCourseVersionAndKey = `-- name: GetLessonByCourseVersionAndKey :one
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 FROM courses.lesson
 WHERE course_version_id = $1 AND stable_key = $2
 `
@@ -361,12 +531,13 @@ func (q *Queries) GetLessonByCourseVersionAndKey(ctx context.Context, arg GetLes
 		&i.Position,
 		&i.CreatedAt,
 		&i.Content,
+		&i.SourceLessonID,
 	)
 	return i, err
 }
 
 const getModule = `-- name: GetModule :one
-SELECT id, course_version_id, stable_key, title, description, position, created_at
+SELECT id, course_version_id, stable_key, title, description, position, created_at, source_module_id
 FROM courses.module
 WHERE id = $1
 `
@@ -382,12 +553,13 @@ func (q *Queries) GetModule(ctx context.Context, id pgtype.UUID) (CoursesModule,
 		&i.Description,
 		&i.Position,
 		&i.CreatedAt,
+		&i.SourceModuleID,
 	)
 	return i, err
 }
 
 const getModuleByCourseVersionAndKey = `-- name: GetModuleByCourseVersionAndKey :one
-SELECT id, course_version_id, stable_key, title, description, position, created_at
+SELECT id, course_version_id, stable_key, title, description, position, created_at, source_module_id
 FROM courses.module
 WHERE course_version_id = $1 AND stable_key = $2
 `
@@ -408,6 +580,7 @@ func (q *Queries) GetModuleByCourseVersionAndKey(ctx context.Context, arg GetMod
 		&i.Description,
 		&i.Position,
 		&i.CreatedAt,
+		&i.SourceModuleID,
 	)
 	return i, err
 }
@@ -631,7 +804,7 @@ func (q *Queries) ListLessonSummariesForCourseVersion(ctx context.Context, cours
 }
 
 const listLessonsForModule = `-- name: ListLessonsForModule :many
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 FROM courses.lesson
 WHERE module_id = $1
 ORDER BY position ASC, id ASC
@@ -658,6 +831,7 @@ func (q *Queries) ListLessonsForModule(ctx context.Context, moduleID pgtype.UUID
 			&i.Position,
 			&i.CreatedAt,
 			&i.Content,
+			&i.SourceLessonID,
 		); err != nil {
 			return nil, err
 		}
@@ -670,7 +844,7 @@ func (q *Queries) ListLessonsForModule(ctx context.Context, moduleID pgtype.UUID
 }
 
 const listModulesForCourseVersion = `-- name: ListModulesForCourseVersion :many
-SELECT id, course_version_id, stable_key, title, description, position, created_at
+SELECT id, course_version_id, stable_key, title, description, position, created_at, source_module_id
 FROM courses.module
 WHERE course_version_id = $1
 ORDER BY position ASC, id ASC
@@ -693,6 +867,7 @@ func (q *Queries) ListModulesForCourseVersion(ctx context.Context, courseVersion
 			&i.Description,
 			&i.Position,
 			&i.CreatedAt,
+			&i.SourceModuleID,
 		); err != nil {
 			return nil, err
 		}

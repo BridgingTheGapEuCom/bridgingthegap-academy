@@ -13,12 +13,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type transactionBeginner interface {
+	Begin(context.Context) (pgx.Tx, error)
+}
+
 // Repository implements Courses-owned persistence contracts using only Courses tables.
-type Repository struct{ q *sqlc.Queries }
+type Repository struct {
+	q     *sqlc.Queries
+	begin transactionBeginner
+}
 
 var _ courses.Repository = (*Repository)(nil)
 
-func New(db sqlc.DBTX) *Repository { return &Repository{q: sqlc.New(db)} }
+func New(db sqlc.DBTX) *Repository {
+	r := &Repository{q: sqlc.New(db)}
+	if begin, ok := db.(transactionBeginner); ok {
+		r.begin = begin
+	}
+	return r
+}
 
 func uuid(value string) (pgtype.UUID, error) {
 	var id pgtype.UUID
@@ -42,6 +55,9 @@ func storageError(err error) error {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505":
+			if pgErr.ConstraintName == "course_version_unique" || pgErr.ConstraintName == "course_version_publication_review_unique" {
+				return courses.ErrCourseVersionAlreadyExists
+			}
 			return courses.ErrConflict
 		case "23503":
 			return courses.ErrNotFound

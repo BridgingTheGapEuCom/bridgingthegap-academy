@@ -14,6 +14,15 @@ Lesson objectives are ordered JSONB metadata. Estimated duration is optional, ex
 
 Each Lesson also owns one presentation-independent JSONB content document: `{ "schemaVersion": 1, "blocks": [] }`. Array order is canonical for both Continuous and Focus rendering; each block has an immutable lesson-local stable key. The built-in semantic block types are `TEXT`, `HEADING`, `IMAGE`, `VIDEO`, `AUDIO`, `CODE`, `QUOTE`, `CALLOUT`, `TABLE`, `DOWNLOAD`, `KNOWLEDGE_CHECK`, and `DIVIDER`. The document uses a constrained rich-text model rather than HTML or editor state. Image alt/decorative rules, transcript/caption media metadata, table headers, heading levels, safe links, and bounded sizes are validated before persistence. Empty documents are retained only as a migration-compatible structural state for M2.2 rows and render as an explicit empty state without Focus controls; new publication should provide blocks.
 
+Publishing persistence accepts one already-built `ImmutableCourseVersion` and
+stores its version, Review/Draft provenance, source identifiers, ordered
+structure, prerequisites, and canonical content in one Courses-owned database
+transaction. Course identity plus SemVer is unique, and Review ID is separately
+unique to prevent replay under another version. Any parent, child, provenance,
+or prerequisite failure rolls the transaction back. Once stored, the immutable
+aggregate can be reconstructed entirely from Courses without consulting
+Authoring. Publication orchestration and Review mutation remain separate work.
+
 The content schema version is technical storage format versioning, separate from CourseVersion SemVer. Unknown versions and block types fail closed. External widgets, asset storage, Tiptap, rendering, and assessment resolution remain post-v1 or later milestones.
 
 The public learner read API is read-only. Discovery and `/api/courses/{slug}` select the highest numeric SemVer version whose status is `PUBLISHED`; `DEPRECATED` and `ARCHIVED` versions never become preferred or appear in ordinary discovery. Explicit version routes may serve `PUBLISHED`, `DEPRECATED`, and `ARCHIVED` artifacts for historical learning/provenance. `WITHDRAWN` artifacts deliberately return the same public not-found response as unavailable content and never serve course or lesson data. Course outlines query lesson metadata only; the exact lesson endpoint loads its block document. All course responses use `Cache-Control: no-store`: artifact content is immutable, but its serving eligibility can change immediately on withdrawal. Deployments that previously cached public course responses must purge those caches when withdrawing a version; response headers cannot revoke copies already stored.

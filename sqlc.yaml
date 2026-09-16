@@ -33,6 +33,7 @@ sql:
       - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
       - internal/modules/infrastructure/postgres/db/migrations/00007_course_structure.sql
       - internal/modules/infrastructure/postgres/db/migrations/00008_lesson_content.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00012_course_version_publication.sql
     queries: internal/modules/courses/db/query
     gen:
       go:

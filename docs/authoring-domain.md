@@ -262,3 +262,45 @@ APPROVED Review remains only an approved frozen Draft snapshot, not a published
 Course. The policy does not inspect roles, query Identity, or infer broader
 contributor independence. Reviewer assignment and broader contributor-
 independence rules are not implemented.
+
+## Publication validation
+
+M4.5a adds a side-effect-free Authoring publication validator. Its only input is
+one exact Review cycle and that cycle's immutable snapshot; it never reads the
+current mutable Draft and does not write Review, Draft, Courses, Identity, or
+Audit data. Only an `APPROVED` Review can be publishable. A missing snapshot,
+unsupported snapshot schema, or mismatch between the Review's frozen Draft
+provenance and snapshot produces a structured blocking issue.
+
+`PublicationValidationResult` contains a boolean `Publishable` and a
+deterministically ordered list of blocking issues. Each issue has a stable code,
+canonical snapshot path, and safe message. The current checks cover CourseVersion
+metadata and SemVer, content licensing, snapshot Module/Lesson identity and
+zero-based ordering, advisory prerequisite references, canonical LessonContent,
+and canonical accessibility metadata. General prerequisite cycles remain
+advisory and are not rejected.
+
+The validator reuses Courses value-object validation for CourseVersion metadata,
+Modules, Lessons, and canonical blocks. It does not add a new aggregate rule
+requiring Modules or Lessons because the existing Courses model permits empty
+structure. It does block empty LessonContent for new publication: empty documents
+remain only a legacy migration-compatible state. Asset-backed Image, Video,
+Audio, and Download blocks produce `unresolved_asset_reference`, and
+`KNOWLEDGE_CHECK` blocks produce `unresolved_assessment_reference`, because
+asset delivery and Assessments do not yet provide a safe publication target.
+
+Validation success only means that the frozen snapshot is ready for the next
+conversion boundary. It does not create a CourseVersion, change a preferred
+version, expose learner content, or publish anything.
+
+The M4.5b conversion boundary takes that exact Review cycle and frozen snapshot,
+requires a successful publication-validation result, and constructs a complete
+Courses-domain `ImmutableCourseVersion`. The value preserves Review and Draft
+revision provenance, canonical metadata, ordered Modules and Lessons, advisory
+prerequisites, and canonical LessonContent without reading the mutable Draft.
+Publication time and contributor attribution are explicit conversion inputs
+because the Review snapshot does not contain them; the converter never generates
+timestamps, identifiers, or attribution. The resulting value is isolated from
+later mutations of its inputs. Courses can now persist this value atomically and
+assign database row identifiers, while Authoring-to-Courses orchestration,
+Review mutation, and the publication API remain later work.

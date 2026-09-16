@@ -37,6 +37,19 @@ type CoursesCourseVersion struct {
 	PublishedAt        pgtype.Timestamptz
 }
 
+type CoursesCourseVersionPublicationProvenance struct {
+	CourseVersionID       pgtype.UUID
+	ReviewID              pgtype.UUID
+	ReviewRevision        int64
+	DraftID               pgtype.UUID
+	DraftRevision         int64
+	SnapshotSchemaVersion int32
+	SubmittedByUserID     pgtype.UUID
+	SubmittedAt           pgtype.Timestamptz
+	ApprovedByUserID      pgtype.UUID
+	ApprovedAt            pgtype.Timestamptz
+}
+
 type CoursesLesson struct {
 	ID                       pgtype.UUID
 	CourseVersionID          pgtype.UUID
@@ -49,6 +62,7 @@ type CoursesLesson struct {
 	Position                 int32
 	CreatedAt                pgtype.Timestamptz
 	Content                  []byte
+	SourceLessonID           pgtype.UUID
 }
 
 type CoursesLessonPrerequisite struct {
@@ -66,4 +80,5 @@ type CoursesModule struct {
 	Description     string
 	Position        int32
 	CreatedAt       pgtype.Timestamptz
+	SourceModuleID  pgtype.UUID
 }

@@ -10,6 +10,7 @@
   "authoring.review_event": "authoring",
   "courses.course": "courses",
   "courses.course_version": "courses",
+  "courses.course_version_publication_provenance": "courses",
   "courses.module": "courses",
   "courses.lesson": "courses",
   "courses.lesson_prerequisite": "courses",

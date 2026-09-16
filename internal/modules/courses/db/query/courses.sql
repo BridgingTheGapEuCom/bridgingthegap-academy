@@ -27,6 +27,20 @@ INSERT INTO courses.course_version (
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING *;
 
+-- name: CreateCourseVersionPublicationProvenance :one
+INSERT INTO courses.course_version_publication_provenance (
+    course_version_id, review_id, review_revision, draft_id, draft_revision,
+    snapshot_schema_version, submitted_by_user_id, submitted_at,
+    approved_by_user_id, approved_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING *;
+
+-- name: GetCourseVersionPublicationProvenance :one
+SELECT *
+FROM courses.course_version_publication_provenance
+WHERE course_version_id = $1;
+
 -- name: GetCourseVersion :one
 SELECT *
 FROM courses.course_version
@@ -60,6 +74,11 @@ INSERT INTO courses.module (course_version_id, stable_key, title, description, p
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
+-- name: CreateImmutableCourseVersionModule :one
+INSERT INTO courses.module (course_version_id, source_module_id, stable_key, title, description, position)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
 -- name: GetModule :one
 SELECT *
 FROM courses.module
@@ -82,6 +101,14 @@ INSERT INTO courses.lesson (
     learning_objectives, estimated_duration_minutes, position, content
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING *;
+
+-- name: CreateImmutableCourseVersionLesson :one
+INSERT INTO courses.lesson (
+    course_version_id, module_id, source_lesson_id, stable_key, title,
+    description, learning_objectives, estimated_duration_minutes, position, content
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: GetLesson :one
