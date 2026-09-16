@@ -25,6 +25,19 @@
         <AuthoringReviewMetadata :review="state.detail.review" />
       </header>
 
+      <AuthoringReviewDecisionActions
+        v-if="state.detail.review.status === 'IN_REVIEW'"
+        :busy="pendingDecision !== undefined"
+        :pending-label="pendingDecision === 'request-changes' ? 'Requesting changes' : 'Approving'"
+        :reloading="reloading"
+        :policy-conflict="policyConflict"
+        :conflict="decisionConflict"
+        :error="decisionError"
+        @approve="decide('approve')"
+        @request-changes="decide('request-changes')"
+        @reload="reloadReview"
+      />
+
       <section class="authoring-review-snapshot__draft" aria-labelledby="review-snapshot-draft-title">
         <h3 id="review-snapshot-draft-title">Draft metadata</h3>
         <h4>{{ state.detail.snapshot.draft.title }}</h4>
@@ -65,8 +78,15 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
-import { authoringDraftPath, getAuthoringDraftReview, type AuthoringReviewDetail } from '../authoring/authoring'
+import {
+  approveAuthoringReview,
+  authoringDraftPath,
+  getAuthoringDraftReview,
+  requestAuthoringReviewChanges,
+  type AuthoringReviewDetail,
+} from '../authoring/authoring'
 import { useAuthoringDraftContext } from '../authoring/draftContext'
+import AuthoringReviewDecisionActions from '../components/AuthoringReviewDecisionActions.vue'
 import AuthoringReviewMetadata from '../components/AuthoringReviewMetadata.vue'
 import AuthoringReviewSnapshotModule from '../components/AuthoringReviewSnapshotModule.vue'
 import BtgButton from '../components/BtgButton.vue'
@@ -88,11 +108,21 @@ const lessonTitles = computed<Readonly<Record<string, string>>>(() => {
 })
 let active = true
 let requestVersion = 0
+const pendingDecision = ref<'approve' | 'request-changes'>()
+const reloading = ref(false)
+const policyConflict = ref(false)
+const decisionConflict = ref(false)
+const decisionError = ref<string>()
 
-watch(() => [draft.value.id, reviewID()], () => { void load() }, { immediate: true })
+watch(() => [draft.value.id, reviewID()], () => {
+  pendingDecision.value = undefined
+  reloading.value = false
+  clearDecisionFeedback()
+  void load()
+}, { immediate: true })
 onBeforeUnmount(() => { active = false })
 
-async function load() {
+async function load(): Promise<boolean> {
   const isCurrent = captureScope()
   const generation = ++requestVersion
   const draftID = draft.value.id
@@ -100,14 +130,64 @@ async function load() {
   state.value = { kind: 'loading' }
   try {
     const detail = await getAuthoringDraftReview(draftID, exactReviewID)
-    if (!isCurrent() || !active || generation !== requestVersion) return
+    if (!isCurrent() || !active || generation !== requestVersion) return false
     // The client supports the same snapshot version persisted by Authoring;
     // never reinterpret an unknown historical format as the current Draft.
     state.value = detail.snapshot.schemaVersion === 1 ? { kind: 'ready', detail } : { kind: 'unsupported' }
+    return state.value.kind === 'ready'
   } catch (error) {
-    if (!isCurrent() || !active || generation !== requestVersion) return
-    if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
+    if (!isCurrent() || !active || generation !== requestVersion) return false
+    if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return false }
     state.value = { kind: 'unavailable' }
+    return false
+  }
+}
+
+function clearDecisionFeedback() {
+  policyConflict.value = false
+  decisionConflict.value = false
+  decisionError.value = undefined
+}
+
+async function decide(decision: 'approve' | 'request-changes') {
+  if (pendingDecision.value || reloading.value || policyConflict.value || decisionConflict.value || state.value.kind !== 'ready' || state.value.detail.review.status !== 'IN_REVIEW') return
+  const isCurrent = captureScope()
+  const detail = state.value.detail
+  pendingDecision.value = decision
+  clearDecisionFeedback()
+  try {
+    const input = { expectedReviewRevision: detail.review.reviewRevision }
+    if (decision === 'approve') await approveAuthoringReview(draft.value.id, detail.review.id, input)
+    else await requestAuthoringReviewChanges(draft.value.id, detail.review.id, input)
+    if (!isCurrent() || !active) return
+    // Re-read only this immutable Review resource. This keeps the historical
+    // snapshot separate from current Draft state and uses server status/revision.
+    await load()
+  } catch (error) {
+    if (!isCurrent() || !active) return
+    if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
+    if (error instanceof APIProblemError && error.status === 409) {
+      if (error.problem?.code === 'independent_reviewer_required') policyConflict.value = true
+      else decisionConflict.value = true
+      return
+    }
+    decisionError.value = error instanceof APIProblemError && error.status === 400
+      ? 'We couldn’t save this Review decision. Please check the Review state and try again.'
+      : 'We couldn’t save this Review decision right now. Please try again.'
+  } finally {
+    if (isCurrent()) pendingDecision.value = undefined
+  }
+}
+
+async function reloadReview() {
+  if (pendingDecision.value || reloading.value) return
+  const isCurrent = captureScope()
+  reloading.value = true
+  clearDecisionFeedback()
+  try {
+    await load()
+  } finally {
+    if (isCurrent()) reloading.value = false
   }
 }
 

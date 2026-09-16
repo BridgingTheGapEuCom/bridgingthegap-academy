@@ -20,6 +20,7 @@ export type AuthoringReview = components['schemas']['AuthoringReview']
 export type AuthoringReviewList = components['schemas']['AuthoringReviewList']
 export type AuthoringReviewDetail = components['schemas']['AuthoringReviewDetail']
 export type AuthoringReviewSubmit = components['schemas']['AuthoringReviewSubmitRequest']
+export type AuthoringReviewDecision = components['schemas']['AuthoringReviewDecisionRequest']
 export type AuthoringReviewSnapshot = components['schemas']['AuthoringReviewSnapshot']
 export type AuthoringReviewSnapshotModule = components['schemas']['AuthoringReviewSnapshotModule']
 export type AuthoringReviewSnapshotLesson = components['schemas']['AuthoringReviewSnapshotLesson']
@@ -134,6 +135,20 @@ export async function getAuthoringDraftReview(draftID: string, reviewID: string,
 export async function submitAuthoringDraftReview(draftID: string, input: AuthoringReviewSubmit, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReviewDetail> {
   assertAuthoringID(draftID)
   return client.request<AuthoringReviewDetail>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews`, jsonRequest('POST', input))
+}
+
+// Decisions are scoped by both the Draft and the immutable Review cycle. The
+// only browser-supplied concurrency value is the authoritative Review revision.
+export async function approveAuthoringReview(draftID: string, reviewID: string, input: AuthoringReviewDecision, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReview> {
+  assertAuthoringID(draftID)
+  assertAuthoringID(reviewID)
+  return client.request<AuthoringReview>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}/approve`, jsonRequest('POST', input))
+}
+
+export async function requestAuthoringReviewChanges(draftID: string, reviewID: string, input: AuthoringReviewDecision, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReview> {
+  assertAuthoringID(draftID)
+  assertAuthoringID(reviewID)
+  return client.request<AuthoringReview>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}/request-changes`, jsonRequest('POST', input))
 }
 
 export async function addAuthoringMember(draftID: string, input: AuthoringMemberAdd, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringMemberMutation> {

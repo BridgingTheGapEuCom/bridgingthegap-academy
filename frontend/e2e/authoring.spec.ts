@@ -202,7 +202,7 @@ test('Authoring Review overview is read-only, keyboard reachable, and responsive
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
-test('Authoring Review history opens an exact read-only frozen snapshot', async ({ page }) => {
+test('Authoring Review history opens an exact frozen snapshot with read-only content', async ({ page }) => {
   let snapshotRequests = 0
   let structureRequests = 0
   await serveDraft(page)
@@ -224,13 +224,49 @@ test('Authoring Review history opens an exact read-only frozen snapshot', async 
   await expect(page.getByRole('heading', { level: 2, name: 'Reviewing Draft revision 3' })).toBeVisible()
   await expect(page.getByText('Frozen integration foundations')).toBeVisible()
   await expect(page.getByText('Frozen semantic content.')).toBeVisible()
-  await expect(page.getByRole('button', { name: /save|submit|approve|request changes/i })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Request changes' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /save|submit/i })).toHaveCount(0)
   expect(snapshotRequests).toBe(1)
   expect(structureRequests).toBe(0)
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   }
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring decides an in-review snapshot with the authoritative Review revision', async ({ page }) => {
+  let review = { ...reviewCycle }
+  let decisionBody: unknown
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}/approve`, (route) => {
+    decisionBody = route.request().postDataJSON()
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
+    review = {
+      ...review,
+      status: 'APPROVED',
+      reviewRevision: 2,
+      decidedBy: session.user_id,
+      decidedAt: '2026-09-15T13:00:00Z',
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(review) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => {
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review, snapshot: reviewSnapshot }) })
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`)
+  const approve = page.getByRole('button', { name: 'Approve' })
+  await approve.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Approved Review is not a published Course.')).toBeVisible()
+  expect(decisionBody).toEqual({ expectedReviewRevision: 1 })
+  await expect(page.getByText('Frozen semantic content.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Request changes' })).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 

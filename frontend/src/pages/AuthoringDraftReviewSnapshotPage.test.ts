@@ -15,10 +15,14 @@ type AuthenticationState =
 
 const authMock = vi.hoisted(() => ({ state: { value: { status: 'authenticated' } as AuthenticationState } }))
 const getAuthoringDraftReviewMock = vi.hoisted(() => vi.fn())
+const approveAuthoringReviewMock = vi.hoisted(() => vi.fn())
+const requestAuthoringReviewChangesMock = vi.hoisted(() => vi.fn())
 vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
 vi.mock('../authoring/authoring', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../authoring/authoring')>()),
   getAuthoringDraftReview: getAuthoringDraftReviewMock,
+  approveAuthoringReview: approveAuthoringReviewMock,
+  requestAuthoringReviewChanges: requestAuthoringReviewChangesMock,
 }))
 
 const draftID = '11111111-1111-4111-8111-111111111111'
@@ -32,9 +36,19 @@ const currentDraft = {
   revision: 9, created_at: '2026-09-15T10:00:00Z', updated_at: '2026-09-15T11:00:00Z',
 }
 
-function detail(id = firstReviewID, title = 'Frozen integration foundations'): AuthoringReviewDetail {
+function detail(
+  id = firstReviewID,
+  title = 'Frozen integration foundations',
+  status: 'IN_REVIEW' | 'APPROVED' | 'CHANGES_REQUESTED' = 'APPROVED',
+  reviewRevision = 2,
+): AuthoringReviewDetail {
   return {
-    review: { id, draftId: draftID, draftRevision: 4, snapshotSchemaVersion: 1, status: 'APPROVED', reviewRevision: 2, submittedBy: actor, submittedAt: '2026-09-15T12:00:00Z', decidedBy: actor, decidedAt: '2026-09-15T13:00:00Z' },
+    review: {
+      id, draftId: draftID, draftRevision: 4, snapshotSchemaVersion: 1, status, reviewRevision,
+      submittedBy: actor, submittedAt: '2026-09-15T12:00:00Z',
+      decidedBy: status === 'IN_REVIEW' ? null : actor,
+      decidedAt: status === 'IN_REVIEW' ? null : '2026-09-15T13:00:00Z',
+    },
     snapshot: {
       schemaVersion: 1,
       draft: { id: draftID, revision: 4, courseId: '55555555-5555-4555-8555-555555555555', intendedVersion: '1.0.0', sourceLanguage: 'en', title, description: 'Historical description', objectives: ['Understand snapshots'], changelog: 'Frozen before Review.', license: { Kind: 'STANDARD', Identifier: 'CC-BY-4.0', DisplayName: 'Creative Commons Attribution 4.0', URL: '', CustomText: '' } },
@@ -72,6 +86,8 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
   beforeEach(() => {
     authMock.state = shallowRef<AuthenticationState>({ status: 'authenticated', userId: actor, expiresAt: '2026-09-15T16:00:00Z' })
     getAuthoringDraftReviewMock.mockReset().mockResolvedValue(detail())
+    approveAuthoringReviewMock.mockReset()
+    requestAuthoringReviewChangesMock.mockReset()
   })
   afterEach(cleanup)
 
@@ -83,6 +99,8 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(screen.queryByText('Current mutable Draft')).toBeNull()
     expect(screen.getByText('Approved Review is not a published Course.')).toBeTruthy()
     expect(screen.queryByText('Published')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull()
     expect(screen.getAllByText(actor).length).toBeGreaterThan(0)
     expect(screen.getByText('Creative Commons Attribution 4.0')).toBeTruthy()
     const modules = screen.getAllByRole('heading', { level: 3 })
@@ -132,5 +150,124 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     await renderPage()
     expect(await screen.findByRole('heading', { level: 2, name: 'Review snapshot format unavailable' })).toBeTruthy()
     expect(screen.queryByText('Current mutable Draft')).toBeNull()
+  })
+
+  it('offers both terminal decisions only for an in-review cycle', async () => {
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5))
+    await renderPage()
+    expect(await screen.findByRole('button', { name: 'Approve' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Request changes' })).toBeTruthy()
+
+    cleanup()
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'CHANGES_REQUESTED', 6))
+    await renderPage()
+    expect(await screen.findByText('Changes requested')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull()
+  })
+
+  it('approves using the exact authoritative Review revision then reloads the frozen Review', async () => {
+    const inReview = detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5)
+    const approved = detail(firstReviewID, 'Frozen integration foundations', 'APPROVED', 6)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(inReview).mockResolvedValueOnce(approved)
+    approveAuthoringReviewMock.mockResolvedValueOnce(approved.review)
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Approve' })).click()
+    expect(approveAuthoringReviewMock).toHaveBeenCalledWith(draftID, firstReviewID, { expectedReviewRevision: 5 })
+    expect(await screen.findByText('Approved Review is not a published Course.')).toBeTruthy()
+    expect(screen.getByText('Frozen integration foundations')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull()
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('requests changes using the exact authoritative Review revision and preserves the snapshot', async () => {
+    const inReview = detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5)
+    const requested = detail(firstReviewID, 'Frozen integration foundations', 'CHANGES_REQUESTED', 6)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(inReview).mockResolvedValueOnce(requested)
+    requestAuthoringReviewChangesMock.mockResolvedValueOnce(requested.review)
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Request changes' })).click()
+    expect(requestAuthoringReviewChangesMock).toHaveBeenCalledWith(draftID, firstReviewID, { expectedReviewRevision: 5 })
+    expect(await screen.findByText('Changes requested')).toBeTruthy()
+    expect(screen.getByText('Frozen integration foundations')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+  })
+
+  it('guards competing local decisions while one request is pending', async () => {
+    const inReview = detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(inReview).mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'APPROVED', 6))
+    let resolveApprove: (value: unknown) => void = () => undefined
+    approveAuthoringReviewMock.mockImplementationOnce(() => new Promise((resolve) => { resolveApprove = resolve }))
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Approve' })).click()
+    await screen.getByRole('button', { name: 'Request changes' }).click()
+    expect(screen.getByText('Approving this Review…')).toBeTruthy()
+    expect(approveAuthoringReviewMock).toHaveBeenCalledTimes(1)
+    expect(requestAuthoringReviewChangesMock).not.toHaveBeenCalled()
+    resolveApprove(detail().review)
+    expect(await screen.findByText('Approved Review is not a published Course.')).toBeTruthy()
+  })
+
+  it('maps the structured independent-review policy conflict without frontend identity inference', async () => {
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5))
+    approveAuthoringReviewMock.mockRejectedValueOnce(new APIProblemError(409, {
+      type: 'https://academy.example/problems/independent-reviewer-required', title: 'Independent reviewer required', status: 409,
+      instance: '/api/authoring/drafts/example/reviews/example/approve', request_id: 'request-id', code: 'independent_reviewer_required',
+    }, undefined))
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Approve' })).click()
+    expect(await screen.findByText('This Review must be decided by someone other than the person who submitted it.')).toBeTruthy()
+    expect(screen.queryByText(/changed before your decision/)).toBeNull()
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps generic Review conflicts distinct and reloads only the exact Review on demand', async () => {
+    const inReview = detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5)
+    const approved = detail(firstReviewID, 'Frozen integration foundations', 'APPROVED', 6)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(inReview).mockResolvedValueOnce(approved)
+    approveAuthoringReviewMock.mockRejectedValueOnce(new APIProblemError(409, undefined, undefined))
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Approve' })).click()
+    expect(await screen.findByText('This Review changed before your decision was saved. Reload the latest Review state.')).toBeTruthy()
+    expect(screen.queryByText(/someone other than the person/)).toBeNull()
+    await screen.getByRole('button', { name: 'Reload review' }).click()
+    expect(await screen.findByText('Approved Review is not a published Course.')).toBeTruthy()
+    expect(approveAuthoringReviewMock).toHaveBeenCalledTimes(1)
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves the in-review snapshot after an operational decision failure', async () => {
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5))
+    requestAuthoringReviewChangesMock.mockRejectedValueOnce(new APIProblemError(500, undefined, undefined))
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Request changes' })).click()
+    expect(await screen.findByText('We couldn’t save this Review decision right now. Please try again.')).toBeTruthy()
+    expect(screen.getByText('Frozen integration foundations')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Request changes' })).toBeTruthy()
+  })
+
+  it('keeps a hidden decision denial opaque', async () => {
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5))
+    approveAuthoringReviewMock.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))
+    const page = await renderPage()
+    await (await screen.findByRole('button', { name: 'Approve' })).click()
+    await waitFor(() => expect(page.markDraftUnavailable).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not let a late decision response affect a newly selected Review route', async () => {
+    const first = detail(firstReviewID, 'First frozen snapshot', 'IN_REVIEW', 5)
+    const second = detail(secondReviewID, 'Second frozen snapshot', 'IN_REVIEW', 7)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    let resolveApprove: (value: unknown) => void = () => undefined
+    approveAuthoringReviewMock.mockImplementationOnce(() => new Promise((resolve) => { resolveApprove = resolve }))
+    const { router } = await renderPage()
+    await (await screen.findByRole('button', { name: 'Approve' })).click()
+    await router.push(`/authoring/drafts/${draftID}/reviews/${secondReviewID}`)
+    expect(await screen.findByText('Second frozen snapshot')).toBeTruthy()
+    resolveApprove(detail(firstReviewID, 'First frozen snapshot', 'APPROVED', 6).review)
+    await waitFor(() => expect(screen.queryByText('First frozen snapshot')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy()
   })
 })

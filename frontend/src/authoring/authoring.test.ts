@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -92,6 +92,18 @@ describe('Authoring API service', () => {
     expect(request).toHaveBeenCalledWith(`/api/authoring/drafts/${draftID}/reviews/${reviewID}`)
     expect(authoringDraftReviewPath(draftID, reviewID)).toBe(`/authoring/drafts/${draftID}/reviews/${reviewID}`)
     await expect(getAuthoringDraftReview(draftID, 'not-a-review', { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
+  })
+
+  it('sends only the authoritative Review revision through exact scoped decision endpoints', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const reviewID = '22222222-2222-4222-8222-222222222222'
+    const input = { expectedReviewRevision: 6 }
+    await approveAuthoringReview(draftID, reviewID, input, { request })
+    await requestAuthoringReviewChanges(draftID, reviewID, input, { request })
+    expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/reviews/${reviewID}/approve`, expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }))
+    expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/reviews/${reviewID}/request-changes`, expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }))
+    await expect(approveAuthoringReview(draftID, 'not-a-review', input, { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
   })
 
   it('keeps Lesson reads and metadata patches scoped to both bounded IDs', async () => {
