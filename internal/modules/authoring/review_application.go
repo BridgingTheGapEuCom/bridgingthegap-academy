@@ -11,12 +11,20 @@ import (
 // transports. Reviewer-independence policy can be inserted here before a
 // decision without changing persistence or trusting transport claims.
 type ReviewApplicationService struct {
-	repository ReviewRepository
-	authorizer Authorizer
+	repository     ReviewRepository
+	authorizer     Authorizer
+	decisionPolicy ReviewDecisionPolicy
 }
 
 func NewReviewApplicationService(repository ReviewRepository, authorizer Authorizer) *ReviewApplicationService {
-	return &ReviewApplicationService{repository: repository, authorizer: authorizer}
+	return NewReviewApplicationServiceWithDecisionPolicy(repository, authorizer, nil)
+}
+
+// NewReviewApplicationServiceWithDecisionPolicy accepts deployment policy at
+// the composition boundary. M4.3a intentionally does not invoke it during
+// decisions; M4.3b will apply it after authorization and before persistence.
+func NewReviewApplicationServiceWithDecisionPolicy(repository ReviewRepository, authorizer Authorizer, decisionPolicy ReviewDecisionPolicy) *ReviewApplicationService {
+	return &ReviewApplicationService{repository: repository, authorizer: authorizer, decisionPolicy: decisionPolicy}
 }
 
 func (s *ReviewApplicationService) Submit(ctx context.Context, actor identity.AuthenticatedActor, draft DraftID, expected int64) (ReviewCycle, ReviewSnapshot, error) {

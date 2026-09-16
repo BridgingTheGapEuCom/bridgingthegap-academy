@@ -99,3 +99,14 @@ func TestReviewApplicationAuthorizationFailureIsUnavailable(t *testing.T) {
 		t.Fatalf("infrastructure failure became denial: %v", err)
 	}
 }
+
+func TestReviewApplicationAcceptsPolicyWithoutEnforcingItBeforeM43b(t *testing.T) {
+	actor := resolvedActor(t)
+	repository := &reviewRepositoryFake{cycle: ReviewCycle{ID: ReviewID("44444444-4444-4444-8444-444444444444"), DraftID: testDraftA, Status: ReviewInReview, Revision: 1}}
+	memberships := &membershipReaderFake{roles: map[DraftID]MemberRole{testDraftA: MemberMaintainer}}
+	service := NewReviewApplicationServiceWithDecisionPolicy(repository, NewAuthorizationService(memberships), NewReviewDecisionPolicy(true))
+
+	if _, err := service.Approve(context.Background(), actor, testDraftA, repository.cycle.ID, 1, ""); err != nil {
+		t.Fatalf("M4.3a policy changed M4.2 decision behavior: %v", err)
+	}
+}

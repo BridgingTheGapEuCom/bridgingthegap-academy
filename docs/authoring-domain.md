@@ -237,3 +237,16 @@ resubmission uses `POST /reviews` to create a new cycle for a later Draft
 revision. Independent-reviewer and contributor-separation policy is explicitly
 not enforced in M4.2; the application decision boundary retains the submitted
 and deciding actor identities so that policy can be added before persistence.
+
+## Independent-review policy configuration
+
+`BTG_LMS_REQUIRE_INDEPENDENT_REVIEW` defaults to `true`. It configures the
+Authoring `ReviewDecisionPolicy`, which compares only the trusted authenticated
+decision actor ID with the immutable submitter ID recorded on that individual
+Review cycle. When enabled, a submitter cannot decide their own cycle and the
+policy returns `ErrIndependentReviewerRequired`; when explicitly set to
+`false`, the policy permits that relationship. This policy is separate from
+the resource-scoped `authoring.review.decide` authorization capability and is
+not yet enforced by the Review HTTP endpoints; M4.3b will place it after
+authorization and before decision persistence. It does not inspect roles,
+query Identity, or infer broader contributor independence.

@@ -8,19 +8,25 @@ import (
 )
 
 type Config struct {
-	DatabaseURL     string
-	HTTPAddr        string
-	MetricsAddr     string
-	DevelopmentHTTP bool
-	PublicOrigin    string
+	DatabaseURL              string
+	HTTPAddr                 string
+	MetricsAddr              string
+	DevelopmentHTTP          bool
+	PublicOrigin             string
+	RequireIndependentReview bool
 }
 
 func LoadConfig() (Config, error) {
+	requireIndependentReview, err := envBool("BTG_LMS_REQUIRE_INDEPENDENT_REVIEW", true)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
-		DatabaseURL:  os.Getenv("BTG_LMS_DATABASE_URL"),
-		HTTPAddr:     envOr("BTG_LMS_HTTP_ADDR", ":8080"),
-		MetricsAddr:  envOr("BTG_LMS_METRICS_ADDR", "127.0.0.1:9090"),
-		PublicOrigin: os.Getenv("BTG_LMS_PUBLIC_ORIGIN"),
+		DatabaseURL:              os.Getenv("BTG_LMS_DATABASE_URL"),
+		HTTPAddr:                 envOr("BTG_LMS_HTTP_ADDR", ":8080"),
+		MetricsAddr:              envOr("BTG_LMS_METRICS_ADDR", "127.0.0.1:9090"),
+		PublicOrigin:             os.Getenv("BTG_LMS_PUBLIC_ORIGIN"),
+		RequireIndependentReview: requireIndependentReview,
 	}
 	switch envOr("BTG_LMS_MODE", "production") {
 	case "production":
@@ -49,4 +55,19 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envBool(key string, fallback bool) (bool, error) {
+	value, set := os.LookupEnv(key)
+	if !set || value == "" {
+		return fallback, nil
+	}
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s must be true or false", key)
+	}
 }
