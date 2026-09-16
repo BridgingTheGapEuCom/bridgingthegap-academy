@@ -13,8 +13,6 @@ type AuthenticationState =
 
 const authMock = vi.hoisted(() => ({ state: { value: { status: 'authenticated' } as AuthenticationState } }))
 const getAuthoringDraftReviewHistoryMock = vi.hoisted(() => vi.fn())
-const getAuthoringActiveDraftReviewMock = vi.hoisted(() => vi.fn())
-const getAuthoringLatestDraftReviewMock = vi.hoisted(() => vi.fn())
 const getAuthoringDraftMock = vi.hoisted(() => vi.fn())
 const submitAuthoringDraftReviewMock = vi.hoisted(() => vi.fn())
 
@@ -22,8 +20,6 @@ vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
 vi.mock('../authoring/authoring', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../authoring/authoring')>()),
   getAuthoringDraftReviewHistory: getAuthoringDraftReviewHistoryMock,
-  getAuthoringActiveDraftReview: getAuthoringActiveDraftReviewMock,
-  getAuthoringLatestDraftReview: getAuthoringLatestDraftReviewMock,
   getAuthoringDraft: getAuthoringDraftMock,
   submitAuthoringDraftReview: submitAuthoringDraftReviewMock,
 }))
@@ -61,15 +57,13 @@ async function renderPage(initialDraft = draft()) {
   const result = render(AuthoringDraftReviewPage, {
     global: { provide: { [authoringDraftContextKey as symbol]: { draft: currentDraft, markDraftUnavailable, replaceDraft } } },
   })
-  return { ...result, currentDraft, markDraftUnavailable }
+  return { ...result, currentDraft, markDraftUnavailable, replaceDraft }
 }
 
 describe('AuthoringDraftReviewPage', () => {
   beforeEach(() => {
     authMock.state = shallowRef<AuthenticationState>({ status: 'authenticated', userId: actorA, expiresAt: '2026-09-15T16:00:00Z' })
     getAuthoringDraftReviewHistoryMock.mockReset().mockResolvedValue({ reviews: [] })
-    getAuthoringActiveDraftReviewMock.mockReset().mockRejectedValue(new APIProblemError(404, undefined, undefined))
-    getAuthoringLatestDraftReviewMock.mockReset().mockRejectedValue(new APIProblemError(404, undefined, undefined))
     getAuthoringDraftMock.mockReset().mockResolvedValue(draft())
     submitAuthoringDraftReviewMock.mockReset()
   })
@@ -83,15 +77,11 @@ describe('AuthoringDraftReviewPage', () => {
     expect(screen.getByText('No Review cycles yet.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Submit for review' })).toBeTruthy()
     expect(getAuthoringDraftReviewHistoryMock).toHaveBeenCalledWith(firstID)
-    expect(getAuthoringActiveDraftReviewMock).toHaveBeenCalledWith(firstID)
-    expect(getAuthoringLatestDraftReviewMock).toHaveBeenCalledWith(firstID)
   })
 
   it('renders active Review metadata without fetching a snapshot', async () => {
     const active = review('66666666-6666-4666-8666-666666666666', 'IN_REVIEW', 4)
     getAuthoringDraftReviewHistoryMock.mockResolvedValue({ reviews: [active] })
-    getAuthoringActiveDraftReviewMock.mockResolvedValue(active)
-    getAuthoringLatestDraftReviewMock.mockResolvedValue(active)
     await renderPage()
     expect((await screen.findAllByText('In review')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('Draft revision under review')[0]?.nextElementSibling?.textContent).toBe('4')
@@ -106,7 +96,6 @@ describe('AuthoringDraftReviewPage', () => {
   ] as const)('renders latest terminal %s state accurately', async (status, label) => {
     const latest = review('66666666-6666-4666-8666-666666666666', status, 3)
     getAuthoringDraftReviewHistoryMock.mockResolvedValue({ reviews: [latest] })
-    getAuthoringLatestDraftReviewMock.mockResolvedValue(latest)
     await renderPage()
     expect((await screen.findAllByText(label)).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Submit for review' })).toBeTruthy()
@@ -120,26 +109,33 @@ describe('AuthoringDraftReviewPage', () => {
     const latest = review('66666666-6666-4666-8666-666666666666', 'CHANGES_REQUESTED', 5, actorB)
     const earlier = review('77777777-7777-4777-8777-777777777777', 'APPROVED', 3)
     getAuthoringDraftReviewHistoryMock.mockResolvedValue({ reviews: [latest, earlier] })
-    getAuthoringLatestDraftReviewMock.mockResolvedValue(latest)
     await renderPage()
     const history = await screen.findByRole('list', { name: 'Review history' })
     expect(history.textContent).toContain('Changes requested')
     expect(history.textContent).toContain('Approved')
     expect(history.querySelectorAll('li')).toHaveLength(2)
     expect(getAuthoringDraftReviewHistoryMock).toHaveBeenCalledTimes(1)
-    expect(getAuthoringActiveDraftReviewMock).toHaveBeenCalledTimes(1)
-    expect(getAuthoringLatestDraftReviewMock).toHaveBeenCalledTimes(1)
   })
 
-  it('treats an active-only 404 as no active Review, but keeps scoped history 404 opaque', async () => {
-    const latest = review('66666666-6666-4666-8666-666666666666', 'APPROVED', 3)
-    getAuthoringDraftReviewHistoryMock.mockResolvedValueOnce({ reviews: [latest] })
-    getAuthoringLatestDraftReviewMock.mockResolvedValueOnce(latest)
-    const ready = await renderPage()
-    expect((await screen.findAllByText('Approved')).length).toBeGreaterThan(0)
-    expect(ready.markDraftUnavailable).not.toHaveBeenCalled()
+  it('keeps a terminal cycle immutable when a later resubmission is active', async () => {
+    const active = review('88888888-8888-4888-8888-888888888888', 'IN_REVIEW', 8, actorB)
+    const prior = review('77777777-7777-4777-8777-777777777777', 'CHANGES_REQUESTED', 5, actorA)
+    getAuthoringDraftReviewHistoryMock.mockResolvedValue({ reviews: [active, prior] })
+    await renderPage()
+    const summary = await screen.findByRole('heading', { level: 3, name: 'Current Review state' })
+    expect(summary.parentElement?.textContent).toContain('In review')
+    expect(summary.parentElement?.textContent).toContain(actorB)
+    const history = screen.getByRole('list', { name: 'Review history' })
+    const entries = history.querySelectorAll('li')
+    expect(entries).toHaveLength(2)
+    expect(entries[0]?.textContent).toContain('Draft revision 8')
+    expect(entries[0]?.textContent).toContain('In review')
+    expect(entries[1]?.textContent).toContain('Draft revision 5')
+    expect(entries[1]?.textContent).toContain('Changes requested')
+    expect(screen.queryByRole('button', { name: 'Submit for review' })).toBeNull()
+  })
 
-    cleanup()
+  it('keeps a scoped history 404 opaque', async () => {
     getAuthoringDraftReviewHistoryMock.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))
     const hidden = await renderPage()
     await waitFor(() => expect(hidden.markDraftUnavailable).toHaveBeenCalledTimes(1))
@@ -168,16 +164,17 @@ describe('AuthoringDraftReviewPage', () => {
   it('submits the current authoritative Draft revision and refreshes Review state without a local merge', async () => {
     const submitted = review('66666666-6666-4666-8666-666666666666', 'IN_REVIEW', 4)
     getAuthoringDraftReviewHistoryMock.mockResolvedValueOnce({ reviews: [] }).mockResolvedValueOnce({ reviews: [submitted] })
-    getAuthoringActiveDraftReviewMock.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined)).mockResolvedValueOnce(submitted)
-    getAuthoringLatestDraftReviewMock.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined)).mockResolvedValueOnce(submitted)
     submitAuthoringDraftReviewMock.mockResolvedValue({ review: submitted, snapshot: {} })
     await renderPage()
-    await (await screen.findByRole('button', { name: 'Submit for review' })).click()
+    const submit = await screen.findByRole('button', { name: 'Submit for review' })
+    submit.focus()
+    await submit.click()
     expect(submitAuthoringDraftReviewMock).toHaveBeenCalledWith(firstID, { expectedDraftRevision: 4 })
     expect(await screen.findByText('Draft submitted for review.')).toBeTruthy()
     expect((await screen.findAllByText('In review')).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: 'Submit for review' })).toBeNull()
     expect(getAuthoringDraftReviewHistoryMock).toHaveBeenCalledTimes(2)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Review' }))
   })
 
   it('uses a newer shared Draft revision and prevents duplicate pending submissions', async () => {
@@ -218,6 +215,22 @@ describe('AuthoringDraftReviewPage', () => {
     await waitFor(() => expect(getAuthoringDraftMock).toHaveBeenCalledWith(firstID))
     expect(await screen.findByText('The latest Draft and Review state have been loaded.')).toBeTruthy()
     expect(submitAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a late conflict reload after switching Drafts', async () => {
+    submitAuthoringDraftReviewMock.mockRejectedValueOnce(new APIProblemError(409, undefined, undefined))
+    let resolveDraft: (value: ReturnType<typeof draft>) => void = () => undefined
+    getAuthoringDraftMock.mockImplementationOnce(() => new Promise((resolve) => { resolveDraft = resolve }))
+    const page = await renderPage()
+    await (await screen.findByRole('button', { name: 'Submit for review' })).click()
+    await screen.findByText(/Review or Draft changed before submission/)
+    await screen.getByRole('button', { name: 'Reload review state' }).click()
+    page.currentDraft.value = draft(secondID)
+    expect(await screen.findByRole('button', { name: 'Submit for review' })).toBeTruthy()
+    resolveDraft({ ...draft(), revision: 8 })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(page.replaceDraft).not.toHaveBeenCalled()
+    expect(page.currentDraft.value.id).toBe(secondID)
   })
 
   it('keeps the empty authoritative state when submission fails operationally', async () => {

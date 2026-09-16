@@ -26,6 +26,7 @@ vi.mock('../authoring/authoring', async (importOriginal) => ({
 }))
 
 const draftID = '11111111-1111-4111-8111-111111111111'
+const secondDraftID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const firstReviewID = '22222222-2222-4222-8222-222222222222'
 const secondReviewID = '33333333-3333-4333-8333-333333333333'
 const actor = '44444444-4444-4444-8444-444444444444'
@@ -67,6 +68,15 @@ function detail(
   } as unknown as AuthoringReviewDetail
 }
 
+function detailForDraft(targetDraftID: string, id: string, title: string): AuthoringReviewDetail {
+  const value = detail(id, title)
+  return {
+    ...value,
+    review: { ...value.review, draftId: targetDraftID },
+    snapshot: { ...value.snapshot, draft: { ...value.snapshot.draft, id: targetDraftID } },
+  }
+}
+
 async function renderPage(path = `/authoring/drafts/${draftID}/reviews/${firstReviewID}`) {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/authoring/drafts/:draftId/review', name: 'review-overview', component: { template: '<h2>Review overview</h2>' } },
@@ -79,7 +89,7 @@ async function renderPage(path = `/authoring/drafts/${draftID}/reviews/${firstRe
   const result = render({ template: '<RouterView />' }, {
     global: { plugins: [router], provide: { [authoringDraftContextKey as symbol]: { draft, replaceDraft: vi.fn(), markDraftUnavailable } } },
   })
-  return { ...result, router, markDraftUnavailable }
+  return { ...result, router, draft, markDraftUnavailable }
 }
 
 describe('AuthoringDraftReviewSnapshotPage', () => {
@@ -109,6 +119,25 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(screen.getByText('Before lesson (before)')).toBeTruthy()
   })
 
+  it('keeps every historical snapshot level unchanged when current Draft context changes', async () => {
+    const page = await renderPage()
+    expect(await screen.findByText('Frozen integration foundations')).toBeTruthy()
+    expect(screen.getByText('Before lesson')).toBeTruthy()
+    expect(screen.getByText('<script>never execute</script>')).toBeTruthy()
+    page.draft.value = {
+      ...currentDraft,
+      revision: 99,
+      title: 'Changed current Draft title',
+      description: 'Changed current Draft description',
+    }
+    await waitFor(() => expect(screen.getByText('Frozen integration foundations')).toBeTruthy())
+    expect(screen.getByText('Before lesson')).toBeTruthy()
+    expect(screen.getByText('<script>never execute</script>')).toBeTruthy()
+    expect(screen.queryByText('Changed current Draft title')).toBeNull()
+    expect(screen.queryByText('Changed current Draft description')).toBeNull()
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
+  })
+
   it('uses the canonical safe renderer for historical content and deferred block fallbacks', async () => {
     await renderPage()
     expect(await screen.findByText('<script>never execute</script>')).toBeTruthy()
@@ -129,6 +158,21 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(await screen.findByText('Second frozen snapshot')).toBeTruthy()
     resolveFirst(detail(firstReviewID, 'Old frozen snapshot'))
     await waitFor(() => expect(screen.queryByText('Old frozen snapshot')).toBeNull())
+  })
+
+  it('does not let a slow prior Draft response cross into another Draft Review route', async () => {
+    let resolveFirst: (value: AuthoringReviewDetail) => void = () => undefined
+    const second = detailForDraft(secondDraftID, secondReviewID, 'Second Draft frozen snapshot')
+    getAuthoringDraftReviewMock.mockImplementationOnce(() => new Promise<AuthoringReviewDetail>((resolve) => { resolveFirst = resolve }))
+      .mockResolvedValueOnce(second)
+    const page = await renderPage()
+    await waitFor(() => expect(getAuthoringDraftReviewMock).toHaveBeenCalledWith(draftID, firstReviewID))
+    page.draft.value = { ...currentDraft, id: secondDraftID, title: 'Second current Draft' }
+    await page.router.push(`/authoring/drafts/${secondDraftID}/reviews/${secondReviewID}`)
+    expect(await screen.findByText('Second Draft frozen snapshot')).toBeTruthy()
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledWith(secondDraftID, secondReviewID)
+    resolveFirst(detail(firstReviewID, 'Old Draft frozen snapshot'))
+    await waitFor(() => expect(screen.queryByText('Old Draft frozen snapshot')).toBeNull())
   })
 
   it('keeps hidden and operational failures separate without substituting current Draft content', async () => {
@@ -172,13 +216,17 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     getAuthoringDraftReviewMock.mockResolvedValueOnce(inReview).mockResolvedValueOnce(approved)
     approveAuthoringReviewMock.mockResolvedValueOnce(approved.review)
     await renderPage()
-    await (await screen.findByRole('button', { name: 'Approve' })).click()
+    const approve = await screen.findByRole('button', { name: 'Approve' })
+    approve.focus()
+    await approve.click()
     expect(approveAuthoringReviewMock).toHaveBeenCalledWith(draftID, firstReviewID, { expectedReviewRevision: 5 })
     expect(await screen.findByText('Approved Review is not a published Course.')).toBeTruthy()
     expect(screen.getByText('Frozen integration foundations')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull()
     expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Reviewing Draft revision 4' })))
+    expect(screen.getByRole('status').textContent).toContain('Review approved')
   })
 
   it('requests changes using the exact authoritative Review revision and preserves the snapshot', async () => {
@@ -192,6 +240,7 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(await screen.findByText('Changes requested')).toBeTruthy()
     expect(screen.getByText('Frozen integration foundations')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('Changes requested')
   })
 
   it('guards competing local decisions while one request is pending', async () => {
@@ -217,6 +266,19 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     }, undefined))
     await renderPage()
     await (await screen.findByRole('button', { name: 'Approve' })).click()
+    expect(await screen.findByText('This Review must be decided by someone other than the person who submitted it.')).toBeTruthy()
+    expect(screen.queryByText(/changed before your decision/)).toBeNull()
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps the same structured policy conflict for request changes', async () => {
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'IN_REVIEW', 5))
+    requestAuthoringReviewChangesMock.mockRejectedValueOnce(new APIProblemError(409, {
+      type: 'https://academy.example/problems/independent-reviewer-required', title: 'Independent reviewer required', status: 409,
+      instance: '/api/authoring/drafts/example/reviews/example/request-changes', request_id: 'request-id', code: 'independent_reviewer_required',
+    }, undefined))
+    await renderPage()
+    await (await screen.findByRole('button', { name: 'Request changes' })).click()
     expect(await screen.findByText('This Review must be decided by someone other than the person who submitted it.')).toBeTruthy()
     expect(screen.queryByText(/changed before your decision/)).toBeNull()
     expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
@@ -269,5 +331,24 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     resolveApprove(detail(firstReviewID, 'First frozen snapshot', 'APPROVED', 6).review)
     await waitFor(() => expect(screen.queryByText('First frozen snapshot')).toBeNull())
     expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy()
+  })
+
+  it('does not let a late conflict reload overwrite a newly selected Review', async () => {
+    const first = detail(firstReviewID, 'First frozen snapshot', 'IN_REVIEW', 5)
+    const second = detail(secondReviewID, 'Second frozen snapshot', 'IN_REVIEW', 7)
+    let resolveReload: (value: AuthoringReviewDetail) => void = () => undefined
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(first)
+      .mockImplementationOnce(() => new Promise<AuthoringReviewDetail>((resolve) => { resolveReload = resolve }))
+      .mockResolvedValueOnce(second)
+    approveAuthoringReviewMock.mockRejectedValueOnce(new APIProblemError(409, undefined, undefined))
+    const { router } = await renderPage()
+    await (await screen.findByRole('button', { name: 'Approve' })).click()
+    await screen.findByText('This Review changed before your decision was saved. Reload the latest Review state.')
+    await screen.getByRole('button', { name: 'Reload review' }).click()
+    await router.push(`/authoring/drafts/${draftID}/reviews/${secondReviewID}`)
+    expect(await screen.findByText('Second frozen snapshot')).toBeTruthy()
+    resolveReload(detail(firstReviewID, 'Stale reloaded snapshot', 'APPROVED', 6))
+    await waitFor(() => expect(screen.queryByText('Stale reloaded snapshot')).toBeNull())
+    expect(screen.getByText('Second frozen snapshot')).toBeTruthy()
   })
 })

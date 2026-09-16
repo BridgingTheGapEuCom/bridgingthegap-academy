@@ -32,11 +32,10 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { APIProblemError } from '../api/client'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
+import { preserveFocusAfterRemoval } from '../authoring/focus'
 import {
-  getAuthoringActiveDraftReview,
   getAuthoringDraft,
   getAuthoringDraftReviewHistory,
-  getAuthoringLatestDraftReview,
   submitAuthoringDraftReview,
   type AuthoringReview,
 } from '../authoring/authoring'
@@ -82,23 +81,14 @@ async function loadReviews(): Promise<boolean> {
   const draftID = draft.value.id
   state.value = { kind: 'loading' }
   try {
-    // History is the scope-confirming metadata read: it is 200 with an empty
-    // list for an accessible Draft, unlike /active and /latest which use 404
-    // to represent an absent cycle.
+    // The newest-first history response is one exact-Draft authorization and
+    // state boundary. Deriving active and latest independently from this one
+    // response avoids combining values observed before and after a concurrent
+    // revocation, submission, or decision.
     const history = await getAuthoringDraftReviewHistory(draftID)
     if (!isCurrent() || !active || generation !== requestVersion) return false
-
-    const [activeReview, latestReview] = await Promise.all([
-      optionalReview(() => getAuthoringActiveDraftReview(draftID)),
-      optionalReview(() => getAuthoringLatestDraftReview(draftID)),
-    ])
-    if (!isCurrent() || !active || generation !== requestVersion) return false
-    // A non-empty history cannot legitimately lack a latest cycle. Do not
-    // misrepresent an inconsistent or failed response as an empty workflow.
-    if (history.reviews.length > 0 && !latestReview) {
-      state.value = { kind: 'unavailable' }
-      return false
-    }
+    const latestReview = history.reviews[0]
+    const activeReview = history.reviews.find((review) => review.status === 'IN_REVIEW')
     state.value = { kind: 'ready', reviews: history.reviews, activeReview, latestReview }
     return true
   } catch (error) {
@@ -116,6 +106,7 @@ async function submitForReview() {
   if (submitting.value || reloading.value || submissionConflict.value || state.value.kind !== 'ready' || state.value.activeReview) return
   const isCurrent = captureScope()
   const draftID = draft.value.id
+  const restoreFocus = preserveFocusAfterRemoval(() => document.getElementById('authoring-review-title'))
   submitting.value = true
   clearSubmissionFeedback()
   try {
@@ -123,7 +114,10 @@ async function submitForReview() {
     // revision. The browser never sends a Review snapshot or actor identity.
     await submitAuthoringDraftReview(draftID, { expectedDraftRevision: draft.value.revision })
     if (!isCurrent() || !active) return
-    if (await loadReviews()) submissionStatus.value = 'Draft submitted for review.'
+    if (await loadReviews()) {
+      submissionStatus.value = 'Draft submitted for review.'
+      if (isCurrent()) await restoreFocus()
+    }
   } catch (error) {
     if (!isCurrent() || !active) return
     if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
@@ -143,6 +137,7 @@ async function reloadReviewState() {
   if (submitting.value || reloading.value) return
   const isCurrent = captureScope()
   const draftID = draft.value.id
+  const restoreFocus = preserveFocusAfterRemoval(() => document.getElementById('authoring-review-title'))
   reloading.value = true
   clearSubmissionFeedback()
   try {
@@ -152,6 +147,7 @@ async function reloadReviewState() {
     if (await loadReviews()) {
       submissionConflict.value = false
       submissionStatus.value = 'The latest Draft and Review state have been loaded.'
+      if (isCurrent()) await restoreFocus()
     }
   } catch (error) {
     if (!isCurrent() || !active) return
@@ -162,12 +158,4 @@ async function reloadReviewState() {
   }
 }
 
-async function optionalReview(read: () => Promise<AuthoringReview>): Promise<AuthoringReview | undefined> {
-  try {
-    return await read()
-  } catch (error) {
-    if (error instanceof APIProblemError && error.status === 404) return undefined
-    throw error
-  }
-}
 </script>

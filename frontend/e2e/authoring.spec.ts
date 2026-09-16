@@ -270,6 +270,35 @@ test('Authoring decides an in-review snapshot with the authoritative Review revi
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
+test('Authoring presents an independent-review policy conflict accessibly', async ({ page }) => {
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}/approve`, (route) => route.fulfill({
+    status: 409,
+    contentType: 'application/problem+json',
+    body: JSON.stringify({
+      type: 'https://academy.example/problems/independent-reviewer-required',
+      title: 'Independent reviewer required',
+      status: 409,
+      instance: route.request().url(),
+      request_id: 'policy-conflict-request',
+      code: 'independent_reviewer_required',
+    }),
+  }))
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ review: reviewCycle, snapshot: reviewSnapshot }),
+  }))
+
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto(`/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`)
+  await page.getByRole('button', { name: 'Approve' }).click()
+  await expect(page.getByRole('alert')).toContainText('someone other than the person who submitted it')
+  await expect(page.getByText('Frozen semantic content.')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
 test('Authoring submits the current Draft revision for Review and reloads authoritative state', async ({ page }) => {
   let reviews: typeof reviewCycle[] = []
   let submissionBody: unknown
@@ -490,7 +519,8 @@ test('Authoring routes reflow at 320px and 390px with enlarged text', async ({ p
   await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(structure) }))
   await page.route(`**/api/authoring/drafts/${draftID}/members`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ members: [{ userId: '77777777-7777-4777-8777-777777777777', role: 'MAINTAINER' }] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, content: { schemaVersion: 1, blocks: [{ key: 'long-stable-block-key-for-reflow', type: 'CODE', payload: { code: 'const example = "unbroken-content-that-must-not-widen-the-page";' } }] } }) }))
-  const routes = ['/authoring', `/authoring/drafts/${draftID}/overview`, `/authoring/drafts/${draftID}/structure`, `/authoring/drafts/${draftID}/lessons/${lesson.id}`, `/authoring/drafts/${draftID}/members`, `/authoring/drafts/${draftID}/review`]
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: reviewCycle, snapshot: reviewSnapshot }) }))
+  const routes = ['/authoring', `/authoring/drafts/${draftID}/overview`, `/authoring/drafts/${draftID}/structure`, `/authoring/drafts/${draftID}/lessons/${lesson.id}`, `/authoring/drafts/${draftID}/members`, `/authoring/drafts/${draftID}/review`, `/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`]
   for (const path of routes) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: path === '/authoring' ? 1 : 2 }).first()).toBeVisible()

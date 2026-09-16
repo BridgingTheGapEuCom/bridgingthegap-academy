@@ -1,24 +1,28 @@
 <template>
   <section class="authoring-section authoring-review-snapshot" aria-labelledby="authoring-review-snapshot-title">
-    <p v-if="state.kind === 'loading'" class="authoring-review__state" role="status">Loading frozen Review snapshot…</p>
+    <div v-if="state.kind === 'loading'" class="authoring-review__state">
+      <h2 id="authoring-review-snapshot-title" tabindex="-1">Review snapshot</h2>
+      <p role="status">Loading frozen Review snapshot…</p>
+    </div>
 
     <div v-else-if="state.kind === 'unavailable'" class="authoring-review__state">
-      <h2 id="authoring-review-snapshot-title">Review unavailable</h2>
-      <p>We couldn’t load this Review snapshot right now.</p>
+      <h2 id="authoring-review-snapshot-title" tabindex="-1">Review unavailable</h2>
+      <p role="alert">We couldn’t load this Review snapshot right now.</p>
       <BtgButton variant="secondary" @click="load">Try again</BtgButton>
     </div>
 
     <div v-else-if="state.kind === 'unsupported'" class="authoring-review__state" role="alert">
-      <h2 id="authoring-review-snapshot-title">Review snapshot format unavailable</h2>
+      <h2 id="authoring-review-snapshot-title" tabindex="-1">Review snapshot format unavailable</h2>
       <p>This historical Review snapshot uses a format this version of the Academy cannot display.</p>
-      <RouterLink :to="authoringDraftPath(draft.id, 'review')">Back to Review overview</RouterLink>
+      <RouterLink :to="authoringDraftPath(routeDraftID(), 'review')">Back to Review overview</RouterLink>
     </div>
 
     <template v-else>
-      <nav aria-label="Review snapshot navigation"><RouterLink :to="authoringDraftPath(draft.id, 'review')">Back to Review overview</RouterLink></nav>
+      <nav aria-label="Review snapshot navigation"><RouterLink :to="authoringDraftPath(routeDraftID(), 'review')">Back to Review overview</RouterLink></nav>
+      <p v-if="decisionStatus" class="authoring-review__status" role="status">{{ decisionStatus }}</p>
       <header class="authoring-review-snapshot__header">
         <p class="authoring-review-snapshot__eyebrow">Frozen Review snapshot</p>
-        <h2 id="authoring-review-snapshot-title">Reviewing Draft revision {{ state.detail.review.draftRevision }}</h2>
+        <h2 id="authoring-review-snapshot-title" tabindex="-1">Reviewing Draft revision {{ state.detail.review.draftRevision }}</h2>
         <p>This is the immutable snapshot captured when this Review was submitted. Later Draft edits do not change it.</p>
         <p class="authoring-review__status">{{ statusLabel(state.detail.review.status) }}</p>
         <p v-if="state.detail.review.status === 'APPROVED'">Approved Review is not a published Course.</p>
@@ -78,6 +82,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
+import { preserveFocusAfterRemoval } from '../authoring/focus'
 import {
   approveAuthoringReview,
   authoringDraftPath,
@@ -98,10 +103,11 @@ type State =
   | { kind: 'unavailable' }
 
 const route = useRoute()
-const { draft, markDraftUnavailable } = useAuthoringDraftContext()
+const { markDraftUnavailable } = useAuthoringDraftContext()
 const state = ref<State>({ kind: 'loading' })
+const routeDraftID = () => typeof route.params.draftId === 'string' ? route.params.draftId : ''
 const reviewID = () => typeof route.params.reviewId === 'string' ? route.params.reviewId : ''
-const captureScope = useAuthoringAsyncScope(() => `${draft.value.id}:${reviewID()}`)
+const captureScope = useAuthoringAsyncScope(() => `${routeDraftID()}:${reviewID()}`)
 const lessonTitles = computed<Readonly<Record<string, string>>>(() => {
   if (state.value.kind !== 'ready') return {}
   return Object.fromEntries(state.value.detail.snapshot.modules.flatMap((module) => module.lessons.map((lesson) => [lesson.stableKey, lesson.title])))
@@ -113,10 +119,12 @@ const reloading = ref(false)
 const policyConflict = ref(false)
 const decisionConflict = ref(false)
 const decisionError = ref<string>()
+const decisionStatus = ref<string>()
 
-watch(() => [draft.value.id, reviewID()], () => {
+watch([routeDraftID, reviewID], () => {
   pendingDecision.value = undefined
   reloading.value = false
+  decisionStatus.value = undefined
   clearDecisionFeedback()
   void load()
 }, { immediate: true })
@@ -125,7 +133,7 @@ onBeforeUnmount(() => { active = false })
 async function load(): Promise<boolean> {
   const isCurrent = captureScope()
   const generation = ++requestVersion
-  const draftID = draft.value.id
+  const draftID = routeDraftID()
   const exactReviewID = reviewID()
   state.value = { kind: 'loading' }
   try {
@@ -153,16 +161,25 @@ async function decide(decision: 'approve' | 'request-changes') {
   if (pendingDecision.value || reloading.value || policyConflict.value || decisionConflict.value || state.value.kind !== 'ready' || state.value.detail.review.status !== 'IN_REVIEW') return
   const isCurrent = captureScope()
   const detail = state.value.detail
+  const draftID = routeDraftID()
+  const exactReviewID = reviewID()
+  const restoreFocus = preserveFocusAfterRemoval(() => document.getElementById('authoring-review-snapshot-title'))
   pendingDecision.value = decision
+  decisionStatus.value = undefined
   clearDecisionFeedback()
   try {
     const input = { expectedReviewRevision: detail.review.reviewRevision }
-    if (decision === 'approve') await approveAuthoringReview(draft.value.id, detail.review.id, input)
-    else await requestAuthoringReviewChanges(draft.value.id, detail.review.id, input)
+    if (decision === 'approve') await approveAuthoringReview(draftID, exactReviewID, input)
+    else await requestAuthoringReviewChanges(draftID, exactReviewID, input)
     if (!isCurrent() || !active) return
     // Re-read only this immutable Review resource. This keeps the historical
     // snapshot separate from current Draft state and uses server status/revision.
-    await load()
+    if (await load()) {
+      decisionStatus.value = decision === 'approve'
+        ? 'Review approved. The frozen snapshot is unchanged and has not been published.'
+        : 'Changes requested. This Review cycle is finished and the frozen snapshot is unchanged.'
+      if (isCurrent()) await restoreFocus()
+    }
   } catch (error) {
     if (!isCurrent() || !active) return
     if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
@@ -182,10 +199,12 @@ async function decide(decision: 'approve' | 'request-changes') {
 async function reloadReview() {
   if (pendingDecision.value || reloading.value) return
   const isCurrent = captureScope()
+  const restoreFocus = preserveFocusAfterRemoval(() => document.getElementById('authoring-review-snapshot-title'))
   reloading.value = true
+  decisionStatus.value = undefined
   clearDecisionFeedback()
   try {
-    await load()
+    if (await load() && isCurrent()) await restoreFocus()
   } finally {
     if (isCurrent()) reloading.value = false
   }

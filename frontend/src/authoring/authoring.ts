@@ -103,8 +103,8 @@ export async function getAuthoringDraftMembers(draftID: string, client: Pick<Aut
   return client.request<AuthoringActiveMemberList>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/members`)
 }
 
-// Review overview reads only immutable cycle metadata. Snapshot reads remain
-// deliberately separate until a later, explicit Review-detail route exists.
+// Review overview reads only immutable cycle metadata. Exact snapshots remain
+// separate and are fetched only by the explicit Draft-scoped detail route.
 export async function getAuthoringDraftReviewHistory(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReviewList> {
   assertAuthoringID(draftID)
   return client.request<AuthoringReviewList>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews`)
