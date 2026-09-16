@@ -171,6 +171,15 @@ describe('PublishedCourseReaderPage', () => {
     expect(screen.queryByText('Exact version one content')).toBeNull()
   })
 
+  it('fails safely when a reader payload is structurally malformed', async () => {
+    getLatestPublishedCourseMock.mockRejectedValueOnce(new Error('Invalid published course response'))
+    await renderPage()
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Course unavailable' })).toBeTruthy()
+    expect(screen.queryByText('Exact version one content')).toBeNull()
+    expect(document.body.textContent).not.toContain('Invalid published course response')
+  })
+
   it('never falls back to latest for malformed or unavailable exact-version routes', async () => {
     getPublishedCourseVersionByIDMock
       .mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))

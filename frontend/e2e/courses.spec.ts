@@ -16,7 +16,7 @@ const catalogFirst = {
 }
 const catalogSecond = { ...catalogFirst, courseId: '10000000-0000-4000-8000-000000000002', version: '2.0.0', title: 'Boundary design', description: 'The next published catalog page.' }
 const publishedCourse = {
-  courseId: catalogFirst.courseId, version: catalogFirst.version, title: catalogFirst.title, description: catalogFirst.description,
+  courseId: catalogFirst.courseId, version: catalogFirst.version, title: catalogFirst.title, description: 'Authoritative reader detail.',
   objectives: ['Explain event ownership'], sourceLanguage: 'en-GB', changelog: 'First public release.', license: catalogFirst.license,
   contributors: catalogFirst.contributors, publishedAt: catalogFirst.publishedAt,
   modules: [{
@@ -52,6 +52,22 @@ const historicalCourse = {
     }],
   }],
 }
+const secondPublishedCourse = {
+  ...publishedCourse,
+  courseId: catalogSecond.courseId,
+  version: catalogSecond.version,
+  title: catalogSecond.title,
+  description: catalogSecond.description,
+  modules: [{
+    ...publishedCourse.modules[0],
+    lessons: [{
+      ...publishedCourse.modules[0].lessons[0],
+      stableKey: 'boundary-introduction',
+      title: 'Boundary introduction',
+      content: { schemaVersion: 1, blocks: [] },
+    }],
+  }],
+}
 
 async function servePublicCourses(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 401, contentType: 'application/problem+json', body: JSON.stringify(unauthenticated) }))
@@ -60,6 +76,7 @@ async function servePublicCourses(page: Page) {
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/latest`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(publishedCourse) }))
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(publishedCourse) }))
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/1.0.0`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(historicalCourse) }))
+  await page.route(`**/api/courses/by-id/${catalogSecond.courseId}/latest`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(secondPublishedCourse) }))
   await page.route('**/api/courses/catalog**', (route) => {
     const offset = new URL(route.request().url()).searchParams.get('offset')
     return route.fulfill({
@@ -80,10 +97,23 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await expect(page.getByRole('link', { name: 'Event-driven architecture' })).toBeVisible()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await expect(page.getByRole('link', { name: 'Event-driven architecture' })).toBeVisible()
+  }
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '' })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
   await page.getByRole('link', { name: 'Event-driven architecture' }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/courses\/by-id\/10000000-0000-4000-8000-000000000001/)
   await expect(page.getByRole('heading', { level: 1, name: 'Event-driven architecture' })).toBeVisible()
+  await expect(page.getByText('Authoritative reader detail.')).toBeVisible()
+  await expect(page.getByText('A practical published course.')).toHaveCount(0)
   await expect(page.getByRole('navigation', { name: 'Course lessons' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'What is EAI?, estimated duration 10 min' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('Published canonical lesson content.')).toBeVisible()
@@ -126,5 +156,13 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await expect(page).toHaveURL('/courses?offset=20')
   await expect(page.getByRole('link', { name: 'Boundary design' })).toBeVisible()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+
+  await page.getByRole('link', { name: 'Boundary design' }).click()
+  await expect(page).toHaveURL(`/courses/by-id/${catalogSecond.courseId}?lesson=boundary-introduction`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Boundary design' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Boundary introduction' })).toBeVisible()
+  await page.goBack()
+  await expect(page).toHaveURL('/courses?offset=20')
+  await expect(page.getByRole('link', { name: 'Boundary design' })).toBeVisible()
 
 })

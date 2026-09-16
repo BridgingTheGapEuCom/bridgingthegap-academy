@@ -16,9 +16,10 @@
       <h1 id="courses-title">Courses</h1>
       <p class="courses-page__intro">Structured learning resources for understanding integration and the systems around it.</p>
 
-      <p v-if="state.page.items.length === 0" class="courses-page__empty" role="status">No published courses are available yet.</p>
+      <p v-if="state.page.items.length === 0 && state.page.total === 0" class="courses-page__empty" role="status">No published courses are available yet.</p>
       <template v-else>
-        <PublishedCourseCatalogList :courses="state.page.items" />
+        <PublishedCourseCatalogList v-if="state.page.items.length" :courses="state.page.items" />
+        <p v-else class="courses-page__empty" role="status">No published courses are available on this page.</p>
         <PublishedCourseCatalogPagination
           :limit="state.page.limit"
           :offset="state.page.offset"
@@ -70,6 +71,13 @@ async function load(offset = catalogOffsetFromRoute(route.query.offset) ?? 0) {
   try {
     const page = await listPublishedCourseCatalog({ limit: publishedCatalogPageSize, offset })
     if (!active || version !== requestVersion) return
+    if (page.items.length === 0 && offset > 0) {
+      const normalizedOffset = page.total === 0 ? 0 : Math.floor((page.total - 1) / page.limit) * page.limit
+      if (normalizedOffset !== offset) {
+        await replaceOffset(normalizedOffset)
+        return
+      }
+    }
     state.value = { kind: 'ready', page }
   } catch {
     if (!active || version !== requestVersion) return
@@ -97,5 +105,10 @@ async function setOffset(offset: number) {
   } finally {
     paginationPending.value = false
   }
+}
+
+async function replaceOffset(offset: number) {
+  const query = { ...route.query, offset: offset === 0 ? undefined : String(offset) }
+  await router.replace({ query })
 }
 </script>

@@ -86,7 +86,7 @@ func TestPublishedReadServiceReturnsIsolatedCopies(t *testing.T) {
 	}
 }
 
-func TestPublishedReadServiceRejectsWrongOrUnpublishedAggregate(t *testing.T) {
+func TestPublishedReadServiceRejectsWrongOrNonPublishedAggregate(t *testing.T) {
 	aggregate := publishedReadAggregate(t)
 	service := NewPublishedReadService(&publishedReadRepositoryFake{exact: aggregate})
 	other, err := ParseVersion("1.2.4")
@@ -96,9 +96,19 @@ func TestPublishedReadServiceRejectsWrongOrUnpublishedAggregate(t *testing.T) {
 	if _, err := service.Exact(context.Background(), aggregate.CourseVersion.CourseID, other); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("wrong SemVer = %v, want not found", err)
 	}
-	aggregate.CourseVersion.Status = CourseVersionArchived
-	if _, err := NewPublishedReadService(&publishedReadRepositoryFake{exact: aggregate}).Exact(context.Background(), aggregate.CourseVersion.CourseID, aggregate.CourseVersion.Version); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("unpublished aggregate = %v, want not found", err)
+	for _, status := range []CourseVersionStatus{CourseVersionDeprecated, CourseVersionArchived, CourseVersionWithdrawn} {
+		t.Run(string(status), func(t *testing.T) {
+			nonPublished := aggregate
+			nonPublished.CourseVersion.Status = status
+			repository := &publishedReadRepositoryFake{exact: nonPublished, latest: nonPublished}
+			readService := NewPublishedReadService(repository)
+			if _, err := readService.Exact(context.Background(), aggregate.CourseVersion.CourseID, aggregate.CourseVersion.Version); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("exact %s aggregate = %v, want not found", status, err)
+			}
+			if _, err := readService.Latest(context.Background(), aggregate.CourseVersion.CourseID); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("latest %s aggregate = %v, want not found", status, err)
+			}
+		})
 	}
 }
 

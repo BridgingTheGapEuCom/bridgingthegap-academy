@@ -38,6 +38,13 @@ export class InvalidCourseRouteError extends Error {
   }
 }
 
+export class InvalidPublishedCourseResponseError extends Error {
+  constructor() {
+    super('Invalid published course response')
+    this.name = 'InvalidPublishedCourseResponseError'
+  }
+}
+
 export function isCourseVersion(version: string): boolean {
   return version.length <= 29 && courseVersionPattern.test(version)
 }
@@ -68,7 +75,9 @@ export async function listPublishedCourseCatalog(query: PublishedCatalogQuery = 
   }
   const parameters = new URLSearchParams({ limit: String(limit), offset: String(offset) })
   if (query.language) parameters.set('language', query.language)
-  return client.request<PublishedCourseCatalogPage>(`/api/courses/catalog?${parameters.toString()}`)
+  const page = await client.request<unknown>(`/api/courses/catalog?${parameters.toString()}`, { cache: 'no-store' })
+  if (!isPublishedCourseCatalogPage(page, limit, offset)) throw new InvalidPublishedCourseResponseError()
+  return page
 }
 
 export function publishedCoursePath(courseID: string): string {
@@ -81,12 +90,16 @@ export function publishedCourseVersionPath(courseID: string, version: string): s
 
 export async function getLatestPublishedCourse(courseID: string, client: APIClient = apiClient): Promise<PublishedCourseVersionDetail> {
   if (!isPublishedCourseID(courseID)) throw new InvalidCourseRouteError()
-  return client.request<PublishedCourseVersionDetail>(`/api/courses/by-id/${encodeURIComponent(courseID)}/latest`)
+  const course = await client.request<unknown>(`/api/courses/by-id/${encodeURIComponent(courseID)}/latest`, { cache: 'no-store' })
+  if (!isPublishedCourseVersionDetail(course)) throw new InvalidPublishedCourseResponseError()
+  return course
 }
 
 export async function getPublishedCourseVersionByID(courseID: string, version: string, client: APIClient = apiClient): Promise<PublishedCourseVersionDetail> {
   if (!isPublishedCourseID(courseID) || !isCourseVersion(version)) throw new InvalidCourseRouteError()
-  return client.request<PublishedCourseVersionDetail>(`/api/courses/by-id/${encodeURIComponent(courseID)}/versions/${encodeURIComponent(version)}`)
+  const course = await client.request<unknown>(`/api/courses/by-id/${encodeURIComponent(courseID)}/versions/${encodeURIComponent(version)}`, { cache: 'no-store' })
+  if (!isPublishedCourseVersionDetail(course)) throw new InvalidPublishedCourseResponseError()
+  return course
 }
 
 export function publishedLessonKeyFromRoute(value: unknown): string | undefined {
@@ -126,4 +139,106 @@ export function formatDuration(minutes: number | null | undefined): string | und
   if (hours === 0) return `${minutes} min`
   if (remainingMinutes === 0) return `${hours} hr`
   return `${hours} hr ${remainingMinutes} min`
+}
+
+function isPublishedCourseCatalogPage(value: unknown, limit: number, offset: number): value is PublishedCourseCatalogPage {
+  if (!isRecord(value)
+    || value.limit !== limit
+    || value.offset !== offset
+    || !isNonNegativeInteger(value.total)
+    || !Array.isArray(value.items)
+    || value.items.length > limit) return false
+  return value.items.every(isPublishedCourseCatalogItem)
+}
+
+function isPublishedCourseCatalogItem(value: unknown): value is PublishedCourseCatalogItem {
+  return isRecord(value)
+    && typeof value.courseId === 'string'
+    && isPublishedCourseID(value.courseId)
+    && typeof value.version === 'string'
+    && isCourseVersion(value.version)
+    && typeof value.title === 'string'
+    && typeof value.description === 'string'
+    && typeof value.sourceLanguage === 'string'
+    && isPublishedContentLicense(value.license)
+    && isPublishedContributors(value.contributors)
+    && isDateTime(value.publishedAt)
+}
+
+function isPublishedCourseVersionDetail(value: unknown): value is PublishedCourseVersionDetail {
+  if (!isRecord(value)
+    || typeof value.courseId !== 'string'
+    || !isPublishedCourseID(value.courseId)
+    || typeof value.version !== 'string'
+    || !isCourseVersion(value.version)
+    || typeof value.title !== 'string'
+    || typeof value.description !== 'string'
+    || !isStringArray(value.objectives)
+    || typeof value.sourceLanguage !== 'string'
+    || typeof value.changelog !== 'string'
+    || !isPublishedContentLicense(value.license)
+    || !isPublishedContributors(value.contributors)
+    || !isDateTime(value.publishedAt)
+    || !Array.isArray(value.modules)) return false
+
+  const moduleKeys = new Set<string>()
+  const lessonKeys = new Set<string>()
+  return value.modules.every((module, moduleIndex) => {
+    if (!isRecord(module)
+      || typeof module.stableKey !== 'string'
+      || !isLessonKey(module.stableKey)
+      || moduleKeys.has(module.stableKey)
+      || typeof module.title !== 'string'
+      || typeof module.description !== 'string'
+      || module.position !== moduleIndex
+      || !Array.isArray(module.lessons)) return false
+    moduleKeys.add(module.stableKey)
+    return module.lessons.every((lesson, lessonIndex) => {
+      if (!isRecord(lesson)
+        || typeof lesson.stableKey !== 'string'
+        || !isLessonKey(lesson.stableKey)
+        || lessonKeys.has(lesson.stableKey)
+        || typeof lesson.title !== 'string'
+        || typeof lesson.description !== 'string'
+        || !isStringArray(lesson.objectives)
+        || !(lesson.estimatedDurationMinutes === null || (isNonNegativeInteger(lesson.estimatedDurationMinutes) && lesson.estimatedDurationMinutes > 0))
+        || lesson.position !== lessonIndex
+        || !isStringArray(lesson.prerequisiteStableKeys)
+        || !Object.prototype.hasOwnProperty.call(lesson, 'content')) return false
+      lessonKeys.add(lesson.stableKey)
+      return true
+    })
+  })
+}
+
+function isPublishedContentLicense(value: unknown): value is PublishedCourseCatalogItem['license'] {
+  return isRecord(value)
+    && (value.kind === 'STANDARD' || value.kind === 'ALL_RIGHTS_RESERVED' || value.kind === 'CUSTOM')
+    && typeof value.identifier === 'string'
+    && typeof value.displayName === 'string'
+    && typeof value.url === 'string'
+    && typeof value.customText === 'string'
+}
+
+function isPublishedContributors(value: unknown): value is PublishedCourseCatalogItem['contributors'] {
+  return Array.isArray(value) && value.every((contributor) => isRecord(contributor)
+    && typeof contributor.displayName === 'string'
+    && (contributor.role === 'AUTHOR' || contributor.role === 'MAINTAINER')
+    && isNonNegativeInteger(contributor.order))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+}
+
+function isDateTime(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && !Number.isNaN(Date.parse(value))
 }

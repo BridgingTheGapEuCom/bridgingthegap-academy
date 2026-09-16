@@ -116,4 +116,24 @@ describe('CourseListPage', () => {
     resolveFirst?.(catalogPage([firstCourse], 0, 1))
     await waitFor(() => expect(screen.queryByRole('link', { name: 'Architecture foundations' })).toBeNull())
   })
+
+  it('normalizes a page that became empty after publications became unavailable', async () => {
+    listPublishedCourseCatalogMock
+      .mockResolvedValueOnce(catalogPage([], 40, 21))
+      .mockResolvedValueOnce(catalogPage([secondCourse], 20, 21))
+    const { router } = await renderPage('/courses?offset=40')
+
+    await waitFor(() => expect(router.currentRoute.value.query.offset).toBe('20'))
+    expect(await screen.findByRole('link', { name: 'Boundary design' })).toBeTruthy()
+    expect(screen.queryByText('No published courses are available yet.')).toBeNull()
+    expect(listPublishedCourseCatalogMock.mock.calls.map(([query]) => query.offset)).toEqual([40, 20])
+  })
+
+  it('keeps pagination available for a transient empty nonzero page', async () => {
+    listPublishedCourseCatalogMock.mockResolvedValueOnce(catalogPage([], 20, 40))
+    await renderPage('/courses?offset=20')
+
+    expect(await screen.findByText('No published courses are available on this page.')).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Previous' }) as HTMLButtonElement).disabled).toBe(false)
+  })
 })
