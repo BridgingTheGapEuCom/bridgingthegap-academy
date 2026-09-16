@@ -378,6 +378,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns one lightweight summary for each Course with a complete immutable PUBLISHED CourseVersion. The selected summary is the highest constrained SemVer; no Authoring state or publication provenance is consulted or exposed. */
+        get: operations["listPublishedCourseCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{slug}": {
         parameters: {
             query?: never;
@@ -889,6 +906,24 @@ export interface components {
         };
         CourseList: {
             courses: components["schemas"]["CourseSummary"][];
+        };
+        PublishedCourseCatalogPage: {
+            items: components["schemas"]["PublishedCourseCatalogItem"][];
+            limit: number;
+            offset: number;
+            total: number;
+        };
+        PublishedCourseCatalogItem: {
+            /** Format: uuid */
+            courseId: string;
+            version: string;
+            title: string;
+            description: string;
+            sourceLanguage: string;
+            license: components["schemas"]["PublishedContentLicense"];
+            contributors: components["schemas"]["PublishedContributor"][];
+            /** Format: date-time */
+            publishedAt: string;
         };
         CourseSummary: {
             slug: string;
@@ -2251,6 +2286,33 @@ export interface operations {
                     "application/json": components["schemas"]["CourseList"];
                 };
             };
+            500: components["responses"]["Problem"];
+        };
+    };
+    listPublishedCourseCatalog: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Filters the selected latest version by its normalized source language. */
+                language?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of lightweight published-course summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedCourseCatalogPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

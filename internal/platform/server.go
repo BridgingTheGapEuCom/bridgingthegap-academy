@@ -80,6 +80,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authorizer:                  identity.NewAuthorizationService(identitypostgres.New(pool)),
 		courses:                     courses.NewReadService(coursesRepository),
 		publishedCourses:            courses.NewPublishedReadService(coursesRepository),
+		publishedCatalog:            courses.NewPublishedCatalogService(coursesRepository),
 		authoring:                   authoring.NewReadService(authoringRepository, authoringAuthorizer),
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
@@ -143,6 +144,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 			api.Use(auth.noStore)
 			api.Use(auth.enforceOrigin)
 			api.Post("/auth/login", auth.handleLogin)
+			if auth.publishedCatalog != nil {
+				api.Get("/courses/catalog", auth.handlePublishedCourseCatalog)
+			}
 			if auth.courses != nil {
 				api.Get("/courses", auth.handleCourseList)
 				api.Get("/courses/{slug}", auth.handleCourseCurrent)

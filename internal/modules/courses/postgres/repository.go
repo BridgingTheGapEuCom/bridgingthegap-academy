@@ -24,6 +24,7 @@ type Repository struct {
 }
 
 var _ courses.Repository = (*Repository)(nil)
+var _ courses.PublishedCatalogRepository = (*Repository)(nil)
 
 func New(db sqlc.DBTX) *Repository {
 	r := &Repository{q: sqlc.New(db)}
@@ -389,6 +390,43 @@ func (r *Repository) ListPublishedCourseVersions(ctx context.Context) ([]courses
 		result = append(result, version)
 	}
 	return result, nil
+}
+
+func (r *Repository) ListLatestPublishedCourseVersions(ctx context.Context, query courses.PublishedCatalogQuery) ([]courses.CourseVersion, error) {
+	params := sqlc.ListLatestPublishedCourseVersionsParams{
+		Language: catalogLanguage(query.Language), Offset: int32(query.Offset), Limit: int32(query.Limit),
+	}
+	rows, err := r.q.ListLatestPublishedCourseVersions(ctx, params)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	versions := make([]courses.CourseVersion, 0, len(rows))
+	for _, row := range rows {
+		version, err := mapCourseVersion(row)
+		if err != nil {
+			return nil, err
+		}
+		versions = append(versions, version)
+	}
+	return versions, nil
+}
+
+func (r *Repository) CountLatestPublishedCourses(ctx context.Context, language *courses.LanguageTag) (int, error) {
+	count, err := r.q.CountLatestPublishedCourses(ctx, catalogLanguage(language))
+	if err != nil {
+		return 0, storageError(err)
+	}
+	if count < 0 || count > int64(^uint(0)>>1) {
+		return 0, errors.New("invalid published catalog count")
+	}
+	return int(count), nil
+}
+
+func catalogLanguage(language *courses.LanguageTag) pgtype.Text {
+	if language == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: string(*language), Valid: true}
 }
 
 func (r *Repository) TransitionCourseVersionStatus(ctx context.Context, id courses.CourseVersionID, current, next courses.CourseVersionStatus) (courses.CourseVersion, error) {

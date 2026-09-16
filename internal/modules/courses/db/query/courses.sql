@@ -68,6 +68,35 @@ WHERE course_id = $1 AND status = 'PUBLISHED'
 ORDER BY version_major DESC, version_minor DESC, version_patch DESC, id DESC
 LIMIT 1;
 
+-- name: ListLatestPublishedCourseVersions :many
+WITH latest AS (
+    SELECT DISTINCT ON (version.course_id) version.id
+    FROM courses.course_version AS version
+    JOIN courses.course_version_publication_provenance AS provenance
+        ON provenance.course_version_id = version.id
+    WHERE version.status = 'PUBLISHED'
+    ORDER BY version.course_id, version.version_major DESC, version.version_minor DESC, version.version_patch DESC, version.id DESC
+)
+SELECT version.*
+FROM courses.course_version AS version
+JOIN latest ON latest.id = version.id
+WHERE (sqlc.narg('language')::text IS NULL OR version.source_language = sqlc.narg('language')::text)
+ORDER BY version.title ASC, version.course_id ASC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
+-- name: CountLatestPublishedCourses :one
+WITH latest AS (
+    SELECT DISTINCT ON (version.course_id) version.course_id, version.source_language
+    FROM courses.course_version AS version
+    JOIN courses.course_version_publication_provenance AS provenance
+        ON provenance.course_version_id = version.id
+    WHERE version.status = 'PUBLISHED'
+    ORDER BY version.course_id, version.version_major DESC, version.version_minor DESC, version.version_patch DESC, version.id DESC
+)
+SELECT count(*)
+FROM latest
+WHERE (sqlc.narg('language')::text IS NULL OR source_language = sqlc.narg('language')::text);
+
 -- name: ListCourseVersions :many
 SELECT *
 FROM courses.course_version

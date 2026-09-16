@@ -162,6 +162,110 @@ func testImmutablePublishedCourseVersionReads(t *testing.T, ctx context.Context,
 	}
 }
 
+func testPublishedCourseCatalog(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	repository := coursespostgres.New(pool)
+	store := courses.NewCourseVersionStore(repository)
+	service := courses.NewPublishedCatalogService(repository)
+	baseline, err := service.List(ctx, courses.PublishedCatalogQuery{Limit: courses.MaxPublishedCatalogLimit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := repository.CreateCourse(ctx, "published-catalog-first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := repository.CreateCourse(ctx, "published-catalog-second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.CreateCourse(ctx, "published-catalog-unpublished"); err != nil {
+		t.Fatal(err)
+	}
+
+	older := immutableCourseVersionFixture(t, first.ID, "1.9.0", "84000000-0000-4000-8000-000000000001")
+	older.CourseVersion.Title = "Older Esperanto catalog entry"
+	older.CourseVersion.SourceLanguage = "eo"
+	if _, err := store.Store(ctx, older); err != nil {
+		t.Fatal(err)
+	}
+	latest := immutableCourseVersionFixture(t, first.ID, "1.10.0", "84000000-0000-4000-8000-000000000002")
+	latest.CourseVersion.Title = "Shared catalog title"
+	latest.CourseVersion.SourceLanguage = "fr"
+	if _, err := store.Store(ctx, latest); err != nil {
+		t.Fatal(err)
+	}
+	other := immutableCourseVersionFixture(t, second.ID, "2.0.0", "84000000-0000-4000-8000-000000000003")
+	other.CourseVersion.Title = "Shared catalog title"
+	other.CourseVersion.SourceLanguage = "eo"
+	if _, err := store.Store(ctx, other); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := service.List(ctx, courses.PublishedCatalogQuery{Limit: courses.MaxPublishedCatalogLimit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != baseline.Total+2 || len(page.Items) != baseline.Total+2 {
+		t.Fatalf("catalog cardinality = %#v", page)
+	}
+	for index := 1; index < len(page.Items); index++ {
+		previous, current := page.Items[index-1], page.Items[index]
+		if previous.Title > current.Title || (previous.Title == current.Title && previous.CourseID > current.CourseID) {
+			t.Fatalf("catalog ordering is not title then course ID: %#v", page.Items)
+		}
+	}
+	var selected, selectedOther courses.PublishedCatalogItem
+	for _, item := range page.Items {
+		if item.CourseID == first.ID {
+			selected = item
+		}
+		if item.CourseID == second.ID {
+			selectedOther = item
+		}
+	}
+	if selected.Version.String() != "1.10.0" || selected.SourceLanguage != "fr" {
+		t.Fatalf("catalog did not select latest numeric SemVer: %#v", selected)
+	}
+	if selectedOther.Version.String() != "2.0.0" || selectedOther.SourceLanguage != "eo" {
+		t.Fatalf("catalog omitted the other published course: %#v", selectedOther)
+	}
+	if len(selected.Contributors) != 2 || selected.Contributors[0].DisplayName != "Ada Author" {
+		t.Fatalf("catalog did not preserve public attribution: %#v", selected.Contributors)
+	}
+
+	language, err := courses.NormalizeLanguageTag("eo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered, err := service.List(ctx, courses.PublishedCatalogQuery{Language: &language})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filtered.Total != 1 || len(filtered.Items) != 1 || filtered.Items[0].CourseID != second.ID {
+		t.Fatalf("language filter used an older version instead of the selected latest version: %#v", filtered)
+	}
+
+	paged, err := service.List(ctx, courses.PublishedCatalogQuery{Limit: 1, Offset: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paged.Total != page.Total || len(paged.Items) != 1 || paged.Items[0].CourseID != page.Items[1].CourseID {
+		t.Fatalf("catalog pagination was not deterministic: %#v", paged)
+	}
+	emptyLanguage, err := courses.NormalizeLanguageTag("zu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty, err := service.List(ctx, courses.PublishedCatalogQuery{Language: &emptyLanguage})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty.Total != 0 || len(empty.Items) != 0 || empty.Items == nil {
+		t.Fatalf("empty catalog page = %#v", empty)
+	}
+}
+
 func immutableCourseVersionFixture(t *testing.T, courseID courses.CourseID, versionText, reviewID string) courses.ImmutableCourseVersion {
 	t.Helper()
 	version, err := courses.ParseVersion(versionText)

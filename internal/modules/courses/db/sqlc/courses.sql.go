@@ -11,6 +11,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countLatestPublishedCourses = `-- name: CountLatestPublishedCourses :one
+WITH latest AS (
+    SELECT DISTINCT ON (version.course_id) version.course_id, version.source_language
+    FROM courses.course_version AS version
+    JOIN courses.course_version_publication_provenance AS provenance
+        ON provenance.course_version_id = version.id
+    WHERE version.status = 'PUBLISHED'
+    ORDER BY version.course_id, version.version_major DESC, version.version_minor DESC, version.version_patch DESC, version.id DESC
+)
+SELECT count(*)
+FROM latest
+WHERE ($1::text IS NULL OR source_language = $1::text)
+`
+
+func (q *Queries) CountLatestPublishedCourses(ctx context.Context, language pgtype.Text) (int64, error) {
+	row := q.db.QueryRow(ctx, countLatestPublishedCourses, language)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCourse = `-- name: CreateCourse :one
 INSERT INTO courses.course (slug)
 VALUES ($1)
@@ -699,6 +720,70 @@ func (q *Queries) ListCourses(ctx context.Context) ([]CoursesCourse, error) {
 	for rows.Next() {
 		var i CoursesCourse
 		if err := rows.Scan(&i.ID, &i.Slug, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestPublishedCourseVersions = `-- name: ListLatestPublishedCourseVersions :many
+WITH latest AS (
+    SELECT DISTINCT ON (version.course_id) version.id
+    FROM courses.course_version AS version
+    JOIN courses.course_version_publication_provenance AS provenance
+        ON provenance.course_version_id = version.id
+    WHERE version.status = 'PUBLISHED'
+    ORDER BY version.course_id, version.version_major DESC, version.version_minor DESC, version.version_patch DESC, version.id DESC
+)
+SELECT version.id, version.course_id, version.version, version.version_major, version.version_minor, version.version_patch, version.status, version.title, version.description, version.learning_objectives, version.source_language, version.changelog, version.license_kind, version.license_identifier, version.license_display_name, version.license_url, version.license_custom_text, version.attribution, version.created_at, version.published_at
+FROM courses.course_version AS version
+JOIN latest ON latest.id = version.id
+WHERE ($1::text IS NULL OR version.source_language = $1::text)
+ORDER BY version.title ASC, version.course_id ASC
+LIMIT $3 OFFSET $2
+`
+
+type ListLatestPublishedCourseVersionsParams struct {
+	Language pgtype.Text
+	Offset   int32
+	Limit    int32
+}
+
+func (q *Queries) ListLatestPublishedCourseVersions(ctx context.Context, arg ListLatestPublishedCourseVersionsParams) ([]CoursesCourseVersion, error) {
+	rows, err := q.db.Query(ctx, listLatestPublishedCourseVersions, arg.Language, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesCourseVersion
+	for rows.Next() {
+		var i CoursesCourseVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.Version,
+			&i.VersionMajor,
+			&i.VersionMinor,
+			&i.VersionPatch,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.SourceLanguage,
+			&i.Changelog,
+			&i.LicenseKind,
+			&i.LicenseIdentifier,
+			&i.LicenseDisplayName,
+			&i.LicenseUrl,
+			&i.LicenseCustomText,
+			&i.Attribution,
+			&i.CreatedAt,
+			&i.PublishedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

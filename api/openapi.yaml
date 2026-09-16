@@ -425,6 +425,18 @@ paths:
           description: Discoverable courses and preferred published versions
           content: { application/json: { schema: { $ref: '#/components/schemas/CourseList' } } }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/catalog:
+    get:
+      operationId: listPublishedCourseCatalog
+      description: Returns one lightweight summary for each Course with a complete immutable PUBLISHED CourseVersion. The selected summary is the highest constrained SemVer; no Authoring state or publication provenance is consulted or exposed.
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: language, in: query, required: false, schema: { type: string }, description: Filters the selected latest version by its normalized source language. }
+      responses:
+        '200': { description: Page of lightweight published-course summaries, content: { application/json: { schema: { $ref: '#/components/schemas/PublishedCourseCatalogPage' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/courses/{slug}:
     get:
       operationId: getCurrentCourse
@@ -1026,6 +1038,8 @@ components:
             created_at: { type: string, format: date-time }
             updated_at: { type: string, format: date-time }
     CourseList: { type: object, required: [courses], properties: { courses: { type: array, items: { $ref: '#/components/schemas/CourseSummary' } } } }
+    PublishedCourseCatalogPage: { type: object, additionalProperties: false, required: [items, limit, offset, total], properties: { items: { type: array, items: { $ref: '#/components/schemas/PublishedCourseCatalogItem' } }, limit: { type: integer, minimum: 1, maximum: 100 }, offset: { type: integer, minimum: 0 }, total: { type: integer, minimum: 0 } } }
+    PublishedCourseCatalogItem: { type: object, additionalProperties: false, required: [courseId, version, title, description, sourceLanguage, license, contributors, publishedAt], properties: { courseId: { type: string, format: uuid }, version: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }, title: { type: string }, description: { type: string }, sourceLanguage: { type: string }, license: { $ref: '#/components/schemas/PublishedContentLicense' }, contributors: { type: array, items: { $ref: '#/components/schemas/PublishedContributor' } }, publishedAt: { type: string, format: date-time } } }
     CourseSummary: { type: object, required: [slug, version], properties: { slug: { type: string }, version: { $ref: '#/components/schemas/CourseVersionSummary' } } }
     CourseIdentity: { type: object, required: [slug], properties: { slug: { type: string } } }
     CourseDetail: { type: object, required: [course, version, modules], properties: { course: { $ref: '#/components/schemas/CourseIdentity' }, version: { $ref: '#/components/schemas/CourseVersionSummary' }, modules: { type: array, items: { $ref: '#/components/schemas/ModuleStructure' } } } }
