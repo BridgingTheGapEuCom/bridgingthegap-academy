@@ -251,5 +251,9 @@ Draft-scoped Review, reject stale or terminal state, then apply independence to
 that cycle's immutable submitter before invoking the transactional decision.
 Persistence repeats lifecycle and revision CAS checks under the Review lock, so
 concurrent decisions still have one winner. HTTP-specific representation of
-`ErrIndependentReviewerRequired` remains deferred to M4.3c. The policy does not
-inspect roles, query Identity, or infer broader contributor independence.
+`ErrIndependentReviewerRequired` is a `409 Conflict` Problem Details response
+with code `independent_reviewer_required`; it remains distinct from hidden
+authorization failures and generic stale or terminal conflicts. An APPROVED
+Review remains only an approved frozen Draft snapshot, not a published Course.
+The policy does not inspect roles, query Identity, or infer broader contributor
+independence.

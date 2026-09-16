@@ -259,10 +259,18 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func problem(w http.ResponseWriter, r *http.Request, status int, title string) {
+	problemCode(w, r, status, title, "")
+}
+
+func problemCode(w http.ResponseWriter, r *http.Request, status int, title, code string) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	response := map[string]any{
 		"type": "about:blank", "title": title, "status": status,
 		"instance": strings.TrimSpace(r.URL.Path), "request_id": r.Context().Value(requestIDKey{}),
-	})
+	}
+	if code != "" {
+		response["code"] = code
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }

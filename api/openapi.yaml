@@ -374,7 +374,7 @@ paths:
   /api/authoring/drafts/{draftId}/reviews/{reviewId}/approve:
     post:
       operationId: approveAuthoringDraftReview
-      description: Terminally approves one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token.
+      description: Terminally approves one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. A configured independent-review policy rejection returns 409 with Problem code independent_reviewer_required; stale and terminal Review conflicts also return 409 without that code.
       security: [{ SessionCookie: [] }]
       parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringReviewID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewDecisionRequest' } } } }
@@ -389,7 +389,7 @@ paths:
   /api/authoring/drafts/{draftId}/reviews/{reviewId}/request-changes:
     post:
       operationId: requestAuthoringDraftReviewChanges
-      description: Terminally requests changes on one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token.
+      description: Terminally requests changes on one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. A configured independent-review policy rejection returns 409 with Problem code independent_reviewer_required; stale and terminal Review conflicts also return 409 without that code.
       security: [{ SessionCookie: [] }]
       parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringReviewID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewDecisionRequest' } } } }
@@ -1044,3 +1044,6 @@ components:
         status: { type: integer }
         instance: { type: string }
         request_id: { type: string }
+        code:
+          type: string
+          description: Stable machine-readable code for a public, specific problem condition when present.

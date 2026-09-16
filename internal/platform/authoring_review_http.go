@@ -202,6 +202,10 @@ func authoringReviewMutationProblem(w http.ResponseWriter, r *http.Request, err 
 		problem(w, r, http.StatusNotFound, "Not found")
 		return
 	}
+	if errors.Is(err, authoring.ErrIndependentReviewerRequired) {
+		problemCode(w, r, http.StatusConflict, "Independent reviewer required", "independent_reviewer_required")
+		return
+	}
 	if errors.Is(err, authoring.ErrRevisionMismatch) || errors.Is(err, authoring.ErrReviewStale) || errors.Is(err, authoring.ErrReviewInvalidState) || errors.Is(err, authoring.ErrReviewAlreadyExists) || errors.Is(err, authoring.ErrConflict) || errors.Is(err, authoring.ErrInvalidState) {
 		problem(w, r, http.StatusConflict, "Review conflict")
 		return

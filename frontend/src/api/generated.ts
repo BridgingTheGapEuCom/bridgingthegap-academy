@@ -320,7 +320,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Terminally approves one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. */
+        /** @description Terminally approves one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. A configured independent-review policy rejection returns 409 with Problem code independent_reviewer_required; stale and terminal Review conflicts also return 409 without that code. */
         post: operations["approveAuthoringDraftReview"];
         delete?: never;
         options?: never;
@@ -337,7 +337,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Terminally requests changes on one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. */
+        /** @description Terminally requests changes on one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. A configured independent-review policy rejection returns 409 with Problem code independent_reviewer_required; stale and terminal Review conflicts also return 409 without that code. */
         post: operations["requestAuthoringDraftReviewChanges"];
         delete?: never;
         options?: never;
@@ -1112,6 +1112,8 @@ export interface components {
             status: number;
             instance: string;
             request_id: string;
+            /** @description Stable machine-readable code for a public, specific problem condition when present. */
+            code?: string;
         };
     };
     responses: {

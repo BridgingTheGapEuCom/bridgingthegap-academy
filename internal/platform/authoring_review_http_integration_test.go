@@ -102,6 +102,22 @@ func testAuthoringReviewAPI(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if got := authRequest(router, http.MethodGet, base+"/active", "", maintainerCookie); got.Code != http.StatusNotFound {
 		t.Fatalf("terminal cycle remained active = %d", got.Code)
 	}
+	selfBase := "/api/authoring/drafts/" + string(otherDraft.ID) + "/reviews"
+	selfSubmission := authRequest(router, http.MethodPost, selfBase, `{"expectedDraftRevision":`+stringInt64(otherDraft.Revision)+`}`, maintainerCookie, csrf)
+	if selfSubmission.Code != http.StatusCreated {
+		t.Fatalf("self-review submission = %d %s", selfSubmission.Code, selfSubmission.Body.String())
+	}
+	selfStart := strings.Index(selfSubmission.Body.String(), marker)
+	if selfStart < 0 {
+		t.Fatal("self-review response omitted ID")
+	}
+	selfCycleID := selfSubmission.Body.String()[selfStart+len(marker):][:36]
+	for _, suffix := range []string{"approve", "request-changes"} {
+		got := authRequest(router, http.MethodPost, selfBase+"/"+selfCycleID+"/"+suffix, `{"expectedReviewRevision":1}`, maintainerCookie, csrf)
+		if got.Code != http.StatusConflict || got.Header().Get("Cache-Control") != "no-store" || !strings.Contains(got.Body.String(), `"code":"independent_reviewer_required"`) || !strings.Contains(got.Body.String(), `"title":"Independent reviewer required"`) {
+			t.Fatalf("self %s policy conflict = %d %s", suffix, got.Code, got.Body.String())
+		}
+	}
 	if got := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(otherDraft.ID)+"/reviews/"+cycleID, "", maintainerCookie); got.Code != http.StatusNotFound {
 		t.Fatalf("cross-Draft review leak = %d", got.Code)
 	}

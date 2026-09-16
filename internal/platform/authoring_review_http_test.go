@@ -204,3 +204,86 @@ func TestAuthoringReviewHTTPReadsExcludeSnapshotsFromHistory(t *testing.T) {
 		}
 	}
 }
+
+func TestAuthoringReviewHTTPIndependentReviewerPolicyConflict(t *testing.T) {
+	draftID := authoring.DraftID("11111111-1111-4111-8111-111111111111")
+	reviewID := authoring.ReviewID("22222222-2222-4222-8222-222222222222")
+	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
+	csrf := authTestCSRFToken().Value()
+	base := "/api/authoring/drafts/" + string(draftID) + "/reviews/" + string(reviewID)
+	newRouter := func(policy authoring.ReviewDecisionPolicy, status authoring.ReviewStatus, revision int64, submittedBy string, role authoring.MemberRole) (*authoringReviewRepositoryFake, *authoringMembershipsFake, http.Handler) {
+		repository := &authoringReviewRepositoryFake{cycle: authoring.ReviewCycle{ID: reviewID, DraftID: draftID, Status: status, Revision: revision, SubmittedByUserID: submittedBy, SubmittedAt: time.Now().UTC()}}
+		memberships := &authoringMembershipsFake{roles: map[authoring.DraftID]authoring.MemberRole{draftID: role}}
+		service := authoring.NewReviewApplicationServiceWithDecisionPolicy(repository, authoring.NewAuthorizationService(memberships), policy)
+		return repository, memberships, authTestRouter(&authHTTP{sessions: &authResolverFake{current: loginTestCurrent(t)}, authoringReviews: service})
+	}
+
+	for _, suffix := range []string{"approve", "request-changes"} {
+		t.Run("enabled self "+suffix, func(t *testing.T) {
+			repository, _, router := newRouter(authoring.NewReviewDecisionPolicy(true), authoring.ReviewInReview, 1, string(loginTestUser), authoring.MemberMaintainer)
+			response := authRequest(router, http.MethodPost, base+"/"+suffix, `{"expectedReviewRevision":1}`, cookie, csrf)
+			if response.Code != http.StatusConflict || response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), `"code":"independent_reviewer_required"`) || !strings.Contains(response.Body.String(), `"title":"Independent reviewer required"`) {
+				t.Fatalf("policy conflict = %d %s", response.Code, response.Body.String())
+			}
+			if strings.Contains(response.Body.String(), string(loginTestUser)) || strings.Contains(response.Body.String(), "submittedBy") || repository.cycle.Status != authoring.ReviewInReview || repository.cycle.Revision != 1 {
+				t.Fatalf("policy conflict exposed or mutated Review: %s %#v", response.Body.String(), repository.cycle)
+			}
+		})
+	}
+
+	for _, suffix := range []string{"approve", "request-changes"} {
+		t.Run("disabled self "+suffix, func(t *testing.T) {
+			repository, _, router := newRouter(authoring.NewReviewDecisionPolicy(false), authoring.ReviewInReview, 1, string(loginTestUser), authoring.MemberMaintainer)
+			response := authRequest(router, http.MethodPost, base+"/"+suffix, `{"expectedReviewRevision":1}`, cookie, csrf)
+			if response.Code != http.StatusOK || strings.Contains(response.Body.String(), `"code":"independent_reviewer_required"`) || repository.cycle.Revision != 2 {
+				t.Fatalf("disabled policy decision = %d %s", response.Code, response.Body.String())
+			}
+		})
+	}
+
+	for _, suffix := range []string{"approve", "request-changes"} {
+		t.Run("stale "+suffix+" remains generic conflict", func(t *testing.T) {
+			_, _, router := newRouter(authoring.NewReviewDecisionPolicy(true), authoring.ReviewInReview, 1, string(loginTestUser), authoring.MemberMaintainer)
+			response := authRequest(router, http.MethodPost, base+"/"+suffix, `{"expectedReviewRevision":2}`, cookie, csrf)
+			if response.Code != http.StatusConflict || strings.Contains(response.Body.String(), `"code":"independent_reviewer_required"`) {
+				t.Fatalf("stale conflict = %d %s", response.Code, response.Body.String())
+			}
+		})
+		t.Run("terminal "+suffix+" remains generic conflict", func(t *testing.T) {
+			_, _, router := newRouter(authoring.NewReviewDecisionPolicy(true), authoring.ReviewApproved, 1, string(loginTestUser), authoring.MemberMaintainer)
+			response := authRequest(router, http.MethodPost, base+"/"+suffix, `{"expectedReviewRevision":1}`, cookie, csrf)
+			if response.Code != http.StatusConflict || strings.Contains(response.Body.String(), `"code":"independent_reviewer_required"`) {
+				t.Fatalf("terminal conflict = %d %s", response.Code, response.Body.String())
+			}
+		})
+	}
+
+	for _, suffix := range []string{"approve", "request-changes"} {
+		t.Run("unauthorized "+suffix+" remains hidden", func(t *testing.T) {
+			_, _, router := newRouter(authoring.NewReviewDecisionPolicy(true), authoring.ReviewInReview, 1, string(loginTestUser), authoring.MemberAuthor)
+			response := authRequest(router, http.MethodPost, base+"/"+suffix, `{"expectedReviewRevision":1}`, cookie, csrf)
+			if response.Code != http.StatusNotFound || strings.Contains(response.Body.String(), `"code":"independent_reviewer_required"`) {
+				t.Fatalf("authorization behavior changed = %d %s", response.Code, response.Body.String())
+			}
+		})
+	}
+
+	for _, suffix := range []string{"approve", "request-changes"} {
+		t.Run("revoked "+suffix+" remains hidden", func(t *testing.T) {
+			_, memberships, router := newRouter(authoring.NewReviewDecisionPolicy(true), authoring.ReviewInReview, 1, string(loginTestUser), authoring.MemberMaintainer)
+			delete(memberships.roles, draftID)
+			response := authRequest(router, http.MethodPost, base+"/"+suffix, `{"expectedReviewRevision":1}`, cookie, csrf)
+			if response.Code != http.StatusNotFound || strings.Contains(response.Body.String(), `"code":"independent_reviewer_required"`) {
+				t.Fatalf("revoked behavior changed = %d %s", response.Code, response.Body.String())
+			}
+		})
+		t.Run("storage failure "+suffix+" remains unavailable", func(t *testing.T) {
+			repository, _, router := newRouter(authoring.NewReviewDecisionPolicy(true), authoring.ReviewInReview, 1, "other-user", authoring.MemberMaintainer)
+			repository.err = errors.New("review storage unavailable")
+			response := authRequest(router, http.MethodPost, base+"/"+suffix, `{"expectedReviewRevision":1}`, cookie, csrf)
+			if response.Code != http.StatusInternalServerError || strings.Contains(response.Body.String(), `"code":"independent_reviewer_required"`) {
+				t.Fatalf("storage failure behavior changed = %d %s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
