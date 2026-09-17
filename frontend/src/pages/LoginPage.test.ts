@@ -20,16 +20,17 @@ import LoginPage from './LoginPage.vue'
 
 const authenticatedState = { status: 'authenticated' as const, userId: '0c640c8d-50e2-4098-8b2a-8094c544c9d7', expiresAt: '2026-09-15T12:00:00Z' }
 
-async function renderLogin(state: AuthenticationState = { status: 'unauthenticated' }) {
+async function renderLogin(state: AuthenticationState = { status: 'unauthenticated' }, path = '/login') {
   authMock.state.value = state
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: { template: '<main>Home</main>' } },
       { path: '/login', component: LoginPage },
+      { path: '/authoring/new', component: { template: '<main>Create Draft</main>' } },
     ],
   })
-  await router.push('/login')
+  await router.push(path)
   await router.isReady()
   return { ...render(LoginPage, { global: { plugins: [router] } }), router }
 }
@@ -140,15 +141,15 @@ describe('LoginPage', () => {
     expect(push).not.toHaveBeenCalledWith('/')
   })
 
-  it('clears the password and navigates only to home after successful login', async () => {
+  it('clears the password and returns to a validated protected path after successful login', async () => {
     authMock.login.mockResolvedValue({ kind: 'authenticated', userId: authenticatedState.userId, expiresAt: authenticatedState.expiresAt })
-    const { router } = await renderLogin()
+    const { router } = await renderLogin({ status: 'unauthenticated' }, '/login?returnTo=/authoring/new')
     const push = vi.spyOn(router, 'push')
 
     await submitCredentials()
 
     expect((passwordInput() as HTMLInputElement).value).toBe('')
-    expect(push).toHaveBeenCalledWith('/')
+    expect(push).toHaveBeenCalledWith('/authoring/new')
   })
 
   it('does not render the form while bootstrapping or already authenticated', async () => {

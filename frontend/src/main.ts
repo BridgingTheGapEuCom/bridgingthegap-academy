@@ -3,6 +3,7 @@ import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import { auth } from './auth/auth'
+import { loginLocation, routeReturnPath } from './auth/navigation'
 import HomePage from './pages/HomePage.vue'
 import LoginPage from './pages/LoginPage.vue'
 import AdminPage from './pages/AdminPage.vue'
@@ -32,17 +33,18 @@ const router = createRouter({
   routes: [
     { path: '/', component: HomePage },
     { path: '/login', component: LoginPage },
-    { path: '/admin', component: AdminPage },
+    { path: '/admin', component: AdminPage, meta: { requiresAuth: true } },
     { path: '/courses', component: CourseListPage },
     { path: '/courses/by-id/:courseId/versions/:version', name: 'published-course-version', component: PublishedCourseReaderPage },
     { path: '/courses/by-id/:courseId', name: 'published-course-latest', component: PublishedCourseReaderPage },
     { path: '/courses/:slug', component: CourseOverviewPage },
     { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPage },
-    { path: '/authoring', name: 'authoring-home', component: AuthoringHomePage },
-    { path: '/authoring/new', name: 'authoring-draft-create', component: AuthoringDraftCreatePage },
+    { path: '/authoring', name: 'authoring-home', component: AuthoringHomePage, meta: { requiresAuth: true } },
+    { path: '/authoring/new', name: 'authoring-draft-create', component: AuthoringDraftCreatePage, meta: { requiresAuth: true } },
     {
       path: '/authoring/drafts/:draftId',
       component: AuthoringDraftShell,
+      meta: { requiresAuth: true },
       children: [
         { path: '', redirect: (to) => ({ name: 'authoring-draft-overview', params: { draftId: to.params.draftId } }) },
         { path: 'overview', name: 'authoring-draft-overview', component: AuthoringDraftOverviewPage },
@@ -54,6 +56,16 @@ const router = createRouter({
       ],
     },
   ],
+})
+
+router.beforeEach(async (to) => {
+  if (!to.matched.some((record) => record.meta.requiresAuth)) return true
+  if (auth.state.value.status === 'bootstrapping') await auth.bootstrapSession()
+  if (auth.state.value.status === 'authenticated') return true
+  if (auth.state.value.status === 'unauthenticated') return loginLocation(routeReturnPath(to))
+  // An unavailable session check should not render a protected page as though
+  // authenticated. Login retains its existing retryable session state.
+  return loginLocation(routeReturnPath(to))
 })
 
 // Give client-side navigation the same clear reading start as a new document.

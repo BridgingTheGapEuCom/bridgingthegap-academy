@@ -64,6 +64,7 @@ import { nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { useAuth } from '../auth/auth'
+import { loginLocation, routeReturnPath } from '../auth/navigation'
 import { authoringDraftPath, getAuthoringDraft, InvalidAuthoringDraftIDError, type AuthoringDraft } from '../authoring/authoring'
 import { authoringDraftContextKey } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
@@ -105,7 +106,7 @@ watch(
     requestVersion += 1
     state.value = { kind: 'loading' }
     void nextTick(() => { draft.value = undefined })
-    if (status === 'unauthenticated') void router.replace('/login')
+    if (status === 'unauthenticated') void router.replace(loginLocation(routeReturnPath(route)))
   },
   { immediate: true, flush: 'sync' },
 )

@@ -51,6 +51,7 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../auth/auth'
+import { loginLocation, routeReturnPath } from '../auth/navigation'
 import { authoringDraftPath, listAuthoringDrafts, type AuthoringDraftSummary } from '../authoring/authoring'
 import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
@@ -72,7 +73,7 @@ watch(
     }
     requestVersion += 1
     state.value = { kind: 'loading' }
-    if (status === 'unauthenticated') void router.replace('/login')
+    if (status === 'unauthenticated') void router.replace(loginLocation(routeReturnPath(router.currentRoute.value)))
   },
   { immediate: true, flush: 'sync' },
 )

@@ -1,6 +1,7 @@
 import { readonly, ref, type Ref } from 'vue'
 import {
   APIProblemError,
+  APIUnavailableError,
   createAPIClient,
   type APIRequestOptions,
   type AuthenticatedSessionResponse,
@@ -76,9 +77,10 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
       csrfToken = undefined
       const task = (async () => {
         try {
-          const session = await transport.request<AuthenticatedSessionResponse>('/api/auth/session', {
+          const session = await transport.request<unknown>('/api/auth/session', {
             invalidateOnUnauthorized: false,
           })
+          if (!isAuthenticatedSession(session)) throw new APIUnavailableError()
           if (version === operationVersion) applyAuthenticatedSession(session)
         } catch (error) {
           if (version === operationVersion) {
@@ -96,13 +98,14 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
     async login(email: LoginRequest['email'], password: LoginRequest['password']): Promise<LoginOutcome> {
       const version = ++operationVersion
       try {
-        const session = await transport.request<AuthenticatedSessionResponse>('/api/auth/login', {
+        const session = await transport.request<unknown>('/api/auth/login', {
           method: 'POST',
           body: JSON.stringify({ email, password } satisfies LoginRequest),
           headers: { 'Content-Type': 'application/json' },
           csrf: false,
           invalidateOnUnauthorized: false,
         })
+        if (!isAuthenticatedSession(session)) throw new APIUnavailableError()
         if (version !== operationVersion) return { kind: 'unavailable' }
         applyAuthenticatedSession(session)
         return { kind: 'authenticated', userId: session.user_id, expiresAt: session.expires_at }
@@ -160,6 +163,15 @@ function isStatus(error: unknown, status: number): boolean {
 
 function retryAfter(error: unknown): number | undefined {
   return error instanceof APIProblemError ? error.retryAfterSeconds : undefined
+}
+
+function isAuthenticatedSession(value: unknown): value is AuthenticatedSessionResponse {
+  if (typeof value !== 'object' || value === null) return false
+  const session = value as Record<string, unknown>
+  return session.authenticated === true
+    && typeof session.user_id === 'string' && session.user_id.length > 0
+    && typeof session.csrf_token === 'string' && session.csrf_token.length > 0
+    && typeof session.expires_at === 'string' && Number.isFinite(Date.parse(session.expires_at))
 }
 
 // This is the sole application instance. Components may consume it through

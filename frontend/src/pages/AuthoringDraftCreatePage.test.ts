@@ -112,4 +112,17 @@ describe('AuthoringDraftCreatePage', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(router.currentRoute.value.path).toBe('/authoring')
   })
+
+  it('returns an expired creation session to sign in without retrying the mutation', async () => {
+    createAuthoringDraftMock.mockImplementationOnce(async () => {
+      authMock.state.value = { status: 'unauthenticated' }
+      throw new APIProblemError(401, undefined, undefined)
+    })
+    const { router } = await renderPage()
+    await completeForm()
+    await fireEvent.click(screen.getByRole('button', { name: 'Create Draft' }))
+    await waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
+    expect(router.currentRoute.value.query.returnTo).toBe('/authoring/new')
+    expect(createAuthoringDraftMock).toHaveBeenCalledTimes(1)
+  })
 })

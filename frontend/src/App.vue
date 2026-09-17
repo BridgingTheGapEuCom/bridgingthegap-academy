@@ -11,6 +11,7 @@
         <RouterLink to="/courses">{{ t('courses') }}</RouterLink>
         <RouterLink v-if="auth.state.value.status === 'authenticated'" to="/authoring">{{ t('authoring') }}</RouterLink>
       </nav>
+      <AppSessionControls />
     </div>
   </header>
   <main id="main" tabindex="-1"><RouterView /></main>
@@ -19,6 +20,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useAuth } from './auth/auth'
+import AppSessionControls from './components/AppSessionControls.vue'
 const { t } = useI18n()
 const auth = useAuth()
 </script>

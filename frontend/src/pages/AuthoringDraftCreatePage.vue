@@ -40,10 +40,11 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { authoringDraftPath, createAuthoringDraft, type AuthoringDraftCreate } from '../authoring/authoring'
 import { useAuth } from '../auth/auth'
+import { loginLocation, routeReturnPath } from '../auth/navigation'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
@@ -52,6 +53,7 @@ import BtgTextInput from '../components/BtgTextInput.vue'
 type Form = { title: string; intendedVersion: string; sourceLanguage: string; description: string; objectivesText: string; changelog: string }
 const auth = useAuth()
 const router = useRouter()
+const route = useRoute()
 const form = reactive<Form>({ title: '', intendedVersion: '0.1.0', sourceLanguage: 'en', description: '', objectivesText: '', changelog: 'Initial Draft.' })
 const errors = reactive<Record<string, string | undefined>>({})
 const formError = ref<string>()
@@ -63,7 +65,7 @@ watch(
   () => auth.state.value.status,
   (status) => {
     requestVersion += 1
-    if (status === 'unauthenticated') void router.replace('/login')
+    if (status === 'unauthenticated') void router.replace(loginLocation(routeReturnPath(route)))
   },
   { immediate: true, flush: 'sync' },
 )

@@ -29,9 +29,7 @@
       <p class="admin-page__status">System status: OK</p>
       <div class="admin-page__actions">
         <BtgButton variant="secondary" @click="goHome">Return home</BtgButton>
-        <BtgButton variant="quiet" :disabled="signingOut" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</BtgButton>
       </div>
-      <p v-if="logoutError" ref="logoutErrorElement" class="admin-page__error" tabindex="-1">{{ logoutError }}</p>
     </div>
 
     <div v-else-if="access.kind === 'forbidden'" class="admin-page__state">
@@ -49,7 +47,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { checkAdminAccess, type AdminAccessOutcome } from '../admin/adminAccess'
 import { useAuth } from '../auth/auth'
@@ -68,9 +66,6 @@ const accessAnnouncement = computed(() => {
   if (access.value.kind === 'unavailable') return 'Administration is temporarily unavailable.'
   return ''
 })
-const signingOut = ref(false)
-const logoutError = ref<string>()
-const logoutErrorElement = ref<HTMLElement>()
 let requestVersion = 0
 let active = true
 
@@ -78,7 +73,6 @@ watch(
   () => auth.state.value,
   (current) => {
     const version = ++requestVersion
-    logoutError.value = undefined
     if (current.status === 'authenticated') {
       void checkAccess(version)
       return
@@ -110,28 +104,6 @@ async function retryBootstrap() {
 
 function retryAccess() {
   void checkAccess()
-}
-
-async function signOut() {
-  if (signingOut.value) return
-  logoutError.value = undefined
-  signingOut.value = true
-  let outcome: Awaited<ReturnType<typeof auth.logout>>
-  try {
-    outcome = await auth.logout()
-  } catch {
-    outcome = { kind: 'unavailable' }
-  } finally {
-    signingOut.value = false
-  }
-  if (!active) return
-  if (outcome.kind === 'unauthenticated') {
-    void router.replace('/login')
-    return
-  }
-  logoutError.value = 'We couldn’t sign you out right now. Please try again.'
-  await nextTick()
-  if (active) logoutErrorElement.value?.focus()
 }
 
 function goHome() {

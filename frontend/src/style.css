@@ -34,6 +34,9 @@
 }
 
 .site-navigation { display: flex; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: var(--btg-space-4); }
+.site-session { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: var(--btg-space-2); }
+.site-session > p { margin: 0; color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); }
+.site-session__error { max-width: min(100%, 22rem); border-inline-start: 0.25rem solid var(--btg-color-danger); background: var(--btg-color-surface-muted); padding: var(--btg-space-2) var(--btg-space-3); color: var(--btg-color-text) !important; }
 
 /* Intrinsic grid/fieldset minima must not impose a viewport width when text grows. */
 .authoring-home,

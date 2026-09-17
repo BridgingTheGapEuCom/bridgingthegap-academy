@@ -46,11 +46,11 @@ test('administrator journey uses backend access confirmation and signs out', asy
   })
 
   await page.goto('/admin')
-  await expect(page).toHaveURL(/\/login$/)
+  await expect(page).toHaveURL(/\/login(?:\?returnTo=\/admin)?$/)
   await page.getByLabel(/^Email/).fill('admin@example.com')
   await page.getByLabel(/^Password/).fill('test-only-password')
   await page.getByLabel(/^Password/).press('Enter')
-  await expect(page).toHaveURL(/\/$/)
+  await expect(page).toHaveURL(/\/admin$/)
   await expect(page.locator('main')).toBeFocused()
 
   await page.goto('/admin')
@@ -63,7 +63,7 @@ test('administrator journey uses backend access confirmation and signs out', asy
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   }
 
-  await page.getByRole('button', { name: 'Sign out' }).focus()
+  await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.locator('main')).toBeFocused()
@@ -72,7 +72,7 @@ test('administrator journey uses backend access confirmation and signs out', asy
   await expect(page.getByRole('heading', { level: 1, name: 'Administration' })).toHaveCount(0)
 
   await page.goto('/admin')
-  await expect(page).toHaveURL(/\/login$/)
+  await expect(page).toHaveURL(/\/login(?:\?returnTo=\/admin)?$/)
 })
 
 test('an authenticated non-administrator sees access denied and remains signed in', async ({ page }) => {
@@ -158,11 +158,11 @@ test('admin and logout operational failures keep the session and provide a retry
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Administration' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).click()
   const logoutError = page.getByText('We couldn’t sign you out right now. Please try again.')
   await expect(logoutError).toBeFocused()
   await expect(page.getByRole('heading', { level: 1, name: 'Administration' })).toBeVisible()
   await expect(page).toHaveURL(/\/admin$/)
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 })

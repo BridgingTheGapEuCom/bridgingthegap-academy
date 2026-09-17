@@ -63,8 +63,9 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../auth/auth'
+import { safeInternalReturnPath } from '../auth/navigation'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
@@ -74,6 +75,7 @@ type FocusableInput = { focus: () => void }
 
 const auth = useAuth()
 const router = useRouter()
+const route = useRoute()
 const email = ref('')
 const password = ref('')
 const emailError = ref<string>()
@@ -120,7 +122,7 @@ async function submit() {
   if (!active) return
 
   if (outcome.kind === 'authenticated') {
-    await router.push('/')
+    await router.push(returnPath())
     return
   }
 
@@ -136,7 +138,11 @@ async function retryBootstrap() {
 }
 
 function continueHome() {
-  void router.push('/')
+  void router.push(returnPath())
+}
+
+function returnPath(): string {
+  return safeInternalReturnPath(route.query.returnTo)
 }
 
 function rateLimitMessage(retryAfterSeconds?: number): string {

@@ -142,7 +142,16 @@ describe('AuthoringDraftShell', () => {
     authMock.state.value = { status: 'unauthenticated' }
     const { router } = await renderShell()
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
+    expect(router.currentRoute.value.query.returnTo).toBe(`/authoring/drafts/${firstID}/overview`)
     expect(getAuthoringDraftMock).not.toHaveBeenCalled()
+  })
+
+  it('removes private Draft content when session state becomes unauthenticated', async () => {
+    const { router } = await renderShell()
+    await screen.findByRole('heading', { level: 1, name: 'Integration foundations' })
+    authMock.state.value = { status: 'unauthenticated' }
+    await waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
+    expect(screen.queryByRole('heading', { level: 1, name: 'Integration foundations' })).toBeNull()
   })
 
   it('does not retain a late response from a previous Draft route', async () => {
