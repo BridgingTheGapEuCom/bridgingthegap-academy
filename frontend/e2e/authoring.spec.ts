@@ -94,14 +94,18 @@ const reviewSnapshot = {
   }],
 }
 
-function reviewDetail(review: { status: string }, published: { courseId: string; courseVersion: string; publishedAt: string } | null = null) {
+function reviewDetail(
+  review: { status: string },
+  published: { courseId: string; courseVersion: string; publishedAt: string } | null = null,
+  publicationIssues: Array<{ code: string; path: string; message: string }> = [],
+) {
   return {
     review,
     snapshot: reviewSnapshot,
     publication: {
       canPublish: true,
-      publishable: review.status === 'APPROVED',
-      issues: [],
+      publishable: review.status === 'APPROVED' && publicationIssues.length === 0,
+      issues: publicationIssues,
       published,
     },
   }
@@ -416,17 +420,24 @@ test('Authoring publishes an approved Review with keyboard and focuses authorita
   await expect(page.getByText('Publishing course version…')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Publishing…' })).toBeDisabled()
   releasePublication()
-  const success = page.getByRole('heading', { level: 4, name: 'Course version published' })
-  await expect(success).toBeVisible()
-  await expect(page.getByText('Course version 1.0.0 was published successfully.')).toBeVisible()
-  await expect(success).toBeFocused()
-  await expect(page.getByRole('heading', { level: 4, name: 'Published course version' })).toBeVisible()
-  await expect(page.locator('[role="status"]').filter({ hasText: 'Published: this exact Review produced course version 1.0.0.' })).toBeVisible()
+  const publishedHeading = page.getByRole('heading', { level: 4, name: 'Published course version' })
+  await expect(publishedHeading).toBeVisible()
+  await expect(page.getByText('Published: this exact Review produced course version 1.0.0.')).toBeVisible()
+  await expect(publishedHeading).toBeFocused()
+  await expect(page.getByRole('heading', { level: 4, name: 'Course version published' })).toHaveCount(0)
+  await expect(page.getByText('Course version 1.0.0 was published successfully.')).toHaveCount(0)
   const readerLink = page.getByRole('link', { name: 'View published course version 1.0.0' })
   await expect(readerLink).toHaveAttribute('href', `/courses/by-id/${draft.course_id}/versions/1.0.0`)
   await expect(page.getByRole('button', { name: 'Publish course version' })).toHaveCount(0)
   expect(publicationBody).toEqual({ expectedReviewRevision: 2 })
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  }
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '' })
 
   await readerLink.focus()
   await page.keyboard.press('Enter')
@@ -436,31 +447,43 @@ test('Authoring publishes an approved Review with keyboard and focuses authorita
 })
 
 test('Authoring exposes and focuses blocking publication validation issues', async ({ page }) => {
-  await serveApprovedReviewSnapshot(page)
-  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}/publish`, (route) => route.fulfill({
-    status: 422,
-    contentType: 'application/problem+json',
-    body: JSON.stringify({
-      type: 'https://academy.example/problems/publication-validation-failed',
-      title: 'Publication validation failed',
-      status: 422,
-      instance: route.request().url(),
-      request_id: 'publication-validation-request',
-      code: 'publication_validation_failed',
-      issues: [
-        { code: 'unresolved_asset_reference', path: 'modules[0].lessons[0].content.blocks[1]', message: 'The image asset is not available.' },
-        { code: 'unresolved_assessment_reference', path: 'modules[0].lessons[0].content.blocks[2]', message: 'The assessment is not available.' },
-      ],
-    }),
+  const publicationIssues = [
+    { code: 'unresolved_asset_reference', path: 'modules[0].lessons[0].content.blocks[1]', message: 'The image asset is not available.' },
+    { code: 'unresolved_assessment_reference', path: 'modules[0].lessons[0].content.blocks[2]', message: 'The assessment is not available.' },
+  ]
+  let blocked = false
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(reviewDetail(approvedReviewCycle, null, blocked ? publicationIssues : [])),
   }))
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}/publish`, (route) => {
+    blocked = true
+    return route.fulfill({
+      status: 422,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({
+        type: 'https://academy.example/problems/publication-validation-failed',
+        title: 'Publication validation failed',
+        status: 422,
+        instance: route.request().url(),
+        request_id: 'publication-validation-request',
+        code: 'publication_validation_failed',
+        issues: publicationIssues,
+      }),
+    })
+  })
 
   await page.goto(`/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`)
   await page.getByRole('button', { name: 'Publish course version' }).focus()
   await page.keyboard.press('Enter')
-  const summary = page.getByRole('heading', { level: 4, name: 'Publication validation issues' })
+  const summary = page.getByRole('heading', { level: 4, name: 'Publication is blocked' })
   await expect(summary).toBeVisible()
   await expect(page.getByText('The image asset is not available.')).toBeVisible()
   await expect(page.getByText('The assessment is not available.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Publish course version' })).toHaveCount(0)
+  await expect(page.getByRole('list', { name: 'Publication validation issues' })).toBeVisible()
   await expect(summary).toBeFocused()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

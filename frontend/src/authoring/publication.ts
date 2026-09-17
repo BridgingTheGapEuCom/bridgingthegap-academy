@@ -1,12 +1,12 @@
 import { APIProblemError } from '../api/client'
-import type { AuthoringPublication, PublicationValidationIssue } from './authoring'
+import type { PublicationValidationIssue } from './authoring'
 
 export type AuthoringPublicationConflictCode = 'review_revision_conflict' | 'review_not_approved' | 'course_version_already_exists' | 'publication_conflict'
 
 export type AuthoringPublicationState =
   | { kind: 'idle' }
   | { kind: 'submitting' }
-  | { kind: 'success'; result: AuthoringPublication }
+  | { kind: 'confirmation-failure' }
   | { kind: 'validation-failure'; issues: PublicationValidationIssue[] }
   | { kind: 'conflict'; code: AuthoringPublicationConflictCode | undefined }
   | { kind: 'operational-failure' }

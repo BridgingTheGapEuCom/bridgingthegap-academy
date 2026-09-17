@@ -178,6 +178,9 @@ async function load(): Promise<boolean> {
       && publicationState.value.kind !== 'submitting') {
       publicationState.value = { kind: 'idle' }
     }
+    if (detail.publication.published !== null && publicationState.value.kind !== 'submitting') {
+      publicationState.value = { kind: 'idle' }
+    }
     state.value = detail.snapshot.schemaVersion === 1 ? { kind: 'ready', detail } : { kind: 'unsupported' }
     return state.value.kind === 'ready'
   } catch (error) {
@@ -257,14 +260,19 @@ async function publishReview() {
   try {
     // Only the exact authoritative Review revision is browser input. The API
     // derives publisher identity, publication time, provenance, and snapshot.
-    const result = await publishAuthoringDraftReview(draftID, exactReviewID, { expectedReviewRevision: detail.review.reviewRevision })
+    await publishAuthoringDraftReview(draftID, exactReviewID, { expectedReviewRevision: detail.review.reviewRevision })
     if (!isCurrent() || !active) return
     // The Review itself remains APPROVED; publication is a separate immutable
     // fact. Re-read this exact resource rather than inventing PUBLISHED state.
-    if (await load() && isCurrent()) {
-      publicationState.value = { kind: 'success', result }
-      await focusPublicationFeedback(isCurrent)
+    const refreshed = await load()
+    if (!isCurrent() || !active) return
+    if (refreshed && state.value.kind === 'ready' && state.value.detail.publication.published !== null) {
+      publicationState.value = { kind: 'idle' }
+      await focusPublicationStatus('authoring-review-published-title', isCurrent)
+      return
     }
+    publicationState.value = { kind: 'confirmation-failure' }
+    if (refreshed) await focusPublicationFeedback(isCurrent)
   } catch (error) {
     if (!isCurrent() || !active) return
     if (error instanceof APIProblemError && error.status === 404) {
@@ -277,7 +285,24 @@ async function publishReview() {
       // A safe domain outcome can reflect a state change after the initial
       // readiness read. Refresh this exact immutable Review for every such
       // outcome, but never replay with a revision the user did not select.
-      if (!await load() || !isCurrent()) return
+      const refreshed = await load()
+      if (!isCurrent() || !active) return
+      if (!refreshed) {
+        publicationState.value = failure
+        return
+      }
+      if (state.value.kind === 'ready' && state.value.detail.publication.published !== null) {
+        publicationState.value = { kind: 'idle' }
+        await focusPublicationStatus('authoring-review-published-title', isCurrent)
+        return
+      }
+      if (failure.kind === 'validation-failure'
+        && state.value.kind === 'ready'
+        && !state.value.detail.publication.publishable) {
+        publicationState.value = { kind: 'idle' }
+        await focusPublicationStatus('authoring-review-publication-blocked-title', isCurrent)
+        return
+      }
     }
     if (!isCurrent() || !active) return
     publicationState.value = failure
@@ -289,6 +314,12 @@ async function focusPublicationFeedback(isCurrent: () => boolean) {
   await nextTick()
   if (!isCurrent() || !active) return
   document.getElementById('authoring-review-publication-feedback-title')?.focus()
+}
+
+async function focusPublicationStatus(id: string, isCurrent: () => boolean) {
+  await nextTick()
+  if (!isCurrent() || !active) return
+  document.getElementById(id)?.focus()
 }
 
 function statusLabel(status: AuthoringReviewDetail['review']['status']): string {

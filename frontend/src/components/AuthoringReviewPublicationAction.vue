@@ -10,15 +10,11 @@
     <p v-if="state.kind === 'submitting'" class="authoring-review__status" role="status">Publishing course version…</p>
 
     <div
-      v-else-if="state.kind === 'success'"
-      class="authoring-review__publication-feedback authoring-review__publication-feedback--success"
+      v-else-if="state.kind === 'confirmation-failure'"
+      class="authoring-review__publication-feedback authoring-review__publication-feedback--error"
     >
-      <h4 id="authoring-review-publication-feedback-title" tabindex="-1">Course version published</h4>
-      <p role="status">Course version {{ state.result.courseVersion }} was published successfully.</p>
-      <dl class="authoring-review__metadata">
-        <div><dt>Version</dt><dd>{{ state.result.courseVersion }}</dd></div>
-        <div><dt>Published</dt><dd><time :datetime="state.result.publishedAt">{{ formatTimestamp(state.result.publishedAt) }}</time></dd></div>
-      </dl>
+      <h4 id="authoring-review-publication-feedback-title" tabindex="-1">Publication status could not be confirmed</h4>
+      <p>The publication request completed, but the refreshed Review did not confirm Published. Review the current state before trying again.</p>
     </div>
 
     <div
@@ -26,7 +22,7 @@
       class="authoring-review__publication-feedback authoring-review__publication-feedback--error"
     >
       <h4 id="authoring-review-publication-feedback-title" tabindex="-1">Publication validation issues</h4>
-      <p role="alert">Publication could not proceed because {{ issueCountLabel(state.issues.length) }} found.</p>
+      <p>Publication could not proceed because {{ issueCountLabel(state.issues.length) }} found.</p>
       <ul class="authoring-review__validation-list" aria-label="Publication validation issues">
         <li v-for="(issue, index) in state.issues" :key="`${issue.code}:${issue.path}:${index}`">
           <strong>{{ issueTitle(issue.code) }}</strong>
@@ -42,7 +38,7 @@
       class="authoring-review__publication-feedback authoring-review__publication-feedback--conflict"
     >
       <h4 id="authoring-review-publication-feedback-title" tabindex="-1">{{ conflictTitle(state.code) }}</h4>
-      <p role="status">{{ conflictMessage(state.code) }}</p>
+      <p>{{ conflictMessage(state.code) }}</p>
     </div>
 
     <div
@@ -75,12 +71,6 @@ defineProps<{
 defineEmits<{
   publish: []
 }>()
-
-function formatTimestamp(value: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC',
-  }).format(new Date(value))
-}
 
 function issueCountLabel(count: number): string {
   return `${count} blocking ${count === 1 ? 'issue was' : 'issues were'}`
