@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 )
 
 const maxAuthoringReviewBodyBytes int64 = 32 * 1024
@@ -33,8 +34,30 @@ type authoringReviewDTO struct {
 }
 
 type authoringReviewDetailDTO struct {
+	Review      authoringReviewDTO                  `json:"review"`
+	Snapshot    authoring.ReviewSnapshot            `json:"snapshot"`
+	Publication authoringReviewPublicationStatusDTO `json:"publication"`
+}
+
+// Submission returns the frozen Review evidence without the optional
+// publication-status read. A successful Review creation must not be reported
+// as failed because a later, independent publication-fact lookup is down.
+type authoringReviewSubmissionDetailDTO struct {
 	Review   authoringReviewDTO       `json:"review"`
 	Snapshot authoring.ReviewSnapshot `json:"snapshot"`
+}
+
+type authoringReviewPublicationStatusDTO struct {
+	CanPublish  bool                            `json:"canPublish"`
+	Publishable bool                            `json:"publishable"`
+	Issues      []publicationValidationIssueDTO `json:"issues"`
+	Published   *authoringReviewPublishedDTO    `json:"published"`
+}
+
+type authoringReviewPublishedDTO struct {
+	CourseID      string    `json:"courseId"`
+	CourseVersion string    `json:"courseVersion"`
+	PublishedAt   time.Time `json:"publishedAt"`
 }
 
 func (a *authHTTP) handleAuthoringReviewSubmit(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +75,7 @@ func (a *authHTTP) handleAuthoringReviewSubmit(w http.ResponseWriter, r *http.Re
 		authoringReviewMutationProblem(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, authoringReviewDetailDTO{Review: authoringReview(cycle), Snapshot: snapshot})
+	writeJSON(w, http.StatusCreated, authoringReviewSubmissionDetailDTO{Review: authoringReview(cycle), Snapshot: snapshot})
 }
 
 func (a *authHTTP) handleAuthoringReviewActive(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +138,37 @@ func (a *authHTTP) handleAuthoringReview(w http.ResponseWriter, r *http.Request)
 		authoringReviewProblem(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, authoringReviewDetailDTO{Review: authoringReview(cycle), Snapshot: snapshot})
+	detail, err := a.authoringReviewDetail(r, actor, cycle, snapshot)
+	if err != nil {
+		authoringReviewProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}
+
+func (a *authHTTP) authoringReviewDetail(r *http.Request, actor identity.AuthenticatedActor, cycle authoring.ReviewCycle, snapshot authoring.ReviewSnapshot) (authoringReviewDetailDTO, error) {
+	validation := authoring.NewPublicationValidator().Validate(cycle, &snapshot)
+	status := authoring.ReviewPublicationStatus{Publishable: validation.Publishable, Issues: validation.Issues}
+	if a.authoringPublicationStatus != nil {
+		var err error
+		status, err = a.authoringPublicationStatus.Status(r.Context(), actor, cycle, snapshot)
+		if err != nil {
+			return authoringReviewDetailDTO{}, err
+		}
+	}
+	issues := make([]publicationValidationIssueDTO, 0, len(status.Issues))
+	for _, issue := range status.Issues {
+		issues = append(issues, publicationValidationIssueDTO{Code: issue.Code, Path: issue.Path, Message: issue.Message})
+	}
+	publication := authoringReviewPublicationStatusDTO{
+		CanPublish: status.CanPublish, Publishable: status.Publishable, Issues: issues,
+	}
+	if status.Published != nil {
+		publication.Published = &authoringReviewPublishedDTO{
+			CourseID: string(status.Published.CourseID), CourseVersion: status.Published.CourseVersion.String(), PublishedAt: status.Published.PublishedAt,
+		}
+	}
+	return authoringReviewDetailDTO{Review: authoringReview(cycle), Snapshot: snapshot, Publication: publication}, nil
 }
 
 func (a *authHTTP) handleAuthoringReviewApprove(w http.ResponseWriter, r *http.Request) {

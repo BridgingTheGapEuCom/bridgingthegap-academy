@@ -18,7 +18,6 @@
       <dl class="authoring-review__metadata">
         <div><dt>Version</dt><dd>{{ state.result.courseVersion }}</dd></div>
         <div><dt>Published</dt><dd><time :datetime="state.result.publishedAt">{{ formatTimestamp(state.result.publishedAt) }}</time></dd></div>
-        <div><dt>CourseVersion ID</dt><dd><code>{{ state.result.courseVersionId }}</code></dd></div>
       </dl>
     </div>
 

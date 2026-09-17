@@ -89,6 +89,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringLessonContent:      authoring.NewLessonContentMutationService(authoringRepository, authoringAuthorizer),
 		authoringMemberships:        authoring.NewMembershipMutationService(authoringRepository, authoringAuthorizer),
 		authoringReviews:            newAuthoringReviewApplicationService(cfg, authoringRepository, authoringAuthorizer),
+		authoringPublicationStatus:  authoring.NewReviewPublicationStatusService(authoringRepository, authoringAuthorizer),
 		authoringPublications:       authoring.NewPublicationApplicationService(publicationService, authoringAuthorizer, time.Now),
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,

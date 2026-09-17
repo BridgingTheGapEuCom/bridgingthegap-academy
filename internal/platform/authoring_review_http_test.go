@@ -10,7 +10,21 @@ import (
 	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 )
+
+type authoringReviewPublicationFactsFake struct {
+	record authoring.PublicationRecord
+	err    error
+}
+
+func (f authoringReviewPublicationFactsFake) RecordPublication(context.Context, authoring.PublicationRecord) (authoring.PublicationRecord, error) {
+	return authoring.PublicationRecord{}, errors.New("not used")
+}
+
+func (f authoringReviewPublicationFactsFake) GetPublication(context.Context, authoring.ReviewID) (authoring.PublicationRecord, error) {
+	return f.record, f.err
+}
 
 type authoringReviewRepositoryFake struct {
 	cycle    authoring.ReviewCycle
@@ -242,6 +256,47 @@ func TestAuthoringReviewHTTPReadsExcludeSnapshotsFromHistory(t *testing.T) {
 		}
 		if path != base+"/"+string(reviewID) && strings.Contains(response.Body.String(), `"snapshot"`) {
 			t.Fatalf("metadata read included snapshot: %s", path)
+		}
+	}
+}
+
+func TestAuthoringReviewHTTPIncludesSafeExactPublicationStatus(t *testing.T) {
+	draftID := authoring.DraftID("11111111-1111-4111-8111-111111111111")
+	reviewID := authoring.ReviewID("22222222-2222-4222-8222-222222222222")
+	version, err := courses.ParseVersion("1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishedAt := time.Date(2026, time.September, 17, 12, 0, 0, 0, time.UTC)
+	cycle := authoring.ReviewCycle{ID: reviewID, DraftID: draftID, DraftRevision: 4, SnapshotSchemaVersion: 1, Status: authoring.ReviewApproved, Revision: 2, SubmittedByUserID: string(loginTestUser), SubmittedAt: time.Now().UTC()}
+	repository := &authoringReviewRepositoryFake{cycle: cycle, snapshot: authoring.ReviewSnapshot{SchemaVersion: 1}}
+	memberships := authoringMembershipsFake{roles: map[authoring.DraftID]authoring.MemberRole{draftID: authoring.MemberMaintainer}}
+	authorizer := authoring.NewAuthorizationService(memberships)
+	facts := authoringReviewPublicationFactsFake{record: authoring.PublicationRecord{
+		ReviewID: reviewID, ReviewRevision: cycle.Revision, DraftID: draftID, DraftRevision: cycle.DraftRevision,
+		CourseID: "33333333-3333-4333-8333-333333333333", CourseVersion: version,
+		CourseVersionID: "44444444-4444-4444-8444-444444444444", PublishedAt: publishedAt,
+		PublishedByUserID: "55555555-5555-4555-8555-555555555555",
+	}}
+	router := authTestRouter(&authHTTP{
+		sessions:                   &authResolverFake{current: loginTestCurrent(t)},
+		authoringReviews:           authoring.NewReviewApplicationService(repository, authorizer),
+		authoringPublicationStatus: authoring.NewReviewPublicationStatusService(facts, authorizer),
+	})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
+	response := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftID)+"/reviews/"+string(reviewID), "", cookie)
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("publication status = %d %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, want := range []string{`"canPublish":true`, `"courseVersion":"1.0.0"`, `"publishedAt":"2026-09-17T12:00:00Z"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %s in %s", want, body)
+		}
+	}
+	for _, forbidden := range []string{"publishedBy", "courseVersionId", "55555555-5555-4555-8555-555555555555"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("publication projection exposed %q: %s", forbidden, body)
 		}
 	}
 }

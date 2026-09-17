@@ -344,6 +344,7 @@
 .authoring-review__decision-actions { display: flex; flex-wrap: wrap; gap: var(--btg-space-3); }
 .authoring-review__publication-feedback { display: grid; gap: var(--btg-space-3); padding: var(--btg-space-3) var(--btg-space-4); border-inline-start: 0.25rem solid var(--btg-color-border-strong); background: var(--btg-color-surface-muted); }
 .authoring-review__publication-feedback--success { border-inline-start-color: var(--btg-color-success); }
+.authoring-review__publication-feedback--ready { border-inline-start-color: var(--btg-color-success); }
 .authoring-review__publication-feedback--conflict { border-inline-start-color: var(--btg-color-warning); }
 .authoring-review__publication-feedback--error { border-inline-start-color: var(--btg-color-danger); }
 .authoring-review__publication-feedback h4,

@@ -20,6 +20,8 @@ export type AuthoringMemberMutation = components['schemas']['AuthoringMemberMuta
 export type AuthoringReview = components['schemas']['AuthoringReview']
 export type AuthoringReviewList = components['schemas']['AuthoringReviewList']
 export type AuthoringReviewDetail = components['schemas']['AuthoringReviewDetail']
+export type AuthoringReviewSubmissionDetail = components['schemas']['AuthoringReviewSubmissionDetail']
+export type AuthoringReviewPublicationStatus = components['schemas']['AuthoringReviewPublicationStatus']
 export type AuthoringReviewSubmit = components['schemas']['AuthoringReviewSubmitRequest']
 export type AuthoringReviewDecision = components['schemas']['AuthoringReviewDecisionRequest']
 export type AuthoringReviewSnapshot = components['schemas']['AuthoringReviewSnapshot']
@@ -75,6 +77,13 @@ export class InvalidAuthoringDraftResponseError extends Error {
   constructor() {
     super('Invalid Authoring draft response')
     this.name = 'InvalidAuthoringDraftResponseError'
+  }
+}
+
+export class InvalidAuthoringReviewResponseError extends Error {
+  constructor() {
+    super('Invalid Authoring Review response')
+    this.name = 'InvalidAuthoringReviewResponseError'
   }
 }
 
@@ -157,15 +166,17 @@ export async function getAuthoringLatestDraftReview(draftID: string, client: Pic
 export async function getAuthoringDraftReview(draftID: string, reviewID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReviewDetail> {
   assertAuthoringID(draftID)
   assertAuthoringID(reviewID)
-  return client.request<AuthoringReviewDetail>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}`)
+  const response = await client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}`, { cache: 'no-store' })
+  if (!isAuthoringReviewDetail(response)) throw new InvalidAuthoringReviewResponseError()
+  return response
 }
 
 // The server freezes the canonical snapshot from the authoritative Draft. The
 // frontend sends only the Draft revision it intends to submit and does not use
 // the snapshot response until a later explicit Review-detail experience.
-export async function submitAuthoringDraftReview(draftID: string, input: AuthoringReviewSubmit, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReviewDetail> {
+export async function submitAuthoringDraftReview(draftID: string, input: AuthoringReviewSubmit, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringReviewSubmissionDetail> {
   assertAuthoringID(draftID)
-  return client.request<AuthoringReviewDetail>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews`, jsonRequest('POST', input))
+  return client.request<AuthoringReviewSubmissionDetail>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews`, jsonRequest('POST', input))
 }
 
 // Decisions are scoped by both the Draft and the immutable Review cycle. The
@@ -299,6 +310,26 @@ function isAuthoringDraft(value: unknown): value is AuthoringDraft {
     && (value.status === 'ACTIVE' || value.status === 'ABANDONED')
     && typeof value.revision === 'number' && Number.isInteger(value.revision) && value.revision >= 1
     && isDateTime(value.created_at) && isDateTime(value.updated_at)
+}
+
+function isAuthoringReviewDetail(value: unknown): value is AuthoringReviewDetail {
+  return isRecord(value)
+    && isRecord(value.review)
+    && typeof value.review.id === 'string' && isAuthoringDraftID(value.review.id)
+    && typeof value.review.draftId === 'string' && isAuthoringDraftID(value.review.draftId)
+    && (value.review.status === 'IN_REVIEW' || value.review.status === 'APPROVED' || value.review.status === 'CHANGES_REQUESTED')
+    && typeof value.review.reviewRevision === 'number' && Number.isSafeInteger(value.review.reviewRevision) && value.review.reviewRevision > 0
+    && isRecord(value.snapshot) && typeof value.snapshot.schemaVersion === 'number' && Array.isArray(value.snapshot.modules)
+    && isAuthoringReviewPublicationStatus(value.publication)
+}
+
+function isAuthoringReviewPublicationStatus(value: unknown): value is AuthoringReviewPublicationStatus {
+  if (!isRecord(value) || typeof value.canPublish !== 'boolean' || typeof value.publishable !== 'boolean' || !Array.isArray(value.issues)) return false
+  if (!value.issues.every((issue) => isRecord(issue) && typeof issue.code === 'string' && typeof issue.path === 'string' && typeof issue.message === 'string')) return false
+  return value.published === null || (isRecord(value.published)
+    && typeof value.published.courseId === 'string' && isAuthoringDraftID(value.published.courseId)
+    && typeof value.published.courseVersion === 'string' && isAuthoringVersion(value.published.courseVersion)
+    && isDateTime(value.published.publishedAt))
 }
 
 function isAuthoringVersion(value: string): boolean {

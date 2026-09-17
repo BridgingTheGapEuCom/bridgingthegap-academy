@@ -646,6 +646,24 @@ export interface components {
         AuthoringReviewDetail: {
             review: components["schemas"]["AuthoringReview"];
             snapshot: components["schemas"]["AuthoringReviewSnapshot"];
+            publication: components["schemas"]["AuthoringReviewPublicationStatus"];
+        };
+        AuthoringReviewSubmissionDetail: {
+            review: components["schemas"]["AuthoringReview"];
+            snapshot: components["schemas"]["AuthoringReviewSnapshot"];
+        };
+        /** @description Server-authoritative exact-Review publication readiness and safe publication state. canPublish represents the current actor's authoring.publish capability only; it does not replace endpoint authorization. */
+        AuthoringReviewPublicationStatus: {
+            canPublish: boolean;
+            publishable: boolean;
+            issues: components["schemas"]["PublicationValidationIssue"][];
+            published: {
+                /** Format: uuid */
+                courseId: string;
+                courseVersion: string;
+                /** Format: date-time */
+                publishedAt: string;
+            } | null;
         };
         AuthoringReviewSnapshot: {
             /** @constant */
@@ -2089,7 +2107,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthoringReviewDetail"];
+                    "application/json": components["schemas"]["AuthoringReviewSubmissionDetail"];
                 };
             };
             400: components["responses"]["Problem"];

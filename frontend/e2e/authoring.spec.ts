@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
 const draftID = '11111111-1111-4111-8111-111111111111'
-const session = { user_id: '22222222-2222-4222-8222-222222222222', expires_at: '2026-09-15T16:00:00Z', csrf_token: 'test-csrf-token' }
+const session = { authenticated: true, user_id: '22222222-2222-4222-8222-222222222222', expires_at: '2026-09-15T16:00:00Z', csrf_token: 'test-csrf-token' }
 const draft = {
   id: draftID,
   course_id: '33333333-3333-4333-8333-333333333333',
@@ -94,6 +94,19 @@ const reviewSnapshot = {
   }],
 }
 
+function reviewDetail(review: { status: string }) {
+  return {
+    review,
+    snapshot: reviewSnapshot,
+    publication: {
+      canPublish: true,
+      publishable: review.status === 'APPROVED',
+      issues: [],
+      published: null,
+    },
+  }
+}
+
 async function serveDraft(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
@@ -108,15 +121,10 @@ async function serveReviewOverview(page: Page) {
 
 async function serveApprovedReviewSnapshot(page: Page) {
   await serveDraft(page)
-  await page.route(`**/api/authoring/drafts/${draftID}/members`, (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ members: [{ userId: session.user_id, role: 'MAINTAINER' }] }),
-  }))
   await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ review: approvedReviewCycle, snapshot: reviewSnapshot }),
+    body: JSON.stringify(reviewDetail(approvedReviewCycle)),
   }))
 }
 
@@ -283,7 +291,7 @@ test('Authoring Review history opens an exact frozen snapshot with read-only con
   })
   await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => {
     snapshotRequests += 1
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: reviewCycle, snapshot: reviewSnapshot }) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewDetail(reviewCycle)) })
   })
 
   await page.setViewportSize({ width: 390, height: 844 })
@@ -328,7 +336,7 @@ test('Authoring decides an in-review snapshot with the authoritative Review revi
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(review) })
   })
   await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => {
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review, snapshot: reviewSnapshot }) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewDetail(review)) })
   })
 
   await page.setViewportSize({ width: 390, height: 844 })
@@ -430,7 +438,7 @@ test('Authoring presents an independent-review policy conflict accessibly', asyn
   await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ review: reviewCycle, snapshot: reviewSnapshot }),
+    body: JSON.stringify(reviewDetail(reviewCycle)),
   }))
 
   await page.setViewportSize({ width: 320, height: 844 })
@@ -662,7 +670,7 @@ test('Authoring routes reflow at 320px and 390px with enlarged text', async ({ p
   await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(structure) }))
   await page.route(`**/api/authoring/drafts/${draftID}/members`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ members: [{ userId: '77777777-7777-4777-8777-777777777777', role: 'MAINTAINER' }] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, content: { schemaVersion: 1, blocks: [{ key: 'long-stable-block-key-for-reflow', type: 'CODE', payload: { code: 'const example = "unbroken-content-that-must-not-widen-the-page";' } }] } }) }))
-  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ review: reviewCycle, snapshot: reviewSnapshot }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewDetail(reviewCycle)) }))
   const routes = ['/authoring', `/authoring/drafts/${draftID}/overview`, `/authoring/drafts/${draftID}/structure`, `/authoring/drafts/${draftID}/lessons/${lesson.id}`, `/authoring/drafts/${draftID}/members`, `/authoring/drafts/${draftID}/review`, `/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`]
   for (const path of routes) {
     await page.goto(path)

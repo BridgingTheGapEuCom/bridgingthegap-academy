@@ -7,23 +7,13 @@ import { authoringDraftContextKey } from '../authoring/draftContext'
 import type { AuthoringPublication, AuthoringReviewDetail } from '../authoring/authoring'
 import AuthoringDraftReviewSnapshotPage from './AuthoringDraftReviewSnapshotPage.vue'
 
-type AuthenticationState =
-  | { status: 'bootstrapping' }
-  | { status: 'unauthenticated' }
-  | { status: 'authenticated'; userId: string; expiresAt: string }
-  | { status: 'unavailable' }
-
-const authMock = vi.hoisted(() => ({ state: { value: { status: 'authenticated' } as AuthenticationState } }))
 const getAuthoringDraftReviewMock = vi.hoisted(() => vi.fn())
-const getAuthoringDraftMembersMock = vi.hoisted(() => vi.fn())
 const approveAuthoringReviewMock = vi.hoisted(() => vi.fn())
 const requestAuthoringReviewChangesMock = vi.hoisted(() => vi.fn())
 const publishAuthoringDraftReviewMock = vi.hoisted(() => vi.fn())
-vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
 vi.mock('../authoring/authoring', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../authoring/authoring')>()),
   getAuthoringDraftReview: getAuthoringDraftReviewMock,
-  getAuthoringDraftMembers: getAuthoringDraftMembersMock,
   approveAuthoringReview: approveAuthoringReviewMock,
   requestAuthoringReviewChanges: requestAuthoringReviewChangesMock,
   publishAuthoringDraftReview: publishAuthoringDraftReviewMock,
@@ -69,6 +59,12 @@ function detail(
         { id: '99999999-9999-4999-8999-999999999999', stableKey: 'second', title: 'Second Module', description: 'Captured second.', position: 1, lessons: [] },
       ],
     },
+    publication: {
+      canPublish: status === 'APPROVED',
+      publishable: status === 'APPROVED',
+      issues: status === 'APPROVED' ? [] : [{ code: 'review_not_approved', path: 'review.status', message: 'Only an approved Review can be published.' }],
+      published: null,
+    },
   } as unknown as AuthoringReviewDetail
 }
 
@@ -109,9 +105,7 @@ async function renderPage(path = `/authoring/drafts/${draftID}/reviews/${firstRe
 
 describe('AuthoringDraftReviewSnapshotPage', () => {
   beforeEach(() => {
-    authMock.state = shallowRef<AuthenticationState>({ status: 'authenticated', userId: actor, expiresAt: '2026-09-15T16:00:00Z' })
     getAuthoringDraftReviewMock.mockReset().mockResolvedValue(detail())
-    getAuthoringDraftMembersMock.mockReset().mockResolvedValue({ members: [{ userId: actor, role: 'MAINTAINER' }] })
     approveAuthoringReviewMock.mockReset()
     requestAuthoringReviewChangesMock.mockReset()
     publishAuthoringDraftReviewMock.mockReset()
@@ -128,10 +122,10 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(screen.queryByText('Published')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull()
-    expect(screen.getAllByText(actor).length).toBeGreaterThan(0)
+    expect(screen.queryByText(actor)).toBeNull()
     expect(screen.getByText('Creative Commons Attribution 4.0')).toBeTruthy()
     const modules = screen.getAllByRole('heading', { level: 3 })
-    expect(modules.map((heading) => heading.textContent)).toEqual(['Draft metadata', 'Snapshot structure', 'First Module', 'Second Module'])
+    expect(modules.map((heading) => heading.textContent)).toEqual(['Publication', 'Publish this Review', 'Draft metadata', 'Snapshot structure', 'First Module', 'Second Module'])
     expect(screen.getAllByRole('heading', { level: 4 }).map((heading) => heading.textContent)).toContain('Before lesson')
     expect(screen.getByText('Before lesson (before)')).toBeTruthy()
   })
@@ -227,16 +221,19 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull()
   })
 
-  it('shows publishing only to a current MAINTAINER viewing an exact approved Review', async () => {
+  it('uses the server-authoritative publication capability for an exact approved Review', async () => {
     await renderPage()
     expect(await screen.findByRole('button', { name: 'Publish course version' })).toBeTruthy()
-    expect(getAuthoringDraftMembersMock).toHaveBeenCalledWith(draftID)
+    expect(screen.getByRole('heading', { level: 4, name: 'Ready for publication' })).toBeTruthy()
 
     cleanup()
-    getAuthoringDraftMembersMock.mockResolvedValueOnce({ members: [{ userId: actor, role: 'AUTHOR' }] })
+    const withoutCapability = detail()
+    withoutCapability.publication = { ...withoutCapability.publication, canPublish: false }
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(withoutCapability)
     await renderPage()
     await screen.findByText('Frozen integration foundations')
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull())
+    expect(screen.getByText('This Review is ready for publication.')).toBeTruthy()
   })
 
   it('does not offer publishing for an in-review or changes-requested cycle', async () => {
@@ -244,12 +241,51 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     await renderPage()
     await screen.findByText('In review')
     expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
+    expect(screen.getByText('Publication is unavailable because this Review is not approved. Current status: in review.')).toBeTruthy()
 
     cleanup()
     getAuthoringDraftReviewMock.mockResolvedValueOnce(detail(firstReviewID, 'Frozen integration foundations', 'CHANGES_REQUESTED', 6))
     await renderPage()
     await screen.findByText('Changes requested')
     expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
+    expect(screen.getByText('Publication is unavailable because this Review is not approved. Current status: changes requested.')).toBeTruthy()
+  })
+
+  it('renders authoritative publication validation issues without enabling publication', async () => {
+    const blocked = detail()
+    blocked.publication = {
+      canPublish: true,
+      publishable: false,
+      issues: [
+        { code: 'unresolved_asset_reference', path: 'modules[media].lessons[intro].content.blocks[diagram]', message: 'The image reference must be resolved before publication.' },
+        { code: 'unresolved_assessment_reference', path: 'modules[checks].lessons[review].content.blocks[knowledge-check]', message: 'The knowledge check reference must be resolved before publication.' },
+      ],
+      published: null,
+    }
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(blocked)
+    await renderPage()
+    expect(await screen.findByRole('heading', { level: 4, name: 'Publication is blocked' })).toBeTruthy()
+    expect(screen.getByText('The image reference must be resolved before publication.')).toBeTruthy()
+    expect(screen.getByText('The knowledge check reference must be resolved before publication.')).toBeTruthy()
+    expect(screen.getAllByText(/Location:/)).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
+  })
+
+  it('identifies only an exact recorded publication and links to its public immutable version', async () => {
+    const published = detail()
+    published.publication = {
+      canPublish: true,
+      publishable: true,
+      issues: [],
+      published: { courseId: '55555555-5555-4555-8555-555555555555', courseVersion: '1.0.0', publishedAt: '2026-09-16T14:30:00Z' },
+    }
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(published)
+    await renderPage()
+    expect(await screen.findByRole('heading', { level: 4, name: 'Published course version' })).toBeTruthy()
+    const link = screen.getByRole('link', { name: 'View published course version 1.0.0' })
+    expect(link.getAttribute('href')).toBe('/courses/by-id/55555555-5555-4555-8555-555555555555/versions/1.0.0')
+    expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
+    expect(screen.queryByText(/courseVersionId|publishedBy/i)).toBeNull()
   })
 
   it('publishes only the exact current Review revision and refreshes its authoritative state', async () => {

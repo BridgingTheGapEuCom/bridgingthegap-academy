@@ -345,7 +345,7 @@ paths:
       parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewSubmitRequest' } } } }
       responses:
-        '201': { description: Frozen Review cycle, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewDetail' } } } }
+        '201': { description: Frozen Review cycle, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringReviewSubmissionDetail' } } } }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
@@ -717,10 +717,35 @@ components:
     AuthoringReviewDetail:
       type: object
       additionalProperties: false
+      required: [review, snapshot, publication]
+      properties:
+        review: { $ref: '#/components/schemas/AuthoringReview' }
+        snapshot: { $ref: '#/components/schemas/AuthoringReviewSnapshot' }
+        publication: { $ref: '#/components/schemas/AuthoringReviewPublicationStatus' }
+    AuthoringReviewSubmissionDetail:
+      type: object
+      additionalProperties: false
       required: [review, snapshot]
       properties:
         review: { $ref: '#/components/schemas/AuthoringReview' }
         snapshot: { $ref: '#/components/schemas/AuthoringReviewSnapshot' }
+    AuthoringReviewPublicationStatus:
+      type: object
+      additionalProperties: false
+      required: [canPublish, publishable, issues, published]
+      description: Server-authoritative exact-Review publication readiness and safe publication state. canPublish represents the current actor's authoring.publish capability only; it does not replace endpoint authorization.
+      properties:
+        canPublish: { type: boolean }
+        publishable: { type: boolean }
+        issues: { type: array, items: { $ref: '#/components/schemas/PublicationValidationIssue' } }
+        published:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [courseId, courseVersion, publishedAt]
+          properties:
+            courseId: { type: string, format: uuid }
+            courseVersion: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$' }
+            publishedAt: { type: string, format: date-time }
     AuthoringReviewSnapshot:
       type: object
       additionalProperties: false

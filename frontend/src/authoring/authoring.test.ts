@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringReviewResponseError, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -107,13 +107,18 @@ describe('Authoring API service', () => {
   })
 
   it('reads an immutable Review snapshot through both exact bounded route IDs', async () => {
-    const request = vi.fn().mockResolvedValue({})
     const draftID = '11111111-1111-4111-8111-111111111111'
     const reviewID = '22222222-2222-4222-8222-222222222222'
+    const request = vi.fn().mockResolvedValue({
+      review: { id: reviewID, draftId: draftID, status: 'APPROVED', reviewRevision: 2 },
+      snapshot: { schemaVersion: 1, modules: [] },
+      publication: { canPublish: true, publishable: true, issues: [], published: null },
+    })
     await getAuthoringDraftReview(draftID, reviewID, { request })
-    expect(request).toHaveBeenCalledWith(`/api/authoring/drafts/${draftID}/reviews/${reviewID}`)
+    expect(request).toHaveBeenCalledWith(`/api/authoring/drafts/${draftID}/reviews/${reviewID}`, { cache: 'no-store' })
     expect(authoringDraftReviewPath(draftID, reviewID)).toBe(`/authoring/drafts/${draftID}/reviews/${reviewID}`)
     await expect(getAuthoringDraftReview(draftID, 'not-a-review', { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
+    await expect(getAuthoringDraftReview(draftID, reviewID, { request: vi.fn().mockResolvedValue({ review: {}, snapshot: {} }) })).rejects.toBeInstanceOf(InvalidAuthoringReviewResponseError)
   })
 
   it('sends only the authoritative Review revision through exact scoped decision endpoints', async () => {

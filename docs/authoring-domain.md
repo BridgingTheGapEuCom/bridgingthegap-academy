@@ -343,5 +343,14 @@ identity and SemVer.
 Stale or non-approved Reviews and foreign Course/SemVer ownership are explicit
 conflicts, while publication-readiness failures return their ordered domain
 issue codes and canonical snapshot paths. Authorization denial remains an
-opaque 404, and all responses remain `no-store`. Frontend publication controls
-remain later work.
+opaque 404, and all responses remain `no-store`.
+
+The exact private Review detail read also includes a compact publication-status
+projection. It derives `canPublish` from the server-side `authoring.publish`
+capability, runs the deterministic frozen-snapshot validator, and reports an
+exact recorded Course version only when that Review produced it. The projection
+contains safe issue code/path/message values and public course/version/time
+navigation data; it excludes publisher, submitter, reviewer, membership, and
+other internal provenance identifiers. The Review UI uses this projection for
+read-only readiness presentation rather than inferring permissions from member
+roles in the browser. Publishing itself remains a separate mutation boundary.

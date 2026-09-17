@@ -42,6 +42,12 @@
         @reload="reloadReview"
       />
 
+      <AuthoringReviewPublicationStatus
+        :review="state.detail.review"
+        :publication="state.detail.publication"
+        :intended-version="state.detail.snapshot.draft.intendedVersion"
+      />
+
       <AuthoringReviewPublicationAction
         v-if="canPublishReview || publicationState.kind !== 'idle'"
         :can-publish="canPublishReview"
@@ -93,18 +99,17 @@ import { preserveFocusAfterRemoval } from '../authoring/focus'
 import {
   approveAuthoringReview,
   authoringDraftPath,
-  getAuthoringDraftMembers,
   getAuthoringDraftReview,
   publishAuthoringDraftReview,
   requestAuthoringReviewChanges,
   type AuthoringReviewDetail,
 } from '../authoring/authoring'
-import { canDisplayAuthoringPublication, classifyAuthoringPublicationFailure, type AuthoringPublicationState } from '../authoring/publication'
-import { useAuth } from '../auth/auth'
+import { classifyAuthoringPublicationFailure, type AuthoringPublicationState } from '../authoring/publication'
 import { useAuthoringDraftContext } from '../authoring/draftContext'
 import AuthoringReviewDecisionActions from '../components/AuthoringReviewDecisionActions.vue'
 import AuthoringReviewMetadata from '../components/AuthoringReviewMetadata.vue'
 import AuthoringReviewPublicationAction from '../components/AuthoringReviewPublicationAction.vue'
+import AuthoringReviewPublicationStatus from '../components/AuthoringReviewPublicationStatus.vue'
 import AuthoringReviewSnapshotModule from '../components/AuthoringReviewSnapshotModule.vue'
 import BtgButton from '../components/BtgButton.vue'
 
@@ -115,7 +120,6 @@ type State =
   | { kind: 'unavailable' }
 
 const route = useRoute()
-const auth = useAuth()
 const { markDraftUnavailable } = useAuthoringDraftContext()
 const state = ref<State>({ kind: 'loading' })
 const routeDraftID = () => typeof route.params.draftId === 'string' ? route.params.draftId : ''
@@ -127,19 +131,19 @@ const lessonTitles = computed<Readonly<Record<string, string>>>(() => {
 })
 let active = true
 let requestVersion = 0
-let membershipRequestVersion = 0
 const pendingDecision = ref<'approve' | 'request-changes'>()
 const reloading = ref(false)
 const policyConflict = ref(false)
 const decisionConflict = ref(false)
 const decisionError = ref<string>()
 const decisionStatus = ref<string>()
-const publishCapability = ref(false)
 const publicationState = ref<AuthoringPublicationState>({ kind: 'idle' })
 const canPublishReview = computed(() => {
   if (state.value.kind !== 'ready') return false
   const review = state.value.detail.review
-  return publishCapability.value
+  return state.value.detail.publication.canPublish
+    && state.value.detail.publication.publishable
+    && state.value.detail.publication.published === null
     && review.status === 'APPROVED'
     && review.draftId === routeDraftID()
     && review.id === reviewID()
@@ -147,11 +151,10 @@ const canPublishReview = computed(() => {
     && review.reviewRevision > 0
 })
 
-watch([routeDraftID, reviewID, () => auth.state.value], () => {
+watch([routeDraftID, reviewID], () => {
   pendingDecision.value = undefined
   reloading.value = false
   decisionStatus.value = undefined
-  publishCapability.value = false
   publicationState.value = { kind: 'idle' }
   clearDecisionFeedback()
   void load()
@@ -176,33 +179,12 @@ async function load(): Promise<boolean> {
       publicationState.value = { kind: 'idle' }
     }
     state.value = detail.snapshot.schemaVersion === 1 ? { kind: 'ready', detail } : { kind: 'unsupported' }
-    if (state.value.kind === 'ready') void loadPublishCapability(detail)
     return state.value.kind === 'ready'
   } catch (error) {
     if (!isCurrent() || !active || generation !== requestVersion) return false
     if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return false }
     state.value = { kind: 'unavailable' }
     return false
-  }
-}
-
-async function loadPublishCapability(detail: AuthoringReviewDetail): Promise<void> {
-  const isCurrent = captureScope()
-  const generation = ++membershipRequestVersion
-  const actor = auth.state.value.status === 'authenticated' ? auth.state.value.userId : undefined
-  publishCapability.value = false
-  if (!actor || detail.review.status !== 'APPROVED' || detail.review.draftId !== routeDraftID() || detail.review.id !== reviewID()) return
-  try {
-    // This is a display capability based on the existing authoritative active
-    // membership read. The publish endpoint remains the security boundary.
-    const members = await getAuthoringDraftMembers(routeDraftID())
-    if (!isCurrent() || !active || generation !== membershipRequestVersion) return
-    publishCapability.value = canDisplayAuthoringPublication(members, actor)
-  } catch (error) {
-    if (!isCurrent() || !active || generation !== membershipRequestVersion) return
-    if (error instanceof APIProblemError && error.status === 404) markDraftUnavailable()
-    // An unavailable capability read must never make a publish action appear.
-    publishCapability.value = false
   }
 }
 

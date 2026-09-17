@@ -1,5 +1,5 @@
 import { APIProblemError } from '../api/client'
-import type { AuthoringActiveMemberList, AuthoringPublication, PublicationValidationIssue } from './authoring'
+import type { AuthoringPublication, PublicationValidationIssue } from './authoring'
 
 export type AuthoringPublicationConflictCode = 'review_revision_conflict' | 'review_not_approved' | 'course_version_already_exists' | 'publication_conflict'
 
@@ -16,13 +16,6 @@ export type AuthoringPublicationFailure = Extract<AuthoringPublicationState,
   | { kind: 'conflict' }
   | { kind: 'operational-failure' }
 >
-
-// This controls only whether the client offers the action. It intentionally
-// mirrors the currently visible membership contract in one place and is never
-// an authorization boundary; the server's authoring.publish check decides it.
-export function canDisplayAuthoringPublication(members: AuthoringActiveMemberList, actorUserID: string): boolean {
-  return members.members.some((member) => member.userId === actorUserID && member.role === 'MAINTAINER')
-}
 
 const publicationConflictCodes = new Set<NonNullable<Extract<AuthoringPublicationFailure, { kind: 'conflict' }>['code']>>([
   'review_revision_conflict',
