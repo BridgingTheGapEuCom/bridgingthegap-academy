@@ -5,7 +5,7 @@
     <template v-if="publication.published">
       <div class="authoring-review__publication-feedback authoring-review__publication-feedback--success">
         <h4>Published course version</h4>
-        <p>This exact Review produced course version {{ publication.published.courseVersion }}.</p>
+        <p role="status">Published: this exact Review produced course version {{ publication.published.courseVersion }}.</p>
         <dl class="authoring-review__metadata">
           <div><dt>Version</dt><dd>{{ publication.published.courseVersion }}</dd></div>
           <div><dt>Published</dt><dd><time :datetime="publication.published.publishedAt">{{ formatTimestamp(publication.published.publishedAt) }}</time></dd></div>

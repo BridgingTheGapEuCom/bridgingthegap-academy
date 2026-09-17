@@ -94,7 +94,7 @@ const reviewSnapshot = {
   }],
 }
 
-function reviewDetail(review: { status: string }) {
+function reviewDetail(review: { status: string }, published: { courseId: string; courseVersion: string; publishedAt: string } | null = null) {
   return {
     review,
     snapshot: reviewSnapshot,
@@ -102,7 +102,7 @@ function reviewDetail(review: { status: string }) {
       canPublish: true,
       publishable: review.status === 'APPROVED',
       issues: [],
-      published: null,
+      published,
     },
   }
 }
@@ -358,10 +358,43 @@ test('Authoring publishes an approved Review with keyboard and focuses authorita
   let publicationBody: unknown
   let releasePublication: () => void = () => undefined
   const publicationGate = new Promise<void>((resolve) => { releasePublication = resolve })
-  await serveApprovedReviewSnapshot(page)
+  let published = false
+  const publishedAt = '2026-09-16T14:30:00Z'
+  const publishedProjection = { courseId: draft.course_id, courseVersion: '1.0.0', publishedAt }
+  const publishedCourse = {
+    courseId: draft.course_id,
+    version: '1.0.0',
+    title: 'Published integration foundations',
+    description: 'Published immutable reader detail.',
+    objectives: ['Explain ownership'],
+    sourceLanguage: 'en',
+    changelog: 'Frozen submission.',
+    license: { kind: 'STANDARD', identifier: 'CC-BY-4.0', displayName: 'Creative Commons Attribution 4.0', url: '', customText: '' },
+    contributors: [{ displayName: 'Author', role: 'AUTHOR', order: 0 }],
+    publishedAt,
+    modules: [{
+      stableKey: 'foundations', title: 'Frozen foundations', description: 'Historical module.', position: 0,
+      lessons: [{
+        stableKey: 'what-is-eai', title: 'Frozen lesson', description: 'Historical lesson.', objectives: ['Explain EAI'], estimatedDurationMinutes: 15, position: 0,
+        prerequisiteStableKeys: [], content: reviewSnapshot.modules[0].lessons[0].content,
+      }],
+    }],
+  }
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(reviewDetail(approvedReviewCycle, published ? publishedProjection : null)),
+  }))
+  await page.route(`**/api/courses/by-id/${draft.course_id}/versions/1.0.0`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(publishedCourse),
+  }))
   await page.route(`**/api/authoring/drafts/${draftID}/reviews/${reviewCycle.id}/publish`, async (route) => {
     publicationBody = route.request().postDataJSON()
     await publicationGate
+    published = true
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -371,7 +404,7 @@ test('Authoring publishes an approved Review with keyboard and focuses authorita
         courseId: draft.course_id,
         courseVersion: '1.0.0',
         courseVersionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        publishedAt: '2026-09-16T14:30:00Z',
+        publishedAt,
       }),
     })
   })
@@ -387,8 +420,19 @@ test('Authoring publishes an approved Review with keyboard and focuses authorita
   await expect(success).toBeVisible()
   await expect(page.getByText('Course version 1.0.0 was published successfully.')).toBeVisible()
   await expect(success).toBeFocused()
+  await expect(page.getByRole('heading', { level: 4, name: 'Published course version' })).toBeVisible()
+  await expect(page.locator('[role="status"]').filter({ hasText: 'Published: this exact Review produced course version 1.0.0.' })).toBeVisible()
+  const readerLink = page.getByRole('link', { name: 'View published course version 1.0.0' })
+  await expect(readerLink).toHaveAttribute('href', `/courses/by-id/${draft.course_id}/versions/1.0.0`)
+  await expect(page.getByRole('button', { name: 'Publish course version' })).toHaveCount(0)
   expect(publicationBody).toEqual({ expectedReviewRevision: 2 })
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+
+  await readerLink.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/courses/by-id/${draft.course_id}/versions/1\\.0\\.0`))
+  await expect(page.getByRole('heading', { level: 1, name: 'Published integration foundations' })).toBeVisible()
+  await expect(page.getByText('Published immutable reader detail.')).toBeVisible()
 })
 
 test('Authoring exposes and focuses blocking publication validation issues', async ({ page }) => {

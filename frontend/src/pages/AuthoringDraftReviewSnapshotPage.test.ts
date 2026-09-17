@@ -282,6 +282,7 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     getAuthoringDraftReviewMock.mockResolvedValueOnce(published)
     await renderPage()
     expect(await screen.findByRole('heading', { level: 4, name: 'Published course version' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('Published: this exact Review produced course version 1.0.0.')
     const link = screen.getByRole('link', { name: 'View published course version 1.0.0' })
     expect(link.getAttribute('href')).toBe('/courses/by-id/55555555-5555-4555-8555-555555555555/versions/1.0.0')
     expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
