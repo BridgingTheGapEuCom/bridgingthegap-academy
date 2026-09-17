@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
 	assessmentspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments/postgres"
@@ -109,6 +110,39 @@ func testAssessmentsPersistence(t *testing.T, ctx context.Context, pool *pgxpool
 			t.Fatalf("concurrent update results success=%d stale=%d", succeeded, stale)
 		}
 	})
+
+	olderInput := input
+	olderInput.Title, olderInput.Questions = "Older assessment", nil
+	older, err := repository.CreateAssessment(ctx, olderInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newerInput := input
+	newerInput.Title, newerInput.Questions = "Newer assessment", nil
+	newer, err := repository.CreateAssessment(ctx, newerInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, timestamp := range []struct {
+		id assessments.AssessmentID
+		at time.Time
+	}{
+		{created.ID, time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)},
+		{older.ID, time.Date(2026, 9, 17, 9, 0, 0, 0, time.UTC)},
+		{newer.ID, time.Date(2026, 9, 17, 11, 0, 0, 0, time.UTC)},
+	} {
+		if _, err := pool.Exec(ctx, "UPDATE assessments.assessment SET updated_at = $2 WHERE id = $1", timestamp.id, timestamp.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, total, err := repository.ListAssessmentSummariesForDraft(ctx, input.OwnerDraftID, 2, 0)
+	if err != nil || total != 3 || len(page) != 2 || page[0].ID != newer.ID || page[0].QuestionCount != 0 || page[1].ID != created.ID || page[1].QuestionCount != 3 {
+		t.Fatalf("deterministic list = %#v total=%d err=%v", page, total, err)
+	}
+	page, total, err = repository.ListAssessmentSummariesForDraft(ctx, input.OwnerDraftID, 2, 2)
+	if err != nil || total != 3 || len(page) != 1 || page[0].ID != older.ID {
+		t.Fatalf("offset list = %#v total=%d err=%v", page, total, err)
+	}
 
 	var definitions int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM assessments.assessment WHERE id = $1", created.ID).Scan(&definitions); err != nil || definitions != 1 {

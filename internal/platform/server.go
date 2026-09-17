@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	assessmentspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	assetslocal "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/localstorage"
 	assetspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/postgres"
@@ -75,6 +76,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	authoringRepository := authoringpostgres.New(pool)
 	authoringAuthorizer := authoring.NewAuthorizationService(authoringRepository)
 	assetRepository := assetspostgres.New(pool)
+	assessmentRepository := assessmentspostgres.New(pool)
 	assetIngestion, err := assets.NewIngestionService(assetRepository, assetStorage, cfg.AssetMaxBytes)
 	if err != nil {
 		return err
@@ -109,6 +111,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringPublications:       authoring.NewPublicationApplicationService(publicationService, authoringAuthorizer, time.Now),
 		authoringAssetUploads:       authoring.NewAssetUploadService(assetIngestion, authoringAuthorizer),
 		authoringAssets:             authoring.NewAssetListService(assetRepository, authoringAuthorizer),
+		authoringAssessments:        authoring.NewAssessmentManagementService(assessmentRepository, authoringAuthorizer),
 		assetMaxBytes:               cfg.AssetMaxBytes,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
@@ -202,6 +205,12 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				}
 				if auth.authoringAssets != nil {
 					protected.Get("/authoring/drafts/{draftId}/assets", auth.handleAuthoringAssetList)
+				}
+				if auth.authoringAssessments != nil {
+					protected.Get("/authoring/drafts/{draftId}/assessments", auth.handleAuthoringAssessmentList)
+					protected.Post("/authoring/drafts/{draftId}/assessments", auth.handleAuthoringAssessmentCreate)
+					protected.Get("/authoring/drafts/{draftId}/assessments/{assessmentId}", auth.handleAuthoringAssessmentGet)
+					protected.Put("/authoring/drafts/{draftId}/assessments/{assessmentId}", auth.handleAuthoringAssessmentUpdate)
 				}
 				if auth.authoringCreation != nil {
 					protected.Post("/authoring/drafts", auth.handleAuthoringDraftCreate)

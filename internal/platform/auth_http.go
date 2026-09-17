@@ -77,6 +77,7 @@ type authHTTP struct {
 	authoringPublications       *authoring.PublicationApplicationService
 	authoringAssetUploads       *authoring.AssetUploadService
 	authoringAssets             *authoring.AssetListService
+	authoringAssessments        *authoring.AssessmentManagementService
 	assetMaxBytes               int64
 	cookieSecure                bool
 	now                         func() time.Time

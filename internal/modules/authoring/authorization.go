@@ -11,17 +11,18 @@ import (
 type Capability string
 
 const (
-	CapabilityRead          Capability = "authoring.read"
-	CapabilityDraftEdit     Capability = "authoring.draft.edit"
-	CapabilityStructureEdit Capability = "authoring.structure.edit"
-	CapabilityContentEdit   Capability = "authoring.content.edit"
-	CapabilityAssetUpload   Capability = "authoring.asset.upload"
-	CapabilityMembersManage Capability = "authoring.members.manage"
-	CapabilityDraftAbandon  Capability = "authoring.draft.abandon"
-	CapabilityReviewRead    Capability = "authoring.review.read"
-	CapabilityReviewSubmit  Capability = "authoring.review.submit"
-	CapabilityReviewDecide  Capability = "authoring.review.decide"
-	CapabilityPublish       Capability = "authoring.publish"
+	CapabilityRead           Capability = "authoring.read"
+	CapabilityDraftEdit      Capability = "authoring.draft.edit"
+	CapabilityStructureEdit  Capability = "authoring.structure.edit"
+	CapabilityContentEdit    Capability = "authoring.content.edit"
+	CapabilityAssetUpload    Capability = "authoring.asset.upload"
+	CapabilityAssessmentEdit Capability = "authoring.assessment.edit"
+	CapabilityMembersManage  Capability = "authoring.members.manage"
+	CapabilityDraftAbandon   Capability = "authoring.draft.abandon"
+	CapabilityReviewRead     Capability = "authoring.review.read"
+	CapabilityReviewSubmit   Capability = "authoring.review.submit"
+	CapabilityReviewDecide   Capability = "authoring.review.decide"
+	CapabilityPublish        Capability = "authoring.publish"
 )
 
 var (
@@ -76,7 +77,7 @@ func (s AuthorizationService) Authorize(ctx context.Context, actor identity.Auth
 func knownCapability(capability Capability) bool {
 	switch capability {
 	case CapabilityRead, CapabilityDraftEdit, CapabilityStructureEdit,
-		CapabilityContentEdit, CapabilityAssetUpload, CapabilityMembersManage, CapabilityDraftAbandon,
+		CapabilityContentEdit, CapabilityAssetUpload, CapabilityAssessmentEdit, CapabilityMembersManage, CapabilityDraftAbandon,
 		CapabilityReviewRead, CapabilityReviewSubmit, CapabilityReviewDecide,
 		CapabilityPublish:
 		return true
@@ -90,7 +91,7 @@ func roleAllows(role MemberRole, capability Capability) bool {
 	case MemberAuthor:
 		return capability == CapabilityRead || capability == CapabilityDraftEdit ||
 			capability == CapabilityStructureEdit || capability == CapabilityContentEdit ||
-			capability == CapabilityAssetUpload || capability == CapabilityReviewRead || capability == CapabilityReviewSubmit
+			capability == CapabilityAssetUpload || capability == CapabilityAssessmentEdit || capability == CapabilityReviewRead || capability == CapabilityReviewSubmit
 	case MemberMaintainer:
 		return knownCapability(capability)
 	default:

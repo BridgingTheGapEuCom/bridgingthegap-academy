@@ -27,11 +27,20 @@ the validated deterministic question definition is one JSONB value. Conditional
 updates replace that definition and increment the revision in one statement, so
 callers cannot observe a partial question set.
 
+Authoring manages Assessments through private Draft-scoped create, list, exact
+read, and aggregate-replacement update routes. They require
+`authoring.assessment.edit`, granted to active AUTHOR and MAINTAINER members;
+global administrators have no implicit Draft bypass. Draft and creator values
+come only from the route and resolved session. The list is bounded and ordered
+by `updatedAt DESC, assessmentKey DESC`; it returns summaries without answer
+keys. Exact Authoring detail returns a deliberately named answer-bearing DTO
+for editing. Neither response exposes owner or creator provenance, and neither
+DTO may be reused for a learner API.
+
 Canonical `KNOWLEDGE_CHECK.assessmentKey` already accepts the lowercase UUID
 format used by Assessment IDs. This milestone does not resolve that reference:
 publication continues to return `unresolved_assessment_reference`, and there
-are no assessment HTTP APIs, learner attempts, grading, or publication bindings
-yet.
+are no learner attempts, grading, or publication bindings yet.
 
 Assessment deletion, cross-Draft reuse, free-form grading, and external
 assessment engines are deliberately unsupported. Later publication must freeze

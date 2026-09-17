@@ -84,6 +84,64 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/assessments:
+    get:
+      operationId: listAuthoringDraftAssessments
+      description: Returns a bounded newest-first page of Assessment summaries for the exact authorized Draft. Only active AUTHOR and MAINTAINER members with authoring.assessment.edit may access it. Summaries never include answer keys or internal provenance.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/AuthoringDraftID' }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Page of private Assessment summaries, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringAssessmentList' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createAuthoringAssessment
+      description: Creates a mutable deterministic Assessment in the exact authorized Draft. The server derives Draft ownership and creator provenance. This Authoring-only response includes answer keys for editing and must not be used by learner APIs.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringAssessmentCreateRequest' } } }
+      responses:
+        '201': { description: Created Authoring Assessment, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringAssessmentDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/assessments/{assessmentId}:
+    get:
+      operationId: getAuthoringAssessment
+      description: Returns one exact Draft-owned Assessment for editing. This is an Authoring-only answer-bearing DTO, never a learner representation.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringAssessmentID' }]
+      responses:
+        '200': { description: Authoring Assessment definition, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringAssessmentDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: replaceAuthoringAssessment
+      description: Atomically replaces one Assessment definition when expectedRevision matches. Stale revisions return a safe conflict; no partial question updates are exposed.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringAssessmentID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringAssessmentUpdateRequest' } } }
+      responses:
+        '200': { description: Committed Authoring Assessment with incremented revision, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringAssessmentDetail' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
     post:
       operationId: uploadAuthoringAsset
       description: Streams exactly one file into the authorized Draft. Active AUTHOR and MAINTAINER members have authoring.asset.upload. The server derives Draft ownership and creator identity, detects media type from bytes, measures size and SHA-256, and returns only safe AVAILABLE Asset metadata.
@@ -687,6 +745,7 @@ components:
     AuthoringOrigin: { name: Origin, in: header, required: true, schema: { type: string }, description: Trusted application Origin required for browser mutations. }
     AuthoringCSRFToken: { name: X-CSRF-Token, in: header, required: true, schema: { type: string }, description: CSRF token bound to the authenticated session. }
     AuthoringDraftID: { name: draftId, in: path, required: true, schema: { type: string, format: uuid } }
+    AuthoringAssessmentID: { name: assessmentId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringUserID: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringModuleID: { name: moduleId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringLessonID: { name: lessonId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -741,6 +800,89 @@ components:
       required: [items, limit, offset, total]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/AuthoringAssetSummary' } }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 0 }
+    AuthoringAssessmentOption:
+      type: object
+      additionalProperties: false
+      required: [stableKey, text, position]
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        text: { type: string, minLength: 1, maxLength: 4000 }
+        position: { type: integer, minimum: 0 }
+    AuthoringAssessmentMatchingItem:
+      type: object
+      additionalProperties: false
+      required: [stableKey, text, position]
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        text: { type: string, minLength: 1, maxLength: 4000 }
+        position: { type: integer, minimum: 0 }
+    AuthoringAssessmentMatchingPair:
+      type: object
+      additionalProperties: false
+      required: [leftKey, rightKey]
+      properties:
+        leftKey: { type: string, minLength: 1, maxLength: 160 }
+        rightKey: { type: string, minLength: 1, maxLength: 160 }
+    AuthoringAssessmentQuestion:
+      type: object
+      additionalProperties: false
+      required: [stableKey, type, prompt, position, options, correctOptionKeys, leftItems, rightItems, correctPairs]
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        type: { type: string, enum: [SINGLE_CHOICE, MULTIPLE_CHOICE, MATCHING] }
+        prompt: { type: string, minLength: 1, maxLength: 10000 }
+        position: { type: integer, minimum: 0 }
+        options: { type: array, items: { $ref: '#/components/schemas/AuthoringAssessmentOption' }, maxItems: 20 }
+        correctOptionKeys: { type: array, items: { type: string, minLength: 1, maxLength: 160 }, maxItems: 20 }
+        leftItems: { type: array, items: { $ref: '#/components/schemas/AuthoringAssessmentMatchingItem' }, maxItems: 20 }
+        rightItems: { type: array, items: { $ref: '#/components/schemas/AuthoringAssessmentMatchingItem' }, maxItems: 20 }
+        correctPairs: { type: array, items: { $ref: '#/components/schemas/AuthoringAssessmentMatchingPair' }, maxItems: 20 }
+    AuthoringAssessmentCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [title, questions]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 240 }
+        questions: { type: array, items: { $ref: '#/components/schemas/AuthoringAssessmentQuestion' }, maxItems: 100 }
+    AuthoringAssessmentUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision, title, questions]
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        questions: { type: array, items: { $ref: '#/components/schemas/AuthoringAssessmentQuestion' }, maxItems: 100 }
+    AuthoringAssessmentDetail:
+      type: object
+      description: Private Authoring-only aggregate. It intentionally includes correct answer definitions and must never be reused for learner delivery.
+      additionalProperties: false
+      required: [assessmentKey, title, revision, questions, createdAt, updatedAt]
+      properties:
+        assessmentKey: { type: string, format: uuid }
+        title: { type: string }
+        revision: { type: integer, minimum: 1 }
+        questions: { type: array, items: { $ref: '#/components/schemas/AuthoringAssessmentQuestion' } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AuthoringAssessmentSummary:
+      type: object
+      additionalProperties: false
+      required: [assessmentKey, title, questionCount, revision, updatedAt]
+      properties:
+        assessmentKey: { type: string, format: uuid }
+        title: { type: string }
+        questionCount: { type: integer, minimum: 0 }
+        revision: { type: integer, minimum: 1 }
+        updatedAt: { type: string, format: date-time }
+    AuthoringAssessmentList:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AuthoringAssessmentSummary' } }
         limit: { type: integer, minimum: 1, maximum: 100 }
         offset: { type: integer, minimum: 0 }
         total: { type: integer, minimum: 0 }

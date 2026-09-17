@@ -381,3 +381,20 @@ navigation data; it excludes publisher, submitter, reviewer, membership, and
 other internal provenance identifiers. The Review UI uses this projection for
 read-only readiness presentation rather than inferring permissions from member
 roles in the browser. Publishing itself remains a separate mutation boundary.
+
+## Assessments
+
+Authoring owns the private Draft-scoped Assessment management boundary and uses
+the neutral Assessments module for persistence. `authoring.assessment.edit` is
+available to active AUTHOR and MAINTAINER members only; it has no global
+administrator bypass. Create derives the Draft owner from the path and creator
+from the session. Exact read and update verify the Assessment belongs to that
+Draft, with missing, foreign, and unauthorized resources all remaining hidden.
+
+Assessment create/read/update responses are private `no-store` responses.
+Exact Authoring detail intentionally contains correct answers for editing, but
+list summaries omit them and neither DTO exposes Draft owner or creator
+provenance. Complete replacement updates require `expectedRevision`; stale
+updates return `409` rather than overwrite current definitions. Empty mutable
+Assessments are permitted, there is no deletion endpoint, and publication still
+does not resolve `KNOWLEDGE_CHECK` references.

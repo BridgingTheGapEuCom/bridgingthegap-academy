@@ -65,6 +65,42 @@ export interface paths {
         /** @description Returns a bounded, newest-first page of AVAILABLE Assets owned by the exact authorized Draft. It returns no binary URL or private provenance. */
         get: operations["listAuthoringDraftAssets"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns a bounded newest-first page of Assessment summaries for the exact authorized Draft. Only active AUTHOR and MAINTAINER members with authoring.assessment.edit may access it. Summaries never include answer keys or internal provenance. */
+        get: operations["listAuthoringDraftAssessments"];
+        put?: never;
+        /** @description Creates a mutable deterministic Assessment in the exact authorized Draft. The server derives Draft ownership and creator provenance. This Authoring-only response includes answer keys for editing and must not be used by learner APIs. */
+        post: operations["createAuthoringAssessment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/assessments/{assessmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns one exact Draft-owned Assessment for editing. This is an Authoring-only answer-bearing DTO, never a learner representation. */
+        get: operations["getAuthoringAssessment"];
+        /** @description Atomically replaces one Assessment definition when expectedRevision matches. Stale revisions return a safe conflict; no partial question updates are exposed. */
+        put: operations["replaceAuthoringAssessment"];
         /** @description Streams exactly one file into the authorized Draft. Active AUTHOR and MAINTAINER members have authoring.asset.upload. The server derives Draft ownership and creator identity, detects media type from bytes, measures size and SHA-256, and returns only safe AVAILABLE Asset metadata. */
         post: operations["uploadAuthoringAsset"];
         delete?: never;
@@ -643,6 +679,68 @@ export interface components {
         };
         AuthoringAssetList: {
             items: components["schemas"]["AuthoringAssetSummary"][];
+            limit: number;
+            offset: number;
+            total: number;
+        };
+        AuthoringAssessmentOption: {
+            stableKey: string;
+            text: string;
+            position: number;
+        };
+        AuthoringAssessmentMatchingItem: {
+            stableKey: string;
+            text: string;
+            position: number;
+        };
+        AuthoringAssessmentMatchingPair: {
+            leftKey: string;
+            rightKey: string;
+        };
+        AuthoringAssessmentQuestion: {
+            stableKey: string;
+            /** @enum {string} */
+            type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "MATCHING";
+            prompt: string;
+            position: number;
+            options: components["schemas"]["AuthoringAssessmentOption"][];
+            correctOptionKeys: string[];
+            leftItems: components["schemas"]["AuthoringAssessmentMatchingItem"][];
+            rightItems: components["schemas"]["AuthoringAssessmentMatchingItem"][];
+            correctPairs: components["schemas"]["AuthoringAssessmentMatchingPair"][];
+        };
+        AuthoringAssessmentCreateRequest: {
+            title: string;
+            questions: components["schemas"]["AuthoringAssessmentQuestion"][];
+        };
+        AuthoringAssessmentUpdateRequest: {
+            expectedRevision: number;
+            title: string;
+            questions: components["schemas"]["AuthoringAssessmentQuestion"][];
+        };
+        /** @description Private Authoring-only aggregate. It intentionally includes correct answer definitions and must never be reused for learner delivery. */
+        AuthoringAssessmentDetail: {
+            /** Format: uuid */
+            assessmentKey: string;
+            title: string;
+            revision: number;
+            questions: components["schemas"]["AuthoringAssessmentQuestion"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AuthoringAssessmentSummary: {
+            /** Format: uuid */
+            assessmentKey: string;
+            title: string;
+            questionCount: number;
+            revision: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AuthoringAssessmentList: {
+            items: components["schemas"]["AuthoringAssessmentSummary"][];
             limit: number;
             offset: number;
             total: number;
@@ -1391,6 +1489,7 @@ export interface components {
         /** @description CSRF token bound to the authenticated session. */
         AuthoringCSRFToken: string;
         AuthoringDraftID: string;
+        AuthoringAssessmentID: string;
         AuthoringUserID: string;
         AuthoringModuleID: string;
         AuthoringLessonID: string;
@@ -1578,6 +1677,136 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringDraftAssessments: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of private Assessment summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssessmentList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createAuthoringAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringAssessmentCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created Authoring Assessment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssessmentDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringAssessment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                assessmentId: components["parameters"]["AuthoringAssessmentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authoring Assessment definition */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssessmentDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    replaceAuthoringAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                assessmentId: components["parameters"]["AuthoringAssessmentID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringAssessmentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Authoring Assessment with incremented revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssessmentDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAssessmentSummariesForDraft = `-- name: CountAssessmentSummariesForDraft :one
+SELECT count(*)
+FROM assessments.assessment
+WHERE owner_draft_id = $1
+`
+
+func (q *Queries) CountAssessmentSummariesForDraft(ctx context.Context, ownerDraftID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countAssessmentSummariesForDraft, ownerDraftID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAssessment = `-- name: CreateAssessment :one
 INSERT INTO assessments.assessment (owner_draft_id, title, definition, created_by_user_id)
 VALUES ($1, $2, $3, $4)
@@ -65,6 +78,54 @@ func (q *Queries) GetAssessment(ctx context.Context, id pgtype.UUID) (Assessment
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listAssessmentSummariesForDraft = `-- name: ListAssessmentSummariesForDraft :many
+SELECT id, title, jsonb_array_length(definition->'questions') AS question_count, revision, updated_at
+FROM assessments.assessment
+WHERE owner_draft_id = $1
+ORDER BY updated_at DESC, id DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListAssessmentSummariesForDraftParams struct {
+	OwnerDraftID pgtype.UUID
+	Limit        int32
+	Offset       int32
+}
+
+type ListAssessmentSummariesForDraftRow struct {
+	ID            pgtype.UUID
+	Title         string
+	QuestionCount int32
+	Revision      int64
+	UpdatedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) ListAssessmentSummariesForDraft(ctx context.Context, arg ListAssessmentSummariesForDraftParams) ([]ListAssessmentSummariesForDraftRow, error) {
+	rows, err := q.db.Query(ctx, listAssessmentSummariesForDraft, arg.OwnerDraftID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAssessmentSummariesForDraftRow
+	for rows.Next() {
+		var i ListAssessmentSummariesForDraftRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.QuestionCount,
+			&i.Revision,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateAssessment = `-- name: UpdateAssessment :one

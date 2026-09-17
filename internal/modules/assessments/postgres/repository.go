@@ -78,6 +78,30 @@ func (r *Repository) UpdateAssessment(ctx context.Context, id assessments.Assess
 	return mapAssessment(row)
 }
 
+func (r *Repository) ListAssessmentSummariesForDraft(ctx context.Context, draftID string, limit, offset int) ([]assessments.AssessmentSummary, int, error) {
+	owner, err := uuid(draftID)
+	if err != nil || limit < 1 || offset < 0 {
+		return nil, 0, assessments.ErrInvalidAssessment
+	}
+	rows, err := r.q.ListAssessmentSummariesForDraft(ctx, sqlc.ListAssessmentSummariesForDraftParams{
+		OwnerDraftID: owner, Limit: int32(limit), Offset: int32(offset),
+	})
+	if err != nil {
+		return nil, 0, storageError(err)
+	}
+	total, err := r.q.CountAssessmentSummariesForDraft(ctx, owner)
+	if err != nil {
+		return nil, 0, storageError(err)
+	}
+	items := make([]assessments.AssessmentSummary, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, assessments.AssessmentSummary{
+			ID: assessments.AssessmentID(row.ID.String()), Title: row.Title, QuestionCount: int(row.QuestionCount), Revision: row.Revision, UpdatedAt: row.UpdatedAt.Time.UTC(),
+		})
+	}
+	return items, int(total), nil
+}
+
 type persistedDefinition struct {
 	Questions []persistedQuestion `json:"questions"`
 }

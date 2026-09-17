@@ -16,3 +16,15 @@ SET title = $3,
     updated_at = now()
 WHERE id = $1 AND revision = $2
 RETURNING *;
+
+-- name: ListAssessmentSummariesForDraft :many
+SELECT id, title, jsonb_array_length(definition->'questions') AS question_count, revision, updated_at
+FROM assessments.assessment
+WHERE owner_draft_id = $1
+ORDER BY updated_at DESC, id DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountAssessmentSummariesForDraft :one
+SELECT count(*)
+FROM assessments.assessment
+WHERE owner_draft_id = $1;
