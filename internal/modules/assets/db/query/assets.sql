@@ -16,3 +16,7 @@ UPDATE assets.asset
 SET lifecycle = 'AVAILABLE', byte_size = $2, sha256_digest = $3, storage_object_id = $4
 WHERE id = $1 AND lifecycle = 'PENDING'
 RETURNING *;
+
+-- name: DiscardPendingAsset :execrows
+DELETE FROM assets.asset
+WHERE id = $1 AND lifecycle = 'PENDING';

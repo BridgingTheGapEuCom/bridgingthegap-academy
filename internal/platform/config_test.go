@@ -12,6 +12,7 @@ import (
 
 func TestLoadConfigRequiresDatabaseAndValidAddresses(t *testing.T) {
 	t.Setenv("BTG_LMS_MODE", "production")
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
 	t.Setenv("BTG_LMS_DATABASE_URL", "")
 	if _, err := LoadConfig(); err == nil {
 		t.Fatal("accepted missing database URL")
@@ -24,6 +25,7 @@ func TestLoadConfigRequiresDatabaseAndValidAddresses(t *testing.T) {
 }
 
 func TestCookieModeRequiresExplicitLoopbackDevelopment(t *testing.T) {
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
 	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
 	t.Setenv("BTG_LMS_HTTP_ADDR", ":8080")
 	t.Setenv("BTG_LMS_MODE", "production")
@@ -52,6 +54,7 @@ func TestCookieModeRequiresExplicitLoopbackDevelopment(t *testing.T) {
 }
 
 func TestIndependentReviewConfigurationDefaultsToRequiredAndCanBeDisabled(t *testing.T) {
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
 	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
 	t.Setenv("BTG_LMS_HTTP_ADDR", ":8080")
 	t.Setenv("BTG_LMS_MODE", "production")
@@ -87,6 +90,7 @@ func TestConfiguredReviewApplicationUsesIndependentReviewSetting(t *testing.T) {
 		t.Setenv("BTG_LMS_HTTP_ADDR", ":8080")
 		t.Setenv("BTG_LMS_MODE", "production")
 		t.Setenv("BTG_LMS_REQUIRE_INDEPENDENT_REVIEW", value)
+		t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
 		cfg, loadErr := LoadConfig()
 		if loadErr != nil {
 			t.Fatal(loadErr)
@@ -121,5 +125,36 @@ func TestConfiguredReviewApplicationUsesIndependentReviewSetting(t *testing.T) {
 				t.Fatalf("disabled configured policy did not reach Review CAS: %#v", repository.cycle)
 			}
 		})
+	}
+}
+
+func TestAssetStorageConfigurationIsExplicitAndBounded(t *testing.T) {
+	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
+	t.Setenv("BTG_LMS_HTTP_ADDR", ":8080")
+	t.Setenv("BTG_LMS_MODE", "production")
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", "")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("accepted missing asset storage path")
+	}
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", "relative/assets")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("accepted relative asset storage path")
+	}
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
+	t.Setenv("BTG_LMS_ASSET_MAX_BYTES", "")
+	cfg, err := LoadConfig()
+	if err != nil || cfg.AssetMaxBytes != defaultAssetMaxBytes {
+		t.Fatalf("default max bytes = %d, %v", cfg.AssetMaxBytes, err)
+	}
+	t.Setenv("BTG_LMS_ASSET_MAX_BYTES", "4096")
+	cfg, err = LoadConfig()
+	if err != nil || cfg.AssetMaxBytes != 4096 {
+		t.Fatalf("configured max bytes = %d, %v", cfg.AssetMaxBytes, err)
+	}
+	for _, invalid := range []string{"0", "-1", "many"} {
+		t.Setenv("BTG_LMS_ASSET_MAX_BYTES", invalid)
+		if _, err := LoadConfig(); err == nil {
+			t.Fatalf("accepted invalid asset maximum %q", invalid)
+		}
 	}
 }

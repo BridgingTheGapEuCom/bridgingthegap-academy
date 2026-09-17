@@ -16,4 +16,5 @@ type Repository interface {
 	CreateAsset(context.Context, AssetInput) (Asset, error)
 	GetAsset(context.Context, AssetID) (Asset, error)
 	MarkAssetAvailable(context.Context, AssetID, StoredBinary) (Asset, error)
+	DiscardPendingAsset(context.Context, AssetID) error
 }

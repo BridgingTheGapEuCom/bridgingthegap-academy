@@ -87,6 +87,7 @@ func TestInternalAssetProvenanceIsNotJSONVisible(t *testing.T) {
 	values := []any{
 		validAsset(),
 		assets.AssetInput{OwnerDraftID: draftID, OriginalFilename: "diagram.png", MediaType: "image/png", CreatedByUserID: creatorID},
+		assets.IngestionInput{OwnerDraftID: draftID, OriginalFilename: "diagram.png", CreatedByUserID: creatorID, Content: strings.NewReader("binary")},
 	}
 	for _, source := range values {
 		encoded, err := json.Marshal(source)
@@ -110,6 +111,7 @@ func (storageContract) Put(context.Context, io.Reader) (assets.StoredBinary, err
 func (storageContract) Open(context.Context, assets.StorageObjectID) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("binary")), nil
 }
+func (storageContract) DiscardUncommitted(context.Context, assets.StorageObjectID) error { return nil }
 
 func TestBinaryStorageBoundaryHasProviderNeutralIdentity(t *testing.T) {
 	var storage assets.BinaryStorage = storageContract{}

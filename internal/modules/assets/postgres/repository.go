@@ -77,6 +77,21 @@ func (r *Repository) MarkAssetAvailable(ctx context.Context, id assets.AssetID, 
 	return mapAsset(row)
 }
 
+func (r *Repository) DiscardPendingAsset(ctx context.Context, id assets.AssetID) error {
+	key, err := uuid(string(id))
+	if err != nil {
+		return assets.ErrInvalidAsset
+	}
+	rows, err := r.q.DiscardPendingAsset(ctx, key)
+	if err != nil {
+		return storageError(err)
+	}
+	if rows == 0 {
+		return assets.ErrInvalidLifecycleTransition
+	}
+	return nil
+}
+
 func mapAsset(row sqlc.AssetsAsset) (assets.Asset, error) {
 	lifecycle, err := assets.ParseLifecycle(row.Lifecycle)
 	if err != nil {

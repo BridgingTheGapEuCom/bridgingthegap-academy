@@ -58,6 +58,19 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 	return i, err
 }
 
+const discardPendingAsset = `-- name: DiscardPendingAsset :execrows
+DELETE FROM assets.asset
+WHERE id = $1 AND lifecycle = 'PENDING'
+`
+
+func (q *Queries) DiscardPendingAsset(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, discardPendingAsset, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getAsset = `-- name: GetAsset :one
 SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at
 FROM assets.asset

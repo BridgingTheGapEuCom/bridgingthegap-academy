@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	assetslocal "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/localstorage"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	authoringpostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
@@ -37,6 +38,11 @@ const maxRequestHeaderBytes = 16 * 1024
 const maxRequestReadDuration = 10 * time.Second
 
 func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
+	assetStorage, err := assetslocal.New(cfg.AssetStoragePath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = assetStorage.Close() }()
 	origins, err := newOriginPolicy(cfg)
 	if err != nil {
 		return err

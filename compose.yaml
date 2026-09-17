@@ -20,12 +20,17 @@ services:
       BTG_LMS_DATABASE_URL: postgres://btg:btg_dev_password@db:5432/btg_lms?sslmode=disable
       BTG_LMS_HTTP_ADDR: :8080
       BTG_LMS_PUBLIC_ORIGIN: ${BTG_LMS_PUBLIC_ORIGIN:-}
+      BTG_LMS_ASSET_STORAGE_PATH: /var/lib/btg-lms/assets
+      BTG_LMS_ASSET_MAX_BYTES: ${BTG_LMS_ASSET_MAX_BYTES:-104857600}
     ports:
       - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
     profiles: [app]
+    volumes:
+      - assetdata:/var/lib/btg-lms/assets
     command: ["serve"]
 volumes:
   pgdata:
+  assetdata:

@@ -21,23 +21,56 @@ media type, verified byte size, lowercase hexadecimal SHA-256 digest, private
 storage object ID, creation time, private creator identity, and lifecycle.
 `PENDING` reserves metadata before verified bytes are attached. `AVAILABLE`
 requires a positive measured size, a valid SHA-256 digest, and a storage object
-ID. Upload processing must detect and verify the media type and apply configured
-size and content-safety policy before this transition; filenames and
-client-declared MIME types are not authoritative. A separate `FAILED` lifecycle
-is intentionally absent until an upload-recovery workflow needs it; a failed
-attempt remains pending and cannot be resolved or published.
+ID. The ingestion service detects media type from a bounded content prefix and
+measures size and SHA-256 while streaming the exact bytes into storage.
+Filenames, filename extensions, client-declared MIME types, sizes, and digests
+are not authoritative. A separate `FAILED` lifecycle remains intentionally
+absent. Routine failed ingestion attempts conditionally remove their PENDING
+metadata; uncertain outcomes remain unavailable for operator reconciliation.
 
 The metadata repository creates only `PENDING` Assets. Attaching the provider's
 `StoredBinary` result changes size, digest, object ID, and lifecycle together in
 one conditional PostgreSQL statement. It cannot overwrite an `AVAILABLE` Asset.
+`DiscardPendingAsset` is a rollback-only conditional delete and cannot remove
+AVAILABLE metadata.
 
 `BinaryStorage` accepts and opens byte streams using only its own opaque object
 identity. Its write result includes the measured size and SHA-256 digest used to
-complete Asset metadata. Deletion is deliberately absent from the initial port:
-an object must not be removed unless retention logic can prove that no immutable
-published CourseVersion relies on it. Asset metadata persists in PostgreSQL;
-binary bytes do not. Once an Asset becomes `AVAILABLE`, this repository exposes
-no operation that replaces its object identity, size, or digest.
+complete Asset metadata. `DiscardUncommitted` is narrowly limited to compensating
+for an ingestion attempt whose metadata did not become AVAILABLE. It is not an
+Asset deletion API. An AVAILABLE object must not be removed unless future
+retention logic proves that no immutable published CourseVersion relies on it.
+Asset metadata persists in PostgreSQL; binary bytes do not. Once an Asset becomes
+`AVAILABLE`, this repository exposes no operation that replaces its object
+identity, size, digest, or content.
+
+The first `BinaryStorage` provider uses local disk. `BTG_LMS_ASSET_STORAGE_PATH`
+is a required absolute application-managed directory; local object and temporary
+file names are provider-generated UUIDs and never derive from original filenames.
+Directories use mode `0700` and object files use `0600`. Writes stream into a
+provider-controlled temporary file, synchronize it, and publish it under a
+non-overwriting opaque name. `Open` and rollback cleanup accept only validated
+storage IDs and remain contained beneath the configured root. Storage paths are
+never domain values or API data.
+
+`BTG_LMS_ASSET_MAX_BYTES` bounds the actual stream and temporarily defaults to
+100 MiB (`104857600`) until product-specific limits are set. Exactly-at-limit
+content is accepted; an additional byte fails the attempt before any permanent
+object is exposed. Media type detection uses the first 512 bytes and stores the
+canonical detected type. Generic `application/octet-stream` remains valid for
+DOWNLOAD content.
+
+PostgreSQL and binary storage are separate atomicity domains. Ingestion creates
+PENDING metadata, commits the binary, then conditionally transitions metadata to
+AVAILABLE. A storage failure removes PENDING metadata. A database failure after
+the binary commit first reads back metadata to account for an update that may
+have committed before a connection error. Confirmed AVAILABLE state converges to
+success. Confirmed PENDING state is conditionally removed before the uncommitted
+blob is discarded, preventing a concurrent AVAILABLE transition from losing its
+content. If state cannot be proven, content is retained and the result reports
+incomplete rollback rather than risking a broken AVAILABLE Asset. A future
+operator reconciliation process may clean rare residual orphans; no background
+worker is introduced here.
 
 Canonical media blocks already carry an `assetKey` string that accepts the
 lowercase opaque Asset UUID form. No LessonContent schema change is needed in
@@ -51,6 +84,13 @@ upload, delivery, or public URLs, and publication therefore continues to return
 Ownership and creator IDs are internal authorization provenance. They are not
 public attribution and must not appear in learner catalog, reader, or asset
 delivery responses. The future API/service layer is responsible for session
-identity, active Authoring membership checks, bounded upload reads, MIME
-verification, and safe delivery policy; the repository does not interpret
-roles and defines no administrator bypass.
+identity, active Authoring membership checks, upload policy, and safe delivery;
+the neutral ingestion service accepts already-authorized Draft and creator IDs,
+does not import Authoring, does not interpret roles, and defines no administrator
+bypass.
+
+The local provider is only the first implementation. The ingestion contract is
+streaming and provider-neutral, so an S3-compatible provider can implement the
+same commit/open/rollback semantics without changing Asset identity or canonical
+LessonContent. Publication remains unchanged in this milestone and continues to
+report `unresolved_asset_reference` even for AVAILABLE Assets.

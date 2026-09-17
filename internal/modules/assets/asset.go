@@ -31,6 +31,7 @@ var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-
 var (
 	ErrInvalidAsset               = errors.New("invalid asset")
 	ErrInvalidLifecycleTransition = errors.New("invalid asset lifecycle transition")
+	ErrInvalidStorageObject       = errors.New("invalid storage object identity")
 )
 
 // Asset is authoritative internal metadata for one managed binary. Asset ID is
@@ -76,6 +77,13 @@ func ParseSHA256Digest(value string) (SHA256Digest, error) {
 		return "", ErrInvalidAsset
 	}
 	return SHA256Digest(value), nil
+}
+
+func ParseStorageObjectID(value string) (StorageObjectID, error) {
+	if !validUUID(value) {
+		return "", ErrInvalidStorageObject
+	}
+	return StorageObjectID(value), nil
 }
 
 // NormalizeMediaType accepts one canonical lower-case MIME type without
@@ -128,7 +136,10 @@ func validateMetadata(ownerDraftID, filename, mediaType string, byteSize int64, 
 			return ErrInvalidAsset
 		}
 	case LifecycleAvailable:
-		if byteSize <= 0 || !validUUID(string(objectID)) {
+		if byteSize <= 0 {
+			return ErrInvalidAsset
+		}
+		if parsed, err := ParseStorageObjectID(string(objectID)); err != nil || parsed != objectID {
 			return ErrInvalidAsset
 		}
 		if parsed, err := ParseSHA256Digest(string(digest)); err != nil || parsed != digest {
