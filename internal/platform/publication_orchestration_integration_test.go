@@ -4,6 +4,7 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"reflect"
@@ -119,26 +120,47 @@ func testPublicationOrchestration(t *testing.T, ctx context.Context, pool *pgxpo
 	concurrentCommand.PublishedAt = publishedAt.Add(time.Hour)
 	concurrentService := authoring.NewPublicationService(authoringRepository, courseStore, authoringRepository)
 	barrier := make(chan struct{})
-	results := make(chan error, 2)
+	type publicationAttempt struct {
+		result authoring.PublicationResult
+		err    error
+	}
+	results := make(chan publicationAttempt, 2)
 	var wait sync.WaitGroup
 	for range 2 {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
 			<-barrier
-			_, publishErr := concurrentService.Publish(ctx, concurrentCommand)
-			results <- publishErr
+			result, publishErr := concurrentService.Publish(ctx, concurrentCommand)
+			results <- publicationAttempt{result: result, err: publishErr}
 		}()
 	}
 	close(barrier)
 	wait.Wait()
 	close(results)
-	for publishErr := range results {
-		if publishErr != nil {
-			t.Fatalf("concurrent publication did not converge: %v", publishErr)
+	var concurrentVersionID courses.CourseVersionID
+	for attempt := range results {
+		if attempt.err != nil {
+			t.Fatalf("concurrent publication did not converge: %v", attempt.err)
+		}
+		if attempt.result.ReviewID != concurrent.ID || attempt.result.ReviewRevision != concurrent.Revision || attempt.result.CourseID != course.ID || attempt.result.CourseVersion.String() != "2.0.0" || attempt.result.CourseVersionID == "" {
+			t.Fatalf("concurrent publication result is incomplete: %#v", attempt.result)
+		}
+		if concurrentVersionID == "" {
+			concurrentVersionID = attempt.result.CourseVersionID
+		} else if attempt.result.CourseVersionID != concurrentVersionID {
+			t.Fatalf("concurrent callers observed different CourseVersion IDs: %q and %q", concurrentVersionID, attempt.result.CourseVersionID)
 		}
 	}
 	assertPublicationCounts(t, ctx, pool, course.ID, 2, 2)
+	concurrentStored, err := courseStore.GetByReviewID(ctx, string(concurrent.ID))
+	if err != nil || concurrentStored.ID != concurrentVersionID {
+		t.Fatalf("concurrent CourseVersion readback = %#v %v", concurrentStored, err)
+	}
+	concurrentFact, err := authoringRepository.GetPublication(ctx, concurrent.ID)
+	if err != nil || concurrentFact.CourseVersionID != concurrentVersionID || concurrentFact.ReviewRevision != concurrent.Revision || concurrentFact.CourseVersion.String() != "2.0.0" {
+		t.Fatalf("concurrent publication fact = %#v %v", concurrentFact, err)
+	}
 }
 
 func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
@@ -159,6 +181,21 @@ func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpoo
 	if err != nil {
 		t.Fatal(err)
 	}
+	administrator, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identityRepository.AssignGlobalRole(ctx, administrator.ID, identity.RoleAdministrator, nil); err != nil {
+		t.Fatal(err)
+	}
+	revokedMaintainer, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherDraftMaintainer, err := identityRepository.CreateUser(ctx, identity.UserActive)
+	if err != nil {
+		t.Fatal(err)
+	}
 	course, err := coursesRepository.CreateCourse(ctx, "publication-http-api")
 	if err != nil {
 		t.Fatal(err)
@@ -175,6 +212,12 @@ func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpoo
 	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspace.ID, string(unauthorized.ID), authoring.MemberAuthor); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, workspace.ID, string(revokedMaintainer.ID), authoring.MemberMaintainer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := revokeTestAuthoringMember(ctx, pool, authoringRepository, workspace.ID, string(revokedMaintainer.ID)); err != nil {
+		t.Fatal(err)
+	}
 
 	sessions := identity.NewSessionService(identityRepository, nil, nil)
 	publisherSession, err := sessions.CreateSession(ctx, publisher.ID)
@@ -182,6 +225,18 @@ func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpoo
 		t.Fatal(err)
 	}
 	unauthorizedSession, err := sessions.CreateSession(ctx, unauthorized.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	administratorSession, err := sessions.CreateSession(ctx, administrator.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedMaintainerSession, err := sessions.CreateSession(ctx, revokedMaintainer.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherDraftMaintainerSession, err := sessions.CreateSession(ctx, otherDraftMaintainer.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,10 +250,19 @@ func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpoo
 	csrf := authTestCSRFToken().Value()
 	publisherCookie := &http.Cookie{Name: sessionCookieName, Value: publisherSession.Token.Value()}
 	unauthorizedCookie := &http.Cookie{Name: sessionCookieName, Value: unauthorizedSession.Token.Value()}
+	administratorCookie := &http.Cookie{Name: sessionCookieName, Value: administratorSession.Token.Value()}
+	revokedMaintainerCookie := &http.Cookie{Name: sessionCookieName, Value: revokedMaintainerSession.Token.Value()}
+	otherDraftMaintainerCookie := &http.Cookie{Name: sessionCookieName, Value: otherDraftMaintainerSession.Token.Value()}
 
 	denied := authRequest(router, http.MethodPost, path, body, unauthorizedCookie, csrf)
 	if denied.Code != http.StatusNotFound {
 		t.Fatalf("AUTHOR publication = %d %s", denied.Code, denied.Body.String())
+	}
+	if denied := authRequest(router, http.MethodPost, path, body, administratorCookie, csrf); denied.Code != http.StatusNotFound {
+		t.Fatalf("global ADMIN publication = %d %s", denied.Code, denied.Body.String())
+	}
+	if denied := authRequest(router, http.MethodPost, path, body, revokedMaintainerCookie, csrf); denied.Code != http.StatusNotFound {
+		t.Fatalf("revoked MAINTAINER publication = %d %s", denied.Code, denied.Body.String())
 	}
 	assertPublicationCounts(t, ctx, pool, course.ID, 0, 0)
 
@@ -213,9 +277,17 @@ func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpoo
 	if recovered.Code != http.StatusOK || !strings.Contains(recovered.Body.String(), `"courseVersion":"3.2.1"`) || !strings.Contains(recovered.Body.String(), `"publishedAt":"2026-09-16T20:00:00Z"`) {
 		t.Fatalf("reconciled publication = %d %s", recovered.Code, recovered.Body.String())
 	}
+	var recoveredPublication authoringPublicationDTO
+	if err := json.Unmarshal(recovered.Body.Bytes(), &recoveredPublication); err != nil || recoveredPublication.CourseVersionID == "" {
+		t.Fatalf("reconciled publication body = %s: %v", recovered.Body.String(), err)
+	}
 	exactReplay := authRequest(router, http.MethodPost, path, body, publisherCookie, csrf)
 	if exactReplay.Code != http.StatusOK {
 		t.Fatalf("exact replay = %d %s", exactReplay.Code, exactReplay.Body.String())
+	}
+	var replayPublication authoringPublicationDTO
+	if err := json.Unmarshal(exactReplay.Body.Bytes(), &replayPublication); err != nil || replayPublication.CourseVersionID != recoveredPublication.CourseVersionID || !replayPublication.PublishedAt.Equal(recoveredPublication.PublishedAt) || replayPublication.CourseVersion != recoveredPublication.CourseVersion {
+		t.Fatalf("exact replay did not preserve immutable publication result: %#v / %#v / %v", recoveredPublication, replayPublication, err)
 	}
 	assertPublicationCounts(t, ctx, pool, course.ID, 1, 1)
 	fact, err := authoringRepository.GetPublication(ctx, cycle.ID)
@@ -225,6 +297,19 @@ func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpoo
 	stored, err := courseStore.GetByReviewID(ctx, string(cycle.ID))
 	if err != nil || len(stored.CourseVersion.Attribution) != 1 || stored.CourseVersion.Attribution[0].UserID != string(submitter.ID) || stored.CourseVersion.Attribution[0].DisplayName != "Author" {
 		t.Fatalf("server-owned frozen attribution = %#v %v", stored.CourseVersion.Attribution, err)
+	}
+	publicCourse, err := courses.NewPublishedReadService(coursesRepository).Exact(ctx, course.ID, stored.CourseVersion.Version)
+	if err != nil || len(publicCourse.Contributors) != 1 || publicCourse.Contributors[0].DisplayName != "Author" {
+		t.Fatalf("public publication attribution = %#v %v", publicCourse.Contributors, err)
+	}
+	publicJSON, err := json.Marshal(publishedCourseVersion(publicCourse))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, internal := range []string{string(submitter.ID), reviewer, string(publisher.ID), string(cycle.ID), string(cycle.DraftID)} {
+		if strings.Contains(string(publicJSON), internal) {
+			t.Fatalf("public CourseVersion leaked internal publication provenance %q: %s", internal, publicJSON)
+		}
 	}
 
 	stale := authRequest(router, http.MethodPost, path, `{"expectedReviewRevision":1}`, publisherCookie, csrf)
@@ -240,6 +325,18 @@ func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpoo
 	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, conflictingWorkspace.ID, string(publisher.ID), authoring.MemberMaintainer); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := addTestAuthoringMember(ctx, pool, authoringRepository, conflictingWorkspace.ID, string(otherDraftMaintainer.ID), authoring.MemberMaintainer); err != nil {
+		t.Fatal(err)
+	}
+	if denied := authRequest(router, http.MethodPost, path, body, otherDraftMaintainerCookie, csrf); denied.Code != http.StatusNotFound || strings.Contains(denied.Body.String(), `"courseVersion"`) {
+		t.Fatalf("other-Draft MAINTAINER publication = %d %s", denied.Code, denied.Body.String())
+	}
+	wrongDraftPath := "/api/authoring/drafts/" + string(conflicting.DraftID) + "/reviews/" + string(cycle.ID) + "/publish"
+	wrongDraft := authRequest(router, http.MethodPost, wrongDraftPath, body, publisherCookie, csrf)
+	if wrongDraft.Code != http.StatusNotFound || strings.Contains(wrongDraft.Body.String(), `"courseVersion"`) {
+		t.Fatalf("cross-Draft Review publication = %d %s", wrongDraft.Code, wrongDraft.Body.String())
+	}
+	assertPublicationCounts(t, ctx, pool, course.ID, 1, 1)
 	conflictPath := "/api/authoring/drafts/" + string(conflicting.DraftID) + "/reviews/" + string(conflicting.ID) + "/publish"
 	conflictBody := `{"expectedReviewRevision":` + stringInt64(conflicting.Revision) + `}`
 	conflict := authRequest(router, http.MethodPost, conflictPath, conflictBody, publisherCookie, csrf)
