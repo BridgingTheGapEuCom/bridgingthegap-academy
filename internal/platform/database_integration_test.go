@@ -43,6 +43,7 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("HTTP login admission", func(t *testing.T) { testHTTPLoginAdmission(t, ctx, pool) })
 	t.Run("HTTP authorization boundary", func(t *testing.T) { testHTTPAuthorizationBoundary(t, ctx, pool) })
 	t.Run("assets persistence", func(t *testing.T) { testAssetsPersistence(t, ctx, pool) })
+	t.Run("authoring asset upload API", func(t *testing.T) { testAuthoringAssetUploadAPI(t, ctx, pool) })
 	t.Run("courses persistence", func(t *testing.T) { testCoursesPersistence(t, ctx, pool) })
 	t.Run("course structure persistence", func(t *testing.T) { testCourseStructurePersistence(t, ctx, pool) })
 	t.Run("immutable course version publication persistence", func(t *testing.T) { testImmutableCourseVersionPersistence(t, ctx, pool) })

@@ -20,3 +20,15 @@ RETURNING *;
 -- name: DiscardPendingAsset :execrows
 DELETE FROM assets.asset
 WHERE id = $1 AND lifecycle = 'PENDING';
+
+-- name: ListAvailableAssetsForDraft :many
+SELECT *
+FROM assets.asset
+WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE'
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
+-- name: CountAvailableAssetsForDraft :one
+SELECT count(*)
+FROM assets.asset
+WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE';

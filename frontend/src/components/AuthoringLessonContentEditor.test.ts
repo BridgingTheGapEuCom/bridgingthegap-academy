@@ -7,7 +7,9 @@ import AuthoringLessonContentEditor from './AuthoringLessonContentEditor.vue'
 
 const replaceContent = vi.hoisted(() => vi.fn())
 const getLesson = vi.hoisted(() => vi.fn())
-vi.mock('../authoring/authoring', async (original) => ({ ...(await original<typeof import('../authoring/authoring')>()), replaceAuthoringLessonContent: replaceContent, getAuthoringLesson: getLesson }))
+const uploadAsset = vi.hoisted(() => vi.fn())
+const listAssets = vi.hoisted(() => vi.fn())
+vi.mock('../authoring/authoring', async (original) => ({ ...(await original<typeof import('../authoring/authoring')>()), replaceAuthoringLessonContent: replaceContent, getAuthoringLesson: getLesson, uploadAuthoringAsset: uploadAsset, listAuthoringDraftAssets: listAssets }))
 const draftID = '11111111-1111-4111-8111-111111111111'
 const lessonID = '22222222-2222-4222-8222-222222222222'
 function lesson(content: AuthoringLessonContent = { schemaVersion: 1, blocks: [] }): AuthoringLessonDetail {
@@ -17,12 +19,19 @@ async function add(type: string) {
   await fireEvent.update(screen.getByRole('combobox', { name: 'Block type' }), type)
   await fireEvent.click(screen.getByRole('button', { name: 'Add block' }))
 }
+async function chooseFile(label: string, file: File) {
+  const input = screen.getByLabelText(label) as HTMLInputElement
+  Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+  await fireEvent.change(input)
+}
 function savedDocument(): AuthoringLessonContent { return replaceContent.mock.calls[0]![2].content }
 
 describe('AuthoringLessonContentEditor', () => {
   beforeEach(() => {
-    getLesson.mockReset(); replaceContent.mockReset()
+    getLesson.mockReset(); replaceContent.mockReset(); uploadAsset.mockReset(); listAssets.mockReset()
     replaceContent.mockImplementation(async (_draft, _lesson, request) => ({ lesson: { ...lesson(request.content), revision: 8, draftRevision: 12 }, content: request.content }))
+    uploadAsset.mockResolvedValue({ assetKey: '55555555-5555-4555-8555-555555555555', filename: 'diagram.png', mediaType: 'image/png', byteSize: 200, status: 'AVAILABLE' })
+    listAssets.mockResolvedValue({ items: [], limit: 20, offset: 0, total: 0 })
   })
   afterEach(cleanup)
 
@@ -89,13 +98,161 @@ describe('AuthoringLessonContentEditor', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(5)
   })
 
+  it('provides native uploads for all asset-capable block types', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson() } })
+    for (const type of ['IMAGE', 'VIDEO', 'AUDIO', 'DOWNLOAD']) await add(type)
+    expect(screen.getByLabelText('Image file').getAttribute('accept')).toBe('image/*')
+    expect(screen.getByLabelText('Video file').getAttribute('accept')).toBe('video/*')
+    expect(screen.getByLabelText('Audio file').getAttribute('accept')).toBe('audio/*')
+    expect(screen.getByLabelText('Download file').getAttribute('accept')).toBeNull()
+    expect(screen.getByLabelText('Captions file')).toBeTruthy()
+  })
+
+  it('lists only compatible Draft Assets and attaches the selected key through the normal save', async () => {
+    const original = { key: 'image', type: 'IMAGE' as const, payload: { asset: { assetKey: 'legacy-key' }, decorative: false, altText: 'Existing diagram' } }
+    listAssets.mockResolvedValue({ items: [
+      { assetKey: '55555555-5555-4555-8555-555555555555', filename: 'reusable.png', mediaType: 'image/png', byteSize: 200, createdAt: '2026-09-17T10:00:00Z' },
+      { assetKey: '66666666-6666-4666-8666-666666666666', filename: 'hidden.mp3', mediaType: 'audio/mpeg', byteSize: 200, createdAt: '2026-09-17T09:00:00Z' },
+    ], limit: 20, offset: 0, total: 2 })
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson({ schemaVersion: 1, blocks: [original] }) } })
+    await screen.findByRole('button', { name: 'Use reusable.png' })
+    expect(screen.queryByRole('button', { name: 'Use hidden.mp3' })).toBeNull()
+    await fireEvent.click(screen.getByRole('button', { name: 'Use reusable.png' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText('Lesson content saved.')
+    expect(savedDocument().blocks[0]).toMatchObject({ payload: { asset: { assetKey: '55555555-5555-4555-8555-555555555555' } } })
+    expect(JSON.stringify(savedDocument())).not.toContain('reusable.png')
+  })
+
+  it('attaches only a server-issued compatible Asset key and saves it through the normal content mutation', async () => {
+    const original = { key: 'image', type: 'IMAGE' as const, payload: { asset: { assetKey: 'existing-asset' }, decorative: false, altText: 'Existing diagram' } }
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson({ schemaVersion: 1, blocks: [original] }) } })
+    const file = new File(['image bytes'], 'replacement.png', { type: 'image/png' })
+    await chooseFile('Image file', file)
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload replacement' }))
+    await screen.findByText(/diagram.png uploaded and attached/)
+    expect(uploadAsset).toHaveBeenCalledWith(draftID, file)
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText('Lesson content saved.')
+    expect(savedDocument().blocks[0]).toMatchObject({ key: 'image', type: 'IMAGE', payload: { asset: { assetKey: '55555555-5555-4555-8555-555555555555' } } })
+    expect(JSON.stringify(savedDocument())).not.toContain('replacement.png')
+    expect(JSON.stringify(savedDocument())).not.toContain('image/png')
+  })
+
+  it('keeps an existing Asset key until replacement upload succeeds and handles safe upload errors', async () => {
+    const original = { key: 'image', type: 'IMAGE' as const, payload: { asset: { assetKey: 'existing-asset' }, decorative: false, altText: 'Existing diagram' } }
+    let resolveUpload: ((asset: unknown) => void) | undefined
+    uploadAsset.mockImplementationOnce(() => new Promise((resolve) => { resolveUpload = resolve }))
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson({ schemaVersion: 1, blocks: [original] }) } })
+    await chooseFile('Image file', new File(['image bytes'], 'replacement.png', { type: 'image/png' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload replacement' }))
+    expect(screen.getByRole('button', { name: 'Uploading…' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Save Lesson content' }).hasAttribute('disabled')).toBe(true)
+    resolveUpload?.({ assetKey: '55555555-5555-4555-8555-555555555555', filename: 'replacement.png', mediaType: 'image/png', byteSize: 200, status: 'AVAILABLE' })
+    await screen.findByText(/uploaded and attached/)
+
+    uploadAsset.mockRejectedValueOnce(new APIProblemError(413, undefined, undefined))
+    await chooseFile('Image file', new File(['image bytes'], 'too-large.png', { type: 'image/png' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload replacement' }))
+    await screen.findByText(/selected file is too large/)
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText('Lesson content saved.')
+    expect(savedDocument().blocks[0]).toMatchObject({ payload: { asset: { assetKey: '55555555-5555-4555-8555-555555555555' } } })
+  })
+
+  it('does not attach an incompatible detected type, while downloads accept generic binary content', async () => {
+    const image = { key: 'image', type: 'IMAGE' as const, payload: { asset: { assetKey: 'existing-asset' }, decorative: false, altText: 'Existing diagram' } }
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson({ schemaVersion: 1, blocks: [image] }) } })
+    uploadAsset.mockResolvedValueOnce({ assetKey: '55555555-5555-4555-8555-555555555555', filename: 'actually-text.png', mediaType: 'text/plain', byteSize: 200, status: 'AVAILABLE' })
+    await chooseFile('Image file', new File(['text'], 'actually-text.png', { type: 'image/png' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload replacement' }))
+    await screen.findByText(/not suitable for this image block/)
+    expect(screen.getByRole('button', { name: 'Save Lesson content' }).hasAttribute('disabled')).toBe(true)
+
+    await add('DOWNLOAD')
+    uploadAsset.mockResolvedValueOnce({ assetKey: '66666666-6666-4666-8666-666666666666', filename: 'notes.bin', mediaType: 'application/octet-stream', byteSize: 200, status: 'AVAILABLE' })
+    await chooseFile('Download file', new File(['binary'], 'notes.bin'))
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload file' }))
+    await screen.findByText(/notes.bin uploaded and attached/)
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText('Lesson content saved.')
+    expect(savedDocument().blocks[1]).toMatchObject({ type: 'DOWNLOAD', payload: { asset: { assetKey: '66666666-6666-4666-8666-666666666666' } } })
+  })
+
+  it('does not attach server-detected incompatible media to video or audio blocks', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson() } })
+    await add('VIDEO')
+    uploadAsset.mockResolvedValueOnce({ assetKey: '55555555-5555-4555-8555-555555555555', filename: 'sound.mp4', mediaType: 'audio/mpeg', byteSize: 200, status: 'AVAILABLE' })
+    await chooseFile('Video file', new File(['sound'], 'sound.mp4', { type: 'video/mp4' }))
+    await fireEvent.click(within(screen.getByLabelText('Video attachment')).getByRole('button', { name: 'Upload file' }))
+    await screen.findByText(/not suitable for this video block/)
+
+    await add('AUDIO')
+    uploadAsset.mockResolvedValueOnce({ assetKey: '66666666-6666-4666-8666-666666666666', filename: 'image.mp3', mediaType: 'image/png', byteSize: 200, status: 'AVAILABLE' })
+    await chooseFile('Audio file', new File(['image'], 'image.mp3', { type: 'audio/mpeg' }))
+    await fireEvent.click(within(screen.getByLabelText('Audio attachment')).getByRole('button', { name: 'Upload file' }))
+    await screen.findByText(/not suitable for this audio block/)
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText(/Upload an asset before saving/)
+    expect(replaceContent).not.toHaveBeenCalled()
+  })
+
+  it('uses the existing hidden-resource behavior for upload denial', async () => {
+    const original = { key: 'image', type: 'IMAGE' as const, payload: { asset: { assetKey: 'existing-asset' }, decorative: false, altText: 'Existing diagram' } }
+    uploadAsset.mockRejectedValueOnce(new APIProblemError(404, undefined, undefined))
+    const { emitted } = render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson({ schemaVersion: 1, blocks: [original] }) } })
+    await chooseFile('Image file', new File(['image'], 'hidden.png', { type: 'image/png' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload replacement' }))
+    await waitFor(() => expect(emitted().unavailable).toHaveLength(1))
+    expect(screen.queryByText(/membership|capability|permission/i)).toBeNull()
+  })
+
+  it('discards a late upload response after the exact Lesson context changes', async () => {
+    const original = { key: 'image', type: 'IMAGE' as const, payload: { asset: { assetKey: 'existing-asset' }, decorative: false, altText: 'Existing diagram' } }
+    let resolveUpload: ((asset: unknown) => void) | undefined
+    uploadAsset.mockImplementationOnce(() => new Promise((resolve) => { resolveUpload = resolve }))
+    const { rerender } = render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson({ schemaVersion: 1, blocks: [original] }) } })
+    await chooseFile('Image file', new File(['image'], 'late.png', { type: 'image/png' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload replacement' }))
+    await rerender({ draftId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', lesson: { ...lesson({ schemaVersion: 1, blocks: [{ ...original, key: 'new-image' }] }), id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', draft_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } })
+    resolveUpload?.({ assetKey: '55555555-5555-4555-8555-555555555555', filename: 'late.png', mediaType: 'image/png', byteSize: 200, status: 'AVAILABLE' })
+    await waitFor(() => expect(screen.queryByText(/late.png uploaded and attached/)).toBeNull())
+    expect(screen.getByRole('button', { name: 'Save Lesson content' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('discards a late upload response when its stable block key no longer exists', async () => {
+    const original = { key: 'image', type: 'IMAGE' as const, payload: { asset: { assetKey: 'existing-asset' }, decorative: false, altText: 'Existing diagram' } }
+    let resolveUpload: ((asset: unknown) => void) | undefined
+    uploadAsset.mockImplementationOnce(() => new Promise((resolve) => { resolveUpload = resolve }))
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson({ schemaVersion: 1, blocks: [original] }) } })
+    await chooseFile('Image file', new File(['image'], 'removed.png', { type: 'image/png' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload replacement' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove block 1 image' }))
+    resolveUpload?.({ assetKey: '55555555-5555-4555-8555-555555555555', filename: 'removed.png', mediaType: 'image/png', byteSize: 200, status: 'AVAILABLE' })
+    await waitFor(() => expect(screen.queryByText(/removed.png uploaded and attached/)).toBeNull())
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText('Lesson content saved.')
+    expect(savedDocument().blocks).toEqual([])
+  })
+
+  it('keeps operational upload errors sanitized', async () => {
+    const original = { key: 'image', type: 'IMAGE' as const, payload: { asset: { assetKey: 'existing-asset' }, decorative: false, altText: 'Existing diagram' } }
+    uploadAsset.mockRejectedValueOnce(new APIProblemError(500, undefined, undefined))
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson({ schemaVersion: 1, blocks: [original] }) } })
+    await chooseFile('Image file', new File(['image'], 'failed.png', { type: 'image/png' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Upload replacement' }))
+    await screen.findByRole('alert')
+    expect(screen.getByRole('alert').textContent).toBe('We couldn’t upload this file right now. Please try again.')
+    expect(screen.getByRole('button', { name: 'Save Lesson content' }).hasAttribute('disabled')).toBe(true)
+  })
+
   it('clears semantic dirty state when edits or movements are reverted', async () => {
     const content: AuthoringLessonContent = { schemaVersion: 1, blocks: [{ key: 'quote', type: 'QUOTE', payload: { text: 'Original' } }, { key: 'divider', type: 'DIVIDER', payload: {} }] }
     render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson(content) } })
     const input = screen.getByRole('textbox', { name: 'Quote text' })
     await fireEvent.update(input, 'Changed'); await fireEvent.update(input, 'Original')
-    await fireEvent.click(screen.getByRole('button', { name: 'Move block 1 Quote down' }))
-    await fireEvent.click(screen.getByRole('button', { name: 'Move block 2 Quote up' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Move block 1 quote down' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Move block 2 quote up' }))
     expect(screen.getByRole('button', { name: 'Save Lesson content' }).hasAttribute('disabled')).toBe(true)
     expect(replaceContent).not.toHaveBeenCalled()
   })

@@ -52,7 +52,7 @@ watch(() => [props.lesson.id, contentFingerprint(props.lesson.content)], () => {
 }, { immediate: true })
 onBeforeUnmount(() => { active = false })
 
-function label(type: string) { return editableBlockTypes.find((entry) => entry.type === type)?.label ?? type.toLowerCase().replaceAll('_', ' ') }
+function label(type: string) { return (editableBlockTypes.find((entry) => entry.type === type)?.label ?? type).toLowerCase().replaceAll('_', ' ') }
 function addBlock() {
   if (saving.value || document.value.blocks.length >= contentEditorLimits.blocks) return
   const next = { ...document.value, blocks: [...document.value.blocks, createContentBlock(blockType.value, document.value.blocks.map((block) => block.key))] }
@@ -60,9 +60,13 @@ function addBlock() {
   document.value = next
   message.value = undefined
 }
-function updateBlock(index: number, block: CanonicalBlock) {
+function updateBlock(key: string, block: CanonicalBlock) {
   if (saving.value) return
-  document.value.blocks[index] = block
+  const index = document.value.blocks.findIndex((current) => current.key === key && current.type === block.type)
+  if (index < 0 || block.key !== key) return
+  const blocks = [...document.value.blocks]
+  blocks[index] = block
+  document.value = { ...document.value, blocks }
   message.value = undefined
 }
 function move(index: number, direction: -1 | 1) {
@@ -153,7 +157,7 @@ async function reloadLatest() {
             <fieldset class="authoring-content__block">
               <legend>Block {{ index + 1 }} · {{ label(block.type) }}</legend>
               <p class="authoring-content__key">Stable key: <code>{{ block.key }}</code></p>
-              <AuthoringContentBlock :block="block" :position="index + 1" @update="updateBlock(index, $event)" />
+              <AuthoringContentBlock :block="block" :position="index + 1" :draft-id="draftId" :lesson-id="lesson.id" @update="updateBlock(block.key, $event)" @unavailable="emit('unavailable')" />
               <div class="authoring-content__actions">
                 <BtgButton variant="secondary" :disabled="index === 0" :aria-label="`Move block ${index + 1} ${label(block.type)} up`" @click="move(index, -1)">Move up</BtgButton>
                 <BtgButton variant="secondary" :disabled="index === document.blocks.length - 1" :aria-label="`Move block ${index + 1} ${label(block.type)} down`" @click="move(index, 1)">Move down</BtgButton>

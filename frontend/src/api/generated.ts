@@ -55,6 +55,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns a bounded, newest-first page of AVAILABLE Assets owned by the exact authorized Draft. It returns no binary URL or private provenance. */
+        get: operations["listAuthoringDraftAssets"];
+        put?: never;
+        /** @description Streams exactly one file into the authorized Draft. Active AUTHOR and MAINTAINER members have authoring.asset.upload. The server derives Draft ownership and creator identity, detects media type from bytes, measures size and SHA-256, and returns only safe AVAILABLE Asset metadata. */
+        post: operations["uploadAuthoringAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}/modules": {
         parameters: {
             query?: never;
@@ -581,6 +599,36 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthoringAsset: {
+            /**
+             * Format: uuid
+             * @description Stable opaque Asset ID used by canonical LessonContent assetKey fields.
+             */
+            assetKey: string;
+            filename: string;
+            /** @description Authoritative media type detected from the stored bytes. */
+            mediaType: string;
+            /** Format: int64 */
+            byteSize: number;
+            /** @constant */
+            status: "AVAILABLE";
+        };
+        AuthoringAssetSummary: {
+            /** Format: uuid */
+            assetKey: string;
+            filename: string;
+            mediaType: string;
+            /** Format: int64 */
+            byteSize: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AuthoringAssetList: {
+            items: components["schemas"]["AuthoringAssetSummary"][];
+            limit: number;
+            offset: number;
+            total: number;
+        };
         AuthoringReviewSubmitRequest: {
             expectedDraftRevision: number;
         };
@@ -1483,6 +1531,75 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringDraftAssets: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of safe Draft Asset summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssetList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    uploadAuthoringAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Authoritative AVAILABLE Asset metadata suitable for a canonical assetKey reference */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAsset"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

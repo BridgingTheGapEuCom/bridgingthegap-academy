@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringPublicationResponseError, InvalidAuthoringReviewResponseError, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringAssetResponseError, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringPublicationResponseError, InvalidAuthoringReviewResponseError, listAuthoringDraftAssets, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson, uploadAuthoringAsset } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -39,6 +39,39 @@ describe('Authoring API service', () => {
     expect(request).toHaveBeenCalledWith(`/api/authoring/drafts/${draftID}/lessons/${lessonID}/content`, expect.objectContaining({ method: 'PUT', body: JSON.stringify(body) }))
     await expect(replaceAuthoringLessonContent(draftID, 'invalid', body, { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
     expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('uploads exactly one file to the scoped Asset boundary and validates the authoritative response', async () => {
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const asset = { assetKey: '22222222-2222-4222-8222-222222222222', filename: 'diagram.png', mediaType: 'image/png', byteSize: 123, status: 'AVAILABLE' }
+    const request = vi.fn().mockResolvedValue(asset)
+    const file = new File(['untrusted browser bytes'], 'diagram.png', { type: 'image/png' })
+    await expect(uploadAuthoringAsset(draftID, file, { request })).resolves.toEqual(asset)
+    expect(request).toHaveBeenCalledWith(`/api/authoring/drafts/${draftID}/assets`, expect.objectContaining({ method: 'POST', cache: 'no-store' }))
+    const options = request.mock.calls[0]![1] as { body: FormData; headers?: HeadersInit }
+    expect(options.body).toBeInstanceOf(FormData)
+    expect(options.body.getAll('file')).toEqual([file])
+    const formEntries: string[] = []
+    options.body.forEach((_value, key) => formEntries.push(key))
+    expect(formEntries).toEqual(['file'])
+    expect(options.headers).toBeUndefined()
+
+    await expect(uploadAuthoringAsset(draftID, file, { request: vi.fn().mockResolvedValue({ ...asset, status: 'PENDING' }) })).rejects.toBeInstanceOf(InvalidAuthoringAssetResponseError)
+    await expect(uploadAuthoringAsset(draftID, file, { request: vi.fn().mockResolvedValue({ ...asset, assetKey: 'not-an-asset' }) })).rejects.toBeInstanceOf(InvalidAuthoringAssetResponseError)
+    await expect(uploadAuthoringAsset(draftID, file, { request: vi.fn().mockResolvedValue({ ...asset, filename: '../path' }) })).rejects.toBeInstanceOf(InvalidAuthoringAssetResponseError)
+  })
+
+  it('does not retry an Asset upload mutation', async () => {
+    const request = vi.fn().mockRejectedValue(new Error('network unavailable'))
+    await expect(uploadAuthoringAsset('11111111-1111-4111-8111-111111111111', new File(['x'], 'notes.txt'), { request })).rejects.toThrow('network unavailable')
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+  it('lists only runtime-validated Asset summaries through the exact Draft boundary', async () => {
+    const page = { items: [{ assetKey: '22222222-2222-4222-8222-222222222222', filename: 'diagram.png', mediaType: 'image/png', byteSize: 123, createdAt: '2026-09-17T10:00:00Z' }], limit: 20, offset: 0, total: 1 }
+    const request = vi.fn().mockResolvedValue(page)
+    await expect(listAuthoringDraftAssets('11111111-1111-4111-8111-111111111111', 20, 0, { request })).resolves.toEqual(page)
+    expect(request).toHaveBeenCalledWith('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets?limit=20&offset=0', { cache: 'no-store' })
+    await expect(listAuthoringDraftAssets('11111111-1111-4111-8111-111111111111', 20, 0, { request: vi.fn().mockResolvedValue({ ...page, items: [{ ...page.items[0], createdAt: 'invalid' }] }) })).rejects.toBeInstanceOf(InvalidAuthoringAssetResponseError)
   })
   it('uses the authenticated shared request boundary for a bounded Draft ID', async () => {
     const request = vi.fn().mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' })

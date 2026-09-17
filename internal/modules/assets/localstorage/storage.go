@@ -198,7 +198,8 @@ func syncDirectory(root *os.Root, name string) error {
 
 func storageError(err error) error {
 	switch {
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded), errors.Is(err, assets.ErrAssetTooLarge):
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded),
+		errors.Is(err, assets.ErrAssetTooLarge), errors.Is(err, assets.ErrInvalidAssetContent):
 		return err
 	default:
 		return assets.ErrBinaryStorage

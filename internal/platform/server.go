@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	assetslocal "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/localstorage"
+	assetspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	authoringpostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
@@ -72,6 +74,10 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 
 	authoringRepository := authoringpostgres.New(pool)
 	authoringAuthorizer := authoring.NewAuthorizationService(authoringRepository)
+	assetIngestion, err := assets.NewIngestionService(assetspostgres.New(pool), assetStorage, cfg.AssetMaxBytes)
+	if err != nil {
+		return err
+	}
 	coursesRepository := coursespostgres.New(pool)
 	publicationService := authoring.NewPublicationService(authoringRepository, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
 	auth := &authHTTP{
@@ -97,6 +103,9 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringReviews:            newAuthoringReviewApplicationService(cfg, authoringRepository, authoringAuthorizer),
 		authoringPublicationStatus:  authoring.NewReviewPublicationStatusService(authoringRepository, authoringAuthorizer),
 		authoringPublications:       authoring.NewPublicationApplicationService(publicationService, authoringAuthorizer, time.Now),
+		authoringAssetUploads:       authoring.NewAssetUploadService(assetIngestion, authoringAuthorizer),
+		authoringAssets:             authoring.NewAssetListService(assetspostgres.New(pool), authoringAuthorizer),
+		assetMaxBytes:               cfg.AssetMaxBytes,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -183,6 +192,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Get("/authoring/drafts/{draftId}/structure", auth.handleAuthoringStructure)
 					protected.Get("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLesson)
 				}
+				if auth.authoringAssets != nil {
+					protected.Get("/authoring/drafts/{draftId}/assets", auth.handleAuthoringAssetList)
+				}
 				if auth.authoringCreation != nil {
 					protected.Post("/authoring/drafts", auth.handleAuthoringDraftCreate)
 				}
@@ -221,6 +233,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				}
 				if auth.authoringPublications != nil {
 					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/publish", auth.handleAuthoringReviewPublish)
+				}
+				if auth.authoringAssetUploads != nil {
+					protected.Post("/authoring/drafts/{draftId}/assets", auth.handleAuthoringAssetUpload)
 				}
 			})
 			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

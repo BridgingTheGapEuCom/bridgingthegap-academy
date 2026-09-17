@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAvailableAssetsForDraft = `-- name: CountAvailableAssetsForDraft :one
+SELECT count(*)
+FROM assets.asset
+WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE'
+`
+
+func (q *Queries) CountAvailableAssetsForDraft(ctx context.Context, ownerDraftID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countAvailableAssetsForDraft, ownerDraftID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAsset = `-- name: CreateAsset :one
 INSERT INTO assets.asset (
     owner_draft_id, original_filename, media_type, byte_size, sha256_digest,
@@ -93,6 +106,51 @@ func (q *Queries) GetAsset(ctx context.Context, id pgtype.UUID) (AssetsAsset, er
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listAvailableAssetsForDraft = `-- name: ListAvailableAssetsForDraft :many
+SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at
+FROM assets.asset
+WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE'
+ORDER BY created_at DESC, id DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListAvailableAssetsForDraftParams struct {
+	OwnerDraftID pgtype.UUID
+	Offset       int32
+	Limit        int32
+}
+
+func (q *Queries) ListAvailableAssetsForDraft(ctx context.Context, arg ListAvailableAssetsForDraftParams) ([]AssetsAsset, error) {
+	rows, err := q.db.Query(ctx, listAvailableAssetsForDraft, arg.OwnerDraftID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AssetsAsset
+	for rows.Next() {
+		var i AssetsAsset
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerDraftID,
+			&i.OriginalFilename,
+			&i.MediaType,
+			&i.ByteSize,
+			&i.Sha256Digest,
+			&i.StorageObjectID,
+			&i.Lifecycle,
+			&i.CreatedByUserID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markAssetAvailable = `-- name: MarkAssetAvailable :one

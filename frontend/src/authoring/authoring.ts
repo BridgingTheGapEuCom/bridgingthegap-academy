@@ -12,6 +12,9 @@ export type AuthoringLessonSummary = components['schemas']['AuthoringLessonSumma
 export type AuthoringLessonDetail = components['schemas']['AuthoringLessonDetail']
 export type AuthoringLessonContent = components['schemas']['LessonContent']
 export type AuthoringLessonContentMutation = components['schemas']['AuthoringLessonContentMutationResponse']
+export type AuthoringAsset = components['schemas']['AuthoringAsset']
+export type AuthoringAssetSummary = components['schemas']['AuthoringAssetSummary']
+export type AuthoringAssetList = components['schemas']['AuthoringAssetList']
 export type AuthoringActiveMember = components['schemas']['AuthoringActiveMember']
 export type AuthoringActiveMemberList = components['schemas']['AuthoringActiveMemberList']
 export type AuthoringMemberAdd = components['schemas']['AuthoringMemberAddRequest']
@@ -91,6 +94,13 @@ export class InvalidAuthoringPublicationResponseError extends Error {
   constructor() {
     super('Invalid Authoring publication response')
     this.name = 'InvalidAuthoringPublicationResponseError'
+  }
+}
+
+export class InvalidAuthoringAssetResponseError extends Error {
+  constructor() {
+    super('Invalid Authoring Asset response')
+    this.name = 'InvalidAuthoringAssetResponseError'
   }
 }
 
@@ -293,6 +303,26 @@ export async function replaceAuthoringLessonContent(draftID: string, lessonID: s
   return client.request<AuthoringLessonContentMutation>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}/content`, jsonRequest('PUT', input))
 }
 
+// The server owns asset identity, ownership, MIME detection, integrity, and
+// lifecycle. This client deliberately sends one file part and no metadata.
+export async function uploadAuthoringAsset(draftID: string, file: File, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringAsset> {
+  assertAuthoringID(draftID)
+  const body = new FormData()
+  body.append('file', file)
+  const response = await client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/assets`, {
+    method: 'POST', body, cache: 'no-store',
+  })
+  if (!isAuthoringAsset(response)) throw new InvalidAuthoringAssetResponseError()
+  return response
+}
+export async function listAuthoringDraftAssets(draftID: string, limit = 20, offset = 0, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringAssetList> {
+  assertAuthoringID(draftID)
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) throw new InvalidAuthoringAssetResponseError()
+  const response = await client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/assets?limit=${limit}&offset=${offset}`, { cache: 'no-store' })
+  if (!isAuthoringAssetList(response)) throw new InvalidAuthoringAssetResponseError()
+  return response
+}
+
 function jsonRequest(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body: unknown) {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
 }
@@ -359,6 +389,31 @@ function isAuthoringPublication(value: unknown): value is AuthoringPublication {
     && typeof value.courseVersion === 'string' && isAuthoringVersion(value.courseVersion)
     && typeof value.courseVersionId === 'string' && isAuthoringDraftID(value.courseVersionId)
     && isDateTime(value.publishedAt)
+}
+
+function isAuthoringAsset(value: unknown): value is AuthoringAsset {
+  return isRecord(value)
+    && typeof value.assetKey === 'string' && isAuthoringDraftID(value.assetKey)
+    && typeof value.filename === 'string' && isSafeAssetFilename(value.filename)
+    && typeof value.mediaType === 'string' && isCanonicalMediaType(value.mediaType)
+    && typeof value.byteSize === 'number' && Number.isSafeInteger(value.byteSize) && value.byteSize > 0
+    && value.status === 'AVAILABLE'
+}
+function isAuthoringAssetList(value: unknown): value is AuthoringAssetList {
+  return isRecord(value) && Array.isArray(value.items) && value.items.every((item) => isRecord(item) && typeof item.assetKey === 'string' && isAuthoringDraftID(item.assetKey) && typeof item.filename === 'string' && isSafeAssetFilename(item.filename) && typeof item.mediaType === 'string' && isCanonicalMediaType(item.mediaType) && typeof item.byteSize === 'number' && Number.isSafeInteger(item.byteSize) && item.byteSize > 0 && isDateTime(item.createdAt))
+    && typeof value.limit === 'number' && Number.isSafeInteger(value.limit) && value.limit >= 1 && value.limit <= 100
+    && typeof value.offset === 'number' && Number.isSafeInteger(value.offset) && value.offset >= 0
+    && typeof value.total === 'number' && Number.isSafeInteger(value.total) && value.total >= 0
+}
+
+function isSafeAssetFilename(value: string): boolean {
+  return value.length > 0 && value.length <= 255 && value.trim() === value
+    && value !== '.' && value !== '..' && !/[\\/\u0000-\u001f\u007f]/.test(value)
+}
+
+function isCanonicalMediaType(value: string): boolean {
+  return value.length >= 3 && value.length <= 127
+    && /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(value)
 }
 
 function isAuthoringVersion(value: string): boolean {

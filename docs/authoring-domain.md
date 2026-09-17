@@ -44,6 +44,7 @@ branch on MAINTAINER/AUTHOR roles. The policy is:
 | `authoring.draft.edit` | Allow | Allow |
 | `authoring.structure.edit` | Allow | Allow |
 | `authoring.content.edit` | Allow | Allow |
+| `authoring.asset.upload` | Allow | Allow |
 | `authoring.members.manage` | Deny | Allow |
 | `authoring.draft.abandon` | Deny | Allow |
 | `authoring.review.read` | Allow | Allow |
@@ -166,6 +167,22 @@ are rejected. Reorder arrays must be explicitly supplied (an empty array is
 valid for an empty structure). Full Lesson layouts have a 1 MiB body budget,
 large enough for the existing 1,000-Module / 10,000-Lesson limits; smaller
 metadata and membership bodies retain their narrower budgets.
+
+Draft asset ingestion is exposed only through
+`POST /api/authoring/drafts/{draftId}/assets`. The Authoring application first
+authorizes `authoring.asset.upload` against the exact route Draft, then passes a
+stream to the neutral Assets ingestion service with the route Draft and resolved
+session actor captured as private ownership provenance. Active AUTHOR and
+MAINTAINER memberships may upload; revoked, unrelated, and absent memberships
+receive the same hidden `404`, and a global ADMINISTRATOR assignment grants no
+Draft access. The multipart contract accepts exactly one `file` part. It rejects
+extra metadata or file parts and applies a bounded HTTP body as defense in depth;
+Assets remains authoritative for stream size, detected media type, SHA-256, and
+storage identity. A successful `201` returns only `assetKey`, filename, detected
+media type, byte size, and AVAILABLE status. Storage location, storage object ID,
+digest, creator, and Draft provenance remain private. Uploads inherit session,
+trusted-Origin, CSRF, and `Cache-Control: no-store` behavior. Asset selection,
+binary delivery, and publication resolution remain separate work.
 
 Outline and individual Lesson reads use a single read-only PostgreSQL snapshot
 for metadata, ordering, revisions, and prerequisites. Outline/reorder queries

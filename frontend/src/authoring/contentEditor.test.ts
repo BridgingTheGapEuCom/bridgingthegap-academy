@@ -5,13 +5,15 @@ import { deferredBlocks } from './contentEditor.fixtures'
 
 
 describe('canonical content editor helpers', () => {
-  it.each(editableBlockTypes)('creates valid $type defaults with unique stable keys independent of text', ({ type }) => {
+  it.each(editableBlockTypes)('creates $type defaults with unique stable keys independent of text', ({ type }) => {
     const first = createContentBlock(type, [])
     const second = createContentBlock(type, [first.key])
     expect(first.key).toMatch(/^block-[a-z0-9]+(?:-[a-z0-9]+)*$/)
     expect(first.key.length).toBeLessThanOrEqual(80)
     expect(second.key).not.toBe(first.key)
-    expect(contentEditorError({ schemaVersion: 1, blocks: [first, second] })).toBeUndefined()
+    const error = contentEditorError({ schemaVersion: 1, blocks: [first, second] })
+    if (type === 'IMAGE' || type === 'VIDEO' || type === 'AUDIO' || type === 'DOWNLOAD') expect(error).toContain('Upload an asset')
+    else expect(error).toBeUndefined()
   })
 
   it('copies deferred canonical payloads without normalization or mutation', () => {

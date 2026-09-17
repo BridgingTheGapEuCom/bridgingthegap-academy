@@ -69,6 +69,44 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/assets:
+    get:
+      operationId: listAuthoringDraftAssets
+      description: Returns a bounded, newest-first page of AVAILABLE Assets owned by the exact authorized Draft. It returns no binary URL or private provenance.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/AuthoringDraftID' }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Page of safe Draft Asset summaries, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringAssetList' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: uploadAuthoringAsset
+      description: Streams exactly one file into the authorized Draft. Active AUTHOR and MAINTAINER members have authoring.asset.upload. The server derives Draft ownership and creator identity, detects media type from bytes, measures size and SHA-256, and returns only safe AVAILABLE Asset metadata.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: Authoritative AVAILABLE Asset metadata suitable for a canonical assetKey reference, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringAsset' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}/modules:
     post:
       operationId: createAuthoringModule
@@ -641,6 +679,35 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    AuthoringAsset:
+      type: object
+      additionalProperties: false
+      required: [assetKey, filename, mediaType, byteSize, status]
+      properties:
+        assetKey: { type: string, format: uuid, description: Stable opaque Asset ID used by canonical LessonContent assetKey fields. }
+        filename: { type: string, minLength: 1, maxLength: 255 }
+        mediaType: { type: string, description: Authoritative media type detected from the stored bytes. }
+        byteSize: { type: integer, format: int64, minimum: 1 }
+        status: { type: string, const: AVAILABLE }
+    AuthoringAssetSummary:
+      type: object
+      additionalProperties: false
+      required: [assetKey, filename, mediaType, byteSize, createdAt]
+      properties:
+        assetKey: { type: string, format: uuid }
+        filename: { type: string, minLength: 1, maxLength: 255 }
+        mediaType: { type: string }
+        byteSize: { type: integer, format: int64, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+    AuthoringAssetList:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AuthoringAssetSummary' } }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 0 }
     AuthoringReviewSubmitRequest:
       type: object
       additionalProperties: false

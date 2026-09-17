@@ -92,6 +92,30 @@ func (r *Repository) DiscardPendingAsset(ctx context.Context, id assets.AssetID)
 	return nil
 }
 
+func (r *Repository) ListAvailableAssetsForDraft(ctx context.Context, draftID string, limit, offset int) ([]assets.Asset, int, error) {
+	ownerDraftID, err := uuid(draftID)
+	if err != nil || limit < 1 || offset < 0 {
+		return nil, 0, assets.ErrInvalidAsset
+	}
+	rows, err := r.q.ListAvailableAssetsForDraft(ctx, sqlc.ListAvailableAssetsForDraftParams{OwnerDraftID: ownerDraftID, Limit: int32(limit), Offset: int32(offset)})
+	if err != nil {
+		return nil, 0, storageError(err)
+	}
+	total, err := r.q.CountAvailableAssetsForDraft(ctx, ownerDraftID)
+	if err != nil {
+		return nil, 0, storageError(err)
+	}
+	items := make([]assets.Asset, 0, len(rows))
+	for _, row := range rows {
+		asset, err := mapAsset(row)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, asset)
+	}
+	return items, int(total), nil
+}
+
 func mapAsset(row sqlc.AssetsAsset) (assets.Asset, error) {
 	lifecycle, err := assets.ParseLifecycle(row.Lifecycle)
 	if err != nil {

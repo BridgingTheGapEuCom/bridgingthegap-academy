@@ -15,6 +15,7 @@ const (
 	CapabilityDraftEdit     Capability = "authoring.draft.edit"
 	CapabilityStructureEdit Capability = "authoring.structure.edit"
 	CapabilityContentEdit   Capability = "authoring.content.edit"
+	CapabilityAssetUpload   Capability = "authoring.asset.upload"
 	CapabilityMembersManage Capability = "authoring.members.manage"
 	CapabilityDraftAbandon  Capability = "authoring.draft.abandon"
 	CapabilityReviewRead    Capability = "authoring.review.read"
@@ -75,7 +76,7 @@ func (s AuthorizationService) Authorize(ctx context.Context, actor identity.Auth
 func knownCapability(capability Capability) bool {
 	switch capability {
 	case CapabilityRead, CapabilityDraftEdit, CapabilityStructureEdit,
-		CapabilityContentEdit, CapabilityMembersManage, CapabilityDraftAbandon,
+		CapabilityContentEdit, CapabilityAssetUpload, CapabilityMembersManage, CapabilityDraftAbandon,
 		CapabilityReviewRead, CapabilityReviewSubmit, CapabilityReviewDecide,
 		CapabilityPublish:
 		return true
@@ -89,7 +90,7 @@ func roleAllows(role MemberRole, capability Capability) bool {
 	case MemberAuthor:
 		return capability == CapabilityRead || capability == CapabilityDraftEdit ||
 			capability == CapabilityStructureEdit || capability == CapabilityContentEdit ||
-			capability == CapabilityReviewRead || capability == CapabilityReviewSubmit
+			capability == CapabilityAssetUpload || capability == CapabilityReviewRead || capability == CapabilityReviewSubmit
 	case MemberMaintainer:
 		return knownCapability(capability)
 	default:

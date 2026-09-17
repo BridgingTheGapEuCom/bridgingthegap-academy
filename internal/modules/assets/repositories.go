@@ -18,3 +18,9 @@ type Repository interface {
 	MarkAssetAvailable(context.Context, AssetID, StoredBinary) (Asset, error)
 	DiscardPendingAsset(context.Context, AssetID) error
 }
+
+// AvailableAssetLister is intentionally separate from ingestion metadata
+// writes so upload-only implementations and tests do not gain read concerns.
+type AvailableAssetLister interface {
+	ListAvailableAssetsForDraft(context.Context, string, int, int) ([]Asset, int, error)
+}

@@ -240,6 +240,13 @@
 .authoring-content__conflict { border-inline-start-color: var(--btg-color-warning); }
 .authoring-content__conflict p { margin-bottom: var(--btg-space-3); }
 .authoring-content__status { border-inline-start-color: var(--btg-color-success); }
+.authoring-asset-attachment { display: grid; min-width: 0; gap: var(--btg-space-3); border-inline-start: 0.25rem solid var(--btg-color-border-strong); padding-inline-start: var(--btg-space-4); }
+.authoring-asset-attachment__current,
+.authoring-asset-attachment__selection,
+.authoring-asset-attachment__metadata { color: var(--btg-color-text-secondary); overflow-wrap: anywhere; }
+.authoring-asset-attachment__error,
+.authoring-asset-attachment__status { border-inline-start: 0.25rem solid var(--btg-color-danger); background: var(--btg-color-surface-muted); padding: var(--btg-space-3) var(--btg-space-4); overflow-wrap: anywhere; }
+.authoring-asset-attachment__status { border-inline-start-color: var(--btg-color-success); }
 .authoring-structure,
 .authoring-structure__header,
 .authoring-structure__modules,

@@ -115,6 +115,10 @@ async function serveDraft(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
   await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/assets**`, (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], limit: 20, offset: 0, total: 0 }) })
+  })
 }
 
 async function serveReviewOverview(page: Page) {
@@ -242,6 +246,66 @@ test('Authoring content edits canonical blocks with keyboard controls and preser
   await page.screenshot({ path: '/tmp/btg-content-editor-mobile.png', fullPage: true })
   await page.setViewportSize({ width: 768, height: 844 })
   await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring attaches an uploaded asset to the exact block and persists only its asset key', async ({ page }) => {
+  const existing = { key: 'architecture-diagram', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Architecture diagram' } }
+  const uploadedAssetKey = '66666666-6666-4666-8666-666666666666'
+  let currentContent = { schemaVersion: 1, blocks: [existing] }
+  let savedRequest: { expectedLessonRevision: number; content: typeof currentContent } | undefined
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ...lesson, revision: 2, content: currentContent }),
+  }))
+  await page.route(`**/api/authoring/drafts/${draftID}/assets`, (route) => {
+    expect(route.request().method()).toBe('POST')
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
+    expect(route.request().headers()['content-type']).toContain('multipart/form-data; boundary=')
+    const body = route.request().postDataBuffer().toString('utf8')
+    expect(body).toContain('name="file"')
+    expect(body).not.toContain('creatorId')
+    expect(body).not.toContain('draftId')
+    expect(body).not.toContain('sha256')
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ assetKey: uploadedAssetKey, filename: 'architecture.png', mediaType: 'image/png', byteSize: 240, status: 'AVAILABLE' }),
+    })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}/content`, (route) => {
+    savedRequest = route.request().postDataJSON()
+    currentContent = savedRequest!.content
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ lesson: { ...lesson, revision: 3, draftRevision: 4 }, content: currentContent }),
+    })
+  })
+
+  await page.goto(`/authoring/drafts/${draftID}/lessons/${lesson.id}`)
+  const input = page.getByLabel('Image file')
+  await input.setInputFiles({ name: 'architecture.png', mimeType: 'image/png', buffer: Buffer.from('image bytes') })
+  await page.getByRole('button', { name: 'Upload replacement' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('architecture.png uploaded and attached. Save Lesson content to keep this reference.')).toBeVisible()
+  await page.getByRole('button', { name: 'Save Lesson content' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Lesson content saved.')).toBeVisible()
+  expect(savedRequest?.expectedLessonRevision).toBe(2)
+  expect(savedRequest?.content.blocks[0]).toEqual({
+    key: 'architecture-diagram',
+    type: 'IMAGE',
+    payload: { asset: { assetKey: uploadedAssetKey }, decorative: false, altText: 'Architecture diagram' },
+  })
+  expect(await page.getByText(uploadedAssetKey).count()).toBe(0)
+
+  await page.reload()
+  await expect(page.getByText('An asset is attached.')).toBeVisible()
+  await page.setViewportSize({ width: 320, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

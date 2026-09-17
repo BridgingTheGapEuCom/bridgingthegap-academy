@@ -83,14 +83,51 @@ upload, delivery, or public URLs, and publication therefore continues to return
 
 Ownership and creator IDs are internal authorization provenance. They are not
 public attribution and must not appear in learner catalog, reader, or asset
-delivery responses. The future API/service layer is responsible for session
-identity, active Authoring membership checks, upload policy, and safe delivery;
-the neutral ingestion service accepts already-authorized Draft and creator IDs,
-does not import Authoring, does not interpret roles, and defines no administrator
-bypass.
+delivery responses. The Draft-scoped Authoring upload boundary authorizes the
+server-resolved actor with `authoring.asset.upload` before parsing the multipart
+stream. Active AUTHOR and MAINTAINER members may upload; global administrator
+status grants no implicit Draft access. The route Draft and session actor become
+the Asset's ownership provenance, and multipart fields cannot replace them. The
+neutral ingestion service continues to accept only already-authorized Draft and
+creator IDs, does not import Authoring, does not interpret roles, and defines no
+administrator bypass.
+
+`POST /api/authoring/drafts/{draftId}/assets` accepts exactly one multipart
+`file` part. The outer request body is limited to the configured asset maximum
+plus a small fixed multipart allowance, while ingestion independently enforces
+the maximum against actual content bytes. The original filename is metadata
+only; a claimed MIME type is ignored in favor of content detection. A successful
+`201` represents an AVAILABLE Asset and returns only its canonical `assetKey`,
+filename, detected media type, measured byte size, and status. It does not return
+the storage object ID, filesystem path, digest, creator, or Draft provenance.
+The private response is `no-store` and inherits the established authenticated
+Origin and CSRF protections. No Asset read, preview, download, or delivery API
+is introduced.
 
 The local provider is only the first implementation. The ingestion contract is
 streaming and provider-neutral, so an S3-compatible provider can implement the
 same commit/open/rollback semantics without changing Asset identity or canonical
 LessonContent. Publication remains unchanged in this milestone and continues to
 report `unresolved_asset_reference` even for AVAILABLE Assets.
+
+Authoring's Lesson editor can upload one new file in the context of an IMAGE,
+VIDEO, AUDIO, or DOWNLOAD block. It sends only the multipart `file` field to
+the exact Draft-scoped endpoint and attaches only the server-returned AVAILABLE
+`assetKey` to canonical LessonContent. Filename, media type, byte size, local
+file details, and storage data remain transient editor information. Upload and
+the normal revision-checked Lesson-content save are separate operations: a
+successful upload can remain unreferenced if the later Draft save fails or is
+abandoned. Replacements leave the existing canonical key intact until the new
+upload succeeds, and no Asset deletion, preview, delivery, listing, or
+publication resolution is performed here.
+
+`GET /api/authoring/drafts/{draftId}/assets` is a private Draft-scoped,
+`no-store` read using the existing `authoring.asset.upload` capability: active
+AUTHOR and MAINTAINER members may list only that Draft's AVAILABLE Assets;
+missing or unauthorized Drafts remain hidden. Results are ordered by creation
+time descending with Asset ID as a stable tie-breaker and use bounded
+`limit`/`offset` pagination. The summary exposes only `assetKey`, filename,
+detected media type, byte size, and creation time. The editor filters this
+server-authoritative metadata for the current block and saves only a selected
+`assetKey`; there is still no preview, delivery, deletion, cross-Draft reuse,
+or publication resolution.
