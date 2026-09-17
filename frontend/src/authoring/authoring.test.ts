@@ -5,7 +5,12 @@ describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
     const request = vi.fn().mockResolvedValue({ drafts: [] })
     await listAuthoringDrafts({ request })
-    expect(request).toHaveBeenCalledWith('/api/authoring/drafts')
+    expect(request).toHaveBeenCalledWith('/api/authoring/drafts', { cache: 'no-store' })
+  })
+
+  it('fails closed when the private Draft discovery payload is malformed', async () => {
+    const request = vi.fn().mockResolvedValue({ drafts: [{ id: 'not-a-draft' }] })
+    await expect(listAuthoringDrafts({ request })).rejects.toThrow('Invalid Authoring draft list response')
   })
 
   it('replaces only canonical content through the scoped authenticated PUT boundary', async () => {

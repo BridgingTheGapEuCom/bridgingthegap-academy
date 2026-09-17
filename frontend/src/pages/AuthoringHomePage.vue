@@ -4,7 +4,7 @@
       <h1 id="authoring-home-title">Checking your session</h1>
       <p>One moment while we check whether you are signed in.</p>
     </div>
-    <div v-else-if="auth.state.value.status === 'unavailable'" class="authoring-home__state">
+    <div v-else-if="auth.state.value.status === 'unavailable'" class="authoring-home__state" role="alert">
       <h1 id="authoring-home-title">Authoring unavailable</h1>
       <p>We couldn’t check your session right now. Please try again.</p>
       <BtgButton variant="secondary" @click="retryBootstrap">Try again</BtgButton>
@@ -17,7 +17,7 @@
       <h1 id="authoring-home-title">Authoring</h1>
       <p>Loading your Drafts…</p>
     </div>
-    <div v-else-if="state.kind === 'unavailable'" class="authoring-home__state">
+    <div v-else-if="state.kind === 'unavailable'" class="authoring-home__state" role="alert">
       <h1 id="authoring-home-title">Authoring unavailable</h1>
       <p>We couldn’t load your Drafts right now. Please try again.</p>
       <BtgButton variant="secondary" @click="load">Try again</BtgButton>
@@ -25,10 +25,10 @@
     <div v-else class="authoring-home__content">
       <p class="authoring-home__eyebrow">Bridging the Gap Academy</p>
       <h1 id="authoring-home-title">Authoring</h1>
-      <p class="authoring-home__intro">Create and maintain course Drafts before publication.</p>
+      <p class="authoring-home__intro">Maintain course Drafts before publication.</p>
       <section aria-labelledby="authoring-drafts-title">
         <h2 id="authoring-drafts-title">Your Drafts</h2>
-        <p v-if="state.drafts.length === 0" class="authoring-home__empty">You do not currently have any course Drafts.</p>
+        <p v-if="state.drafts.length === 0" class="authoring-home__empty" role="status">You do not currently have any course Drafts.</p>
         <ol v-else class="authoring-home__list">
           <li v-for="draft in state.drafts" :key="draft.id" class="authoring-home__item">
             <article>

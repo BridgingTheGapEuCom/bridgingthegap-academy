@@ -63,6 +63,13 @@ export class InvalidAuthoringDraftIDError extends Error {
   }
 }
 
+export class InvalidAuthoringDraftListResponseError extends Error {
+  constructor() {
+    super('Invalid Authoring draft list response')
+    this.name = 'InvalidAuthoringDraftListResponseError'
+  }
+}
+
 // The route value is bounded before it becomes an API path. Authorization is
 // deliberately not decided here: the private API remains the authority.
 export function isAuthoringDraftID(value: string): boolean {
@@ -76,7 +83,9 @@ function assertAuthoringID(value: string): void {
 // Discovery remains server-authoritative: the private endpoint filters the
 // current actor's active memberships and never accepts browser-side roles.
 export async function listAuthoringDrafts(client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringDraftList> {
-  return client.request<AuthoringDraftList>('/api/authoring/drafts')
+  const response = await client.request<unknown>('/api/authoring/drafts', { cache: 'no-store' })
+  if (!isAuthoringDraftList(response)) throw new InvalidAuthoringDraftListResponseError()
+  return response
 }
 
 export async function getAuthoringDraft(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringDraft> {
@@ -237,6 +246,36 @@ export async function replaceAuthoringLessonContent(draftID: string, lessonID: s
 
 function jsonRequest(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body: unknown) {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+}
+
+function isAuthoringDraftList(value: unknown): value is AuthoringDraftList {
+  if (!isRecord(value) || !Array.isArray(value.drafts)) return false
+  return value.drafts.every(isAuthoringDraftSummary)
+}
+
+function isAuthoringDraftSummary(value: unknown): value is AuthoringDraftSummary {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && isAuthoringDraftID(value.id)
+    && typeof value.title === 'string'
+    && value.title.length > 0
+    && value.title.length <= 240
+    && typeof value.intendedVersion === 'string'
+    && isAuthoringVersion(value.intendedVersion)
+    && (value.status === 'ACTIVE' || value.status === 'ABANDONED')
+    && isDateTime(value.updatedAt)
+}
+
+function isAuthoringVersion(value: string): boolean {
+  return /^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$/.test(value)
+}
+
+function isDateTime(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && !Number.isNaN(Date.parse(value))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function authoringDraftPath(draftID: string, section: 'overview' | 'structure' | 'members' | 'review' = 'overview'): string {

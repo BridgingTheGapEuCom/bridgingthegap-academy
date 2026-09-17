@@ -71,12 +71,28 @@ describe('AuthoringHomePage', () => {
     expect(screen.queryByRole('button', { name: /Create/i })).toBeNull()
   })
 
+  it('keeps an accessible loading state until Draft discovery resolves', async () => {
+    let resolveDrafts: (value: ReturnType<typeof drafts>) => void = () => undefined
+    listAuthoringDraftsMock.mockImplementationOnce(() => new Promise<ReturnType<typeof drafts>>((resolve) => { resolveDrafts = resolve }))
+    await renderPage()
+    expect(screen.getByRole('status').textContent).toContain('Loading your Drafts')
+    resolveDrafts(drafts())
+    expect(await screen.findByRole('link', { name: 'Open Draft: Integration foundations' })).toBeTruthy()
+  })
+
   it('keeps operational failures distinct from an empty list and retries explicitly', async () => {
     listAuthoringDraftsMock.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(drafts())
     await renderPage()
-    await screen.findByRole('heading', { level: 1, name: 'Authoring unavailable' })
+    await screen.findByRole('alert')
     await fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('link', { name: 'Open Draft: Integration foundations' })).toBeTruthy()
+  })
+
+  it('treats a malformed private Draft list as an operational failure', async () => {
+    listAuthoringDraftsMock.mockRejectedValueOnce(new Error('Invalid Authoring draft list response'))
+    await renderPage()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Authoring unavailable' })).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Invalid Authoring draft list response')
   })
 
   it('redirects unauthenticated visitors without loading Drafts and drops a late prior-session result', async () => {

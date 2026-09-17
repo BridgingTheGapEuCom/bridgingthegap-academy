@@ -137,9 +137,18 @@ test('Authoring discovery is reachable from main navigation and opens an accessi
   await expect(page.getByRole('link', { name: `Open Draft: ${draft.title}` })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '' })
   await page.getByRole('link', { name: `Open Draft: ${draft.title}` }).click()
   await expect(page).toHaveURL(`/authoring/drafts/${draftID}/overview`)
   await expect(page.getByRole('heading', { level: 1, name: draft.title })).toBeVisible()
+  await page.goBack()
+  await expect(page).toHaveURL('/authoring')
+  await expect(page.getByRole('link', { name: `Open Draft: ${draft.title}` })).toBeVisible()
 })
 
 test('Authoring content edits canonical blocks with keyboard controls and preserves deferred payloads', async ({ page }) => {
