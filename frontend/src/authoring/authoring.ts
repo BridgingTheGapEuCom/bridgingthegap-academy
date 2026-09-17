@@ -87,6 +87,13 @@ export class InvalidAuthoringReviewResponseError extends Error {
   }
 }
 
+export class InvalidAuthoringPublicationResponseError extends Error {
+  constructor() {
+    super('Invalid Authoring publication response')
+    this.name = 'InvalidAuthoringPublicationResponseError'
+  }
+}
+
 // The route value is bounded before it becomes an API path. Authorization is
 // deliberately not decided here: the private API remains the authority.
 export function isAuthoringDraftID(value: string): boolean {
@@ -199,7 +206,19 @@ export async function requestAuthoringReviewChanges(draftID: string, reviewID: s
 export async function publishAuthoringDraftReview(draftID: string, reviewID: string, input: AuthoringPublicationRequest, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringPublication> {
   assertAuthoringID(draftID)
   assertAuthoringID(reviewID)
-  return client.request<AuthoringPublication>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}/publish`, jsonRequest('POST', input))
+  const response = await client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/reviews/${encodeURIComponent(reviewID)}/publish`, {
+    ...jsonRequest('POST', input),
+    cache: 'no-store',
+  })
+  // A successful response is still untrusted network data. It must describe
+  // the exact Review and revision the user selected; publication metadata is
+  // otherwise rendered only after the authoritative Review read is refreshed.
+  if (!isAuthoringPublication(response)
+    || response.reviewId !== reviewID
+    || response.reviewRevision !== input.expectedReviewRevision) {
+    throw new InvalidAuthoringPublicationResponseError()
+  }
+  return response
 }
 
 export async function addAuthoringMember(draftID: string, input: AuthoringMemberAdd, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringMemberMutation> {
@@ -330,6 +349,16 @@ function isAuthoringReviewPublicationStatus(value: unknown): value is AuthoringR
     && typeof value.published.courseId === 'string' && isAuthoringDraftID(value.published.courseId)
     && typeof value.published.courseVersion === 'string' && isAuthoringVersion(value.published.courseVersion)
     && isDateTime(value.published.publishedAt))
+}
+
+function isAuthoringPublication(value: unknown): value is AuthoringPublication {
+  return isRecord(value)
+    && typeof value.reviewId === 'string' && isAuthoringDraftID(value.reviewId)
+    && typeof value.reviewRevision === 'number' && Number.isSafeInteger(value.reviewRevision) && value.reviewRevision > 0
+    && typeof value.courseId === 'string' && isAuthoringDraftID(value.courseId)
+    && typeof value.courseVersion === 'string' && isAuthoringVersion(value.courseVersion)
+    && typeof value.courseVersionId === 'string' && isAuthoringDraftID(value.courseVersionId)
+    && isDateTime(value.publishedAt)
 }
 
 function isAuthoringVersion(value: string): boolean {

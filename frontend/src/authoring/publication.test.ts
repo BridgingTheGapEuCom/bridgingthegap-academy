@@ -19,4 +19,13 @@ describe('publication mutation error classification', () => {
     }, undefined))
     expect(failure).toEqual({ kind: 'conflict', code: 'course_version_already_exists' })
   })
+
+  it('fails closed when a validation problem does not contain the safe issue shape', () => {
+    const failure = classifyAuthoringPublicationFailure(new APIProblemError(422, {
+      type: 'https://academy.example/problems/publication-validation-failed', title: 'Publication validation failed', status: 422,
+      instance: '/publish', request_id: 'request-id', code: 'publication_validation_failed',
+      issues: [{ code: 'unresolved_asset_reference', path: 3, message: '<script>unsafe</script>' }],
+    } as never, undefined))
+    expect(failure).toEqual({ kind: 'operational-failure' })
+  })
 })

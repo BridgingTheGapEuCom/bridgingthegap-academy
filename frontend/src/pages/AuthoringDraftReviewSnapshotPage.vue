@@ -273,9 +273,10 @@ async function publishReview() {
       return
     }
     const failure = classifyAuthoringPublicationFailure(error)
-    if (failure.kind === 'conflict' && (failure.code === 'review_revision_conflict' || failure.code === 'review_not_approved')) {
-      // Refresh the authoritative exact Review, but never replay publication
-      // with a revision the user did not explicitly submit.
+    if (failure.kind === 'conflict' || failure.kind === 'validation-failure') {
+      // A safe domain outcome can reflect a state change after the initial
+      // readiness read. Refresh this exact immutable Review for every such
+      // outcome, but never replay with a revision the user did not select.
       if (!await load() || !isCurrent()) return
     }
     if (!isCurrent() || !active) return

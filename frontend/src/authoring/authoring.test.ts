@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringReviewResponseError, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringPublicationResponseError, InvalidAuthoringReviewResponseError, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -134,17 +134,37 @@ describe('Authoring API service', () => {
   })
 
   it('publishes an exact Review using only its authoritative revision', async () => {
-    const request = vi.fn().mockResolvedValue({})
+    const request = vi.fn().mockResolvedValue({
+      reviewId: '22222222-2222-4222-8222-222222222222', reviewRevision: 8,
+      courseId: '33333333-3333-4333-8333-333333333333', courseVersion: '1.0.0',
+      courseVersionId: '44444444-4444-4444-8444-444444444444', publishedAt: '2026-09-16T14:30:00Z',
+    })
     const draftID = '11111111-1111-4111-8111-111111111111'
     const reviewID = '22222222-2222-4222-8222-222222222222'
     await publishAuthoringDraftReview(draftID, reviewID, { expectedReviewRevision: 8 }, { request })
     expect(request).toHaveBeenCalledWith(
       `/api/authoring/drafts/${draftID}/reviews/${reviewID}/publish`,
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedReviewRevision: 8 }) }),
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedReviewRevision: 8 }), cache: 'no-store' }),
     )
     const body = JSON.parse(request.mock.calls[0][1].body)
     expect(body).toEqual({ expectedReviewRevision: 8 })
+    expect(body).not.toHaveProperty('userId')
+    expect(body).not.toHaveProperty('publishedBy')
     await expect(publishAuthoringDraftReview(draftID, 'not-a-review', { expectedReviewRevision: 8 }, { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
+  })
+
+  it('fails closed when a publication response is malformed or belongs to another Review', async () => {
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const reviewID = '22222222-2222-4222-8222-222222222222'
+    const input = { expectedReviewRevision: 8 }
+    const valid = {
+      reviewId: reviewID, reviewRevision: 8,
+      courseId: '33333333-3333-4333-8333-333333333333', courseVersion: '1.0.0',
+      courseVersionId: '44444444-4444-4444-8444-444444444444', publishedAt: '2026-09-16T14:30:00Z',
+    }
+    await expect(publishAuthoringDraftReview(draftID, reviewID, input, { request: vi.fn().mockResolvedValue({ ...valid, reviewId: draftID }) })).rejects.toBeInstanceOf(InvalidAuthoringPublicationResponseError)
+    await expect(publishAuthoringDraftReview(draftID, reviewID, input, { request: vi.fn().mockResolvedValue({ ...valid, reviewRevision: 9 }) })).rejects.toBeInstanceOf(InvalidAuthoringPublicationResponseError)
+    await expect(publishAuthoringDraftReview(draftID, reviewID, input, { request: vi.fn().mockResolvedValue({ ...valid, courseVersion: 'not-a-version' }) })).rejects.toBeInstanceOf(InvalidAuthoringPublicationResponseError)
   })
 
   it('keeps Lesson reads and metadata patches scoped to both bounded IDs', async () => {

@@ -24,6 +24,14 @@ const publicationConflictCodes = new Set<NonNullable<Extract<AuthoringPublicatio
   'publication_conflict',
 ])
 
+function isPublicationValidationIssue(value: unknown): value is PublicationValidationIssue {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const issue = value as Record<string, unknown>
+  return typeof issue.code === 'string' && issue.code.length > 0 && issue.code.length <= 128
+    && typeof issue.path === 'string' && issue.path.length <= 4096
+    && typeof issue.message === 'string' && issue.message.length > 0 && issue.message.length <= 20000
+}
+
 // Keep structured publication validation intact for the accessible issue UI.
 // This is deliberately transport-error classification, not authorization or
 // publication policy logic.
@@ -31,7 +39,9 @@ export function classifyAuthoringPublicationFailure(error: unknown): AuthoringPu
   if (!(error instanceof APIProblemError)) return { kind: 'operational-failure' }
   if (error.status === 422 && error.problem?.code === 'publication_validation_failed') {
     const issues = (error.problem as { issues?: unknown }).issues
-    if (Array.isArray(issues)) return { kind: 'validation-failure', issues: issues as PublicationValidationIssue[] }
+    if (Array.isArray(issues) && issues.length > 0 && issues.every(isPublicationValidationIssue)) {
+      return { kind: 'validation-failure', issues }
+    }
   }
   if (error.status === 409) {
     const code = error.problem?.code

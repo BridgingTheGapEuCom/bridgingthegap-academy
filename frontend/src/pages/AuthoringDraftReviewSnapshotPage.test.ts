@@ -374,17 +374,26 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(screen.getByText('Assessment unavailable.')).toBeTruthy()
     expect(screen.getByText('Frozen integration foundations')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Publish course version' })).toBeTruthy()
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(2)
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 4, name: 'Publication validation issues' })))
   })
 
   it('presents an exact replay as the same single successful publication outcome', async () => {
+    const published = detail()
+    published.publication = {
+      canPublish: true,
+      publishable: true,
+      issues: [],
+      published: { courseId: '55555555-5555-4555-8555-555555555555', courseVersion: '1.0.0', publishedAt: '2026-09-16T14:30:00Z' },
+    }
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(detail()).mockResolvedValueOnce(published)
     publishAuthoringDraftReviewMock.mockResolvedValue(publicationResult(firstReviewID, 2))
     await renderPage()
     await (await screen.findByRole('button', { name: 'Publish course version' })).click()
     expect(await screen.findByText('Course version 1.0.0 was published successfully.')).toBeTruthy()
-    await screen.getByRole('button', { name: 'Publish course version' }).click()
-    await waitFor(() => expect(publishAuthoringDraftReviewMock).toHaveBeenCalledTimes(2))
-    expect(await screen.findByText('Course version 1.0.0 was published successfully.')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 4, name: 'Published course version' })).toBeTruthy()
+    expect(publishAuthoringDraftReviewMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Publish course version' })).toBeNull()
     expect(screen.getAllByRole('heading', { level: 4, name: 'Course version published' })).toHaveLength(1)
     expect(screen.getAllByText('Course version 1.0.0 was published successfully.')).toHaveLength(1)
   })
@@ -417,6 +426,7 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(await screen.findByRole('heading', { level: 4, name: 'Course version already exists' })).toBeTruthy()
     expect(screen.getByText('This semantic version already exists for another publication. Choose a new version in a later Draft and Review cycle before publishing.')).toBeTruthy()
     expect(screen.queryByText(/secret-review-id|database constraint/i)).toBeNull()
+    expect(getAuthoringDraftReviewMock).toHaveBeenCalledTimes(2)
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 4, name: 'Course version already exists' })))
   })
 
@@ -488,7 +498,7 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
   it('clears rendered publication feedback when the exact Review route changes', async () => {
     const first = detail(firstReviewID, 'First frozen snapshot', 'APPROVED', 5)
     const second = detail(secondReviewID, 'Second frozen snapshot', 'APPROVED', 7)
-    getAuthoringDraftReviewMock.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    getAuthoringDraftReviewMock.mockResolvedValueOnce(first).mockResolvedValueOnce(first).mockResolvedValueOnce(second)
     publishAuthoringDraftReviewMock.mockRejectedValueOnce(new APIProblemError(422, {
       type: 'https://academy.example/problems/publication-validation-failed', title: 'Publication validation failed', status: 422,
       instance: '/publish', request_id: 'request-id', code: 'publication_validation_failed',
