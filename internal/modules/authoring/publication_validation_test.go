@@ -194,9 +194,12 @@ func TestPublicationValidatorValidatesCanonicalContentAndDependencies(t *testing
 
 	emptyContent := clonePublicationSnapshot(t, snapshot)
 	emptyContent.Modules[0].Lessons[0].Content.Blocks = []courses.Block{}
+	// Empty canonical documents are a supported migration-era representation in
+	// Courses. Publication validation reuses that contract rather than adding a
+	// second, stricter content rule.
 	result = NewPublicationValidator().Validate(cycle, &emptyContent)
-	if result.Publishable || !hasPublicationIssue(result, PublicationIssueLessonContentEmpty) {
-		t.Fatalf("empty publication content = %#v", result)
+	if !result.Publishable {
+		t.Fatalf("empty canonical content = %#v", result)
 	}
 
 	unsupported := clonePublicationSnapshot(t, snapshot)

@@ -294,8 +294,8 @@ advisory and are not rejected.
 The validator reuses Courses value-object validation for CourseVersion metadata,
 Modules, Lessons, and canonical blocks. It does not add a new aggregate rule
 requiring Modules or Lessons because the existing Courses model permits empty
-structure. It does block empty LessonContent for new publication: empty documents
-remain only a legacy migration-compatible state. Asset-backed Image, Video,
+structure, and it retains the canonical migration-era allowance for empty
+LessonContent documents. Asset-backed Image, Video,
 Audio, and Download blocks produce `unresolved_asset_reference`, and
 `KNOWLEDGE_CHECK` blocks produce `unresolved_assessment_reference`, because
 asset delivery and Assessments do not yet provide a safe publication target.

@@ -43,7 +43,6 @@ const (
 	PublicationIssueImageAccessibilityInvalid  PublicationValidationCode = "invalid_image_accessibility"
 	PublicationIssueMediaAccessibilityInvalid  PublicationValidationCode = "invalid_media_accessibility"
 	PublicationIssueTableInvalid               PublicationValidationCode = "invalid_table"
-	PublicationIssueLessonContentEmpty         PublicationValidationCode = "empty_lesson_content"
 	PublicationIssueAssetUnresolved            PublicationValidationCode = "unresolved_asset_reference"
 	PublicationIssueAssessmentUnresolved       PublicationValidationCode = "unresolved_assessment_reference"
 )
@@ -262,13 +261,6 @@ func validatePublicationLessonContent(content courses.LessonContent, path string
 		add(PublicationIssueLessonContentInvalid, path+".blocks", "The LessonContent block collection is invalid.")
 		return
 	}
-	if len(content.Blocks) == 0 {
-		// Courses documents retain empty content only for legacy migration rows;
-		// new publication requires at least one canonical block.
-		add(PublicationIssueLessonContentEmpty, path+".blocks", "A published Lesson requires canonical content blocks.")
-		return
-	}
-
 	seen := make(map[string]struct{}, len(content.Blocks))
 	for index, block := range content.Blocks {
 		blockPath := fmt.Sprintf("%s.blocks[%d]", path, index)
