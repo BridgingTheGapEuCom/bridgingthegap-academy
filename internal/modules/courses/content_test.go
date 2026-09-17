@@ -53,6 +53,10 @@ func TestLessonContentValidationAndRoundTrip(t *testing.T) {
 
 func TestBuiltInBlockPayloadValidation(t *testing.T) {
 	asset := AssetReference{AssetKey: "media-asset"}
+	opaqueAsset := AssetReference{AssetKey: "11111111-1111-4111-8111-111111111111"}
+	if err := opaqueAsset.Validate(); err != nil || strings.Contains(opaqueAsset.AssetKey, "/") || strings.Contains(opaqueAsset.AssetKey, "://") {
+		t.Fatalf("canonical asset reference cannot carry an opaque path-free Asset ID: %v", err)
+	}
 	blocks := []Block{
 		{Key: "text", Type: BlockText, Payload: TextBlockPayload{Content: validRichText()}},
 		{Key: "heading", Type: BlockHeading, Payload: HeadingBlockPayload{Level: 2, Content: []RichTextInline{{Type: "text", Text: "Heading"}}}},

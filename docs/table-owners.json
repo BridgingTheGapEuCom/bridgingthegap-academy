@@ -1,5 +1,6 @@
 {
   "audit.events": "audit",
+  "assets.asset": "assets",
   "authoring.course_draft": "authoring",
   "authoring.workspace": "authoring",
   "authoring.workspace_member": "authoring",
