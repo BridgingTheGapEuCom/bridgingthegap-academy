@@ -26,6 +26,7 @@
       <p class="authoring-home__eyebrow">Bridging the Gap Academy</p>
       <h1 id="authoring-home-title">Authoring</h1>
       <p class="authoring-home__intro">Maintain course Drafts before publication.</p>
+      <p><BtgButton @click="createDraft">Create Draft</BtgButton></p>
       <section aria-labelledby="authoring-drafts-title">
         <h2 id="authoring-drafts-title">Your Drafts</h2>
         <p v-if="state.drafts.length === 0" class="authoring-home__empty" role="status">You do not currently have any course Drafts.</p>
@@ -93,4 +94,5 @@ async function load() {
 
 async function retryBootstrap() { await auth.bootstrapSession() }
 function statusLabel(status: AuthoringDraftSummary['status']): string { return status === 'ACTIVE' ? 'Active Draft' : 'Abandoned Draft' }
+function createDraft() { void router.push('/authoring/new') }
 </script>

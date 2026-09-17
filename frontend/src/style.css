@@ -37,8 +37,10 @@
 
 /* Intrinsic grid/fieldset minima must not impose a viewport width when text grows. */
 .authoring-home,
+.authoring-create,
 .authoring-shell { min-width: 0; overflow-wrap: anywhere; }
 .authoring-home :where(div, section, article, ol, li),
+.authoring-create :where(div, section, article, form, fieldset),
 .authoring-shell :where(div, section, article, form, fieldset, ol, li) { min-width: 0; }
 
 .home-page { padding-block: clamp(var(--btg-space-7), 10vw, 7rem); }
@@ -65,11 +67,18 @@
 
 .authoring-shell { padding-block: clamp(var(--btg-space-6), 7vw, var(--btg-space-8)); }
 .authoring-home { padding-block: clamp(var(--btg-space-6), 7vw, var(--btg-space-8)); }
+.authoring-create { padding-block: clamp(var(--btg-space-6), 7vw, var(--btg-space-8)); }
 .authoring-home__content,
-.authoring-home__state { display: grid; gap: var(--btg-space-5); }
+.authoring-home__state,
+.authoring-create__content,
+.authoring-create__state { display: grid; gap: var(--btg-space-5); }
 .authoring-home__eyebrow { margin-bottom: calc(-1 * var(--btg-space-3)); color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-strong); letter-spacing: 0.08em; text-transform: uppercase; }
 .authoring-home__intro,
-.authoring-home__empty { color: var(--btg-color-text-secondary); }
+.authoring-home__empty,
+.authoring-create__intro { color: var(--btg-color-text-secondary); }
+.authoring-create__back { width: fit-content; }
+.authoring-create__eyebrow { margin-bottom: calc(-1 * var(--btg-space-3)); color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-strong); letter-spacing: 0.08em; text-transform: uppercase; }
+.authoring-create__pending { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }
 .authoring-home__list { display: grid; gap: var(--btg-space-4); margin: var(--btg-space-4) 0 0; padding: 0; list-style: none; }
 .authoring-home__item { border-inline-start: 0.25rem solid var(--btg-color-border); padding-inline-start: var(--btg-space-4); }
 .authoring-home__item article { display: grid; gap: var(--btg-space-3); }

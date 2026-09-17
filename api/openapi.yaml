@@ -13,6 +13,22 @@ paths:
         '200': { description: Accessible Draft summaries ordered by most recently updated, then ID, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringDraftList' } } } }
         '401': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createAuthoringDraft
+      description: Creates a new editable Draft for the authenticated actor. The creator receives the initial active MAINTAINER membership atomically. The server creates the opaque Course identity; no Review or CourseVersion is created.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthoringDraftCreateRequest' }
+      responses:
+        '201': { description: Created editable Draft, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringDraft' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}:
     get:
       operationId: getAuthoringDraft
@@ -957,6 +973,17 @@ components:
         objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
         changelog: { type: string, minLength: 1, maxLength: 20000 }
         license: { $ref: '#/components/schemas/ContentLicense' }
+    AuthoringDraftCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [title, description, objectives, changelog, intendedVersion, sourceLanguage]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, minLength: 1, maxLength: 20000 }
+        objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
+        changelog: { type: string, minLength: 1, maxLength: 20000 }
+        intendedVersion: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
+        sourceLanguage: { type: string, minLength: 2, maxLength: 64 }
     AuthoringDraft:
       type: object
       required: [id, course_id, intended_version, source_language, title, description, objectives, changelog, license, status, revision, created_at, updated_at]

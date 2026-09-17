@@ -115,6 +115,15 @@ type authoringDraftUpdateRequest struct {
 	License          optionalField[authoringLicenseRequest] `json:"license"`
 }
 
+type authoringDraftCreateRequest struct {
+	IntendedVersion string   `json:"intendedVersion"`
+	SourceLanguage  string   `json:"sourceLanguage"`
+	Title           string   `json:"title"`
+	Description     string   `json:"description"`
+	Objectives      []string `json:"objectives"`
+	Changelog       string   `json:"changelog"`
+}
+
 type authoringModuleCreateRequest struct {
 	ExpectedDraftRevision *int64 `json:"expectedDraftRevision"`
 	StableKey             string `json:"stableKey"`
@@ -313,6 +322,34 @@ func (a *authHTTP) handleAuthoringDraftList(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, struct {
 		Drafts []authoringDraftSummaryDTO `json:"drafts"`
 	}{Drafts: items})
+}
+
+func (a *authHTTP) handleAuthoringDraftCreate(w http.ResponseWriter, r *http.Request) {
+	actor, ok := currentAuthenticatedActor(r.Context())
+	if !ok {
+		problem(w, r, http.StatusUnauthorized, "Unauthenticated")
+		return
+	}
+	input, err := decodeAuthoringDraftCreate(w, r)
+	if err != nil {
+		problem(w, r, http.StatusBadRequest, "Invalid draft creation")
+		return
+	}
+	if a.authoringCreation == nil {
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	draft, err := a.authoringCreation.Create(r.Context(), actor, input)
+	if err != nil {
+		if errors.Is(err, authoring.ErrInvalidDraftCreation) {
+			problem(w, r, http.StatusBadRequest, "Invalid draft creation")
+			return
+		}
+		problem(w, r, http.StatusInternalServerError, "Authoring service unavailable")
+		return
+	}
+	w.Header().Set("Location", "/api/authoring/drafts/"+string(draft.ID))
+	writeJSON(w, http.StatusCreated, authoringDraft(draft))
 }
 
 func (a *authHTTP) handleAuthoringDraftUpdate(w http.ResponseWriter, r *http.Request) {
@@ -890,6 +927,29 @@ func decodeAuthoringDraftUpdate(w http.ResponseWriter, r *http.Request) (int64, 
 		return 0, authoring.DraftMetadataPatch{}, errors.New("empty patch")
 	}
 	return *input.ExpectedRevision, patch, nil
+}
+
+func decodeAuthoringDraftCreate(w http.ResponseWriter, r *http.Request) (authoring.DraftCreationInput, error) {
+	var request authoringDraftCreateRequest
+	if err := decodeAuthoringBody(w, r, maxAuthoringDraftMetadataBodyBytes, &request); err != nil {
+		return authoring.DraftCreationInput{}, err
+	}
+	version, err := courses.ParseVersion(request.IntendedVersion)
+	if err != nil {
+		return authoring.DraftCreationInput{}, err
+	}
+	language, err := courses.NormalizeLanguageTag(request.SourceLanguage)
+	if err != nil {
+		return authoring.DraftCreationInput{}, err
+	}
+	input := authoring.DraftCreationInput{
+		IntendedVersion: version, SourceLanguage: language, Title: request.Title,
+		Description: request.Description, LearningObjectives: request.Objectives, Changelog: request.Changelog,
+	}
+	if err := input.Validate(); err != nil {
+		return authoring.DraftCreationInput{}, err
+	}
+	return input, nil
 }
 
 func decodeAuthoringModuleCreate(w http.ResponseWriter, r *http.Request, draftID authoring.DraftID) (int64, authoring.ModuleInput, error) {

@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/db/sqlc"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
+	googleuuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -215,6 +217,70 @@ func (r *Repository) CreateDraft(ctx context.Context, metadata authoring.DraftMe
 	}
 	draft, err := mapDraft(row)
 	return draft, mapWorkspace(w), err
+}
+
+// CreateDraftForCreator reserves an opaque Courses identity, then creates the
+// Draft, workspace, and creator's active MAINTAINER membership in one database
+// transaction. The Courses row is only the stable identity required by the
+// existing foreign key; it has no CourseVersion or learner-visible content.
+func (r *Repository) CreateDraftForCreator(ctx context.Context, input authoring.DraftCreationInput, createdBy string) (authoring.CourseDraft, error) {
+	if err := input.Validate(); err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidDraftCreation
+	}
+	userID, err := uuid(createdBy)
+	if err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidDraftCreation
+	}
+	courseID := googleuuid.New()
+	courseKey, err := uuid(courseID.String())
+	if err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidDraftCreation
+	}
+	metadata := authoring.DraftMetadata{
+		CourseID:           courses.CourseID(courseID.String()),
+		IntendedVersion:    input.IntendedVersion,
+		SourceLanguage:     input.SourceLanguage,
+		Title:              input.Title,
+		Description:        input.Description,
+		LearningObjectives: append([]string(nil), input.LearningObjectives...),
+		Changelog:          input.Changelog,
+		License:            courses.ContentLicense{Kind: courses.ContentLicenseAllRightsReserved, DisplayName: "All Rights Reserved"},
+	}
+	args, err := encodeMetadata(metadata)
+	if err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidDraftCreation
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Course slugs are an existing storage requirement but are not part of the
+	// Draft creation contract. This generated opaque slug is never exposed by
+	// Authoring and cannot make an unpublished Draft discoverable.
+	if _, err := tx.Exec(ctx, "INSERT INTO courses.course (id, slug) VALUES ($1, $2)", courseKey, "draft-"+strings.ReplaceAll(courseID.String(), "-", "")); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	q := r.q.WithTx(tx)
+	row, err := q.CreateDraft(ctx, args)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	workspace, err := q.CreateWorkspace(ctx, sqlc.CreateWorkspaceParams{DraftID: row.ID, CreatedByUserID: userID})
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if _, err := q.AddMember(ctx, sqlc.AddMemberParams{WorkspaceID: workspace.ID, UserID: userID, Role: string(authoring.MemberMaintainer)}); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	draft, err := mapDraft(row)
+	if err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	return draft, nil
 }
 
 func (r *Repository) GetDraft(ctx context.Context, id authoring.DraftID) (authoring.CourseDraft, error) {

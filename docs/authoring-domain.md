@@ -80,6 +80,16 @@ The authenticated `/authoring` frontend route uses this projection as the
 normal entry point and links each summary to its existing Draft-scoped
 workspace route; it does not persist or fabricate Draft discovery data.
 
+Authenticated users can create a Draft through `POST /api/authoring/drafts`.
+The server takes the creator from the authenticated session, creates an active
+MAINTAINER membership with the Draft in one transaction, and returns the
+authoritative editable Draft. The existing `course_draft.course_id` foreign
+key requires an opaque Courses identity container in that transaction; this
+does not create a CourseVersion, a Review, structure, or learner-visible
+published content. Initial creation is intentionally limited to the metadata
+the current Draft aggregate requires; further editing remains in the Draft
+workspace.
+
 The metadata PATCH endpoint accepts only intended version, source language,
 title, description, objectives, changelog, and content license. It requires an
 explicit expected revision and rejects a no-op patch. The Authoring mutation

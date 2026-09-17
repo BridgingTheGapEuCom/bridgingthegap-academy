@@ -2,6 +2,7 @@ import { useAuth, type AuthService } from '../auth/auth'
 import type { components } from '../api/generated'
 
 export type AuthoringDraft = components['schemas']['AuthoringDraft']
+export type AuthoringDraftCreate = components['schemas']['AuthoringDraftCreateRequest']
 export type AuthoringDraftSummary = components['schemas']['AuthoringDraftSummary']
 export type AuthoringDraftList = components['schemas']['AuthoringDraftList']
 export type AuthoringContentLicense = components['schemas']['ContentLicense']
@@ -70,6 +71,13 @@ export class InvalidAuthoringDraftListResponseError extends Error {
   }
 }
 
+export class InvalidAuthoringDraftResponseError extends Error {
+  constructor() {
+    super('Invalid Authoring draft response')
+    this.name = 'InvalidAuthoringDraftResponseError'
+  }
+}
+
 // The route value is bounded before it becomes an API path. Authorization is
 // deliberately not decided here: the private API remains the authority.
 export function isAuthoringDraftID(value: string): boolean {
@@ -85,6 +93,17 @@ function assertAuthoringID(value: string): void {
 export async function listAuthoringDrafts(client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringDraftList> {
   const response = await client.request<unknown>('/api/authoring/drafts', { cache: 'no-store' })
   if (!isAuthoringDraftList(response)) throw new InvalidAuthoringDraftListResponseError()
+  return response
+}
+
+// Creation accepts only Draft metadata. The authenticated API session supplies
+// creator identity and CSRF; the server owns Course identity and membership.
+export async function createAuthoringDraft(input: AuthoringDraftCreate, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringDraft> {
+  const response = await client.request<unknown>('/api/authoring/drafts', {
+    ...jsonRequest('POST', input),
+    cache: 'no-store',
+  })
+  if (!isAuthoringDraft(response)) throw new InvalidAuthoringDraftResponseError()
   return response
 }
 
@@ -264,6 +283,22 @@ function isAuthoringDraftSummary(value: unknown): value is AuthoringDraftSummary
     && isAuthoringVersion(value.intendedVersion)
     && (value.status === 'ACTIVE' || value.status === 'ABANDONED')
     && isDateTime(value.updatedAt)
+}
+
+function isAuthoringDraft(value: unknown): value is AuthoringDraft {
+  return isRecord(value)
+    && typeof value.id === 'string' && isAuthoringDraftID(value.id)
+    && typeof value.course_id === 'string' && isAuthoringDraftID(value.course_id)
+    && typeof value.intended_version === 'string' && isAuthoringVersion(value.intended_version)
+    && typeof value.source_language === 'string' && value.source_language.length > 0 && value.source_language.length <= 64
+    && typeof value.title === 'string' && value.title.trim().length > 0 && value.title.length <= 240
+    && typeof value.description === 'string' && value.description.trim().length > 0 && value.description.length <= 20000
+    && Array.isArray(value.objectives) && value.objectives.length >= 1 && value.objectives.length <= 100 && value.objectives.every((objective) => typeof objective === 'string' && objective.trim().length > 0 && objective.length <= 1000)
+    && typeof value.changelog === 'string' && value.changelog.trim().length > 0 && value.changelog.length <= 20000
+    && isRecord(value.license)
+    && (value.status === 'ACTIVE' || value.status === 'ABANDONED')
+    && typeof value.revision === 'number' && Number.isInteger(value.revision) && value.revision >= 1
+    && isDateTime(value.created_at) && isDateTime(value.updated_at)
 }
 
 function isAuthoringVersion(value: string): boolean {

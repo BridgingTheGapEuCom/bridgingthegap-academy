@@ -63,6 +63,7 @@ type authHTTP struct {
 	publishedCourses            *courses.PublishedReadService
 	publishedCatalog            *courses.PublishedCatalogService
 	authoring                   *authoring.ReadService
+	authoringCreation           *authoring.DraftCreationService
 	authoringMutations          *authoring.DraftMutationService
 	authoringStructureMutations *authoring.ModuleMutationService
 	authoringLessonMutations    *authoring.LessonMutationService

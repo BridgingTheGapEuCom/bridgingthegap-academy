@@ -26,6 +26,21 @@ type authoringHTTPRepository struct {
 	err           error
 }
 
+type authoringDraftCreationHTTPRepository struct {
+	draft       authoring.CourseDraft
+	input       authoring.DraftCreationInput
+	createdByID string
+	calls       int
+	err         error
+}
+
+func (r *authoringDraftCreationHTTPRepository) CreateDraftForCreator(_ context.Context, input authoring.DraftCreationInput, createdBy string) (authoring.CourseDraft, error) {
+	r.calls++
+	r.input = input
+	r.createdByID = createdBy
+	return r.draft, r.err
+}
+
 func (r authoringHTTPRepository) ListAccessibleDrafts(_ context.Context, userID string) ([]authoring.DraftSummary, error) {
 	if r.err != nil {
 		return nil, r.err
@@ -107,6 +122,61 @@ func (r *authoringHTTPRepository) UpdateDraftMetadata(_ context.Context, id auth
 	draft.UpdatedAt = time.Now().UTC()
 	r.drafts[id] = draft
 	return draft, nil
+}
+
+func TestAuthoringDraftCreationHTTPSecurityAndResponse(t *testing.T) {
+	draftID := authoring.DraftID("11111111-1111-4111-8111-111111111111")
+	createdAt := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+	repository := &authoringDraftCreationHTTPRepository{draft: authoring.CourseDraft{
+		ID: draftID,
+		Metadata: authoring.DraftMetadata{
+			CourseID: "33333333-3333-4333-8333-333333333333", IntendedVersion: courses.Version{Major: 0, Minor: 1}, SourceLanguage: "en", Title: "New Draft",
+			Description: "A new editable Draft.", LearningObjectives: []string{"Explain the course"}, Changelog: "Initial Draft.", License: courses.ContentLicense{Kind: courses.ContentLicenseAllRightsReserved, DisplayName: "All Rights Reserved"},
+		},
+		Status: authoring.DraftActive, Revision: 1, CreatedAt: createdAt, UpdatedAt: createdAt,
+	}}
+	resolver := &authResolverFake{current: loginTestCurrent(t)}
+	router := authTestRouter(&authHTTP{sessions: resolver, authoringCreation: authoring.NewDraftCreationService(repository)})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
+	csrf := authTestCSRFToken().Value()
+	path := "/api/authoring/drafts"
+	body := `{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":["Explain the course"],"changelog":"Initial Draft."}`
+
+	if response := authRequest(router, http.MethodPost, path, body, nil, csrf); response.Code != http.StatusUnauthorized || response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("unauthenticated creation = %d cache=%q", response.Code, response.Header().Get("Cache-Control"))
+	}
+	if response := authRequest(router, http.MethodPost, path, body, cookie); response.Code != http.StatusForbidden {
+		t.Fatalf("missing CSRF creation = %d", response.Code)
+	}
+	untrusted := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	untrusted.Header.Set("Content-Type", "application/json")
+	untrusted.Header.Set("Origin", "https://attacker.example")
+	untrusted.Header.Set("X-CSRF-Token", csrf)
+	untrusted.AddCookie(cookie)
+	untrustedResponse := httptest.NewRecorder()
+	router.ServeHTTP(untrustedResponse, untrusted)
+	if untrustedResponse.Code != http.StatusForbidden {
+		t.Fatalf("untrusted Origin creation = %d", untrustedResponse.Code)
+	}
+
+	response := authRequest(router, http.MethodPost, path, body, cookie, csrf)
+	if response.Code != http.StatusCreated || response.Header().Get("Cache-Control") != "no-store" || response.Header().Get("Location") != path+"/"+string(draftID) {
+		t.Fatalf("creation response = %d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
+	}
+	if repository.calls != 1 || repository.createdByID != string(loginTestUser) || repository.input.Title != "New Draft" || repository.input.IntendedVersion.String() != "0.1.0" || strings.Contains(response.Body.String(), "userId") {
+		t.Fatalf("creation identity/input response mismatch: %#v body=%s", repository, response.Body.String())
+	}
+	for _, invalid := range []string{
+		`{`,
+		`{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":["Explain"],"changelog":"Initial","creatorId":"forged"}`,
+		`{"title":"New Draft","intendedVersion":"1.bad.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":["Explain"],"changelog":"Initial"}`,
+		`{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":[],"changelog":"Initial"}`,
+		`{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":["Explain"],"changelog":"Initial","title":"Duplicate"}`,
+	} {
+		if response := authRequest(router, http.MethodPost, path, invalid, cookie, csrf); response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid creation %s = %d", invalid, response.Code)
+		}
+	}
 }
 
 type authoringMembershipsFake struct {

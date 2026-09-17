@@ -11,6 +11,7 @@ import CourseOverviewPage from './pages/CourseOverviewPage.vue'
 import LessonPage from './pages/LessonPage.vue'
 import PublishedCourseReaderPage from './pages/PublishedCourseReaderPage.vue'
 import AuthoringHomePage from './pages/AuthoringHomePage.vue'
+import AuthoringDraftCreatePage from './pages/AuthoringDraftCreatePage.vue'
 import AuthoringDraftShell from './pages/AuthoringDraftShell.vue'
 import AuthoringDraftOverviewPage from './pages/AuthoringDraftOverviewPage.vue'
 import AuthoringDraftStructurePage from './pages/AuthoringDraftStructurePage.vue'
@@ -38,6 +39,7 @@ const router = createRouter({
     { path: '/courses/:slug', component: CourseOverviewPage },
     { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPage },
     { path: '/authoring', name: 'authoring-home', component: AuthoringHomePage },
+    { path: '/authoring/new', name: 'authoring-draft-create', component: AuthoringDraftCreatePage },
     {
       path: '/authoring/drafts/:draftId',
       component: AuthoringDraftShell,

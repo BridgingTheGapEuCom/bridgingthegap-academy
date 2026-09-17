@@ -32,6 +32,9 @@ func TestAuthoringJSONRejectsAmbiguousAndInvalidInputs(t *testing.T) {
 		case "content":
 			_, _, err := decodeAuthoringLessonContent(w, r)
 			return err
+		case "draft-create":
+			_, err := decodeAuthoringDraftCreate(w, r)
+			return err
 		default:
 			_, _, err := decodeAuthoringMemberRole(w, r)
 			return err
@@ -45,6 +48,8 @@ func TestAuthoringJSONRejectsAmbiguousAndInvalidInputs(t *testing.T) {
 		{"missing lesson array", "lessons", `{"expectedDraftRevision":1,"modules":[{"moduleId":"11111111-1111-4111-8111-111111111111"}]}`},
 		{"null lesson array", "lessons", `{"expectedDraftRevision":1,"modules":[{"moduleId":"11111111-1111-4111-8111-111111111111","lessonIds":null}]}`},
 		{"null optional description", "module-create", `{"expectedDraftRevision":1,"stableKey":"intro","title":"Intro","description":null,"position":0}`},
+		{"draft creation unknown creator", "draft-create", `{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"Description","objectives":["Explain"],"changelog":"Initial","creatorId":"forged"}`},
+		{"draft creation missing metadata", "draft-create", `{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en"}`},
 		{"duplicate revision", "members", `{"expectedDraftRevision":1,"expectedDraftRevision":2,"role":"AUTHOR"}`},
 		{"wrong case", "members", `{"ExpectedDraftRevision":1,"role":"AUTHOR"}`},
 		{"null nested license value", "draft", `{"expectedRevision":1,"license":{"kind":"ALL_RIGHTS_RESERVED","display_name":"All rights reserved","url":null}}`},
@@ -66,6 +71,7 @@ func TestAuthoringJSONRejectsAmbiguousAndInvalidInputs(t *testing.T) {
 		{"lessons", `{"expectedDraftRevision":1,"modules":[]}`},
 		{"module-create", `{"expectedDraftRevision":1,"stableKey":"intro","title":"Intro","position":0}`},
 		{"content", `{"expectedLessonRevision":1,"content":{"schemaVersion":1,"blocks":[]}}`},
+		{"draft-create", `{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"Description","objectives":["Explain"],"changelog":"Initial"}`},
 	} {
 		if err := decode(test.body, test.kind); err != nil {
 			t.Fatalf("valid %s request rejected: %v", test.kind, err)
@@ -105,13 +111,14 @@ func TestEveryAuthoringMutationInheritsBrowserWriteProtection(t *testing.T) {
 		authoringLessonMutations:    authoring.NewLessonMutationService(nil, authorizer),
 		authoringLessonContent:      authoring.NewLessonContentMutationService(nil, authorizer),
 		authoringMemberships:        authoring.NewMembershipMutationService(nil, authorizer),
+		authoringCreation:           authoring.NewDraftCreationService(nil),
 	})
 	base := "/api/authoring/drafts/11111111-1111-4111-8111-111111111111"
 	child := "22222222-2222-4222-8222-222222222222"
 	routes := []struct{ method, path string }{
 		{"PATCH", base}, {"POST", base + "/modules"}, {"PATCH", base + "/modules/" + child}, {"PUT", base + "/modules/order"}, {"DELETE", base + "/modules/" + child},
 		{"POST", base + "/modules/" + child + "/lessons"}, {"PATCH", base + "/lessons/" + child}, {"PUT", base + "/lessons/order"}, {"PUT", base + "/lessons/" + child + "/prerequisites"}, {"DELETE", base + "/lessons/" + child}, {"PUT", base + "/lessons/" + child + "/content"},
-		{"POST", base + "/members"}, {"PATCH", base + "/members/" + child}, {"DELETE", base + "/members/" + child},
+		{"POST", "/api/authoring/drafts"}, {"POST", base + "/members"}, {"PATCH", base + "/members/" + child}, {"DELETE", base + "/members/" + child},
 	}
 	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
 	for _, route := range routes {

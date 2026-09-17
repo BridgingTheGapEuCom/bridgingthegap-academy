@@ -14,7 +14,8 @@ export interface paths {
         /** @description Returns minimal mutable Draft summaries for which the authenticated actor currently has an active Authoring membership. Revoked memberships are excluded. Responses are private and not cacheable. */
         get: operations["listAuthoringDrafts"];
         put?: never;
-        post?: never;
+        /** @description Creates a new editable Draft for the authenticated actor. The creator receives the initial active MAINTAINER membership atomically. The server creates the opaque Course identity; no Review or CourseVersion is created. */
+        post: operations["createAuthoringDraft"];
         delete?: never;
         options?: never;
         head?: never;
@@ -825,6 +826,14 @@ export interface components {
             changelog?: string;
             license?: components["schemas"]["ContentLicense"];
         } | unknown | unknown | unknown | unknown | unknown | unknown | unknown;
+        AuthoringDraftCreateRequest: {
+            title: string;
+            description: string;
+            objectives: string[];
+            changelog: string;
+            intendedVersion: string;
+            sourceLanguage: string;
+        };
         AuthoringDraft: {
             /** Format: uuid */
             id: string;
@@ -1334,6 +1343,39 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createAuthoringDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringDraftCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created editable Draft */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringDraft"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };

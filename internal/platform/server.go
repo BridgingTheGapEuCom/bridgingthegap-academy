@@ -82,6 +82,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		publishedCourses:            courses.NewPublishedReadService(coursesRepository),
 		publishedCatalog:            courses.NewPublishedCatalogService(coursesRepository),
 		authoring:                   authoring.NewReadService(authoringRepository, authoringAuthorizer),
+		authoringCreation:           authoring.NewDraftCreationService(authoringRepository),
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
 		authoringLessonMutations:    authoring.NewLessonMutationService(authoringRepository, authoringAuthorizer),
@@ -174,6 +175,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Get("/authoring/drafts/{draftId}/members", auth.handleAuthoringMembers)
 					protected.Get("/authoring/drafts/{draftId}/structure", auth.handleAuthoringStructure)
 					protected.Get("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLesson)
+				}
+				if auth.authoringCreation != nil {
+					protected.Post("/authoring/drafts", auth.handleAuthoringDraftCreate)
 				}
 				if auth.authoringMutations != nil {
 					protected.Patch("/authoring/drafts/{draftId}", auth.handleAuthoringDraftUpdate)

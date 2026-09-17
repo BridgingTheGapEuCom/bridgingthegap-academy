@@ -30,6 +30,7 @@ const drafts = () => ({ drafts: [
 function routerFor() {
   return createRouter({ history: createMemoryHistory(), routes: [
     { path: '/authoring', component: AuthoringHomePage },
+    { path: '/authoring/new', component: { template: '<p>Create Draft page</p>' } },
     { path: '/authoring/drafts/:draftId/overview', component: { template: '<p>Draft workspace</p>' } },
     { path: '/login', component: { template: '<p>Login</p>' } },
   ] })
@@ -63,12 +64,20 @@ describe('AuthoringHomePage', () => {
     expect(listAuthoringDraftsMock).toHaveBeenCalledTimes(1)
   })
 
-  it('uses an informative empty state and never fabricates a creation flow', async () => {
+  it('uses an informative empty state with the same real creation path', async () => {
     listAuthoringDraftsMock.mockResolvedValueOnce({ drafts: [] })
-    await renderPage()
+    const { router } = await renderPage()
     expect(await screen.findByText('You do not currently have any course Drafts.')).toBeTruthy()
     expect(screen.queryByRole('link', { name: /Open Draft/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Create/i })).toBeNull()
+    await fireEvent.click(screen.getByRole('button', { name: 'Create Draft' }))
+    await waitFor(() => expect(router.currentRoute.value.path).toBe('/authoring/new'))
+  })
+
+  it('offers the creation route alongside existing Draft discovery', async () => {
+    const { router } = await renderPage()
+    await screen.findByRole('link', { name: 'Open Draft: Integration foundations' })
+    await fireEvent.click(screen.getByRole('button', { name: 'Create Draft' }))
+    await waitFor(() => expect(router.currentRoute.value.path).toBe('/authoring/new'))
   })
 
   it('keeps an accessible loading state until Draft discovery resolves', async () => {

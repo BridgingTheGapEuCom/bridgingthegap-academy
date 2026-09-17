@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
+import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -11,6 +11,23 @@ describe('Authoring API service', () => {
   it('fails closed when the private Draft discovery payload is malformed', async () => {
     const request = vi.fn().mockResolvedValue({ drafts: [{ id: 'not-a-draft' }] })
     await expect(listAuthoringDrafts({ request })).rejects.toThrow('Invalid Authoring draft list response')
+  })
+
+  it('creates a Draft with metadata only and rejects a malformed authoritative response', async () => {
+    const input = {
+      title: 'First Draft', intendedVersion: '0.1.0', sourceLanguage: 'en', description: 'A complete description.', objectives: ['Explain the topic'], changelog: 'Initial Draft.',
+    }
+    const created = {
+      id: '11111111-1111-4111-8111-111111111111', course_id: '22222222-2222-4222-8222-222222222222', intended_version: '0.1.0', source_language: 'en', title: input.title, description: input.description, objectives: input.objectives, changelog: input.changelog,
+      license: { kind: 'ALL_RIGHTS_RESERVED', identifier: '', display_name: 'All Rights Reserved', url: '', custom_text: '' }, status: 'ACTIVE', revision: 1, created_at: '2026-09-17T10:00:00Z', updated_at: '2026-09-17T10:00:00Z',
+    }
+    const request = vi.fn().mockResolvedValue(created)
+    await expect(createAuthoringDraft(input, { request })).resolves.toEqual(created)
+    expect(request).toHaveBeenCalledWith('/api/authoring/drafts', expect.objectContaining({ method: 'POST', body: JSON.stringify(input), cache: 'no-store' }))
+    expect(JSON.parse(request.mock.calls[0][1].body)).not.toHaveProperty('userId')
+    expect(JSON.parse(request.mock.calls[0][1].body)).not.toHaveProperty('publishedBy')
+
+    await expect(createAuthoringDraft(input, { request: vi.fn().mockResolvedValue({ id: 'not-a-draft' }) })).rejects.toBeInstanceOf(InvalidAuthoringDraftResponseError)
   })
 
   it('replaces only canonical content through the scoped authenticated PUT boundary', async () => {

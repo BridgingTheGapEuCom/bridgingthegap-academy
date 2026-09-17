@@ -151,6 +151,45 @@ test('Authoring discovery is reachable from main navigation and opens an accessi
   await expect(page.getByRole('link', { name: `Open Draft: ${draft.title}` })).toBeVisible()
 })
 
+test('Authoring creates a Draft from the accessible home flow and opens its workspace', async ({ page }) => {
+  const createdID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const created = { ...draft, id: createdID, course_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', title: 'First Draft', revision: 1 }
+  let createdVisible = false
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route('**/api/authoring/drafts', (route) => {
+    if (route.request().method() === 'POST') {
+      expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
+      expect(route.request().postDataJSON()).toEqual({
+        title: 'First Draft', intendedVersion: '0.1.0', sourceLanguage: 'en', description: 'A complete initial description.', objectives: ['Explain the first topic'], changelog: 'Initial Draft.',
+      })
+      createdVisible = true
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(created) })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ drafts: createdVisible ? [{ id: createdID, title: created.title, intendedVersion: created.intended_version, status: created.status, updatedAt: created.updated_at }] : [] }) })
+  })
+  await page.route(`**/api/authoring/drafts/${createdID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(created) }))
+  await page.route(`**/api/authoring/drafts/${createdID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
+  await page.goto('/authoring')
+  await expect(page.getByText('You do not currently have any course Drafts.')).toBeVisible()
+  await page.getByRole('button', { name: 'Create Draft' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL('/authoring/new')
+  await expect(page.getByRole('heading', { level: 1, name: 'Create Draft' })).toBeVisible()
+  await page.getByRole('textbox', { name: /^Title required$/ }).fill('First Draft')
+  await page.getByRole('textbox', { name: /^Description required$/ }).fill('A complete initial description.')
+  await page.getByRole('textbox', { name: /^Learning objectives required$/ }).fill('Explain the first topic')
+  await page.getByRole('button', { name: 'Create Draft' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(`/authoring/drafts/${createdID}/overview`)
+  await expect(page.getByRole('heading', { level: 1, name: created.title })).toBeVisible()
+  await page.goBack()
+  await expect(page).toHaveURL('/authoring/new')
+  await page.goBack()
+  await expect(page).toHaveURL('/authoring')
+  await expect(page.getByRole('link', { name: `Open Draft: ${created.title}` })).toBeVisible()
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
 test('Authoring content edits canonical blocks with keyboard controls and preserves deferred payloads', async ({ page }) => {
   let contentBody: { expectedLessonRevision: number; content: { schemaVersion: number; blocks: { key: string; type: string; payload: unknown }[] } } | undefined
   const deferred = { key: 'architecture-diagram', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Architecture diagram', caption: 'Reference' } }
