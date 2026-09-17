@@ -122,6 +122,9 @@ func buildImmutableCourseVersion(cycle ReviewCycle, snapshot ReviewSnapshot, met
 		}
 		result.Modules = append(result.Modules, convertedModule)
 	}
+	if err := result.ValidateForPersistence(); err != nil {
+		return courses.ImmutableCourseVersion{}, err
+	}
 	return result, nil
 }
 
