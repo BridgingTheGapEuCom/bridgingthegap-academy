@@ -25,7 +25,22 @@ func testImmutableCourseVersionPersistence(t *testing.T, ctx context.Context, po
 		t.Fatal(err)
 	}
 
+	invalid := immutableCourseVersionFixture(t, course.ID, "1.2.2", "71000000-0000-4000-8000-000000000099")
+	invalid.ID = "76000000-0000-4000-8000-000000000001"
+	if _, err := store.Store(ctx, invalid); !errors.Is(err, courses.ErrInvalidImmutableCourseVersion) {
+		t.Fatalf("invalid aggregate error = %v", err)
+	}
+	if counts := publicationCountsTuple(t, ctx, pool, course.ID); counts != [3]int{} {
+		t.Fatalf("invalid aggregate wrote rows: %v", counts)
+	}
+
+	missingCourse := immutableCourseVersionFixture(t, "70000000-0000-4000-8000-000000000099", "1.2.2", "71000000-0000-4000-8000-000000000098")
+	if _, err := store.Store(ctx, missingCourse); !errors.Is(err, courses.ErrNotFound) {
+		t.Fatalf("missing Course error = %v", err)
+	}
+
 	input := immutableCourseVersionFixture(t, course.ID, "1.2.3", "71000000-0000-4000-8000-000000000001")
+	input.Modules[1].Lessons[0].Content.Blocks = []courses.Block{}
 	stored, err := store.Store(ctx, input)
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +69,17 @@ func testImmutableCourseVersionPersistence(t *testing.T, ctx context.Context, po
 	}
 	if counts := publicationCountsTuple(t, ctx, pool, course.ID); counts != [3]int{1, 2, 3} {
 		t.Fatalf("Review replay left partial data: %v", counts)
+	}
+
+	moduleRollback := immutableCourseVersionFixture(t, course.ID, "1.3.0", "71000000-0000-4000-8000-000000000004")
+	// This unique source-provenance constraint fails on the second Module,
+	// after the CourseVersion, provenance record, and first Module are stored.
+	moduleRollback.Modules[1].SourceID = moduleRollback.Modules[0].SourceID
+	if _, err := store.Store(ctx, moduleRollback); !errors.Is(err, courses.ErrInvalidImmutableCourseVersion) {
+		t.Fatalf("late Module failure = %v", err)
+	}
+	if counts := publicationCountsTuple(t, ctx, pool, course.ID); counts != [3]int{1, 2, 3} {
+		t.Fatalf("late Module failure did not roll back: %v", counts)
 	}
 
 	rollback := immutableCourseVersionFixture(t, course.ID, "2.0.0", "71000000-0000-4000-8000-000000000002")
