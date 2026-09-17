@@ -3,16 +3,21 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
+	assetslocal "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/localstorage"
+	assetspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	authoringpostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
@@ -21,6 +26,103 @@ import (
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func testPublicationAssetBinding(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	authoringRepository := authoringpostgres.New(pool)
+	assetRepository := assetspostgres.New(pool)
+	coursesRepository := coursespostgres.New(pool)
+	courseStore := courses.NewCourseVersionStore(coursesRepository)
+	course, err := coursesRepository.CreateCourse(ctx, "publication-asset-binding")
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitter := "ac000000-0000-4000-8000-000000000001"
+	reviewer := "ac000000-0000-4000-8000-000000000002"
+	publisher := "ac000000-0000-4000-8000-000000000003"
+	metadata := draftFixture(t, course.ID)
+	draft, _, err := authoringRepository.CreateDraft(ctx, metadata, submitter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storage, err := assetslocal.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storage.Close()
+	ingestion, err := assets.NewIngestionService(assetRepository, storage, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assetBytes := []byte("GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
+	asset, err := ingestion.Ingest(ctx, assets.IngestionInput{
+		OwnerDraftID: string(draft.ID), CreatedByUserID: submitter, OriginalFilename: "architecture.gif", Content: bytes.NewReader(assetBytes),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, draft, err := authoringRepository.CreateModuleAtPosition(ctx, draft.ID, draft.Revision, authoring.ModuleInput{DraftID: draft.ID, StableKey: "assets", Title: "Assets", Position: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lesson := lessonFixture(draft.ID, module.ID, "asset-lesson", 0)
+	lesson.Content = courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{{
+		Key: "diagram", Type: courses.BlockImage,
+		Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: string(asset.ID)}, AltText: "Architecture"},
+	}}}
+	_, draft, err = authoringRepository.CreateLessonAtPosition(ctx, draft.ID, module.ID, draft.Revision, lesson)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cycle, _, err := authoringRepository.SubmitReview(ctx, draft.ID, draft.Revision, submitter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cycle, err = authoringRepository.DecideReview(ctx, cycle.ID, cycle.Revision, authoring.ReviewApproved, reviewer, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := authoring.NewPublicationServiceWithAssets(authoringRepository, authoring.NewAssetPublicationResolver(assetRepository), courseStore, authoringRepository)
+	command := authoring.PublishReviewCommand{DraftID: cycle.DraftID, ReviewID: cycle.ID, ExpectedReviewRevision: cycle.Revision, PublishedByUserID: publisher, PublishedAt: time.Date(2026, 9, 17, 15, 0, 0, 0, time.UTC)}
+	result, err := service.Publish(ctx, command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := courseStore.GetByReviewID(ctx, string(cycle.ID))
+	if err != nil || stored.ID != result.CourseVersionID || len(stored.AssetBindings) != 1 {
+		t.Fatalf("stored asset publication = %#v, %v", stored, err)
+	}
+	binding := stored.AssetBindings[0]
+	if binding.AssetKey != string(asset.ID) || binding.StorageObjectID != string(asset.StorageObjectID) || binding.MediaType != asset.MediaType || binding.ByteSize != asset.ByteSize || binding.SHA256Digest != string(asset.SHA256Digest) || binding.OriginalFilename != asset.OriginalFilename {
+		t.Fatalf("binding did not freeze authoritative metadata: %#v", binding)
+	}
+	image := stored.Modules[0].Lessons[0].Content.Blocks[0].Payload.(courses.ImageBlockPayload)
+	if image.Asset.AssetKey != string(asset.ID) {
+		t.Fatalf("canonical content was rewritten: %#v", image)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE assets.asset SET original_filename='changed.png', media_type='text/plain' WHERE id=$1`, asset.ID); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := courseStore.GetByReviewID(ctx, string(cycle.ID))
+	if err != nil || !reflect.DeepEqual(reloaded.AssetBindings, stored.AssetBindings) {
+		t.Fatalf("mutable Authoring Asset altered publication: %#v, %v", reloaded.AssetBindings, err)
+	}
+	replayed, err := service.Publish(ctx, command)
+	if err != nil || !replayed.Reconciled || replayed.CourseVersionID != stored.ID {
+		t.Fatalf("replay did not retain frozen binding: %#v, %v", replayed, err)
+	}
+	var bindingCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version_asset_binding WHERE course_version_id=$1`, stored.ID).Scan(&bindingCount); err != nil || bindingCount != 1 {
+		t.Fatalf("binding count = %d, %v", bindingCount, err)
+	}
+
+	router := authTestRouter(&authHTTP{publishedAssets: courses.NewPublishedAssetReadService(coursesRepository), assetStorage: storage})
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/courses/by-id/"+string(course.ID)+"/versions/"+result.CourseVersion.String()+"/assets/"+string(asset.ID), nil))
+	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), assetBytes) || response.Header().Get("Content-Type") != "image/gif" {
+		t.Fatalf("published asset delivery = status=%d headers=%#v body=%q", response.Code, response.Header(), response.Body.Bytes())
+	}
+}
 
 type failOncePublicationRepository struct {
 	base authoring.PublicationRecordRepository

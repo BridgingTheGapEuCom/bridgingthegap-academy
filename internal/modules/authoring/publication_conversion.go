@@ -20,6 +20,7 @@ type PublicationConversionMetadata struct {
 	PublishedAt       time.Time
 	PublishedByUserID string
 	Attribution       []courses.ContributorSnapshot
+	AssetBindings     []courses.PublishedAssetBinding
 }
 
 // PublicationValidationFailure preserves every deterministic M4.5a issue for
@@ -45,7 +46,7 @@ func NewPublicationConverter() PublicationConverter {
 }
 
 func (c PublicationConverter) Convert(cycle ReviewCycle, snapshot *ReviewSnapshot, metadata PublicationConversionMetadata) (courses.ImmutableCourseVersion, error) {
-	validation := c.validator.Validate(cycle, snapshot)
+	validation := c.validator.ValidateResolved(cycle, snapshot, metadata.AssetBindings)
 	if !validation.Publishable {
 		return courses.ImmutableCourseVersion{}, &PublicationValidationFailure{Result: validation}
 	}
@@ -92,7 +93,8 @@ func buildImmutableCourseVersion(cycle ReviewCycle, snapshot ReviewSnapshot, met
 			ApprovedAt:            cloneTime(cycle.DecidedAt),
 			PublishedByUserID:     metadata.PublishedByUserID,
 		},
-		Modules: make([]courses.ImmutableCourseVersionModule, 0, len(snapshot.Modules)),
+		Modules:       make([]courses.ImmutableCourseVersionModule, 0, len(snapshot.Modules)),
+		AssetBindings: append([]courses.PublishedAssetBinding{}, metadata.AssetBindings...),
 	}
 	for _, module := range snapshot.Modules {
 		convertedModule := courses.ImmutableCourseVersionModule{

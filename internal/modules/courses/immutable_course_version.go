@@ -2,6 +2,7 @@ package courses
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,7 @@ type ImmutableCourseVersion struct {
 	CourseVersion CourseVersionInput
 	Provenance    CourseVersionProvenance
 	Modules       []ImmutableCourseVersionModule
+	AssetBindings []PublishedAssetBinding `json:"-"`
 }
 
 type ImmutableCourseVersionModule struct {
@@ -74,6 +76,7 @@ func (v ImmutableCourseVersion) ValidateForPersistence() error {
 
 	moduleKeys := make(map[string]struct{}, len(v.Modules))
 	lessonKeys := make(map[string]struct{})
+	referencedAssets := make([]contentAssetReference, 0)
 	for moduleIndex, module := range v.Modules {
 		if module.ID != "" || !uuidPattern.MatchString(module.SourceID) || module.Position != moduleIndex || module.Lessons == nil {
 			return ErrInvalidImmutableCourseVersion
@@ -106,6 +109,39 @@ func (v ImmutableCourseVersion) ValidateForPersistence() error {
 			}).Validate() != nil {
 				return ErrInvalidImmutableCourseVersion
 			}
+			referencedAssets = append(referencedAssets, contentAssetReferences(lesson.Content)...)
+		}
+	}
+
+	bindings := make(map[string]PublishedAssetBinding, len(v.AssetBindings))
+	previousAssetKey := ""
+	for _, binding := range v.AssetBindings {
+		if binding.Validate() != nil {
+			return ErrInvalidImmutableCourseVersion
+		}
+		if previousAssetKey != "" && binding.AssetKey <= previousAssetKey {
+			return ErrInvalidImmutableCourseVersion
+		}
+		if _, duplicate := bindings[binding.AssetKey]; duplicate {
+			return ErrInvalidImmutableCourseVersion
+		}
+		referenced := false
+		for _, reference := range referencedAssets {
+			if reference.key == binding.AssetKey {
+				referenced = true
+				break
+			}
+		}
+		if !referenced {
+			return ErrInvalidImmutableCourseVersion
+		}
+		bindings[binding.AssetKey] = binding
+		previousAssetKey = binding.AssetKey
+	}
+	for _, reference := range referencedAssets {
+		binding, bound := bindings[reference.key]
+		if !bound || (reference.mediaPrefix != "" && !strings.HasPrefix(binding.MediaType, reference.mediaPrefix)) {
+			return ErrInvalidImmutableCourseVersion
 		}
 	}
 

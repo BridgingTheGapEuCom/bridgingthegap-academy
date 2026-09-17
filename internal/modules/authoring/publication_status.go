@@ -35,6 +35,16 @@ type ReviewPublicationStatusService struct {
 	publications PublicationRecordRepository
 	authorizer   Authorizer
 	validator    PublicationValidator
+	assets       PublicationAssetResolver
+}
+
+func NewReviewPublicationStatusServiceWithAssets(publications PublicationRecordRepository, authorizer Authorizer, resolver PublicationAssetResolver) *ReviewPublicationStatusService {
+	return &ReviewPublicationStatusService{
+		publications: publications,
+		authorizer:   authorizer,
+		validator:    NewPublicationValidator(),
+		assets:       resolver,
+	}
 }
 
 func NewReviewPublicationStatusService(publications PublicationRecordRepository, authorizer Authorizer) *ReviewPublicationStatusService {
@@ -55,11 +65,7 @@ func (s *ReviewPublicationStatusService) Status(ctx context.Context, actor ident
 		return ReviewPublicationStatus{}, ErrPublicationInvalidInput
 	}
 
-	validation := s.validator.Validate(cycle, &snapshot)
-	status := ReviewPublicationStatus{
-		Publishable: validation.Publishable,
-		Issues:      validation.Issues,
-	}
+	status := ReviewPublicationStatus{}
 	if err := s.authorizer.Authorize(ctx, actor, CapabilityPublish, DraftResource(cycle.DraftID)); err == nil {
 		status.CanPublish = true
 	} else if !errors.Is(err, ErrAuthorizationDenied) {
@@ -67,20 +73,32 @@ func (s *ReviewPublicationStatusService) Status(ctx context.Context, actor ident
 	}
 
 	record, err := s.publications.GetPublication(ctx, cycle.ID)
-	if errors.Is(err, ErrNotFound) {
+	if err != nil {
+		if !errors.Is(err, ErrNotFound) {
+			return ReviewPublicationStatus{}, err
+		}
+	} else {
+		if !publicationRecordMatchesReview(record, cycle) {
+			return ReviewPublicationStatus{}, ErrPublicationConflict
+		}
+		status.Published = &PublishedReviewPublication{
+			CourseID:      record.CourseID,
+			CourseVersion: record.CourseVersion,
+			PublishedAt:   record.PublishedAt,
+		}
 		return status, nil
 	}
-	if err != nil {
-		return ReviewPublicationStatus{}, err
+
+	validation := s.validator.Validate(cycle, &snapshot)
+	if len(publicationAssetUses(snapshot)) > 0 && s.assets != nil {
+		resolution, err := s.assets.Resolve(ctx, cycle.DraftID, snapshot)
+		if err != nil {
+			return ReviewPublicationStatus{}, err
+		}
+		validation = validateResolvedPublication(s.validator, cycle, &snapshot, resolution)
 	}
-	if !publicationRecordMatchesReview(record, cycle) {
-		return ReviewPublicationStatus{}, ErrPublicationConflict
-	}
-	status.Published = &PublishedReviewPublication{
-		CourseID:      record.CourseID,
-		CourseVersion: record.CourseVersion,
-		PublishedAt:   record.PublishedAt,
-	}
+	status.Publishable = validation.Publishable
+	status.Issues = validation.Issues
 	return status, nil
 }
 

@@ -41,6 +41,29 @@ SELECT *
 FROM courses.course_version_publication_provenance
 WHERE course_version_id = $1;
 
+-- name: CreateCourseVersionAssetBinding :one
+INSERT INTO courses.course_version_asset_binding (
+    course_version_id, asset_key, storage_object_id, original_filename,
+    media_type, byte_size, sha256_digest
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: ListCourseVersionAssetBindings :many
+SELECT *
+FROM courses.course_version_asset_binding
+WHERE course_version_id = $1
+ORDER BY asset_key ASC;
+
+-- name: GetPublishedAssetBindingByCourseAndVersionAndAssetKey :one
+SELECT binding.*
+FROM courses.course_version_asset_binding AS binding
+JOIN courses.course_version AS version ON version.id = binding.course_version_id
+WHERE version.course_id = $1
+  AND version.version = $2
+  AND version.status = 'PUBLISHED'
+  AND binding.asset_key = $3;
+
 -- name: GetCourseVersionIDByReviewID :one
 SELECT course_version_id
 FROM courses.course_version_publication_provenance

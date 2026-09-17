@@ -584,6 +584,8 @@
 .lesson-knowledge-check,
 .lesson-callout { border-inline-start: 0.25rem solid var(--btg-color-border-strong); background: var(--btg-color-surface-muted); padding: var(--btg-space-4); }
 .lesson-media--unresolved { color: var(--btg-color-text-secondary); }
+.lesson-media__element { display: block; max-width: 100%; margin-block: var(--btg-space-3); }
+.lesson-media__image { height: auto; }
 .lesson-media__transcript { border-top: var(--btg-border-width) solid var(--btg-color-border); margin-top: var(--btg-space-4); padding-top: var(--btg-space-4); }
 .lesson-media__transcript h3 { font-size: 1rem; }
 .lesson-callout--warning { border-inline-start-color: var(--btg-color-warning); }

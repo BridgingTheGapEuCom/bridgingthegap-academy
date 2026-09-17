@@ -37,6 +37,16 @@ type CoursesCourseVersion struct {
 	PublishedAt        pgtype.Timestamptz
 }
 
+type CoursesCourseVersionAssetBinding struct {
+	CourseVersionID  pgtype.UUID
+	AssetKey         pgtype.UUID
+	StorageObjectID  pgtype.UUID
+	OriginalFilename string
+	MediaType        string
+	ByteSize         int64
+	Sha256Digest     string
+}
+
 type CoursesCourseVersionPublicationProvenance struct {
 	CourseVersionID       pgtype.UUID
 	ReviewID              pgtype.UUID

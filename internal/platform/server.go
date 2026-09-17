@@ -74,12 +74,14 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 
 	authoringRepository := authoringpostgres.New(pool)
 	authoringAuthorizer := authoring.NewAuthorizationService(authoringRepository)
-	assetIngestion, err := assets.NewIngestionService(assetspostgres.New(pool), assetStorage, cfg.AssetMaxBytes)
+	assetRepository := assetspostgres.New(pool)
+	assetIngestion, err := assets.NewIngestionService(assetRepository, assetStorage, cfg.AssetMaxBytes)
 	if err != nil {
 		return err
 	}
 	coursesRepository := coursespostgres.New(pool)
-	publicationService := authoring.NewPublicationService(authoringRepository, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
+	publicationAssetResolver := authoring.NewAssetPublicationResolver(assetRepository)
+	publicationService := authoring.NewPublicationServiceWithAssets(authoringRepository, publicationAssetResolver, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
 		sessions:                    identity.NewSessionService(identitypostgres.New(pool), nil, nil),
@@ -92,7 +94,9 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authorizer:                  identity.NewAuthorizationService(identitypostgres.New(pool)),
 		courses:                     courses.NewReadService(coursesRepository),
 		publishedCourses:            courses.NewPublishedReadService(coursesRepository),
+		publishedAssets:             courses.NewPublishedAssetReadService(coursesRepository),
 		publishedCatalog:            courses.NewPublishedCatalogService(coursesRepository),
+		assetStorage:                assetStorage,
 		authoring:                   authoring.NewReadService(authoringRepository, authoringAuthorizer),
 		authoringCreation:           authoring.NewDraftCreationService(authoringRepository),
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
@@ -101,10 +105,10 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringLessonContent:      authoring.NewLessonContentMutationService(authoringRepository, authoringAuthorizer),
 		authoringMemberships:        authoring.NewMembershipMutationService(authoringRepository, authoringAuthorizer),
 		authoringReviews:            newAuthoringReviewApplicationService(cfg, authoringRepository, authoringAuthorizer),
-		authoringPublicationStatus:  authoring.NewReviewPublicationStatusService(authoringRepository, authoringAuthorizer),
+		authoringPublicationStatus:  authoring.NewReviewPublicationStatusServiceWithAssets(authoringRepository, authoringAuthorizer, publicationAssetResolver),
 		authoringPublications:       authoring.NewPublicationApplicationService(publicationService, authoringAuthorizer, time.Now),
 		authoringAssetUploads:       authoring.NewAssetUploadService(assetIngestion, authoringAuthorizer),
-		authoringAssets:             authoring.NewAssetListService(assetspostgres.New(pool), authoringAuthorizer),
+		authoringAssets:             authoring.NewAssetListService(assetRepository, authoringAuthorizer),
 		assetMaxBytes:               cfg.AssetMaxBytes,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
@@ -176,6 +180,10 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				// M4.5 publications through exact Courses-owned IDs.
 				api.Get("/courses/by-id/{courseId}/versions/{version}", auth.handlePublishedCourseVersion)
 				api.Get("/courses/by-id/{courseId}/latest", auth.handleLatestPublishedCourseVersion)
+			}
+			if auth.publishedAssets != nil && auth.assetStorage != nil {
+				api.Get("/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}", auth.handlePublishedCourseAsset)
+				api.Head("/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}", auth.handlePublishedCourseAsset)
 			}
 			api.With(auth.resolveSession(false), auth.csrfProtection).Post("/auth/logout", auth.handleLogout)
 			api.Group(func(protected chi.Router) {

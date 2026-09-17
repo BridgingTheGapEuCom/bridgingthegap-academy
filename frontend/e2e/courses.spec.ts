@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { Buffer } from 'node:buffer'
 
 const unauthenticated = { type: 'about:blank', title: 'Unauthenticated', status: 401, instance: '/api/auth/session', request_id: 'test-request' }
 const courseList = { courses: [{ slug: 'event-driven-architecture', version: { version: '1.10.0', status: 'PUBLISHED', title: 'Event-driven architecture', description: 'A practical course.', source_language: 'en-GB', contributors: [{ display_name: 'Ada Author', role: 'AUTHOR', order: 0 }] } }] }
@@ -29,7 +30,7 @@ const publishedCourse = {
           blocks: [
             { key: 'intro', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Published canonical lesson content.', marks: [{ type: 'strong' }] }] }] } } },
             { key: 'code', type: 'CODE', payload: { language: 'go', code: 'fmt.Println("inert")' } },
-            { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Event flow' } },
+            { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: '50000000-0000-4000-8000-000000000001' }, decorative: false, altText: 'Event flow' } },
             { key: 'table', type: 'TABLE', payload: { caption: 'Terms', headers: ['Term'], rows: [['Event']] } },
           ],
         },
@@ -75,6 +76,11 @@ async function servePublicCourses(page: Page) {
   await page.route('**/api/courses/event-driven-architecture', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(courseDetail) }))
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/latest`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(publishedCourse) }))
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(publishedCourse) }))
+  await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}/assets/50000000-0000-4000-8000-000000000001`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'image/gif',
+    body: Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64'),
+  }))
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/1.0.0`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(historicalCourse) }))
   await page.route(`**/api/courses/by-id/${catalogSecond.courseId}/latest`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(secondPublishedCourse) }))
   await page.route('**/api/courses/catalog**', (route) => {
@@ -108,6 +114,8 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await page.evaluate(() => { document.documentElement.style.fontSize = '' })
   await page.setViewportSize({ width: 1440, height: 1000 })
 
+  const assetPath = `/api/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}/assets/50000000-0000-4000-8000-000000000001`
+  const assetRequest = page.waitForRequest((request) => new URL(request.url()).pathname === assetPath)
   await page.getByRole('link', { name: 'Event-driven architecture' }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/courses\/by-id\/10000000-0000-4000-8000-000000000001/)
@@ -118,6 +126,7 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await expect(page.getByRole('link', { name: 'What is EAI?, estimated duration 10 min' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('Published canonical lesson content.')).toBeVisible()
   await expect(page.locator('pre code')).toContainText('fmt.Println')
+  await assetRequest
   await expect(page.getByRole('img', { name: 'Event flow' })).toBeVisible()
   await expect(page.getByRole('table')).toBeVisible()
   await page.getByRole('link', { name: 'Synchronous and asynchronous, estimated duration 1 hr 15 min' }).focus()

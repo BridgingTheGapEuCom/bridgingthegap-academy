@@ -69,6 +69,20 @@ type PublicationValidator struct{}
 func NewPublicationValidator() PublicationValidator { return PublicationValidator{} }
 
 func (PublicationValidator) Validate(cycle ReviewCycle, snapshot *ReviewSnapshot) PublicationValidationResult {
+	return validatePublication(cycle, snapshot, nil)
+}
+
+// ValidateResolved keeps canonical validation pure while allowing the
+// application resolver to attest which asset keys were authoritatively bound.
+func (PublicationValidator) ValidateResolved(cycle ReviewCycle, snapshot *ReviewSnapshot, bindings []courses.PublishedAssetBinding) PublicationValidationResult {
+	resolved := make(map[string]struct{}, len(bindings))
+	for _, binding := range bindings {
+		resolved[binding.AssetKey] = struct{}{}
+	}
+	return validatePublication(cycle, snapshot, resolved)
+}
+
+func validatePublication(cycle ReviewCycle, snapshot *ReviewSnapshot, resolvedAssets map[string]struct{}) PublicationValidationResult {
 	issues := make([]PublicationValidationIssue, 0)
 	add := func(code PublicationValidationCode, path, message string) {
 		issues = append(issues, PublicationValidationIssue{Code: code, Path: path, Message: message})
@@ -96,7 +110,7 @@ func (PublicationValidator) Validate(cycle ReviewCycle, snapshot *ReviewSnapshot
 	}
 
 	validatePublicationMetadata(*snapshot, add)
-	validatePublicationStructure(*snapshot, add)
+	validatePublicationStructure(*snapshot, resolvedAssets, add)
 	return publicationValidationResult(issues)
 }
 
@@ -147,7 +161,7 @@ func validatePublicationMetadata(snapshot ReviewSnapshot, add func(PublicationVa
 	}
 }
 
-func validatePublicationStructure(snapshot ReviewSnapshot, add func(PublicationValidationCode, string, string)) {
+func validatePublicationStructure(snapshot ReviewSnapshot, resolvedAssets map[string]struct{}, add func(PublicationValidationCode, string, string)) {
 	if snapshot.Modules == nil {
 		add(PublicationIssueStructureInvalid, "modules", "The snapshot structure is missing its Modules collection.")
 		return
@@ -218,7 +232,7 @@ func validatePublicationStructure(snapshot ReviewSnapshot, add func(PublicationV
 			}).ValidateMetadata(); err != nil {
 				add(PublicationIssueLessonMetadataInvalid, lessonPath, "Lesson metadata does not meet published CourseVersion requirements.")
 			}
-			validatePublicationLessonContent(lesson.Content, lessonPath+".content", add)
+			validatePublicationLessonContent(lesson.Content, lessonPath+".content", resolvedAssets, add)
 		}
 	}
 
@@ -252,7 +266,7 @@ func validatePublicationPrerequisites(self string, keys []string, lessonKeys map
 	}
 }
 
-func validatePublicationLessonContent(content courses.LessonContent, path string, add func(PublicationValidationCode, string, string)) {
+func validatePublicationLessonContent(content courses.LessonContent, path string, resolvedAssets map[string]struct{}, add func(PublicationValidationCode, string, string)) {
 	if content.SchemaVersion != courses.LessonContentSchemaVersion {
 		add(PublicationIssueContentSchemaUnsupported, path+".schemaVersion", "This LessonContent schema version is not supported for publication.")
 		return
@@ -278,10 +292,34 @@ func validatePublicationLessonContent(content courses.LessonContent, path string
 		}
 		switch block.Type {
 		case courses.BlockImage, courses.BlockVideo, courses.BlockAudio, courses.BlockDownload:
-			add(PublicationIssueAssetUnresolved, blockPath, "This asset reference cannot be published until asset delivery is available.")
+			if !publicationBlockAssetsResolved(block, resolvedAssets) {
+				add(PublicationIssueAssetUnresolved, blockPath, "This asset reference has not been resolved for publication.")
+			}
 		case courses.BlockKnowledgeCheck:
 			add(PublicationIssueAssessmentUnresolved, blockPath, "This assessment reference cannot be published until assessments are available.")
 		}
+	}
+}
+
+func publicationBlockAssetsResolved(block courses.Block, resolved map[string]struct{}) bool {
+	if resolved == nil {
+		return false
+	}
+	has := func(key string) bool { _, ok := resolved[key]; return ok }
+	switch payload := block.Payload.(type) {
+	case courses.ImageBlockPayload:
+		return has(payload.Asset.AssetKey)
+	case courses.VideoBlockPayload:
+		if !has(payload.Asset.AssetKey) || !has(payload.CaptionsAsset.AssetKey) {
+			return false
+		}
+		return payload.TranscriptAsset == nil || has(payload.TranscriptAsset.AssetKey)
+	case courses.AudioBlockPayload:
+		return has(payload.Asset.AssetKey) && (payload.TranscriptAsset == nil || has(payload.TranscriptAsset.AssetKey))
+	case courses.DownloadBlockPayload:
+		return has(payload.Asset.AssetKey)
+	default:
+		return false
 	}
 }
 

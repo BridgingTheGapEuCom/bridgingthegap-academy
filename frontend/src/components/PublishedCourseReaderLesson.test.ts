@@ -56,7 +56,7 @@ describe('PublishedCourseReaderLesson', () => {
     expect(screen.getByRole('img', { name: 'Event flow' }).textContent).toContain('Image asset unavailable')
     expect(screen.getByText('Video transcript')).toBeTruthy()
     expect(screen.getByText('Audio transcript')).toBeTruthy()
-    expect(screen.getByText('Download unavailable until published asset delivery is enabled.')).toBeTruthy()
+    expect(screen.getByText('Download unavailable.')).toBeTruthy()
     expect(screen.getByText('Interactive knowledge checks will be available when assessments are enabled.')).toBeTruthy()
     expect(document.querySelector('hr')).toBeTruthy()
     expect(document.querySelector('img, video, audio, [src]')).toBeNull()
@@ -76,5 +76,39 @@ describe('PublishedCourseReaderLesson', () => {
     cleanup()
     renderLesson({ schemaVersion: 2, blocks: [] })
     expect(screen.getByText('This lesson uses a content format this version of the Academy cannot display.')).toBeTruthy()
+  })
+
+  it('uses exact immutable CourseVersion asset URLs with native accessible media', () => {
+    const image = '50000000-0000-4000-8000-000000000001'
+    const video = '50000000-0000-4000-8000-000000000002'
+    const captions = '50000000-0000-4000-8000-000000000003'
+    const audio = '50000000-0000-4000-8000-000000000004'
+    const download = '50000000-0000-4000-8000-000000000005'
+    const courseID = '10000000-0000-4000-8000-000000000001'
+    render(PublishedCourseReaderLesson, {
+      props: {
+        lesson: lesson({
+          schemaVersion: 1,
+          blocks: [
+            { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: image }, decorative: false, altText: 'Published architecture' } },
+            { key: 'video', type: 'VIDEO', payload: { asset: { assetKey: video }, title: 'Walkthrough', captionsAsset: { assetKey: captions }, transcript: 'Accessible transcript' } },
+            { key: 'audio', type: 'AUDIO', payload: { asset: { assetKey: audio }, title: 'Audio guide', transcript: 'Audio transcript' } },
+            { key: 'download', type: 'DOWNLOAD', payload: { asset: { assetKey: download }, label: 'Reference worksheet' } },
+          ],
+        }),
+        courseId: courseID,
+        version: '1.2.3',
+      },
+    })
+
+    const base = `/api/courses/by-id/${courseID}/versions/1.2.3/assets/`
+    expect(screen.getByRole('img', { name: 'Published architecture' }).getAttribute('src')).toBe(base + image)
+    expect(document.querySelector('video')?.getAttribute('autoplay')).toBeNull()
+    expect(document.querySelector('video source')?.getAttribute('src')).toBe(base + video)
+    expect(document.querySelector('audio')?.getAttribute('autoplay')).toBeNull()
+    expect(document.querySelector('audio source')?.getAttribute('src')).toBe(base + audio)
+    expect(screen.getByRole('link', { name: 'Download captions' }).getAttribute('href')).toBe(base + captions + '?download=1')
+    expect(screen.getByRole('link', { name: 'Reference worksheet' }).getAttribute('href')).toBe(base + download + '?download=1')
+    expect(document.body.textContent).not.toContain('StorageObjectID')
   })
 })

@@ -163,28 +163,33 @@ func TestPublicationConverterRequiresExplicitValidPublicationMetadata(t *testing
 	}
 }
 
-func TestPublicationConversionCopiesCanonicalDependencyReferencesWithoutResolvingThem(t *testing.T) {
+func TestPublicationConversionCopiesCanonicalDependencyReferencesAndBindings(t *testing.T) {
 	cycle, snapshot, metadata := publicationConversionFixture(t)
+	assetKey := "55555555-5555-4555-8555-555555555555"
 	snapshot.Modules[0].Lessons[0].Content.Blocks = []courses.Block{
-		{Key: "architecture-image", Type: courses.BlockImage, Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: "architecture-diagram"}, AltText: "Architecture diagram"}},
+		{Key: "architecture-image", Type: courses.BlockImage, Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: assetKey}, AltText: "Architecture diagram"}},
 		{Key: "knowledge-check", Type: courses.BlockKnowledgeCheck, Payload: courses.KnowledgeCheckBlockPayload{AssessmentKey: "architecture-check"}},
 	}
-
-	// M4.5a currently blocks unresolved delivery dependencies. Exercise the
-	// pure copy stage directly to prove that a later resolver can clear those
-	// issues without requiring any lossy change to this conversion boundary.
+	metadata.AssetBindings = []courses.PublishedAssetBinding{{
+		AssetKey: assetKey, StorageObjectID: "66666666-6666-4666-8666-666666666666",
+		OriginalFilename: "architecture.png", MediaType: "image/png", ByteSize: 123,
+		SHA256Digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}}
 	converted, err := buildImmutableCourseVersion(cycle, snapshot, metadata)
 	if err != nil {
 		t.Fatal(err)
 	}
 	blocks := converted.Modules[0].Lessons[0].Content.Blocks
 	image, ok := blocks[0].Payload.(courses.ImageBlockPayload)
-	if !ok || image.Asset.AssetKey != "architecture-diagram" || image.AltText != "Architecture diagram" {
+	if !ok || image.Asset.AssetKey != assetKey || image.AltText != "Architecture diagram" {
 		t.Fatalf("asset/accessibility payload changed: %#v", blocks[0])
 	}
 	check, ok := blocks[1].Payload.(courses.KnowledgeCheckBlockPayload)
 	if !ok || check.AssessmentKey != "architecture-check" {
 		t.Fatalf("assessment reference changed: %#v", blocks[1])
+	}
+	if !reflect.DeepEqual(converted.AssetBindings, metadata.AssetBindings) {
+		t.Fatalf("immutable asset binding changed: %#v", converted.AssetBindings)
 	}
 }
 

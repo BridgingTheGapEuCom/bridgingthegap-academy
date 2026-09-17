@@ -28,6 +28,12 @@ func validAsset() assets.Asset {
 }
 
 func TestAssetMetadataValidation(t *testing.T) {
+	if parsed, err := assets.ParseAssetID(string(assetID)); err != nil || parsed != assetID {
+		t.Fatalf("canonical Asset ID parse = %q, %v", parsed, err)
+	}
+	if _, err := assets.ParseAssetID("legacy-key"); err == nil {
+		t.Fatal("non-canonical Asset ID accepted")
+	}
 	if err := validAsset().Validate(); err != nil {
 		t.Fatalf("valid Asset rejected: %v", err)
 	}

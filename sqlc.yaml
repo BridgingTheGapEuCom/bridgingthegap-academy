@@ -37,12 +37,21 @@ sql:
         out: internal/modules/assets/db/sqlc
         sql_package: pgx/v5
   - engine: postgresql
+    schema: internal/modules/infrastructure/postgres/db/migrations/00017_assessments.sql
+    queries: internal/modules/assessments/db/query
+    gen:
+      go:
+        package: sqlc
+        out: internal/modules/assessments/db/sqlc
+        sql_package: pgx/v5
+  - engine: postgresql
     schema:
       - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
       - internal/modules/infrastructure/postgres/db/migrations/00007_course_structure.sql
       - internal/modules/infrastructure/postgres/db/migrations/00008_lesson_content.sql
       - internal/modules/infrastructure/postgres/db/migrations/00012_course_version_publication.sql
       - internal/modules/infrastructure/postgres/db/migrations/00013_course_version_publication_actor.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00016_course_version_asset_binding.sql
     queries: internal/modules/courses/db/query
     gen:
       go:

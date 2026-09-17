@@ -60,6 +60,32 @@ func TestAuthoringMayUseDomainActorButNotIdentityPersistence(t *testing.T) {
 	}
 }
 
+func TestAssessmentsRemainNeutralAndAuthoringMayUseItsDomainValues(t *testing.T) {
+	if forbidden("assessments", "authoring") == false {
+		t.Fatal("Assessments must not import Authoring")
+	}
+	if forbidden("authoring", "assessments") {
+		t.Fatal("Authoring should be able to use neutral Assessment domain values")
+	}
+	root := t.TempDir()
+	path := filepath.Join(root, "authoring", "assessment.go")
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("package authoring\nimport _ \""+modulePrefix+"assessments\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := check(root, nil); err != nil {
+		t.Fatalf("Assessment domain import rejected: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("package authoring\nimport _ \""+modulePrefix+"assessments/postgres\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := check(root, nil); err == nil || !strings.Contains(err.Error(), "Assessments domain values only") {
+		t.Fatalf("Assessment persistence import accepted: %v", err)
+	}
+}
+
 func TestCheckRejectsForbiddenImportAndCrossModuleWrite(t *testing.T) {
 	root := t.TempDir()
 	goPath := filepath.Join(root, "courses", "bad.go")

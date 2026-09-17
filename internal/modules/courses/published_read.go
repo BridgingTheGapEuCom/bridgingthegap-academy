@@ -14,6 +14,14 @@ type PublishedCourseVersionRepository interface {
 	GetLatestPublishedImmutableCourseVersion(context.Context, CourseID) (ImmutableCourseVersion, error)
 }
 
+// PublishedAssetBindingRepository resolves one frozen binary binding through
+// its public CourseVersion coordinates. It intentionally does not expose an
+// Asset repository: learner delivery must never consult mutable Authoring
+// metadata.
+type PublishedAssetBindingRepository interface {
+	GetPublishedAssetBindingByCourseAndVersionAndAssetKey(context.Context, CourseID, Version, string) (PublishedAssetBinding, error)
+}
+
 // PublishedCourseVersion is the learner-facing immutable read model. It
 // intentionally excludes Review, Draft, snapshot, and storage provenance.
 type PublishedCourseVersion struct {
@@ -62,6 +70,31 @@ type PublishedCourseLesson struct {
 // SemVer value in the Courses repository.
 type PublishedReadService struct {
 	repository PublishedCourseVersionRepository
+}
+
+// PublishedAssetReadService is the narrow Courses-owned boundary for public
+// binary delivery. A successful lookup proves that the asset belongs to the
+// requested exact PUBLISHED CourseVersion.
+type PublishedAssetReadService struct {
+	repository PublishedAssetBindingRepository
+}
+
+func NewPublishedAssetReadService(repository PublishedAssetBindingRepository) *PublishedAssetReadService {
+	return &PublishedAssetReadService{repository: repository}
+}
+
+func (s *PublishedAssetReadService) Exact(ctx context.Context, courseID CourseID, version Version, assetKey string) (PublishedAssetBinding, error) {
+	if s == nil || s.repository == nil || !uuidPattern.MatchString(string(courseID)) || !version.Valid() || !uuidPattern.MatchString(assetKey) {
+		return PublishedAssetBinding{}, ErrNotFound
+	}
+	binding, err := s.repository.GetPublishedAssetBindingByCourseAndVersionAndAssetKey(ctx, courseID, version, assetKey)
+	if err != nil {
+		return PublishedAssetBinding{}, err
+	}
+	if binding.AssetKey != assetKey || binding.Validate() != nil {
+		return PublishedAssetBinding{}, ErrInvalidImmutableCourseVersion
+	}
+	return binding, nil
 }
 
 func NewPublishedReadService(repository PublishedCourseVersionRepository) *PublishedReadService {

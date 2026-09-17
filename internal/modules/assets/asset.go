@@ -68,6 +68,13 @@ func ParseLifecycle(value string) (Lifecycle, error) {
 	return status, nil
 }
 
+func ParseAssetID(value string) (AssetID, error) {
+	if !validUUID(value) {
+		return "", ErrInvalidAsset
+	}
+	return AssetID(value), nil
+}
+
 func ParseSHA256Digest(value string) (SHA256Digest, error) {
 	if len(value) != 64 || strings.ToLower(value) != value {
 		return "", ErrInvalidAsset

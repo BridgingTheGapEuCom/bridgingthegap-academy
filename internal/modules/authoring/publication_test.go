@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 )
 
@@ -183,7 +184,37 @@ func TestPublicationServiceLeavesCoursesIntactWhenFactWriteFails(t *testing.T) {
 	versions.byReview = storedPublication(versions.stored)
 	publications.err = nil
 	result, err := service.Publish(context.Background(), command)
-	if err != nil || !result.Reconciled || versions.storeCalls != 2 || publications.calls != 2 {
+	if err != nil || !result.Reconciled || versions.storeCalls != 1 || publications.calls != 2 {
 		t.Fatalf("recovery result=%#v error=%v stores=%d records=%d", result, err, versions.storeCalls, publications.calls)
+	}
+}
+
+func TestPublicationServiceResolvesAssetsAndReplayUsesFrozenCoursesBinding(t *testing.T) {
+	reviews, versions, publications, command := publicationServiceFixture(t)
+	assetKey := "55555555-5555-4555-8555-555555555555"
+	reviews.snapshot.Modules[0].Lessons[0].Content = courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{{
+		Key: "diagram", Type: courses.BlockImage,
+		Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: assetKey}, AltText: "Architecture"},
+	}}}
+	assetRepository := &publicationAssetRepositoryFake{items: map[assets.AssetID]assets.Asset{
+		assets.AssetID(assetKey): availablePublicationAsset(assetKey, string(command.DraftID), "66666666-6666-4666-8666-666666666666", "image/png", "diagram.png"),
+	}}
+	service := NewPublicationServiceWithAssets(reviews, NewAssetPublicationResolver(assetRepository), versions, publications)
+	if _, err := service.Publish(context.Background(), command); err != nil {
+		t.Fatal(err)
+	}
+	if len(versions.stored.AssetBindings) != 1 || versions.stored.AssetBindings[0].AssetKey != assetKey || versions.stored.Modules[0].Lessons[0].Content.Blocks[0].Payload.(courses.ImageBlockPayload).Asset.AssetKey != assetKey {
+		t.Fatalf("resolved publication = %#v", versions.stored)
+	}
+
+	// Simulate Courses commit followed by a missing Authoring fact. Recovery
+	// must use the frozen Courses binding without consulting Assets again.
+	versions.byReview = storedPublication(versions.stored)
+	versions.storeErr = courses.ErrCourseVersionAlreadyExists
+	publications.err = nil
+	assetRepository.err = errors.New("current Assets unavailable")
+	result, err := service.Publish(context.Background(), command)
+	if err != nil || !result.Reconciled || versions.storeCalls != 1 {
+		t.Fatalf("frozen-binding replay = %#v, %v; stores=%d", result, err, versions.storeCalls)
 	}
 }

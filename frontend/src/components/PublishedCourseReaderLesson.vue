@@ -20,7 +20,7 @@
       <p v-else-if="content.kind === 'invalid-content'" role="note">This lesson content cannot be displayed safely.</p>
       <p v-else-if="!content.blocks.length">This lesson has no published content yet.</p>
       <div v-else v-for="block in content.blocks" :key="block.key" class="published-course-reader-lesson__block">
-        <LessonBlockRenderer :block="block" />
+        <LessonBlockRenderer :block="block" :published-asset-context="assetContext" />
       </div>
     </section>
   </article>
@@ -33,10 +33,15 @@ import type { PublishedCourseVersionDetail } from '../courses/courses'
 import { formatDuration } from '../courses/courses'
 import { decodeLessonContent } from '../lesson/content'
 
-const props = defineProps<{ lesson: PublishedCourseVersionDetail['modules'][number]['lessons'][number] | null }>()
+const props = defineProps<{
+  lesson: PublishedCourseVersionDetail['modules'][number]['lessons'][number] | null
+  courseId?: string
+  version?: string
+}>()
 const lessonTitle = ref<HTMLHeadingElement | null>(null)
 let previousLessonStableKey: string | undefined
 const content = computed(() => props.lesson ? decodeLessonContent(props.lesson.content) : { kind: 'invalid-content' } as const)
+const assetContext = computed(() => props.courseId && props.version ? { courseID: props.courseId, version: props.version } : undefined)
 
 onMounted(() => { previousLessonStableKey = props.lesson?.stableKey })
 onUpdated(() => {

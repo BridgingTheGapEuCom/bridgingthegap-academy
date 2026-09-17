@@ -100,3 +100,47 @@ func TestImmutableCourseVersionPersistenceValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestImmutableCourseVersionRequiresExactValidAssetBindings(t *testing.T) {
+	assetKey := "51000000-0000-4000-8000-000000000001"
+	valid := validImmutableCourseVersion(t)
+	valid.Modules = []ImmutableCourseVersionModule{{
+		SourceID: "52000000-0000-4000-8000-000000000001", StableKey: "module", Title: "Module", Position: 0,
+		Lessons: []ImmutableCourseVersionLesson{{
+			SourceID: "53000000-0000-4000-8000-000000000001", StableKey: "lesson", Title: "Lesson", Description: "A lesson with an image.", Position: 0,
+			LearningObjectives: []string{"Explain the diagram"}, PrerequisiteStableKeys: []string{},
+			Content: LessonContent{SchemaVersion: 1, Blocks: []Block{{Key: "image", Type: BlockImage, Payload: ImageBlockPayload{Asset: AssetReference{AssetKey: assetKey}, AltText: "Diagram"}}}},
+		}},
+	}}
+	valid.AssetBindings = []PublishedAssetBinding{{
+		AssetKey: assetKey, StorageObjectID: "54000000-0000-4000-8000-000000000001",
+		OriginalFilename: "diagram.png", MediaType: "image/png", ByteSize: 42,
+		SHA256Digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}}
+	if err := valid.ValidateForPersistence(); err != nil {
+		t.Fatalf("valid binding rejected: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*ImmutableCourseVersion)
+	}{
+		{"missing", func(v *ImmutableCourseVersion) { v.AssetBindings = nil }},
+		{"duplicate", func(v *ImmutableCourseVersion) { v.AssetBindings = append(v.AssetBindings, v.AssetBindings[0]) }},
+		{"invalid digest", func(v *ImmutableCourseVersion) { v.AssetBindings[0].SHA256Digest = "bad" }},
+		{"invalid size", func(v *ImmutableCourseVersion) { v.AssetBindings[0].ByteSize = 0 }},
+		{"invalid media type", func(v *ImmutableCourseVersion) { v.AssetBindings[0].MediaType = "IMAGE/PNG" }},
+		{"incompatible media type", func(v *ImmutableCourseVersion) { v.AssetBindings[0].MediaType = "text/plain" }},
+		{"unreferenced", func(v *ImmutableCourseVersion) { v.AssetBindings[0].AssetKey = "55000000-0000-4000-8000-000000000001" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := valid
+			candidate.AssetBindings = append([]PublishedAssetBinding{}, valid.AssetBindings...)
+			test.mutate(&candidate)
+			if !errors.Is(candidate.ValidateForPersistence(), ErrInvalidImmutableCourseVersion) {
+				t.Fatal("invalid binding accepted")
+			}
+		})
+	}
+}

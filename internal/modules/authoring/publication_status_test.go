@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 )
 
@@ -98,5 +99,33 @@ func TestReviewPublicationStatusRejectsInconsistentPublicationFact(t *testing.T)
 	_, err := NewReviewPublicationStatusService(facts, NewAuthorizationService(memberships)).Status(context.Background(), resolvedActor(t), cycle, snapshot)
 	if !errors.Is(err, ErrPublicationConflict) {
 		t.Fatalf("inconsistent fact error = %v", err)
+	}
+}
+
+func TestReviewPublicationStatusUsesAuthoritativeAssetResolution(t *testing.T) {
+	cycle, snapshot := publicationValidationFixture(t)
+	assetKey := "51000000-0000-4000-8000-000000000001"
+	snapshot.Modules[0].Lessons[0].Content = courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{{
+		Key: "image", Type: courses.BlockImage,
+		Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: assetKey}, AltText: "Diagram"},
+	}}}
+	assetsRepository := &publicationAssetRepositoryFake{items: map[assets.AssetID]assets.Asset{
+		assets.AssetID(assetKey): availablePublicationAsset(assetKey, string(cycle.DraftID), "52000000-0000-4000-8000-000000000001", "image/png", "diagram.png"),
+	}}
+	service := NewReviewPublicationStatusServiceWithAssets(
+		&publicationStatusFactsFake{err: ErrNotFound},
+		NewAuthorizationService(&membershipReaderFake{roles: map[DraftID]MemberRole{cycle.DraftID: MemberMaintainer}}),
+		NewAssetPublicationResolver(assetsRepository),
+	)
+	status, err := service.Status(context.Background(), resolvedActor(t), cycle, snapshot)
+	if err != nil || !status.Publishable || len(status.Issues) != 0 {
+		t.Fatalf("resolved readiness = %#v, %v", status, err)
+	}
+	foreign := assetsRepository.items[assets.AssetID(assetKey)]
+	foreign.OwnerDraftID = "53000000-0000-4000-8000-000000000001"
+	assetsRepository.items[assets.AssetID(assetKey)] = foreign
+	status, err = service.Status(context.Background(), resolvedActor(t), cycle, snapshot)
+	if err != nil || status.Publishable || !hasPublicationIssue(PublicationValidationResult{Issues: status.Issues}, PublicationIssueAssetUnavailable) {
+		t.Fatalf("foreign Asset readiness = %#v, %v", status, err)
 	}
 }

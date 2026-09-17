@@ -479,6 +479,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Streams one binary only when assetKey is bound to the requested exact immutable PUBLISHED CourseVersion. The storage object and Authoring provenance are never exposed. The response is immutable and supports ETag revalidation; byte ranges are not currently supported. */
+        get: operations["getPublishedCourseVersionAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** @description Returns the same immutable representation headers as GET without a response body. */
+        head: operations["headPublishedCourseVersionAsset"];
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/by-id/{courseId}/latest": {
         parameters: {
             query?: never;
@@ -2592,6 +2610,71 @@ export interface operations {
             400: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
+        };
+    };
+    getPublishedCourseVersionAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                /** @description Stable canonical Asset ID from published LessonContent. */
+                assetKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Frozen published binary. Content-Type, Content-Length, Content-Disposition, ETag, and immutable cache headers come from the Courses-owned binding. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description The immutable binary matches If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    headPublishedCourseVersionAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                assetKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Frozen published binary headers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The immutable binary matches If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getLatestPublishedCourseVersionById: {

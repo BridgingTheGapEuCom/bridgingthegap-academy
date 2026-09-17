@@ -41,6 +41,23 @@ func (r *Repository) StoreImmutableCourseVersion(ctx context.Context, input cour
 	if err := storePublicationProvenance(ctx, q, versionID, input.Provenance); err != nil {
 		return courses.ImmutableCourseVersion{}, immutableStoreError(err)
 	}
+	for _, binding := range input.AssetBindings {
+		assetKey, err := uuid(binding.AssetKey)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
+		}
+		storageObjectID, err := uuid(binding.StorageObjectID)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
+		}
+		if _, err := q.CreateCourseVersionAssetBinding(ctx, sqlc.CreateCourseVersionAssetBindingParams{
+			CourseVersionID: versionID, AssetKey: assetKey, StorageObjectID: storageObjectID,
+			OriginalFilename: binding.OriginalFilename, MediaType: binding.MediaType,
+			ByteSize: binding.ByteSize, Sha256Digest: binding.SHA256Digest,
+		}); err != nil {
+			return courses.ImmutableCourseVersion{}, immutableStoreError(err)
+		}
+	}
 
 	lessonIDs := make(map[string]pgtype.UUID)
 	for _, module := range input.Modules {
@@ -136,6 +153,34 @@ func (r *Repository) GetPublishedImmutableCourseVersionByCourseAndVersion(ctx co
 		return courses.ImmutableCourseVersion{}, storageError(err)
 	}
 	return getImmutableCourseVersion(ctx, r.q, versionID)
+}
+
+func (r *Repository) GetPublishedAssetBindingByCourseAndVersionAndAssetKey(ctx context.Context, courseID courses.CourseID, version courses.Version, assetKey string) (courses.PublishedAssetBinding, error) {
+	courseKey, err := uuid(string(courseID))
+	if err != nil {
+		return courses.PublishedAssetBinding{}, courses.ErrNotFound
+	}
+	assetID, err := uuid(assetKey)
+	if err != nil {
+		return courses.PublishedAssetBinding{}, courses.ErrNotFound
+	}
+	row, err := r.q.GetPublishedAssetBindingByCourseAndVersionAndAssetKey(ctx, sqlc.GetPublishedAssetBindingByCourseAndVersionAndAssetKeyParams{
+		CourseID: courseKey,
+		Version:  version.String(),
+		AssetKey: assetID,
+	})
+	if err != nil {
+		return courses.PublishedAssetBinding{}, storageError(err)
+	}
+	binding := courses.PublishedAssetBinding{
+		AssetKey: row.AssetKey.String(), StorageObjectID: row.StorageObjectID.String(),
+		OriginalFilename: row.OriginalFilename, MediaType: row.MediaType,
+		ByteSize: row.ByteSize, SHA256Digest: row.Sha256Digest,
+	}
+	if err := binding.Validate(); err != nil {
+		return courses.PublishedAssetBinding{}, courses.ErrInvalidImmutableCourseVersion
+	}
+	return binding, nil
 }
 
 func (r *Repository) GetLatestPublishedImmutableCourseVersion(ctx context.Context, courseID courses.CourseID) (courses.ImmutableCourseVersion, error) {
@@ -257,7 +302,19 @@ func getImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, versionID p
 			ApprovedAt:            cloneTime(provenanceRow.ApprovedAt.Time.UTC()),
 			PublishedByUserID:     provenanceRow.PublishedByUserID.String(),
 		},
-		Modules: []courses.ImmutableCourseVersionModule{},
+		Modules:       []courses.ImmutableCourseVersionModule{},
+		AssetBindings: []courses.PublishedAssetBinding{},
+	}
+	bindingRows, err := q.ListCourseVersionAssetBindings(ctx, versionID)
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, storageError(err)
+	}
+	for _, row := range bindingRows {
+		result.AssetBindings = append(result.AssetBindings, courses.PublishedAssetBinding{
+			AssetKey: row.AssetKey.String(), StorageObjectID: row.StorageObjectID.String(),
+			OriginalFilename: row.OriginalFilename, MediaType: row.MediaType,
+			ByteSize: row.ByteSize, SHA256Digest: row.Sha256Digest,
+		})
 	}
 	moduleRows, err := q.ListModulesForCourseVersion(ctx, versionID)
 	if err != nil {

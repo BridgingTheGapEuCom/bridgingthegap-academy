@@ -72,14 +72,13 @@ incomplete rollback rather than risking a broken AVAILABLE Asset. A future
 operator reconciliation process may clean rare residual orphans; no background
 worker is introduced here.
 
-Canonical media blocks already carry an `assetKey` string that accepts the
-lowercase opaque Asset UUID form. No LessonContent schema change is needed in
-this milestone. A later Authoring service will require that reference to resolve
-to an authorized `AVAILABLE` Asset. Publication must eventually freeze a blob
-identity or equivalent immutable Asset revision so later authoring mutation
-cannot change a published CourseVersion. M5.1a does not implement that binding,
-upload, delivery, or public URLs, and publication therefore continues to return
-`unresolved_asset_reference` for IMAGE, VIDEO, AUDIO, and DOWNLOAD blocks.
+Canonical media blocks carry only the stable lowercase Asset UUID as
+`assetKey`; storage keys, paths, and URLs never enter LessonContent. Publication
+resolves references from the exact frozen Review, requiring that each Asset is
+`AVAILABLE` and owned by that Review's Draft. Authoritative storage identity,
+filename, detected media type, byte size, and SHA-256 are copied into a
+Courses-owned immutable binding. Published reads never consult mutable
+Authoring ownership or Asset metadata.
 
 Ownership and creator IDs are internal authorization provenance. They are not
 public attribution and must not appear in learner catalog, reader, or asset
@@ -107,8 +106,10 @@ is introduced.
 The local provider is only the first implementation. The ingestion contract is
 streaming and provider-neutral, so an S3-compatible provider can implement the
 same commit/open/rollback semantics without changing Asset identity or canonical
-LessonContent. Publication remains unchanged in this milestone and continues to
-report `unresolved_asset_reference` even for AVAILABLE Assets.
+LessonContent. Publication reports the same safe
+`unavailable_asset_reference` for malformed, missing, foreign-Draft, or PENDING
+references. IMAGE, VIDEO, and AUDIO must match their authoritative detected
+media family; DOWNLOAD accepts any AVAILABLE media type.
 
 Authoring's Lesson editor can upload one new file in the context of an IMAGE,
 VIDEO, AUDIO, or DOWNLOAD block. It sends only the multipart `file` field to
@@ -119,7 +120,7 @@ the normal revision-checked Lesson-content save are separate operations: a
 successful upload can remain unreferenced if the later Draft save fails or is
 abandoned. Replacements leave the existing canonical key intact until the new
 upload succeeds, and no Asset deletion, preview, delivery, listing, or
-publication resolution is performed here.
+binary delivery is performed here.
 
 `GET /api/authoring/drafts/{draftId}/assets` is a private Draft-scoped,
 `no-store` read using the existing `authoring.asset.upload` capability: active
@@ -130,4 +131,30 @@ time descending with Asset ID as a stable tie-breaker and use bounded
 detected media type, byte size, and creation time. The editor filters this
 server-authoritative metadata for the current block and saves only a selected
 `assetKey`; there is still no preview, delivery, deletion, cross-Draft reuse,
-or publication resolution.
+or binary delivery.
+
+Courses asset bindings and their CourseVersion commit in one Courses
+transaction and deliberately have no FK to mutable Asset metadata. Repeated
+references produce one binding per Asset key. AVAILABLE bytes are immutable
+through the current API, and future deletion or garbage collection must retain
+every storage object referenced by a published binding.
+
+Published binary delivery is Courses-version-scoped:
+`GET /api/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}` first
+finds the exact immutable `PUBLISHED` CourseVersion binding, then opens its
+private storage object through `BinaryStorage`. It never queries current
+Authoring Asset metadata, so an unpublished Asset cannot be fetched merely by
+knowing its key and a later Authoring change cannot alter an older CourseVersion.
+The response exposes no storage object, filesystem, Review, Draft, or uploader
+identifier. It streams the binding's frozen media type, byte size, and safe
+filename, has a SHA-256-derived strong ETag, and uses
+`Cache-Control: public, max-age=31536000, immutable`. Range responses are
+deliberately deferred because the current provider-neutral `Open` contract is a
+forward-only stream.
+
+The delivery URL is same-origin and contains only Course ID, exact SemVer, and
+canonical Asset ID. Safe raster images plus audio/video media may render inline;
+SVG, HTML, and every other non-allowlisted type are forced to attachment, as is
+an explicit download request. `Content-Disposition` is constructed from the
+frozen validated filename and `X-Content-Type-Options: nosniff` is sent. There
+is still no Authoring preview or unpublished binary endpoint.

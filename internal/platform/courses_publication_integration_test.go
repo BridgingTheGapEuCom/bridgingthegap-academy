@@ -328,6 +328,11 @@ func immutableCourseVersionFixture(t *testing.T, courseID courses.CourseID, vers
 			ApprovedByUserID: "72000000-0000-4000-8000-000000000002", ApprovedAt: &approvedAt,
 			PublishedByUserID: "72000000-0000-4000-8000-000000000003",
 		},
+		AssetBindings: []courses.PublishedAssetBinding{{
+			AssetKey: "76000000-0000-4000-8000-000000000001", StorageObjectID: "77000000-0000-4000-8000-000000000001",
+			OriginalFilename: "architecture.png", MediaType: "image/png", ByteSize: 2048,
+			SHA256Digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		}},
 		Modules: []courses.ImmutableCourseVersionModule{
 			{
 				SourceID: "74000000-0000-4000-8000-000000000001", StableKey: "foundations", Title: "Foundations", Description: "Core concepts.", Position: 0,
@@ -335,7 +340,7 @@ func immutableCourseVersionFixture(t *testing.T, courseID courses.CourseID, vers
 					{
 						SourceID: "75000000-0000-4000-8000-000000000001", StableKey: "introduction", Title: "Introduction", Description: "Introduce publication.", LearningObjectives: []string{"Describe publication"}, Position: 0, PrerequisiteStableKeys: []string{},
 						Content: courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{
-							{Key: "architecture", Type: courses.BlockImage, Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: "architecture-diagram"}, AltText: "Publication architecture diagram", Caption: "Atomic publication flow"}},
+							{Key: "architecture", Type: courses.BlockImage, Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: "76000000-0000-4000-8000-000000000001"}, AltText: "Publication architecture diagram", Caption: "Atomic publication flow"}},
 							{Key: "check", Type: courses.BlockKnowledgeCheck, Payload: courses.KnowledgeCheckBlockPayload{AssessmentKey: "publication-check"}},
 						}},
 					},
@@ -361,7 +366,7 @@ func assertImmutableCourseVersionRoundTrip(t *testing.T, expected, actual course
 	if _, err := uuid.Parse(string(actual.ID)); err != nil || actual.ID == courses.CourseVersionID(expected.Provenance.ReviewID) {
 		t.Fatalf("invalid generated CourseVersion ID: %q", actual.ID)
 	}
-	if !reflect.DeepEqual(actual.CourseVersion, expected.CourseVersion) || !reflect.DeepEqual(actual.Provenance, expected.Provenance) || len(actual.Modules) != len(expected.Modules) {
+	if !reflect.DeepEqual(actual.CourseVersion, expected.CourseVersion) || !reflect.DeepEqual(actual.Provenance, expected.Provenance) || !reflect.DeepEqual(actual.AssetBindings, expected.AssetBindings) || len(actual.Modules) != len(expected.Modules) {
 		t.Fatalf("CourseVersion metadata/provenance mismatch:\nexpected=%#v\nactual=%#v", expected, actual)
 	}
 	for moduleIndex := range expected.Modules {

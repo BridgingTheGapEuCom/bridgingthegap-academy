@@ -85,11 +85,16 @@ func publishedCourseHTTPFixture(t *testing.T) courses.ImmutableCourseVersion {
 			Attribution: []courses.ContributorSnapshot{{UserID: "20000000-0000-4000-8000-000000000001", DisplayName: "Ada Author", Role: courses.ContributorAuthor, Order: 0}},
 			PublishedAt: publishedAt,
 		},
+		AssetBindings: []courses.PublishedAssetBinding{{
+			AssetKey: "50000000-0000-4000-8000-000000000001", StorageObjectID: "60000000-0000-4000-8000-000000000001",
+			OriginalFilename: "architecture.png", MediaType: "image/png", ByteSize: 100,
+			SHA256Digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		}},
 		Modules: []courses.ImmutableCourseVersionModule{{
 			StableKey: "foundations", Title: "Foundations", Description: "Core material.", Position: 0,
 			Lessons: []courses.ImmutableCourseVersionLesson{{
 				StableKey: "introduction", Title: "Introduction", Description: "First lesson.", LearningObjectives: []string{"Understand the version"}, Position: 0,
-				PrerequisiteStableKeys: []string{}, Content: courses.LessonContent{SchemaVersion: courses.LessonContentSchemaVersion, Blocks: []courses.Block{{Key: "asset", Type: courses.BlockImage, Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: "architecture-diagram"}, AltText: "Architecture diagram"}}}},
+				PrerequisiteStableKeys: []string{}, Content: courses.LessonContent{SchemaVersion: courses.LessonContentSchemaVersion, Blocks: []courses.Block{{Key: "asset", Type: courses.BlockImage, Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: "50000000-0000-4000-8000-000000000001"}, AltText: "Architecture diagram"}}}},
 			}},
 		}},
 	}
@@ -225,12 +230,12 @@ func TestImmutablePublishedCourseVersionHTTP(t *testing.T) {
 			t.Fatalf("GET %s = %d, cache=%q: %s", path, response.Code, response.Header().Get("Cache-Control"), response.Body.String())
 		}
 		body := response.Body.String()
-		for _, value := range []string{`"courseId":"10000000-0000-4000-8000-000000000001"`, `"version":"1.10.0"`, `"stableKey":"foundations"`, `"stableKey":"introduction"`, `"schemaVersion":1`, `"assetKey":"architecture-diagram"`} {
+		for _, value := range []string{`"courseId":"10000000-0000-4000-8000-000000000001"`, `"version":"1.10.0"`, `"stableKey":"foundations"`, `"stableKey":"introduction"`, `"schemaVersion":1`, `"assetKey":"50000000-0000-4000-8000-000000000001"`} {
 			if !strings.Contains(body, value) {
 				t.Fatalf("GET %s omitted immutable content %s: %s", path, value, body)
 			}
 		}
-		for _, hidden := range []string{`"reviewId"`, `"draftId"`, `"snapshotSchemaVersion"`, `"submittedBy"`, `"userId"`} {
+		for _, hidden := range []string{`"reviewId"`, `"draftId"`, `"snapshotSchemaVersion"`, `"submittedBy"`, `"userId"`, `"storageObjectId"`, `60000000-0000-4000-8000-000000000001`} {
 			if strings.Contains(body, hidden) {
 				t.Fatalf("GET %s exposed internal provenance %s: %s", path, hidden, body)
 			}

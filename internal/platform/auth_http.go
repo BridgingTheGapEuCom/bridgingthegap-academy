@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
@@ -61,7 +62,9 @@ type authHTTP struct {
 	authzMetrics                *prometheus.CounterVec
 	courses                     *courses.ReadService
 	publishedCourses            *courses.PublishedReadService
+	publishedAssets             *courses.PublishedAssetReadService
 	publishedCatalog            *courses.PublishedCatalogService
+	assetStorage                assets.BinaryStorage
 	authoring                   *authoring.ReadService
 	authoringCreation           *authoring.DraftCreationService
 	authoringMutations          *authoring.DraftMutationService

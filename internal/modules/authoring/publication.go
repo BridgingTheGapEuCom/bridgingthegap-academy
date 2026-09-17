@@ -67,12 +67,17 @@ type PublicationResult struct {
 type PublicationService struct {
 	reviews      ReviewRepository
 	converter    PublicationConverter
+	assets       PublicationAssetResolver
 	versions     PublicationCourseVersionStore
 	publications PublicationRecordRepository
 }
 
 func NewPublicationService(reviews ReviewRepository, versions PublicationCourseVersionStore, publications PublicationRecordRepository) *PublicationService {
 	return &PublicationService{reviews: reviews, converter: NewPublicationConverter(), versions: versions, publications: publications}
+}
+
+func NewPublicationServiceWithAssets(reviews ReviewRepository, resolver PublicationAssetResolver, versions PublicationCourseVersionStore, publications PublicationRecordRepository) *PublicationService {
+	return &PublicationService{reviews: reviews, converter: NewPublicationConverter(), assets: resolver, versions: versions, publications: publications}
 }
 
 func (s *PublicationService) Publish(ctx context.Context, command PublishReviewCommand) (PublicationResult, error) {
@@ -90,6 +95,9 @@ func (s *PublicationService) Publish(ctx context.Context, command PublishReviewC
 	if cycle.Status != ReviewApproved {
 		return PublicationResult{}, ErrReviewInvalidState
 	}
+	if validation := validatePublicationBeforeAssetResolution(s.converter.validator, cycle, &snapshot); !validation.Publishable {
+		return PublicationResult{}, &PublicationValidationFailure{Result: validation}
+	}
 
 	attribution := command.Attribution
 	if attribution == nil {
@@ -101,9 +109,40 @@ func (s *PublicationService) Publish(ctx context.Context, command PublishReviewC
 			Role: courses.ContributorAuthor, Order: 0,
 		}}
 	}
+
+	// Recovery checks the Courses-owned immutable aggregate before consulting
+	// current Asset state. Once Courses committed, its frozen bindings are the
+	// authority even if the separate Authoring publication-fact write failed.
+	existing, existingErr := s.versions.GetByReviewID(ctx, string(cycle.ID))
+	if existingErr == nil && existing.ID != "" {
+		candidate, err := s.converter.Convert(cycle, &snapshot, PublicationConversionMetadata{
+			PublishedAt: existing.CourseVersion.PublishedAt, PublishedByUserID: existing.Provenance.PublishedByUserID,
+			Attribution: attribution, AssetBindings: existing.AssetBindings,
+		})
+		if err != nil || !samePublicationSource(existing, candidate) {
+			return PublicationResult{}, ErrPublicationProvenanceMismatch
+		}
+		return s.recordResult(ctx, existing, true)
+	}
+	if existingErr != nil && !errors.Is(existingErr, courses.ErrNotFound) {
+		return PublicationResult{}, existingErr
+	}
+
+	bindings := []courses.PublishedAssetBinding(nil)
+	if len(publicationAssetUses(snapshot)) > 0 && s.assets != nil {
+		resolution, err := s.assets.Resolve(ctx, cycle.DraftID, snapshot)
+		if err != nil {
+			return PublicationResult{}, err
+		}
+		validation := validateResolvedPublication(s.converter.validator, cycle, &snapshot, resolution)
+		if !validation.Publishable {
+			return PublicationResult{}, &PublicationValidationFailure{Result: validation}
+		}
+		bindings = resolution.Bindings
+	}
 	candidate, err := s.converter.Convert(cycle, &snapshot, PublicationConversionMetadata{
 		PublishedAt: command.PublishedAt, PublishedByUserID: command.PublishedByUserID,
-		Attribution: attribution,
+		Attribution: attribution, AssetBindings: bindings,
 	})
 	if err != nil {
 		return PublicationResult{}, err
@@ -119,6 +158,10 @@ func (s *PublicationService) Publish(ctx context.Context, command PublishReviewC
 		return PublicationResult{}, err
 	}
 
+	return s.recordResult(ctx, stored, reconciled)
+}
+
+func (s *PublicationService) recordResult(ctx context.Context, stored courses.ImmutableCourseVersion, reconciled bool) (PublicationResult, error) {
 	record, err := s.publications.RecordPublication(ctx, publicationRecordFromVersion(stored))
 	if err != nil {
 		return PublicationResult{}, err

@@ -117,6 +117,48 @@ func (q *Queries) CreateCourseVersion(ctx context.Context, arg CreateCourseVersi
 	return i, err
 }
 
+const createCourseVersionAssetBinding = `-- name: CreateCourseVersionAssetBinding :one
+INSERT INTO courses.course_version_asset_binding (
+    course_version_id, asset_key, storage_object_id, original_filename,
+    media_type, byte_size, sha256_digest
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING course_version_id, asset_key, storage_object_id, original_filename, media_type, byte_size, sha256_digest
+`
+
+type CreateCourseVersionAssetBindingParams struct {
+	CourseVersionID  pgtype.UUID
+	AssetKey         pgtype.UUID
+	StorageObjectID  pgtype.UUID
+	OriginalFilename string
+	MediaType        string
+	ByteSize         int64
+	Sha256Digest     string
+}
+
+func (q *Queries) CreateCourseVersionAssetBinding(ctx context.Context, arg CreateCourseVersionAssetBindingParams) (CoursesCourseVersionAssetBinding, error) {
+	row := q.db.QueryRow(ctx, createCourseVersionAssetBinding,
+		arg.CourseVersionID,
+		arg.AssetKey,
+		arg.StorageObjectID,
+		arg.OriginalFilename,
+		arg.MediaType,
+		arg.ByteSize,
+		arg.Sha256Digest,
+	)
+	var i CoursesCourseVersionAssetBinding
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.AssetKey,
+		&i.StorageObjectID,
+		&i.OriginalFilename,
+		&i.MediaType,
+		&i.ByteSize,
+		&i.Sha256Digest,
+	)
+	return i, err
+}
+
 const createCourseVersionPublicationProvenance = `-- name: CreateCourseVersionPublicationProvenance :one
 INSERT INTO courses.course_version_publication_provenance (
     course_version_id, review_id, review_revision, draft_id, draft_revision,
@@ -638,6 +680,37 @@ func (q *Queries) GetModuleByCourseVersionAndKey(ctx context.Context, arg GetMod
 	return i, err
 }
 
+const getPublishedAssetBindingByCourseAndVersionAndAssetKey = `-- name: GetPublishedAssetBindingByCourseAndVersionAndAssetKey :one
+SELECT binding.course_version_id, binding.asset_key, binding.storage_object_id, binding.original_filename, binding.media_type, binding.byte_size, binding.sha256_digest
+FROM courses.course_version_asset_binding AS binding
+JOIN courses.course_version AS version ON version.id = binding.course_version_id
+WHERE version.course_id = $1
+  AND version.version = $2
+  AND version.status = 'PUBLISHED'
+  AND binding.asset_key = $3
+`
+
+type GetPublishedAssetBindingByCourseAndVersionAndAssetKeyParams struct {
+	CourseID pgtype.UUID
+	Version  string
+	AssetKey pgtype.UUID
+}
+
+func (q *Queries) GetPublishedAssetBindingByCourseAndVersionAndAssetKey(ctx context.Context, arg GetPublishedAssetBindingByCourseAndVersionAndAssetKeyParams) (CoursesCourseVersionAssetBinding, error) {
+	row := q.db.QueryRow(ctx, getPublishedAssetBindingByCourseAndVersionAndAssetKey, arg.CourseID, arg.Version, arg.AssetKey)
+	var i CoursesCourseVersionAssetBinding
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.AssetKey,
+		&i.StorageObjectID,
+		&i.OriginalFilename,
+		&i.MediaType,
+		&i.ByteSize,
+		&i.Sha256Digest,
+	)
+	return i, err
+}
+
 const getPublishedCourseVersionIDByCourseAndVersion = `-- name: GetPublishedCourseVersionIDByCourseAndVersion :one
 SELECT id
 FROM courses.course_version
@@ -654,6 +727,41 @@ func (q *Queries) GetPublishedCourseVersionIDByCourseAndVersion(ctx context.Cont
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listCourseVersionAssetBindings = `-- name: ListCourseVersionAssetBindings :many
+SELECT course_version_id, asset_key, storage_object_id, original_filename, media_type, byte_size, sha256_digest
+FROM courses.course_version_asset_binding
+WHERE course_version_id = $1
+ORDER BY asset_key ASC
+`
+
+func (q *Queries) ListCourseVersionAssetBindings(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesCourseVersionAssetBinding, error) {
+	rows, err := q.db.Query(ctx, listCourseVersionAssetBindings, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesCourseVersionAssetBinding
+	for rows.Next() {
+		var i CoursesCourseVersionAssetBinding
+		if err := rows.Scan(
+			&i.CourseVersionID,
+			&i.AssetKey,
+			&i.StorageObjectID,
+			&i.OriginalFilename,
+			&i.MediaType,
+			&i.ByteSize,
+			&i.Sha256Digest,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCourseVersions = `-- name: ListCourseVersions :many

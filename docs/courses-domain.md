@@ -16,7 +16,7 @@ Each Lesson also owns one presentation-independent JSONB content document: `{ "s
 
 Publishing persistence accepts one already-built `ImmutableCourseVersion` and
 stores its version, Review/Draft provenance, source identifiers, ordered
-structure, prerequisites, and canonical content in one Courses-owned database
+structure, prerequisites, canonical content, and immutable Asset bindings in one Courses-owned database
 transaction. Course identity plus SemVer is unique, and Review ID is separately
 unique to prevent replay under another version. Any parent, child, provenance,
 or prerequisite failure rolls the transaction back. Once stored, the immutable
@@ -28,6 +28,16 @@ reconciliation while preserving a Course plus SemVer collision owned by another
 Review as a conflict. Review mutation and public publication APIs remain separate
 work.
 
+Canonical published LessonContent retains its storage-agnostic `assetKey`.
+`ImmutableCourseVersion.AssetBindings` gives each referenced key one frozen,
+Courses-owned interpretation: internal storage object identity, original
+filename, authoritative media type, byte size, and SHA-256. Bindings are unique
+and deterministically ordered, every canonical Asset reference must have one,
+and unreferenced bindings are rejected. The binding table deliberately has no
+FK to mutable Assets metadata. It contains no uploader, Draft owner, or
+membership provenance, and public Course DTOs omit the internal binding and
+storage identity.
+
 The content schema version is technical storage format versioning, separate from CourseVersion SemVer. Unknown versions and block types fail closed. External widgets, asset storage, Tiptap, rendering, and assessment resolution remain post-v1 or later milestones.
 
 The public learner read API is read-only. Discovery and `/api/courses/{slug}` select the highest numeric SemVer version whose status is `PUBLISHED`; `DEPRECATED` and `ARCHIVED` versions never become preferred or appear in ordinary discovery. Explicit version routes may serve `PUBLISHED`, `DEPRECATED`, and `ARCHIVED` artifacts for historical learning/provenance. `WITHDRAWN` artifacts deliberately return the same public not-found response as unavailable content and never serve course or lesson data. Course outlines query lesson metadata only; the exact lesson endpoint loads its block document. All course responses use `Cache-Control: no-store`: artifact content is immutable, but its serving eligibility can change immediately on withdrawal. Deployments that previously cached public course responses must purge those caches when withdrawing a version; response headers cannot revoke copies already stored.
@@ -36,6 +46,8 @@ The immutable publication read boundary is Courses-owned: `/api/courses/by-id/{c
 
 `/api/courses/catalog` is also Courses-owned and returns a paginated lightweight summary for each logical Course with a complete immutable `PUBLISHED` version. It selects one latest version per Course by numeric SemVer, then orders summaries by title and Course ID. Its optional normalized source-language filter applies to that selected latest version. The catalog never consults unpublished Authoring state or exposes Review/Draft provenance, modules, lessons, or canonical content; consumers fetch a selected full version through the immutable `by-id` read API.
 
-The published course reader renders canonical LessonContent from the exact loaded CourseVersion through the shared closed block renderer. It rejects Course/version payloads that do not match the active route, strictly normalizes Lesson selection within that version, and never substitutes Authoring or Draft data. The renderer never executes authored HTML. Unresolved media and download assets remain descriptive read-only placeholders until asset delivery exists; knowledge checks remain non-interactive placeholders until assessment delivery exists. Enrollment, progress, and completion are not part of the reader.
+The published course reader renders canonical LessonContent from the exact loaded CourseVersion through the shared closed block renderer. It rejects Course/version payloads that do not match the active route, strictly normalizes Lesson selection within that version, and never substitutes Authoring or Draft data. The renderer never executes authored HTML. IMAGE, VIDEO, AUDIO, and DOWNLOAD blocks build same-origin URLs using only the exact loaded Course ID, SemVer, and canonical `assetKey`; the server resolves those URLs through that CourseVersion's immutable binding. Images retain canonical alt/decorative semantics, native audio/video controls do not autoplay, and downloads use meaningful canonical labels. Captions and asset-backed transcripts remain truthful download links until a separate validated timed-text design exists. Knowledge checks remain non-interactive placeholders until assessment delivery exists. Enrollment, progress, and completion are not part of the reader.
+
+`GET /api/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}` is a public immutable binary representation for one exact PUBLISHED CourseVersion binding. It never falls back to latest or Authoring state. Binding metadata provides Content-Type, Content-Length, and safe filename; a SHA-256-derived strong ETag supports `If-None-Match`, and the exact immutable URL is cacheable for one year. Storage object IDs and all Authoring provenance remain private. The current `BinaryStorage.Open` contract is streaming-only, so delivery intentionally does not advertise or emulate byte-range responses. Inline media is limited to safe raster image, audio, and video types; SVG and active/document types are forced to attachment with `nosniff`. Future asset retention must preserve every storage object referenced by a Courses binding.
 
 The learner catalog is discovery data only; the reader always fetches its own exact Courses aggregate, and the backend alone resolves `latest`. Catalog and reader requests bypass browser storage and HTTP reuse so a withdrawn publication is not retained as learner content. The frontend rejects malformed or route-mismatched public responses, exact-version routes never fall back to latest, and an out-of-range catalog page is normalized after publication visibility changes.

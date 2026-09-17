@@ -312,10 +312,13 @@ The validator reuses Courses value-object validation for CourseVersion metadata,
 Modules, Lessons, and canonical blocks. It does not add a new aggregate rule
 requiring Modules or Lessons because the existing Courses model permits empty
 structure, and it retains the canonical migration-era allowance for empty
-LessonContent documents. Asset-backed Image, Video,
-Audio, and Download blocks produce `unresolved_asset_reference`, and
-`KNOWLEDGE_CHECK` blocks produce `unresolved_assessment_reference`, because
-asset delivery and Assessments do not yet provide a safe publication target.
+LessonContent documents. Its pure form reports unresolved Asset references.
+Publication orchestration resolves those references through Assets using only
+the frozen Review, requiring exact Draft ownership and AVAILABLE state.
+Malformed, missing, foreign-Draft, and PENDING references share the safe
+`unavailable_asset_reference` issue; authoritative MIME-family mismatches use
+`incompatible_asset_media_type`. `KNOWLEDGE_CHECK` continues to produce
+`unresolved_assessment_reference`.
 
 Validation success only means that the frozen snapshot is ready for the next
 conversion boundary. It does not create a CourseVersion, change a preferred
@@ -347,6 +350,13 @@ frozen publication source matches, and repairs the missing Authoring fact. A
 SemVer owned by another Review remains a conflict. Thus one exact Review can
 converge on at most one publication result without deleting or rolling back an
 immutable Courses artifact.
+
+Asset resolution runs only for a new publication. Replay and recovery first
+load the Courses aggregate by exact Review provenance and validate the frozen
+Review against its already-persisted bindings. Later Authoring Asset changes
+therefore cannot change or block recovery of an original publication. Asset
+bindings persist inside the Courses transaction; Authoring records no second
+binding and never writes Courses tables directly.
 
 `POST /api/authoring/drafts/{draftId}/reviews/{reviewId}/publish` exposes that
 orchestration to an authenticated actor with current `authoring.publish` access

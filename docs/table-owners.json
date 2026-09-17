@@ -1,6 +1,7 @@
 {
   "audit.events": "audit",
   "assets.asset": "assets",
+  "assessments.assessment": "assessments",
   "authoring.course_draft": "authoring",
   "authoring.workspace": "authoring",
   "authoring.workspace_member": "authoring",
@@ -12,6 +13,7 @@
   "authoring.review_publication": "authoring",
   "courses.course": "courses",
   "courses.course_version": "courses",
+  "courses.course_version_asset_binding": "courses",
   "courses.course_version_publication_provenance": "courses",
   "courses.module": "courses",
   "courses.lesson": "courses",
