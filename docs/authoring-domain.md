@@ -335,9 +335,11 @@ immutable Courses artifact.
 orchestration to an authenticated actor with current `authoring.publish` access
 to the exact Draft. The request contains only `expectedReviewRevision`;
 publisher identity comes from the resolved session and publication time from the
-server clock. The current server-owned attribution fallback records the frozen
-Review submitter's opaque ID without an Identity lookup. Successful initial and
-reconciled publications return the same CourseVersion identity and SemVer.
+server clock. The current server-owned attribution fallback retains the frozen
+Review submitter as internal source provenance, but exposes only the generic
+public label `Author` until Review snapshots carry public attribution.
+Successful initial and reconciled publications return the same CourseVersion
+identity and SemVer.
 Stale or non-approved Reviews and foreign Course/SemVer ownership are explicit
 conflicts, while publication-readiness failures return their ordered domain
 issue codes and canonical snapshot paths. Authorization denial remains an

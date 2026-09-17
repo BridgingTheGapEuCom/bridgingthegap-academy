@@ -223,7 +223,7 @@ func testAuthoringPublicationAPI(t *testing.T, ctx context.Context, pool *pgxpoo
 		t.Fatalf("server publication provenance = %#v %v", fact, err)
 	}
 	stored, err := courseStore.GetByReviewID(ctx, string(cycle.ID))
-	if err != nil || len(stored.CourseVersion.Attribution) != 1 || stored.CourseVersion.Attribution[0].UserID != string(submitter.ID) || stored.CourseVersion.Attribution[0].DisplayName != string(submitter.ID) {
+	if err != nil || len(stored.CourseVersion.Attribution) != 1 || stored.CourseVersion.Attribution[0].UserID != string(submitter.ID) || stored.CourseVersion.Attribution[0].DisplayName != "Author" {
 		t.Fatalf("server-owned frozen attribution = %#v %v", stored.CourseVersion.Attribution, err)
 	}
 

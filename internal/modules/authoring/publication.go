@@ -93,11 +93,11 @@ func (s *PublicationService) Publish(ctx context.Context, command PublishReviewC
 
 	attribution := command.Attribution
 	if attribution == nil {
-		// The browser never supplies historical attribution. Until a richer
-		// frozen attribution model exists, retain the immutable submitter's
-		// opaque ID as the publication's accountable source attribution.
+		// The browser never supplies historical attribution. Keep the frozen
+		// submitter as an internal account reference, while using a safe public
+		// display label until the Review snapshot carries public attribution.
 		attribution = []courses.ContributorSnapshot{{
-			UserID: cycle.SubmittedByUserID, DisplayName: cycle.SubmittedByUserID,
+			UserID: cycle.SubmittedByUserID, DisplayName: "Author",
 			Role: courses.ContributorAuthor, Order: 0,
 		}}
 	}

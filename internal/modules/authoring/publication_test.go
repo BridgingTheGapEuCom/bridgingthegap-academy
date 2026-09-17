@@ -100,6 +100,21 @@ func TestPublicationServicePublishesExactApprovedReview(t *testing.T) {
 	}
 }
 
+func TestPublicationServiceUsesSafeFallbackAttribution(t *testing.T) {
+	reviews, versions, publications, command := publicationServiceFixture(t)
+	command.Attribution = nil
+	if _, err := NewPublicationService(reviews, versions, publications).Publish(context.Background(), command); err != nil {
+		t.Fatal(err)
+	}
+	if len(versions.stored.CourseVersion.Attribution) != 1 {
+		t.Fatalf("fallback attribution = %#v", versions.stored.CourseVersion.Attribution)
+	}
+	contributor := versions.stored.CourseVersion.Attribution[0]
+	if contributor.UserID != reviews.cycle.SubmittedByUserID || contributor.DisplayName != "Author" || contributor.Role != courses.ContributorAuthor || contributor.Order != 0 {
+		t.Fatalf("fallback attribution exposed opaque source identity: %#v", contributor)
+	}
+}
+
 func TestPublicationServiceRejectsStaleStateAndInvalidSnapshotBeforeCourses(t *testing.T) {
 	for _, test := range []struct {
 		name   string
