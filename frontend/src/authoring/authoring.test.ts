@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringAssetResponseError, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringPublicationResponseError, InvalidAuthoringReviewResponseError, listAuthoringDraftAssets, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson, uploadAuthoringAsset } from './authoring'
+import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringAssessment, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringAssessment, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringAssessmentResponseError, InvalidAuthoringAssetResponseError, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringPublicationResponseError, InvalidAuthoringReviewResponseError, listAuthoringDraftAssessments, listAuthoringDraftAssets, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringAssessment, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson, uploadAuthoringAsset } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -72,6 +72,24 @@ describe('Authoring API service', () => {
     await expect(listAuthoringDraftAssets('11111111-1111-4111-8111-111111111111', 20, 0, { request })).resolves.toEqual(page)
     expect(request).toHaveBeenCalledWith('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets?limit=20&offset=0', { cache: 'no-store' })
     await expect(listAuthoringDraftAssets('11111111-1111-4111-8111-111111111111', 20, 0, { request: vi.fn().mockResolvedValue({ ...page, items: [{ ...page.items[0], createdAt: 'invalid' }] }) })).rejects.toBeInstanceOf(InvalidAuthoringAssetResponseError)
+  })
+  it('uses Draft-scoped Authoring-only Assessment DTOs and fails closed on malformed answer definitions', async () => {
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const assessmentID = '22222222-2222-4222-8222-222222222222'
+    const question = { stableKey: 'question-one', type: 'SINGLE_CHOICE' as const, prompt: 'Choose one', position: 0, options: [{ stableKey: 'option-one', text: 'One', position: 0 }, { stableKey: 'option-two', text: 'Two', position: 1 }], correctOptionKeys: ['option-one'], leftItems: [], rightItems: [], correctPairs: [] }
+    const detail = { assessmentKey: assessmentID, title: 'Knowledge check', revision: 2, questions: [question], createdAt: '2026-09-17T10:00:00Z', updatedAt: '2026-09-17T10:00:00Z' }
+    const page = { items: [{ assessmentKey: assessmentID, title: 'Knowledge check', questionCount: 1, revision: 2, updatedAt: '2026-09-17T10:00:00Z' }], limit: 20, offset: 0, total: 1 }
+    const request = vi.fn().mockResolvedValueOnce(page).mockResolvedValueOnce(detail).mockResolvedValueOnce({ ...detail, revision: 3 }).mockResolvedValueOnce(detail)
+    await expect(listAuthoringDraftAssessments(draftID, 20, 0, { request })).resolves.toEqual(page)
+    await expect(createAuthoringAssessment(draftID, { title: detail.title, questions: [] }, { request })).resolves.toEqual(detail)
+    await expect(replaceAuthoringAssessment(draftID, assessmentID, { expectedRevision: 2, title: detail.title, questions: [question] }, { request })).resolves.toMatchObject({ revision: 3 })
+    await expect(getAuthoringAssessment(draftID, assessmentID, { request })).resolves.toEqual(detail)
+    expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/assessments?limit=20&offset=0`, { cache: 'no-store' })
+    expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/assessments`, expect.objectContaining({ method: 'POST', cache: 'no-store', body: JSON.stringify({ title: detail.title, questions: [] }) }))
+    expect(request).toHaveBeenNthCalledWith(3, `/api/authoring/drafts/${draftID}/assessments/${assessmentID}`, expect.objectContaining({ method: 'PUT', cache: 'no-store' }))
+    expect(JSON.parse(request.mock.calls[2]![1].body)).toEqual({ expectedRevision: 2, title: detail.title, questions: [question] })
+    await expect(getAuthoringAssessment(draftID, assessmentID, { request: vi.fn().mockResolvedValue({ ...detail, questions: [{ ...question, correctOptionKeys: ['missing'] }] }) })).rejects.toBeInstanceOf(InvalidAuthoringAssessmentResponseError)
+    await expect(getAuthoringAssessment(draftID, assessmentID, { request: vi.fn().mockResolvedValue({ ...detail, questions: [{ ...question, position: 1 }] }) })).rejects.toBeInstanceOf(InvalidAuthoringAssessmentResponseError)
   })
   it('uses the authenticated shared request boundary for a bounded Draft ID', async () => {
     const request = vi.fn().mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' })

@@ -69,20 +69,28 @@ type PublicationValidator struct{}
 func NewPublicationValidator() PublicationValidator { return PublicationValidator{} }
 
 func (PublicationValidator) Validate(cycle ReviewCycle, snapshot *ReviewSnapshot) PublicationValidationResult {
-	return validatePublication(cycle, snapshot, nil)
+	return validatePublication(cycle, snapshot, nil, nil)
 }
 
 // ValidateResolved keeps canonical validation pure while allowing the
 // application resolver to attest which asset keys were authoritatively bound.
 func (PublicationValidator) ValidateResolved(cycle ReviewCycle, snapshot *ReviewSnapshot, bindings []courses.PublishedAssetBinding) PublicationValidationResult {
-	resolved := make(map[string]struct{}, len(bindings))
-	for _, binding := range bindings {
-		resolved[binding.AssetKey] = struct{}{}
-	}
-	return validatePublication(cycle, snapshot, resolved)
+	return NewPublicationValidator().ValidateResolvedBindings(cycle, snapshot, bindings, nil)
 }
 
-func validatePublication(cycle ReviewCycle, snapshot *ReviewSnapshot, resolvedAssets map[string]struct{}) PublicationValidationResult {
+func (PublicationValidator) ValidateResolvedBindings(cycle ReviewCycle, snapshot *ReviewSnapshot, assetBindings []courses.PublishedAssetBinding, assessmentBindings []courses.PublishedAssessmentBinding) PublicationValidationResult {
+	resolved := make(map[string]struct{}, len(assetBindings))
+	for _, binding := range assetBindings {
+		resolved[binding.AssetKey] = struct{}{}
+	}
+	resolvedAssessments := make(map[string]struct{}, len(assessmentBindings))
+	for _, binding := range assessmentBindings {
+		resolvedAssessments[binding.AssessmentKey] = struct{}{}
+	}
+	return validatePublication(cycle, snapshot, resolved, resolvedAssessments)
+}
+
+func validatePublication(cycle ReviewCycle, snapshot *ReviewSnapshot, resolvedAssets, resolvedAssessments map[string]struct{}) PublicationValidationResult {
 	issues := make([]PublicationValidationIssue, 0)
 	add := func(code PublicationValidationCode, path, message string) {
 		issues = append(issues, PublicationValidationIssue{Code: code, Path: path, Message: message})
@@ -110,7 +118,7 @@ func validatePublication(cycle ReviewCycle, snapshot *ReviewSnapshot, resolvedAs
 	}
 
 	validatePublicationMetadata(*snapshot, add)
-	validatePublicationStructure(*snapshot, resolvedAssets, add)
+	validatePublicationStructure(*snapshot, resolvedAssets, resolvedAssessments, add)
 	return publicationValidationResult(issues)
 }
 
@@ -161,7 +169,7 @@ func validatePublicationMetadata(snapshot ReviewSnapshot, add func(PublicationVa
 	}
 }
 
-func validatePublicationStructure(snapshot ReviewSnapshot, resolvedAssets map[string]struct{}, add func(PublicationValidationCode, string, string)) {
+func validatePublicationStructure(snapshot ReviewSnapshot, resolvedAssets, resolvedAssessments map[string]struct{}, add func(PublicationValidationCode, string, string)) {
 	if snapshot.Modules == nil {
 		add(PublicationIssueStructureInvalid, "modules", "The snapshot structure is missing its Modules collection.")
 		return
@@ -232,7 +240,7 @@ func validatePublicationStructure(snapshot ReviewSnapshot, resolvedAssets map[st
 			}).ValidateMetadata(); err != nil {
 				add(PublicationIssueLessonMetadataInvalid, lessonPath, "Lesson metadata does not meet published CourseVersion requirements.")
 			}
-			validatePublicationLessonContent(lesson.Content, lessonPath+".content", resolvedAssets, add)
+			validatePublicationLessonContent(lesson.Content, lessonPath+".content", resolvedAssets, resolvedAssessments, add)
 		}
 	}
 
@@ -266,7 +274,7 @@ func validatePublicationPrerequisites(self string, keys []string, lessonKeys map
 	}
 }
 
-func validatePublicationLessonContent(content courses.LessonContent, path string, resolvedAssets map[string]struct{}, add func(PublicationValidationCode, string, string)) {
+func validatePublicationLessonContent(content courses.LessonContent, path string, resolvedAssets, resolvedAssessments map[string]struct{}, add func(PublicationValidationCode, string, string)) {
 	if content.SchemaVersion != courses.LessonContentSchemaVersion {
 		add(PublicationIssueContentSchemaUnsupported, path+".schemaVersion", "This LessonContent schema version is not supported for publication.")
 		return
@@ -296,7 +304,10 @@ func validatePublicationLessonContent(content courses.LessonContent, path string
 				add(PublicationIssueAssetUnresolved, blockPath, "This asset reference has not been resolved for publication.")
 			}
 		case courses.BlockKnowledgeCheck:
-			add(PublicationIssueAssessmentUnresolved, blockPath, "This assessment reference cannot be published until assessments are available.")
+			payload := block.Payload.(courses.KnowledgeCheckBlockPayload)
+			if _, resolved := resolvedAssessments[payload.AssessmentKey]; !resolved {
+				add(PublicationIssueAssessmentUnresolved, blockPath, "This Assessment reference has not been resolved for publication.")
+			}
 		}
 	}
 }

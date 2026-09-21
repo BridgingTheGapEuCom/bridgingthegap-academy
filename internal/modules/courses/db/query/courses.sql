@@ -55,6 +55,19 @@ FROM courses.course_version_asset_binding
 WHERE course_version_id = $1
 ORDER BY asset_key ASC;
 
+-- name: CreateCourseVersionAssessmentBinding :one
+INSERT INTO courses.course_version_assessment_binding (
+    course_version_id, assessment_key, definition
+)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: ListCourseVersionAssessmentBindings :many
+SELECT *
+FROM courses.course_version_assessment_binding
+WHERE course_version_id = $1
+ORDER BY assessment_key ASC;
+
 -- name: GetPublishedAssetBindingByCourseAndVersionAndAssetKey :one
 SELECT binding.*
 FROM courses.course_version_asset_binding AS binding

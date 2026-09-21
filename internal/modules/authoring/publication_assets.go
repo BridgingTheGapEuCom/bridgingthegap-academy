@@ -97,15 +97,16 @@ func unavailableAssetIssue(path string) PublicationValidationIssue {
 	return PublicationValidationIssue{Code: PublicationIssueAssetUnavailable, Path: path, Message: "This asset reference is not available for publication from this Draft."}
 }
 
-func validateResolvedPublication(validator PublicationValidator, cycle ReviewCycle, snapshot *ReviewSnapshot, resolution PublicationAssetResolution) PublicationValidationResult {
-	validation := validator.ValidateResolved(cycle, snapshot, resolution.Bindings)
-	issues := make([]PublicationValidationIssue, 0, len(validation.Issues)+len(resolution.Issues))
+func validateResolvedPublication(validator PublicationValidator, cycle ReviewCycle, snapshot *ReviewSnapshot, assets PublicationAssetResolution, assessments PublicationAssessmentResolution) PublicationValidationResult {
+	validation := validator.ValidateResolvedBindings(cycle, snapshot, assets.Bindings, assessments.Bindings)
+	issues := make([]PublicationValidationIssue, 0, len(validation.Issues)+len(assets.Issues)+len(assessments.Issues))
 	for _, issue := range validation.Issues {
-		if issue.Code != PublicationIssueAssetUnresolved {
+		if issue.Code != PublicationIssueAssetUnresolved && issue.Code != PublicationIssueAssessmentUnresolved {
 			issues = append(issues, issue)
 		}
 	}
-	issues = append(issues, resolution.Issues...)
+	issues = append(issues, assets.Issues...)
+	issues = append(issues, assessments.Issues...)
 	return publicationValidationResult(issues)
 }
 
@@ -113,7 +114,7 @@ func validatePublicationBeforeAssetResolution(validator PublicationValidator, cy
 	validation := validator.Validate(cycle, snapshot)
 	issues := make([]PublicationValidationIssue, 0, len(validation.Issues))
 	for _, issue := range validation.Issues {
-		if issue.Code != PublicationIssueAssetUnresolved {
+		if issue.Code != PublicationIssueAssetUnresolved && issue.Code != PublicationIssueAssessmentUnresolved {
 			issues = append(issues, issue)
 		}
 	}

@@ -9,7 +9,8 @@ const replaceContent = vi.hoisted(() => vi.fn())
 const getLesson = vi.hoisted(() => vi.fn())
 const uploadAsset = vi.hoisted(() => vi.fn())
 const listAssets = vi.hoisted(() => vi.fn())
-vi.mock('../authoring/authoring', async (original) => ({ ...(await original<typeof import('../authoring/authoring')>()), replaceAuthoringLessonContent: replaceContent, getAuthoringLesson: getLesson, uploadAuthoringAsset: uploadAsset, listAuthoringDraftAssets: listAssets }))
+const listAssessments = vi.hoisted(() => vi.fn())
+vi.mock('../authoring/authoring', async (original) => ({ ...(await original<typeof import('../authoring/authoring')>()), replaceAuthoringLessonContent: replaceContent, getAuthoringLesson: getLesson, uploadAuthoringAsset: uploadAsset, listAuthoringDraftAssets: listAssets, listAuthoringDraftAssessments: listAssessments }))
 const draftID = '11111111-1111-4111-8111-111111111111'
 const lessonID = '22222222-2222-4222-8222-222222222222'
 function lesson(content: AuthoringLessonContent = { schemaVersion: 1, blocks: [] }): AuthoringLessonDetail {
@@ -28,10 +29,11 @@ function savedDocument(): AuthoringLessonContent { return replaceContent.mock.ca
 
 describe('AuthoringLessonContentEditor', () => {
   beforeEach(() => {
-    getLesson.mockReset(); replaceContent.mockReset(); uploadAsset.mockReset(); listAssets.mockReset()
+    getLesson.mockReset(); replaceContent.mockReset(); uploadAsset.mockReset(); listAssets.mockReset(); listAssessments.mockReset()
     replaceContent.mockImplementation(async (_draft, _lesson, request) => ({ lesson: { ...lesson(request.content), revision: 8, draftRevision: 12 }, content: request.content }))
     uploadAsset.mockResolvedValue({ assetKey: '55555555-5555-4555-8555-555555555555', filename: 'diagram.png', mediaType: 'image/png', byteSize: 200, status: 'AVAILABLE' })
     listAssets.mockResolvedValue({ items: [], limit: 20, offset: 0, total: 0 })
+    listAssessments.mockResolvedValue({ items: [], limit: 20, offset: 0, total: 0 })
   })
   afterEach(cleanup)
 
@@ -106,6 +108,19 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.getByLabelText('Audio file').getAttribute('accept')).toBe('audio/*')
     expect(screen.getByLabelText('Download file').getAttribute('accept')).toBeNull()
     expect(screen.getByLabelText('Captions file')).toBeTruthy()
+  })
+
+  it('chooses a Draft Assessment for a knowledge check and saves only assessmentKey', async () => {
+    listAssessments.mockResolvedValue({ items: [{ assessmentKey: '77777777-7777-4777-8777-777777777777', title: 'Terminology check', questionCount: 2, revision: 3, updatedAt: '2026-09-17T10:00:00Z' }], limit: 20, offset: 0, total: 1 })
+    render(AuthoringLessonContentEditor, { props: { draftId: draftID, lesson: lesson() } })
+    await add('KNOWLEDGE_CHECK')
+    await screen.findByRole('button', { name: 'Use Terminology check' })
+    expect(screen.queryByText('correctOptionKeys')).toBeNull()
+    await fireEvent.click(screen.getByRole('button', { name: 'Use Terminology check' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await screen.findByText('Lesson content saved.')
+    expect(savedDocument().blocks[0]).toEqual({ key: expect.any(String), type: 'KNOWLEDGE_CHECK', payload: { assessmentKey: '77777777-7777-4777-8777-777777777777' } })
+    expect(JSON.stringify(savedDocument())).not.toContain('Terminology check')
   })
 
   it('lists only compatible Draft Assets and attaches the selected key through the normal save', async () => {

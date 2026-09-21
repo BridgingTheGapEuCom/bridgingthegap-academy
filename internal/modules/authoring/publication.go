@@ -115,9 +115,13 @@ func (s *PublicationService) Publish(ctx context.Context, command PublishReviewC
 	// authority even if the separate Authoring publication-fact write failed.
 	existing, existingErr := s.versions.GetByReviewID(ctx, string(cycle.ID))
 	if existingErr == nil && existing.ID != "" {
+		assessmentResolution := resolvePublicationAssessments(snapshot)
+		if len(assessmentResolution.Issues) != 0 {
+			return PublicationResult{}, ErrPublicationProvenanceMismatch
+		}
 		candidate, err := s.converter.Convert(cycle, &snapshot, PublicationConversionMetadata{
 			PublishedAt: existing.CourseVersion.PublishedAt, PublishedByUserID: existing.Provenance.PublishedByUserID,
-			Attribution: attribution, AssetBindings: existing.AssetBindings,
+			Attribution: attribution, AssetBindings: existing.AssetBindings, AssessmentBindings: assessmentResolution.Bindings,
 		})
 		if err != nil || !samePublicationSource(existing, candidate) {
 			return PublicationResult{}, ErrPublicationProvenanceMismatch
@@ -129,20 +133,23 @@ func (s *PublicationService) Publish(ctx context.Context, command PublishReviewC
 	}
 
 	bindings := []courses.PublishedAssetBinding(nil)
+	assetResolution := PublicationAssetResolution{Bindings: bindings, Issues: []PublicationValidationIssue{}}
 	if len(publicationAssetUses(snapshot)) > 0 && s.assets != nil {
 		resolution, err := s.assets.Resolve(ctx, cycle.DraftID, snapshot)
 		if err != nil {
 			return PublicationResult{}, err
 		}
-		validation := validateResolvedPublication(s.converter.validator, cycle, &snapshot, resolution)
-		if !validation.Publishable {
-			return PublicationResult{}, &PublicationValidationFailure{Result: validation}
-		}
+		assetResolution = resolution
 		bindings = resolution.Bindings
+	}
+	assessmentResolution := resolvePublicationAssessments(snapshot)
+	validation := validateResolvedPublication(s.converter.validator, cycle, &snapshot, assetResolution, assessmentResolution)
+	if !validation.Publishable {
+		return PublicationResult{}, &PublicationValidationFailure{Result: validation}
 	}
 	candidate, err := s.converter.Convert(cycle, &snapshot, PublicationConversionMetadata{
 		PublishedAt: command.PublishedAt, PublishedByUserID: command.PublishedByUserID,
-		Attribution: attribution, AssetBindings: bindings,
+		Attribution: attribution, AssetBindings: bindings, AssessmentBindings: assessmentResolution.Bindings,
 	})
 	if err != nil {
 		return PublicationResult{}, err

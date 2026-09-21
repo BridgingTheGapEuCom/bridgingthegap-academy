@@ -20,6 +20,8 @@ import AuthoringDraftMembersPage from './pages/AuthoringDraftMembersPage.vue'
 import AuthoringDraftLessonPage from './pages/AuthoringDraftLessonPage.vue'
 import AuthoringDraftReviewPage from './pages/AuthoringDraftReviewPage.vue'
 import AuthoringDraftReviewSnapshotPage from './pages/AuthoringDraftReviewSnapshotPage.vue'
+import AuthoringDraftAssessmentsPage from './pages/AuthoringDraftAssessmentsPage.vue'
+import AuthoringDraftAssessmentPage from './pages/AuthoringDraftAssessmentPage.vue'
 import './style.css'
 
 const i18n = createI18n({
@@ -51,6 +53,8 @@ const router = createRouter({
         { path: 'structure', name: 'authoring-draft-structure', component: AuthoringDraftStructurePage },
         { path: 'lessons/:lessonId', name: 'authoring-draft-lesson', component: AuthoringDraftLessonPage },
         { path: 'members', name: 'authoring-draft-members', component: AuthoringDraftMembersPage },
+        { path: 'assessments', name: 'authoring-draft-assessments', component: AuthoringDraftAssessmentsPage },
+        { path: 'assessments/:assessmentId', name: 'authoring-draft-assessment', component: AuthoringDraftAssessmentPage },
         { path: 'review', name: 'authoring-draft-review', component: AuthoringDraftReviewPage },
         { path: 'reviews/:reviewId', name: 'authoring-draft-review-snapshot', component: AuthoringDraftReviewSnapshotPage },
       ],

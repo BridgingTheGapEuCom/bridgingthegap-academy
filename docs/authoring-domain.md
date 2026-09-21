@@ -317,8 +317,10 @@ Publication orchestration resolves those references through Assets using only
 the frozen Review, requiring exact Draft ownership and AVAILABLE state.
 Malformed, missing, foreign-Draft, and PENDING references share the safe
 `unavailable_asset_reference` issue; authoritative MIME-family mismatches use
-`incompatible_asset_media_type`. `KNOWLEDGE_CHECK` continues to produce
-`unresolved_assessment_reference`.
+`incompatible_asset_media_type`. Knowledge checks resolve only against private
+Assessment definitions frozen at Review submission. Missing, malformed, and
+foreign references use `unavailable_assessment_reference`; an empty or invalid
+frozen definition uses `incomplete_assessment`.
 
 Validation success only means that the frozen snapshot is ready for the next
 conversion boundary. It does not create a CourseVersion, change a preferred
@@ -358,6 +360,16 @@ therefore cannot change or block recovery of an original publication. Asset
 bindings persist inside the Courses transaction; Authoring records no second
 binding and never writes Courses tables directly.
 
+Assessment snapshot composition is also Authoring-owned. Review submission
+uses one repeatable-read transaction for the exact Draft revision, canonical
+LessonContent, and every referenced Assessment. Frozen definitions are stored
+inside the Review snapshot persistence document but are omitted from the Review
+HTTP DTO, so correct answers do not leak through ordinary Review reads. Later
+Assessment edits belong to a new Review and cannot alter an existing Review.
+Publication maps only this private frozen data into Courses; exact replay first
+uses the already-persisted Courses binding and never reinterprets current
+Assessment rows.
+
 `POST /api/authoring/drafts/{draftId}/reviews/{reviewId}/publish` exposes that
 orchestration to an authenticated actor with current `authoring.publish` access
 to the exact Draft. The request contains only `expectedReviewRevision`;
@@ -396,5 +408,13 @@ Exact Authoring detail intentionally contains correct answers for editing, but
 list summaries omit them and neither DTO exposes Draft owner or creator
 provenance. Complete replacement updates require `expectedRevision`; stale
 updates return `409` rather than overwrite current definitions. Empty mutable
-Assessments are permitted, there is no deletion endpoint, and publication still
-does not resolve `KNOWLEDGE_CHECK` references.
+Assessments are permitted and there is no deletion endpoint. They can be
+reviewed as frozen Authoring state, but they block publication until they
+contain at least one complete deterministic question.
+
+The Lesson content editor can add a `KNOWLEDGE_CHECK` and choose only an
+Assessment summary from the current Draft. The block stores just
+`assessmentKey`; title, questions, answers, revision, and provenance remain
+outside canonical LessonContent. Selecting an Assessment is a local content
+edit and is persisted only by the existing Lesson-content save flow. Unknown
+legacy keys are retained until an author deliberately replaces them.

@@ -37,6 +37,12 @@ type CoursesCourseVersion struct {
 	PublishedAt        pgtype.Timestamptz
 }
 
+type CoursesCourseVersionAssessmentBinding struct {
+	CourseVersionID pgtype.UUID
+	AssessmentKey   pgtype.UUID
+	Definition      []byte
+}
+
 type CoursesCourseVersionAssetBinding struct {
 	CourseVersionID  pgtype.UUID
 	AssetKey         pgtype.UUID

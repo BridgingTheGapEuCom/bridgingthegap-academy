@@ -37,12 +37,27 @@ keys. Exact Authoring detail returns a deliberately named answer-bearing DTO
 for editing. Neither response exposes owner or creator provenance, and neither
 DTO may be reused for a learner API.
 
-Canonical `KNOWLEDGE_CHECK.assessmentKey` already accepts the lowercase UUID
-format used by Assessment IDs. This milestone does not resolve that reference:
-publication continues to return `unresolved_assessment_reference`, and there
-are no learner attempts, grading, or publication bindings yet.
+Canonical `KNOWLEDGE_CHECK.assessmentKey` uses the lowercase UUID format used
+by Assessment IDs. Review submission resolves those keys inside the same
+repeatable-read PostgreSQL transaction as the Draft snapshot and privately
+freezes each exact Draft-owned definition. Malformed, missing, and foreign
+references remain unfrozen and later produce the same safe unavailable
+publication issue. An empty mutable Assessment is frozen faithfully but is not
+publication-ready.
 
 Assessment deletion, cross-Draft reuse, free-form grading, and external
-assessment engines are deliberately unsupported. Later publication must freeze
-an immutable deterministic representation rather than make a CourseVersion
-depend on mutable Authoring state.
+assessment engines are deliberately unsupported. Publication maps the private
+Review copy into a Courses-owned immutable binding; it never reads the current
+Assessment. Questions, stable keys, order, and authoritative answers are
+copied, while Draft owner, creator, revision, and Authoring timestamps are
+excluded. Answers remain server-private and are not part of public Course
+projections. Learner rendering, attempts, and grading are still deferred.
+
+The Draft Authoring workspace provides private Assessment list and editor
+routes. The editor uses native radios, checkboxes, selects, and move controls;
+stable question, option, and matching-item keys survive text edits and
+reordering. Assessment saves replace the complete aggregate using its exact
+revision. A revision conflict preserves local edits and requires an explicit
+reload; it is never merged or retried automatically. Correct answers appear
+only in this authenticated editor, never in Assessment lists or Lesson block
+choosers.

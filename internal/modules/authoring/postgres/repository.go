@@ -18,8 +18,9 @@ import (
 )
 
 type Repository struct {
-	pool *pgxpool.Pool
-	q    *sqlc.Queries
+	pool                *pgxpool.Pool
+	q                   *sqlc.Queries
+	assessmentSnapshots func(pgx.Tx) AssessmentSnapshotReader
 }
 
 var _ authoring.Repository = (*Repository)(nil)

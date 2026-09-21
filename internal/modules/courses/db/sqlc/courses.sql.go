@@ -117,6 +117,27 @@ func (q *Queries) CreateCourseVersion(ctx context.Context, arg CreateCourseVersi
 	return i, err
 }
 
+const createCourseVersionAssessmentBinding = `-- name: CreateCourseVersionAssessmentBinding :one
+INSERT INTO courses.course_version_assessment_binding (
+    course_version_id, assessment_key, definition
+)
+VALUES ($1, $2, $3)
+RETURNING course_version_id, assessment_key, definition
+`
+
+type CreateCourseVersionAssessmentBindingParams struct {
+	CourseVersionID pgtype.UUID
+	AssessmentKey   pgtype.UUID
+	Definition      []byte
+}
+
+func (q *Queries) CreateCourseVersionAssessmentBinding(ctx context.Context, arg CreateCourseVersionAssessmentBindingParams) (CoursesCourseVersionAssessmentBinding, error) {
+	row := q.db.QueryRow(ctx, createCourseVersionAssessmentBinding, arg.CourseVersionID, arg.AssessmentKey, arg.Definition)
+	var i CoursesCourseVersionAssessmentBinding
+	err := row.Scan(&i.CourseVersionID, &i.AssessmentKey, &i.Definition)
+	return i, err
+}
+
 const createCourseVersionAssetBinding = `-- name: CreateCourseVersionAssetBinding :one
 INSERT INTO courses.course_version_asset_binding (
     course_version_id, asset_key, storage_object_id, original_filename,
@@ -727,6 +748,33 @@ func (q *Queries) GetPublishedCourseVersionIDByCourseAndVersion(ctx context.Cont
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listCourseVersionAssessmentBindings = `-- name: ListCourseVersionAssessmentBindings :many
+SELECT course_version_id, assessment_key, definition
+FROM courses.course_version_assessment_binding
+WHERE course_version_id = $1
+ORDER BY assessment_key ASC
+`
+
+func (q *Queries) ListCourseVersionAssessmentBindings(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesCourseVersionAssessmentBinding, error) {
+	rows, err := q.db.Query(ctx, listCourseVersionAssessmentBindings, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesCourseVersionAssessmentBinding
+	for rows.Next() {
+		var i CoursesCourseVersionAssessmentBinding
+		if err := rows.Scan(&i.CourseVersionID, &i.AssessmentKey, &i.Definition); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCourseVersionAssetBindings = `-- name: ListCourseVersionAssetBindings :many

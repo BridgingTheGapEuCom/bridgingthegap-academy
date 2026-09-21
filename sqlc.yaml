@@ -52,6 +52,7 @@ sql:
       - internal/modules/infrastructure/postgres/db/migrations/00012_course_version_publication.sql
       - internal/modules/infrastructure/postgres/db/migrations/00013_course_version_publication_actor.sql
       - internal/modules/infrastructure/postgres/db/migrations/00016_course_version_asset_binding.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00018_course_version_assessment_binding.sql
     queries: internal/modules/courses/db/query
     gen:
       go:

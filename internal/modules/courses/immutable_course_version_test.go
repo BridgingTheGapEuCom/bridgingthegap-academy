@@ -144,3 +144,47 @@ func TestImmutableCourseVersionRequiresExactValidAssetBindings(t *testing.T) {
 		})
 	}
 }
+
+func TestImmutableCourseVersionRequiresExactValidAssessmentBindings(t *testing.T) {
+	assessmentKey := "71000000-0000-4000-8000-000000000001"
+	valid := validImmutableCourseVersion(t)
+	valid.Modules = []ImmutableCourseVersionModule{{SourceID: "52000000-0000-4000-8000-000000000001", StableKey: "module", Title: "Module", Position: 0, Lessons: []ImmutableCourseVersionLesson{{
+		SourceID: "53000000-0000-4000-8000-000000000001", StableKey: "lesson", Title: "Lesson", Description: "A lesson with a check.", Position: 0, LearningObjectives: []string{"Check learning"}, PrerequisiteStableKeys: []string{},
+		Content: LessonContent{SchemaVersion: 1, Blocks: []Block{{Key: "check", Type: BlockKnowledgeCheck, Payload: KnowledgeCheckBlockPayload{AssessmentKey: assessmentKey}}}},
+	}}}}
+	valid.AssessmentBindings = []PublishedAssessmentBinding{{AssessmentKey: assessmentKey, Questions: []PublishedAssessmentQuestion{{StableKey: "question", Type: PublishedQuestionSingleChoice, Prompt: "Choose", Position: 0, Options: []PublishedAssessmentOption{{StableKey: "one", Text: "One", Position: 0}, {StableKey: "two", Text: "Two", Position: 1}}, CorrectOptionKeys: []string{"one"}}}}}
+	if err := valid.ValidateForPersistence(); err != nil {
+		t.Fatalf("valid Assessment binding rejected: %v", err)
+	}
+	tests := []struct {
+		name   string
+		mutate func(*ImmutableCourseVersion)
+	}{
+		{"missing", func(v *ImmutableCourseVersion) { v.AssessmentBindings = nil }},
+		{"duplicate", func(v *ImmutableCourseVersion) {
+			v.AssessmentBindings = append(v.AssessmentBindings, v.AssessmentBindings[0])
+		}},
+		{"unreferenced", func(v *ImmutableCourseVersion) {
+			v.AssessmentBindings[0].AssessmentKey = "72000000-0000-4000-8000-000000000001"
+		}},
+		{"empty", func(v *ImmutableCourseVersion) { v.AssessmentBindings[0].Questions = nil }},
+		{"unsupported", func(v *ImmutableCourseVersion) { v.AssessmentBindings[0].Questions[0].Type = "ESSAY" }},
+		{"bad answer", func(v *ImmutableCourseVersion) {
+			v.AssessmentBindings[0].Questions[0].CorrectOptionKeys = []string{"missing"}
+		}},
+		{"bad order", func(v *ImmutableCourseVersion) { v.AssessmentBindings[0].Questions[0].Options[0].Position = 2 }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := valid
+			candidate.AssessmentBindings = append([]PublishedAssessmentBinding(nil), valid.AssessmentBindings...)
+			candidate.AssessmentBindings[0].Questions = append([]PublishedAssessmentQuestion(nil), valid.AssessmentBindings[0].Questions...)
+			candidate.AssessmentBindings[0].Questions[0].Options = append([]PublishedAssessmentOption(nil), valid.AssessmentBindings[0].Questions[0].Options...)
+			candidate.AssessmentBindings[0].Questions[0].CorrectOptionKeys = append([]string(nil), valid.AssessmentBindings[0].Questions[0].CorrectOptionKeys...)
+			test.mutate(&candidate)
+			if !errors.Is(candidate.ValidateForPersistence(), ErrInvalidImmutableCourseVersion) {
+				t.Fatal("invalid Assessment binding accepted")
+			}
+		})
+	}
+}

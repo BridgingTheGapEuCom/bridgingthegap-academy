@@ -89,14 +89,15 @@ func (s *ReviewPublicationStatusService) Status(ctx context.Context, actor ident
 		return status, nil
 	}
 
-	validation := s.validator.Validate(cycle, &snapshot)
+	assetResolution := PublicationAssetResolution{Bindings: []courses.PublishedAssetBinding{}, Issues: []PublicationValidationIssue{}}
 	if len(publicationAssetUses(snapshot)) > 0 && s.assets != nil {
 		resolution, err := s.assets.Resolve(ctx, cycle.DraftID, snapshot)
 		if err != nil {
 			return ReviewPublicationStatus{}, err
 		}
-		validation = validateResolvedPublication(s.validator, cycle, &snapshot, resolution)
+		assetResolution = resolution
 	}
+	validation := validateResolvedPublication(s.validator, cycle, &snapshot, assetResolution, resolvePublicationAssessments(snapshot))
 	status.Publishable = validation.Publishable
 	status.Issues = validation.Issues
 	return status, nil

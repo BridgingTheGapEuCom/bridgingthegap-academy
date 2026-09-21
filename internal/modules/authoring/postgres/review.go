@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"sort"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -35,8 +37,8 @@ func scanReview(row pgx.Row) (authoring.ReviewCycle, authoring.ReviewSnapshot, e
 		}
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, storageError(err)
 	}
-	var snapshot authoring.ReviewSnapshot
-	if err := json.Unmarshal(stored.snapshot, &snapshot); err != nil || snapshot.Validate() != nil || snapshot.SchemaVersion != int(stored.snapshotVersion) || snapshot.Draft.Revision != stored.draftRevision || snapshot.Draft.ID != authoring.DraftID(stored.draftID.String()) {
+	snapshot, err := authoring.UnmarshalReviewSnapshot(stored.snapshot)
+	if err != nil || snapshot.SchemaVersion != int(stored.snapshotVersion) || snapshot.Draft.Revision != stored.draftRevision || snapshot.Draft.ID != authoring.DraftID(stored.draftID.String()) {
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, authoring.ErrReviewSnapshot
 	}
 	cycle := authoring.ReviewCycle{ID: authoring.ReviewID(stored.id.String()), DraftID: authoring.DraftID(stored.draftID.String()), DraftRevision: stored.draftRevision, SnapshotSchemaVersion: int(stored.snapshotVersion), Status: authoring.ReviewStatus(stored.status), Revision: stored.revision, SubmittedByUserID: stored.submittedBy.String(), SubmittedAt: stored.submittedAt.Time}
@@ -53,6 +55,15 @@ func scanReview(row pgx.Row) (authoring.ReviewCycle, authoring.ReviewSnapshot, e
 	return cycle, snapshot, nil
 }
 
+type AssessmentSnapshotReader interface {
+	GetAssessment(context.Context, assessments.AssessmentID) (assessments.Assessment, error)
+}
+
+func (r *Repository) WithAssessmentSnapshotReader(factory func(pgx.Tx) AssessmentSnapshotReader) *Repository {
+	r.assessmentSnapshots = factory
+	return r
+}
+
 func (r *Repository) SubmitReview(ctx context.Context, draftID authoring.DraftID, expected int64, actor string) (authoring.ReviewCycle, authoring.ReviewSnapshot, error) {
 	if draftID == "" || expected < 1 || authoring.ValidateReviewActor(actor) != nil {
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, authoring.ErrReviewSnapshot
@@ -65,7 +76,7 @@ func (r *Repository) SubmitReview(ctx context.Context, draftID authoring.DraftID
 	if err != nil {
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, err
 	}
-	tx, err := r.pool.Begin(ctx)
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, storageError(err)
 	}
@@ -114,6 +125,33 @@ func (r *Repository) SubmitReview(ctx context.Context, draftID authoring.DraftID
 	if err != nil {
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, err
 	}
+	assessmentKeys := reviewAssessmentKeys(snapshot)
+	if len(assessmentKeys) > 0 {
+		if r.assessmentSnapshots == nil {
+			return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, authoring.ErrReviewSnapshot
+		}
+		reader := r.assessmentSnapshots(tx)
+		for _, key := range assessmentKeys {
+			assessmentID, parseErr := assessments.ParseAssessmentID(key)
+			if parseErr != nil {
+				continue
+			}
+			assessment, getErr := reader.GetAssessment(ctx, assessmentID)
+			if errors.Is(getErr, assessments.ErrAssessmentNotFound) {
+				continue
+			}
+			if getErr != nil {
+				return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, getErr
+			}
+			if assessment.OwnerDraftID != string(draftID) {
+				continue
+			}
+			if assessment.Validate() != nil {
+				return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, authoring.ErrReviewSnapshot
+			}
+			snapshot.Assessments = append(snapshot.Assessments, authoring.ReviewSnapshotAssessment{AssessmentKey: string(assessment.ID), Questions: cloneAssessmentQuestions(assessment.Questions)})
+		}
+	}
 	encoded, err := authoring.MarshalReviewSnapshot(snapshot)
 	if err != nil {
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, err
@@ -134,6 +172,38 @@ func (r *Repository) SubmitReview(ctx context.Context, draftID authoring.DraftID
 		return authoring.ReviewCycle{}, authoring.ReviewSnapshot{}, storageError(err)
 	}
 	return cycle, stored, nil
+}
+
+func reviewAssessmentKeys(snapshot authoring.ReviewSnapshot) []string {
+	keys := map[string]struct{}{}
+	for _, module := range snapshot.Modules {
+		for _, lesson := range module.Lessons {
+			for _, block := range lesson.Content.Blocks {
+				if payload, ok := block.Payload.(courses.KnowledgeCheckBlockPayload); ok {
+					keys[payload.AssessmentKey] = struct{}{}
+				}
+			}
+		}
+	}
+	result := make([]string, 0, len(keys))
+	for key := range keys {
+		result = append(result, key)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func cloneAssessmentQuestions(source []assessments.Question) []assessments.Question {
+	result := make([]assessments.Question, 0, len(source))
+	for _, question := range source {
+		question.Options = append([]assessments.ChoiceOption(nil), question.Options...)
+		question.CorrectOptionKeys = append([]string(nil), question.CorrectOptionKeys...)
+		question.LeftItems = append([]assessments.MatchingItem(nil), question.LeftItems...)
+		question.RightItems = append([]assessments.MatchingItem(nil), question.RightItems...)
+		question.CorrectPairs = append([]assessments.MatchingPair(nil), question.CorrectPairs...)
+		result = append(result, question)
+	}
+	return result
 }
 
 func (r *Repository) GetReview(ctx context.Context, id authoring.ReviewID) (authoring.ReviewCycle, authoring.ReviewSnapshot, error) {

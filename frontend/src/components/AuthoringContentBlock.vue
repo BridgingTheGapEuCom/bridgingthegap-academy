@@ -4,6 +4,7 @@ import BtgFormField from './BtgFormField.vue'
 import AuthoringRichTextEditor from './AuthoringRichTextEditor.vue'
 import AuthoringInlineTextEditor from './AuthoringInlineTextEditor.vue'
 import AuthoringAssetAttachment from './AuthoringAssetAttachment.vue'
+import AuthoringAssessmentAttachment from './AuthoringAssessmentAttachment.vue'
 const props = defineProps<{ block: CanonicalBlock; position: number; draftId: string; lessonId: string }>()
 const emit = defineEmits<{ update: [block: CanonicalBlock]; unavailable: [] }>()
 function field(name: 'code' | 'language' | 'title' | 'text' | 'attribution' | 'sourceUrl' | 'altText' | 'caption' | 'label' | 'description' | 'transcript', event: Event) {
@@ -37,6 +38,9 @@ function attach(field: 'asset' | 'captionsAsset', assetKey: string) {
     return
   }
   if (props.block.type === 'VIDEO') emit('update', { ...props.block, payload: { ...props.block.payload, [field]: { assetKey } } } as CanonicalBlock)
+}
+function attachAssessment(assessmentKey: string) {
+  if (props.block.type === 'KNOWLEDGE_CHECK') emit('update', { ...props.block, payload: { assessmentKey } })
 }
 </script>
 
@@ -84,6 +88,9 @@ function attach(field: 'asset' | 'captionsAsset', assetKey: string) {
     <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="DOWNLOAD" label="Download" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')" />
     <BtgFormField label="Download label" :error="!block.payload.label.trim() ? 'Enter a download label.' : undefined" v-slot="{ controlId, describedBy, invalid }"><input :id="controlId" :value="block.payload.label" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="240" required @input="field('label', $event)" /></BtgFormField>
     <BtgFormField label="Download description" v-slot="{ controlId }"><textarea :id="controlId" :value="block.payload.description" maxlength="4000" @input="field('description', $event)" /></BtgFormField>
+  </template>
+  <template v-else-if="block.type === 'KNOWLEDGE_CHECK'">
+    <AuthoringAssessmentAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" :current-assessment-key="block.payload.assessmentKey" @attached="attachAssessment" @unavailable="emit('unavailable')" />
   </template>
   <p v-else-if="block.type === 'DIVIDER'" class="authoring-section__intro">A semantic divider. No configuration is needed.</p>
   <template v-else>

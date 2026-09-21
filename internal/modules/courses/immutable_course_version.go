@@ -29,11 +29,12 @@ type CourseVersionProvenance struct {
 // them. Modules, Lessons, prerequisites, and canonical content remain in frozen
 // snapshot order.
 type ImmutableCourseVersion struct {
-	ID            CourseVersionID
-	CourseVersion CourseVersionInput
-	Provenance    CourseVersionProvenance
-	Modules       []ImmutableCourseVersionModule
-	AssetBindings []PublishedAssetBinding `json:"-"`
+	ID                 CourseVersionID
+	CourseVersion      CourseVersionInput
+	Provenance         CourseVersionProvenance
+	Modules            []ImmutableCourseVersionModule
+	AssetBindings      []PublishedAssetBinding      `json:"-"`
+	AssessmentBindings []PublishedAssessmentBinding `json:"-"`
 }
 
 type ImmutableCourseVersionModule struct {
@@ -77,6 +78,7 @@ func (v ImmutableCourseVersion) ValidateForPersistence() error {
 	moduleKeys := make(map[string]struct{}, len(v.Modules))
 	lessonKeys := make(map[string]struct{})
 	referencedAssets := make([]contentAssetReference, 0)
+	referencedAssessments := make([]string, 0)
 	for moduleIndex, module := range v.Modules {
 		if module.ID != "" || !uuidPattern.MatchString(module.SourceID) || module.Position != moduleIndex || module.Lessons == nil {
 			return ErrInvalidImmutableCourseVersion
@@ -110,6 +112,7 @@ func (v ImmutableCourseVersion) ValidateForPersistence() error {
 				return ErrInvalidImmutableCourseVersion
 			}
 			referencedAssets = append(referencedAssets, contentAssetReferences(lesson.Content)...)
+			referencedAssessments = append(referencedAssessments, contentAssessmentReferences(lesson.Content)...)
 		}
 	}
 
@@ -141,6 +144,34 @@ func (v ImmutableCourseVersion) ValidateForPersistence() error {
 	for _, reference := range referencedAssets {
 		binding, bound := bindings[reference.key]
 		if !bound || (reference.mediaPrefix != "" && !strings.HasPrefix(binding.MediaType, reference.mediaPrefix)) {
+			return ErrInvalidImmutableCourseVersion
+		}
+	}
+
+	assessmentBindings := make(map[string]PublishedAssessmentBinding, len(v.AssessmentBindings))
+	previousAssessmentKey := ""
+	for _, binding := range v.AssessmentBindings {
+		if binding.Validate() != nil || previousAssessmentKey != "" && binding.AssessmentKey <= previousAssessmentKey {
+			return ErrInvalidImmutableCourseVersion
+		}
+		if _, duplicate := assessmentBindings[binding.AssessmentKey]; duplicate {
+			return ErrInvalidImmutableCourseVersion
+		}
+		referenced := false
+		for _, key := range referencedAssessments {
+			if key == binding.AssessmentKey {
+				referenced = true
+				break
+			}
+		}
+		if !referenced {
+			return ErrInvalidImmutableCourseVersion
+		}
+		assessmentBindings[binding.AssessmentKey] = binding
+		previousAssessmentKey = binding.AssessmentKey
+	}
+	for _, key := range referencedAssessments {
+		if _, bound := assessmentBindings[key]; !bound {
 			return ErrInvalidImmutableCourseVersion
 		}
 	}

@@ -310,6 +310,77 @@ test('Authoring attaches an uploaded asset to the exact block and persists only 
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
+test('Authoring creates an Assessment and attaches only its key to a knowledge-check block', async ({ page }) => {
+  const assessmentID = '77777777-7777-4777-8777-777777777777'
+  let assessment = { assessmentKey: assessmentID, title: 'Terminology check', revision: 1, questions: [], createdAt: '2026-09-17T10:00:00Z', updatedAt: '2026-09-17T10:00:00Z' }
+  let savedAssessment: { expectedRevision: number; title: string; questions: unknown[] } | undefined
+  let content = { schemaVersion: 1, blocks: [] as { key: string; type: string; payload: unknown }[] }
+  let savedContent: typeof content | undefined
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/assessments`, (route) => {
+    if (route.request().method() === 'POST') {
+      expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
+      expect(route.request().postDataJSON()).toEqual({ title: 'Terminology check', questions: [] })
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(assessment) })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ assessmentKey: assessmentID, title: assessment.title, questionCount: assessment.questions.length, revision: assessment.revision, updatedAt: assessment.updatedAt }], limit: 20, offset: 0, total: 1 }) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/assessments?**`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [{ assessmentKey: assessmentID, title: assessment.title, questionCount: assessment.questions.length, revision: assessment.revision, updatedAt: assessment.updatedAt }], limit: 20, offset: 0, total: 1 }),
+  }))
+  await page.route(`**/api/authoring/drafts/${draftID}/assessments/${assessmentID}`, (route) => {
+    if (route.request().method() === 'PUT') {
+      const request = route.request().postDataJSON()
+      savedAssessment = request
+      assessment = {
+        ...assessment,
+        revision: 2,
+        updatedAt: '2026-09-17T10:01:00Z',
+        questions: [{ stableKey: 'question-one', type: 'SINGLE_CHOICE', prompt: 'Which term is correct?', position: 0, options: [{ stableKey: 'option-one', text: 'First option', position: 0 }, { stableKey: 'option-two', text: 'Second option', position: 1 }], correctOptionKeys: ['option-one'], leftItems: [], rightItems: [], correctPairs: [] }],
+      }
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(assessment) })
+  })
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, content }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}/content`, (route) => {
+    const request = route.request().postDataJSON()
+    savedContent = request.content
+    content = request.content
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ lesson: { ...lesson, revision: 3, draftRevision: 4 }, content }) })
+  })
+
+  await page.goto(`/authoring/drafts/${draftID}/assessments`)
+  await expect(page.getByRole('heading', { level: 2, name: 'Assessments' })).toBeVisible()
+  await page.getByRole('textbox', { name: /Assessment title/ }).fill('Terminology check')
+  await page.getByRole('button', { name: 'Create Assessment' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(`/authoring/drafts/${draftID}/assessments/${assessmentID}`)
+  await page.getByRole('button', { name: 'Add single-choice question' }).focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('textbox', { name: /Question 1 prompt/ }).fill('Which term is correct?')
+  await page.getByRole('button', { name: 'Save Assessment' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Assessment saved.')).toBeVisible()
+  expect(savedAssessment?.expectedRevision).toBe(1)
+  expect(savedAssessment?.questions).toHaveLength(1)
+
+  await page.goto(`/authoring/drafts/${draftID}/lessons/${lesson.id}`)
+  await page.getByRole('combobox', { name: 'Block type' }).selectOption('KNOWLEDGE_CHECK')
+  await page.getByRole('button', { name: 'Add block' }).click()
+  await page.getByRole('button', { name: 'Use Terminology check' }).focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('button', { name: 'Save Lesson content' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Lesson content saved.')).toBeVisible()
+  expect(savedContent?.blocks[0]).toEqual({ key: expect.any(String), type: 'KNOWLEDGE_CHECK', payload: { assessmentKey: assessmentID } })
+  expect(JSON.stringify(savedContent)).not.toContain('Terminology check')
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
 test('Authoring Draft shell is private, accessible, and responsive', async ({ page }) => {
   await serveDraft(page)
   await page.setViewportSize({ width: 1440, height: 1000 })

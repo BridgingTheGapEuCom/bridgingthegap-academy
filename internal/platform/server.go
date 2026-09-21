@@ -25,6 +25,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/web"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -73,7 +74,9 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	metricsServer := &http.Server{Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: maxRequestHeaderBytes}
 	go func() { _ = metricsServer.Serve(metricsListener) }()
 
-	authoringRepository := authoringpostgres.New(pool)
+	authoringRepository := authoringpostgres.New(pool).WithAssessmentSnapshotReader(func(tx pgx.Tx) authoringpostgres.AssessmentSnapshotReader {
+		return assessmentspostgres.New(tx)
+	})
 	authoringAuthorizer := authoring.NewAuthorizationService(authoringRepository)
 	assetRepository := assetspostgres.New(pool)
 	assessmentRepository := assessmentspostgres.New(pool)

@@ -15,6 +15,18 @@ export type AuthoringLessonContentMutation = components['schemas']['AuthoringLes
 export type AuthoringAsset = components['schemas']['AuthoringAsset']
 export type AuthoringAssetSummary = components['schemas']['AuthoringAssetSummary']
 export type AuthoringAssetList = components['schemas']['AuthoringAssetList']
+// These are deliberately Authoring-only representations. Detail responses
+// contain answer definitions so an authorized author can edit them; learner
+// code must never use this type or helper.
+export type AuthoringAssessmentOption = components['schemas']['AuthoringAssessmentOption']
+export type AuthoringAssessmentMatchingItem = components['schemas']['AuthoringAssessmentMatchingItem']
+export type AuthoringAssessmentMatchingPair = components['schemas']['AuthoringAssessmentMatchingPair']
+export type AuthoringAssessmentQuestion = components['schemas']['AuthoringAssessmentQuestion']
+export type AuthoringAssessmentCreate = components['schemas']['AuthoringAssessmentCreateRequest']
+export type AuthoringAssessmentUpdate = components['schemas']['AuthoringAssessmentUpdateRequest']
+export type AuthoringAssessmentDetail = components['schemas']['AuthoringAssessmentDetail']
+export type AuthoringAssessmentSummary = components['schemas']['AuthoringAssessmentSummary']
+export type AuthoringAssessmentList = components['schemas']['AuthoringAssessmentList']
 export type AuthoringActiveMember = components['schemas']['AuthoringActiveMember']
 export type AuthoringActiveMemberList = components['schemas']['AuthoringActiveMemberList']
 export type AuthoringMemberAdd = components['schemas']['AuthoringMemberAddRequest']
@@ -101,6 +113,13 @@ export class InvalidAuthoringAssetResponseError extends Error {
   constructor() {
     super('Invalid Authoring Asset response')
     this.name = 'InvalidAuthoringAssetResponseError'
+  }
+}
+
+export class InvalidAuthoringAssessmentResponseError extends Error {
+  constructor() {
+    super('Invalid Authoring Assessment response')
+    this.name = 'InvalidAuthoringAssessmentResponseError'
   }
 }
 
@@ -323,6 +342,35 @@ export async function listAuthoringDraftAssets(draftID: string, limit = 20, offs
   return response
 }
 
+export async function listAuthoringDraftAssessments(draftID: string, limit = 20, offset = 0, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringAssessmentList> {
+  assertAuthoringID(draftID)
+  if (!isPage(limit, offset)) throw new InvalidAuthoringAssessmentResponseError()
+  const response = await client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/assessments?limit=${limit}&offset=${offset}`, { cache: 'no-store' })
+  if (!isAuthoringAssessmentList(response)) throw new InvalidAuthoringAssessmentResponseError()
+  return response
+}
+
+export async function createAuthoringAssessment(draftID: string, input: AuthoringAssessmentCreate, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringAssessmentDetail> {
+  assertAuthoringID(draftID)
+  const response = await client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/assessments`, { ...jsonRequest('POST', input), cache: 'no-store' })
+  if (!isAuthoringAssessmentDetail(response)) throw new InvalidAuthoringAssessmentResponseError()
+  return response
+}
+
+export async function getAuthoringAssessment(draftID: string, assessmentID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringAssessmentDetail> {
+  assertAuthoringID(draftID); assertAuthoringID(assessmentID)
+  const response = await client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/assessments/${encodeURIComponent(assessmentID)}`, { cache: 'no-store' })
+  if (!isAuthoringAssessmentDetail(response) || response.assessmentKey !== assessmentID) throw new InvalidAuthoringAssessmentResponseError()
+  return response
+}
+
+export async function replaceAuthoringAssessment(draftID: string, assessmentID: string, input: AuthoringAssessmentUpdate, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringAssessmentDetail> {
+  assertAuthoringID(draftID); assertAuthoringID(assessmentID)
+  const response = await client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/assessments/${encodeURIComponent(assessmentID)}`, { ...jsonRequest('PUT', input), cache: 'no-store' })
+  if (!isAuthoringAssessmentDetail(response) || response.assessmentKey !== assessmentID || response.revision <= input.expectedRevision) throw new InvalidAuthoringAssessmentResponseError()
+  return response
+}
+
 function jsonRequest(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body: unknown) {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
 }
@@ -406,6 +454,55 @@ function isAuthoringAssetList(value: unknown): value is AuthoringAssetList {
     && typeof value.total === 'number' && Number.isSafeInteger(value.total) && value.total >= 0
 }
 
+function isAuthoringAssessmentList(value: unknown): value is AuthoringAssessmentList {
+  return isRecord(value) && Array.isArray(value.items) && value.items.every(isAuthoringAssessmentSummary)
+    && isPage(value.limit, value.offset) && typeof value.total === 'number' && Number.isSafeInteger(value.total) && value.total >= 0
+}
+
+function isAuthoringAssessmentSummary(value: unknown): value is AuthoringAssessmentSummary {
+  return isRecord(value) && typeof value.assessmentKey === 'string' && isAuthoringDraftID(value.assessmentKey)
+    && isAssessmentTitle(value.title) && typeof value.questionCount === 'number' && Number.isSafeInteger(value.questionCount) && value.questionCount >= 0
+    && isRevision(value.revision) && isDateTime(value.updatedAt)
+}
+
+function isAuthoringAssessmentDetail(value: unknown): value is AuthoringAssessmentDetail {
+  return isRecord(value) && typeof value.assessmentKey === 'string' && isAuthoringDraftID(value.assessmentKey)
+    && isAssessmentTitle(value.title) && isRevision(value.revision) && isDateTime(value.createdAt) && isDateTime(value.updatedAt)
+    && Array.isArray(value.questions) && value.questions.length <= 100 && value.questions.every(isAuthoringAssessmentQuestion)
+    && unique(value.questions.map((question) => question.stableKey)) && sequential(value.questions.map((question) => question.position))
+}
+
+function isAuthoringAssessmentQuestion(value: unknown): value is AuthoringAssessmentQuestion {
+  if (!isRecord(value) || !isStableAssessmentKey(value.stableKey) || !isNonEmptyText(value.prompt, 10_000) || !isPosition(value.position)
+    || !Array.isArray(value.options) || !Array.isArray(value.correctOptionKeys) || !Array.isArray(value.leftItems) || !Array.isArray(value.rightItems) || !Array.isArray(value.correctPairs)) return false
+  const options = value.options as unknown[]; const correct = value.correctOptionKeys as unknown[]; const leftItems = value.leftItems as unknown[]; const rightItems = value.rightItems as unknown[]; const pairs = value.correctPairs as unknown[]
+  if (!options.every(isAuthoringAssessmentOption) || !leftItems.every(isAuthoringAssessmentItem) || !rightItems.every(isAuthoringAssessmentItem)
+    || !pairs.every(isAuthoringAssessmentPair) || !correct.every(isStableAssessmentKey)) return false
+  const safeOptions = options as AuthoringAssessmentOption[]; const safeCorrect = correct as string[]; const safeLeft = leftItems as AuthoringAssessmentMatchingItem[]; const safeRight = rightItems as AuthoringAssessmentMatchingItem[]; const safePairs = pairs as AuthoringAssessmentMatchingPair[]
+  if (!unique(safeOptions.map((option) => option.stableKey)) || !unique(safeLeft.map((item) => item.stableKey)) || !unique(safeRight.map((item) => item.stableKey))
+    || !sequential(safeOptions.map((option) => option.position)) || !sequential(safeLeft.map((item) => item.position)) || !sequential(safeRight.map((item) => item.position))) return false
+  if (value.type === 'SINGLE_CHOICE') return safeOptions.length >= 2 && safeLeft.length === 0 && safeRight.length === 0 && safePairs.length === 0
+    && safeCorrect.length === 1 && safeOptions.some((option) => option.stableKey === safeCorrect[0])
+  if (value.type === 'MULTIPLE_CHOICE') return safeOptions.length >= 2 && safeLeft.length === 0 && safeRight.length === 0 && safePairs.length === 0
+    && safeCorrect.length > 0 && unique(safeCorrect) && safeCorrect.every((key) => safeOptions.some((option) => option.stableKey === key))
+  if (value.type === 'MATCHING') return safeOptions.length === 0 && safeCorrect.length === 0 && safeLeft.length > 0 && safeLeft.length === safeRight.length
+    && safePairs.length === safeLeft.length && unique(safePairs.map((pair) => pair.leftKey)) && unique(safePairs.map((pair) => pair.rightKey))
+    && safePairs.every((pair) => safeLeft.some((item) => item.stableKey === pair.leftKey) && safeRight.some((item) => item.stableKey === pair.rightKey))
+  return false
+}
+
+function isAuthoringAssessmentOption(value: unknown): value is AuthoringAssessmentOption { return isRecord(value) && isStableAssessmentKey(value.stableKey) && isNonEmptyText(value.text, 4000) && isPosition(value.position) }
+function isAuthoringAssessmentItem(value: unknown): value is AuthoringAssessmentMatchingItem { return isRecord(value) && isStableAssessmentKey(value.stableKey) && isNonEmptyText(value.text, 4000) && isPosition(value.position) }
+function isAuthoringAssessmentPair(value: unknown): value is AuthoringAssessmentMatchingPair { return isRecord(value) && isStableAssessmentKey(value.leftKey) && isStableAssessmentKey(value.rightKey) }
+function isAssessmentTitle(value: unknown): boolean { return isNonEmptyText(value, 240) }
+function isNonEmptyText(value: unknown, max: number): value is string { return typeof value === 'string' && value.trim().length > 0 && value.length <= max }
+function isStableAssessmentKey(value: unknown): value is string { return typeof value === 'string' && value.length >= 1 && value.length <= 160 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) }
+function isPosition(value: unknown): boolean { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 }
+function isRevision(value: unknown): boolean { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 }
+function isPage(limit: unknown, offset: unknown): boolean { return typeof limit === 'number' && Number.isSafeInteger(limit) && limit >= 1 && limit <= 100 && typeof offset === 'number' && Number.isSafeInteger(offset) && offset >= 0 }
+function unique(values: string[]): boolean { return new Set(values).size === values.length }
+function sequential(positions: number[]): boolean { return positions.every((position, index) => position === index) }
+
 function isSafeAssetFilename(value: string): boolean {
   return value.length > 0 && value.length <= 255 && value.trim() === value
     && value !== '.' && value !== '..' && !/[\\/\u0000-\u001f\u007f]/.test(value)
@@ -441,4 +538,14 @@ export function authoringDraftReviewPath(draftID: string, reviewID: string): str
 export function authoringDraftLessonPath(draftID: string, lessonID: string): string {
   assertAuthoringID(draftID); assertAuthoringID(lessonID)
   return `/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}`
+}
+
+export function authoringDraftAssessmentsPath(draftID: string): string {
+  assertAuthoringID(draftID)
+  return `/authoring/drafts/${encodeURIComponent(draftID)}/assessments`
+}
+
+export function authoringDraftAssessmentPath(draftID: string, assessmentID: string): string {
+  assertAuthoringID(draftID); assertAuthoringID(assessmentID)
+  return `${authoringDraftAssessmentsPath(draftID)}/${encodeURIComponent(assessmentID)}`
 }

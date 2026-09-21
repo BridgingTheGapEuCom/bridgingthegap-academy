@@ -53,6 +53,7 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("published course catalog", func(t *testing.T) { testPublishedCourseCatalog(t, ctx, pool) })
 	t.Run("publication orchestration and recovery", func(t *testing.T) { testPublicationOrchestration(t, ctx, pool) })
 	t.Run("publication asset resolution and immutable binding", func(t *testing.T) { testPublicationAssetBinding(t, ctx, pool) })
+	t.Run("publication Assessment resolution and immutable binding", func(t *testing.T) { testPublicationAssessmentBinding(t, ctx, pool) })
 	t.Run("published asset binary delivery", func(t *testing.T) { testPublishedAssetBinaryDelivery(t, ctx, pool) })
 	t.Run("authoring publication API", func(t *testing.T) { testAuthoringPublicationAPI(t, ctx, pool) })
 	t.Run("course public read service", func(t *testing.T) { testCourseReadService(t, ctx, pool) })

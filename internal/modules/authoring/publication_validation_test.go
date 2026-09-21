@@ -40,8 +40,8 @@ func clonePublicationSnapshot(t *testing.T, snapshot ReviewSnapshot) ReviewSnaps
 	if err != nil {
 		t.Fatal(err)
 	}
-	var clone ReviewSnapshot
-	if err := json.Unmarshal(encoded, &clone); err != nil {
+	clone, err := UnmarshalReviewSnapshot(encoded)
+	if err != nil {
 		t.Fatal(err)
 	}
 	return clone

@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
+	assessmentspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	assetslocal "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/localstorage"
 	assetspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/postgres"
@@ -24,8 +26,142 @@ import (
 	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func testPublicationAssessmentBinding(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	assessmentRepository := assessmentspostgres.New(pool)
+	authoringRepository := authoringpostgres.New(pool).WithAssessmentSnapshotReader(func(tx pgx.Tx) authoringpostgres.AssessmentSnapshotReader { return assessmentspostgres.New(tx) })
+	coursesRepository := coursespostgres.New(pool)
+	store := courses.NewCourseVersionStore(coursesRepository)
+	course, err := coursesRepository.CreateCourse(ctx, "publication-assessment-binding")
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitter := "ab000000-0000-4000-8000-000000000001"
+	reviewer := "ab000000-0000-4000-8000-000000000002"
+	publisher := "ab000000-0000-4000-8000-000000000003"
+	draft, _, err := authoringRepository.CreateDraft(ctx, draftFixture(t, course.ID), submitter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitionA := []assessments.Question{{StableKey: "question", Type: assessments.QuestionSingleChoice, Prompt: "Reviewed wording A", Position: 0, Options: []assessments.ChoiceOption{{StableKey: "correct", Text: "Correct A", Position: 0}, {StableKey: "other", Text: "Other", Position: 1}}, CorrectOptionKeys: []string{"correct"}}}
+	assessment, err := assessmentRepository.CreateAssessment(ctx, assessments.AssessmentInput{OwnerDraftID: string(draft.ID), Title: "Review check", Questions: definitionA, CreatedByUserID: submitter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, draft, err := authoringRepository.CreateModuleAtPosition(ctx, draft.ID, draft.Revision, authoring.ModuleInput{DraftID: draft.ID, StableKey: "checks", Title: "Checks", Position: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lesson := lessonFixture(draft.ID, module.ID, "check-lesson", 0)
+	lesson.Content = courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{{Key: "check", Type: courses.BlockKnowledgeCheck, Payload: courses.KnowledgeCheckBlockPayload{AssessmentKey: string(assessment.ID)}}}}
+	_, draft, err = authoringRepository.CreateLessonAtPosition(ctx, draft.ID, module.ID, draft.Revision, lesson)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cycle, submittedSnapshot, err := authoringRepository.SubmitReview(ctx, draft.ID, draft.Revision, submitter)
+	if err != nil || len(submittedSnapshot.Assessments) != 1 || submittedSnapshot.Assessments[0].Questions[0].Prompt != "Reviewed wording A" {
+		t.Fatalf("frozen Review Assessment = %#v, %v", submittedSnapshot.Assessments, err)
+	}
+	definitionB := cloneAssessmentDefinition(definitionA)
+	definitionB[0].Prompt = "Mutable wording B"
+	definitionB[0].Options[0].Text = "Correct B"
+	assessment, err = assessmentRepository.UpdateAssessment(ctx, assessment.ID, assessment.Revision, assessments.AssessmentUpdate{Title: assessment.Title, Questions: definitionB})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, reloadedSnapshot, err := authoringRepository.GetReviewForDraft(ctx, draft.ID, cycle.ID)
+	if err != nil || !reflect.DeepEqual(reloadedSnapshot.Assessments, submittedSnapshot.Assessments) {
+		t.Fatalf("mutable edit changed Review snapshot: %#v, %v", reloadedSnapshot.Assessments, err)
+	}
+	cycle, err = authoringRepository.DecideReview(ctx, cycle.ID, cycle.Revision, authoring.ReviewApproved, reviewer, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := authoring.PublishReviewCommand{DraftID: draft.ID, ReviewID: cycle.ID, ExpectedReviewRevision: cycle.Revision, PublishedByUserID: publisher, PublishedAt: time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)}
+	failingFacts := &failOncePublicationRepository{base: authoringRepository, fail: true}
+	service := authoring.NewPublicationService(authoringRepository, store, failingFacts)
+	if _, err := service.Publish(ctx, command); err == nil {
+		t.Fatal("injected fact failure did not occur")
+	}
+	persisted, err := store.GetByReviewID(ctx, string(cycle.ID))
+	if err != nil || len(persisted.AssessmentBindings) != 1 || persisted.AssessmentBindings[0].Questions[0].Prompt != "Reviewed wording A" || persisted.AssessmentBindings[0].Questions[0].Options[0].Text != "Correct A" {
+		t.Fatalf("published binding did not preserve reviewed A: %#v, %v", persisted.AssessmentBindings, err)
+	}
+	definitionC := cloneAssessmentDefinition(definitionB)
+	definitionC[0].Prompt = "Mutable wording C"
+	if _, err := assessmentRepository.UpdateAssessment(ctx, assessment.ID, assessment.Revision, assessments.AssessmentUpdate{Title: assessment.Title, Questions: definitionC}); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := service.Publish(ctx, command)
+	if err != nil || !recovered.Reconciled || recovered.CourseVersionID != persisted.ID {
+		t.Fatalf("recovery = %#v, %v", recovered, err)
+	}
+	reloaded, err := store.GetByReviewID(ctx, string(cycle.ID))
+	if err != nil || !reflect.DeepEqual(reloaded.AssessmentBindings, persisted.AssessmentBindings) {
+		t.Fatalf("recovery reinterpreted mutable Assessment: %#v, %v", reloaded.AssessmentBindings, err)
+	}
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version_assessment_binding WHERE course_version_id=$1`, persisted.ID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("Assessment binding count = %d, %v", count, err)
+	}
+
+	foreignCourse, err := coursesRepository.CreateCourse(ctx, "publication-foreign-assessment")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignDraft, _, err := authoringRepository.CreateDraft(ctx, draftFixture(t, foreignCourse.ID), submitter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignModule, foreignDraft, err := authoringRepository.CreateModuleAtPosition(ctx, foreignDraft.ID, foreignDraft.Revision, authoring.ModuleInput{DraftID: foreignDraft.ID, StableKey: "checks", Title: "Checks", Position: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignLesson := lessonFixture(foreignDraft.ID, foreignModule.ID, "foreign-check", 0)
+	foreignLesson.Content = courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{{Key: "check", Type: courses.BlockKnowledgeCheck, Payload: courses.KnowledgeCheckBlockPayload{AssessmentKey: string(assessment.ID)}}}}
+	_, foreignDraft, err = authoringRepository.CreateLessonAtPosition(ctx, foreignDraft.ID, foreignModule.ID, foreignDraft.Revision, foreignLesson)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignCycle, foreignSnapshot, err := authoringRepository.SubmitReview(ctx, foreignDraft.ID, foreignDraft.Revision, submitter)
+	if err != nil || len(foreignSnapshot.Assessments) != 0 {
+		t.Fatalf("foreign Assessment was frozen into Review: %#v, %v", foreignSnapshot.Assessments, err)
+	}
+	foreignCycle, err = authoringRepository.DecideReview(ctx, foreignCycle.ID, foreignCycle.Revision, authoring.ReviewApproved, reviewer, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = authoring.NewPublicationService(authoringRepository, store, authoringRepository).Publish(ctx, authoring.PublishReviewCommand{DraftID: foreignDraft.ID, ReviewID: foreignCycle.ID, ExpectedReviewRevision: foreignCycle.Revision, PublishedByUserID: publisher, PublishedAt: command.PublishedAt.Add(time.Hour)})
+	var validation *authoring.PublicationValidationFailure
+	if !errors.As(err, &validation) || !hasIntegrationPublicationIssue(validation.Result, authoring.PublicationIssueAssessmentUnavailable) {
+		t.Fatalf("foreign Assessment publication error = %#v, %v", validation, err)
+	}
+}
+
+func hasIntegrationPublicationIssue(result authoring.PublicationValidationResult, code authoring.PublicationValidationCode) bool {
+	for _, issue := range result.Issues {
+		if issue.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func cloneAssessmentDefinition(source []assessments.Question) []assessments.Question {
+	result := append([]assessments.Question(nil), source...)
+	for index := range result {
+		result[index].Options = append([]assessments.ChoiceOption(nil), source[index].Options...)
+		result[index].CorrectOptionKeys = append([]string(nil), source[index].CorrectOptionKeys...)
+		result[index].LeftItems = append([]assessments.MatchingItem(nil), source[index].LeftItems...)
+		result[index].RightItems = append([]assessments.MatchingItem(nil), source[index].RightItems...)
+		result[index].CorrectPairs = append([]assessments.MatchingPair(nil), source[index].CorrectPairs...)
+	}
+	return result
+}
 
 func testPublicationAssetBinding(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()

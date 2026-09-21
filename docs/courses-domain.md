@@ -16,7 +16,7 @@ Each Lesson also owns one presentation-independent JSONB content document: `{ "s
 
 Publishing persistence accepts one already-built `ImmutableCourseVersion` and
 stores its version, Review/Draft provenance, source identifiers, ordered
-structure, prerequisites, canonical content, and immutable Asset bindings in one Courses-owned database
+structure, prerequisites, canonical content, and immutable Asset and Assessment bindings in one Courses-owned database
 transaction. Course identity plus SemVer is unique, and Review ID is separately
 unique to prevent replay under another version. Any parent, child, provenance,
 or prerequisite failure rolls the transaction back. Once stored, the immutable
@@ -38,7 +38,24 @@ FK to mutable Assets metadata. It contains no uploader, Draft owner, or
 membership provenance, and public Course DTOs omit the internal binding and
 storage identity.
 
-The content schema version is technical storage format versioning, separate from CourseVersion SemVer. Unknown versions and block types fail closed. External widgets, asset storage, Tiptap, rendering, and assessment resolution remain post-v1 or later milestones.
+Canonical published LessonContent likewise retains only `assessmentKey`.
+`ImmutableCourseVersion.AssessmentBindings` freezes one complete deterministic
+definition per referenced key: question types, prompts, stable question and
+option/item keys, explicit order, correct choice sets, and one-to-one matching
+pairs. Every knowledge-check reference must have exactly one binding, duplicate
+and unreferenced bindings are rejected, and empty definitions are invalid for
+publication. The JSONB binding rows are written and read in the same Courses
+transaction as the CourseVersion and have no FK or runtime dependency on the
+mutable Assessments table.
+
+Correct answers are required internal grading data, so the Courses aggregate
+and persistence retain them. The entire binding collection is excluded from
+default JSON and existing public Course/catalog DTOs; learner question delivery
+will require a separate answer-free projection. Exact publication recovery uses
+the binding already owned by Courses, ensuring later Assessment edits cannot
+alter or block the published artifact.
+
+The content schema version is technical storage format versioning, separate from CourseVersion SemVer. Unknown versions and block types fail closed. External widgets, Tiptap, learner Assessment rendering, attempts, and grading remain later milestones.
 
 The public learner read API is read-only. Discovery and `/api/courses/{slug}` select the highest numeric SemVer version whose status is `PUBLISHED`; `DEPRECATED` and `ARCHIVED` versions never become preferred or appear in ordinary discovery. Explicit version routes may serve `PUBLISHED`, `DEPRECATED`, and `ARCHIVED` artifacts for historical learning/provenance. `WITHDRAWN` artifacts deliberately return the same public not-found response as unavailable content and never serve course or lesson data. Course outlines query lesson metadata only; the exact lesson endpoint loads its block document. All course responses use `Cache-Control: no-store`: artifact content is immutable, but its serving eligibility can change immediately on withdrawal. Deployments that previously cached public course responses must purge those caches when withdrawing a version; response headers cannot revoke copies already stored.
 

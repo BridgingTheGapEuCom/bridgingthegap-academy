@@ -58,6 +58,19 @@ func (r *Repository) StoreImmutableCourseVersion(ctx context.Context, input cour
 			return courses.ImmutableCourseVersion{}, immutableStoreError(err)
 		}
 	}
+	for _, binding := range input.AssessmentBindings {
+		assessmentKey, err := uuid(binding.AssessmentKey)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
+		}
+		definition, err := marshalPublishedAssessment(binding)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, err
+		}
+		if _, err := q.CreateCourseVersionAssessmentBinding(ctx, sqlc.CreateCourseVersionAssessmentBindingParams{CourseVersionID: versionID, AssessmentKey: assessmentKey, Definition: definition}); err != nil {
+			return courses.ImmutableCourseVersion{}, immutableStoreError(err)
+		}
+	}
 
 	lessonIDs := make(map[string]pgtype.UUID)
 	for _, module := range input.Modules {
@@ -302,8 +315,9 @@ func getImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, versionID p
 			ApprovedAt:            cloneTime(provenanceRow.ApprovedAt.Time.UTC()),
 			PublishedByUserID:     provenanceRow.PublishedByUserID.String(),
 		},
-		Modules:       []courses.ImmutableCourseVersionModule{},
-		AssetBindings: []courses.PublishedAssetBinding{},
+		Modules:            []courses.ImmutableCourseVersionModule{},
+		AssetBindings:      []courses.PublishedAssetBinding{},
+		AssessmentBindings: []courses.PublishedAssessmentBinding{},
 	}
 	bindingRows, err := q.ListCourseVersionAssetBindings(ctx, versionID)
 	if err != nil {
@@ -315,6 +329,17 @@ func getImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, versionID p
 			OriginalFilename: row.OriginalFilename, MediaType: row.MediaType,
 			ByteSize: row.ByteSize, SHA256Digest: row.Sha256Digest,
 		})
+	}
+	assessmentRows, err := q.ListCourseVersionAssessmentBindings(ctx, versionID)
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, storageError(err)
+	}
+	for _, row := range assessmentRows {
+		binding, err := unmarshalPublishedAssessment(row.AssessmentKey.String(), row.Definition)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, err
+		}
+		result.AssessmentBindings = append(result.AssessmentBindings, binding)
 	}
 	moduleRows, err := q.ListModulesForCourseVersion(ctx, versionID)
 	if err != nil {

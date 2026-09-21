@@ -3,12 +3,12 @@ import { decodeLessonContent, safePublishedURL } from '../lesson/content'
 import type { AuthoringLessonContent } from './authoring'
 
 export type CanonicalBlock = components['schemas']['LessonBlock']
-export type EditableBlockType = 'TEXT' | 'HEADING' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'CODE' | 'QUOTE' | 'CALLOUT' | 'DOWNLOAD' | 'DIVIDER'
+export type EditableBlockType = 'TEXT' | 'HEADING' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'CODE' | 'QUOTE' | 'CALLOUT' | 'DOWNLOAD' | 'KNOWLEDGE_CHECK' | 'DIVIDER'
 export const editableBlockTypes: { type: EditableBlockType; label: string }[] = [
   { type: 'TEXT', label: 'Text' }, { type: 'HEADING', label: 'Heading' },
   { type: 'IMAGE', label: 'Image' }, { type: 'VIDEO', label: 'Video' }, { type: 'AUDIO', label: 'Audio' },
   { type: 'CODE', label: 'Code' }, { type: 'QUOTE', label: 'Quote' },
-  { type: 'CALLOUT', label: 'Callout' }, { type: 'DOWNLOAD', label: 'Download' }, { type: 'DIVIDER', label: 'Divider' },
+  { type: 'CALLOUT', label: 'Callout' }, { type: 'DOWNLOAD', label: 'Download' }, { type: 'KNOWLEDGE_CHECK', label: 'Knowledge check' }, { type: 'DIVIDER', label: 'Divider' },
 ]
 // Mirrors the canonical Go content limits; no editor-only fields enter this document.
 export const contentEditorLimits = { blocks: 200, bytes: 1 << 20, text: 50_000, codeBytes: 100_000 }
@@ -39,6 +39,11 @@ export function createContentBlock(type: EditableBlockType, existingKeys: string
     case 'QUOTE': return { key, type, payload: { text: 'New quote' } }
     case 'CALLOUT': return { key, type, payload: { kind: 'NOTE', content } }
     case 'DOWNLOAD': return { key, type, payload: { asset: { assetKey: '' }, label: 'New download' } }
+    // A selected Assessment key is the sole canonical reference. It is saved
+    // through the normal Lesson mutation and remains publication-unresolved.
+    // A non-empty placeholder preserves the established migration-compatible
+    // canonical shape until an author chooses a real Draft Assessment.
+    case 'KNOWLEDGE_CHECK': return { key, type, payload: { assessmentKey: 'assessment-placeholder' } }
     case 'DIVIDER': return { key, type, payload: {} }
   }
 }

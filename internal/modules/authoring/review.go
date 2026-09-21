@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 )
 
@@ -77,6 +78,14 @@ type ReviewSnapshot struct {
 	SchemaVersion int                    `json:"schemaVersion"`
 	Draft         ReviewSnapshotDraft    `json:"draft"`
 	Modules       []ReviewSnapshotModule `json:"modules"`
+	// Assessments contains answer-bearing definitions frozen with the Review.
+	// It is deliberately absent from the Authoring Review HTTP representation.
+	Assessments []ReviewSnapshotAssessment `json:"-"`
+}
+
+type ReviewSnapshotAssessment struct {
+	AssessmentKey string
+	Questions     []assessments.Question
 }
 
 type ReviewSnapshotDraft struct {
@@ -153,7 +162,7 @@ func NewReviewSnapshot(draft CourseDraft, modules []DraftModule, lessons []Draft
 		Title: draft.Metadata.Title, Description: draft.Metadata.Description,
 		Objectives: append([]string{}, draft.Metadata.LearningObjectives...), Changelog: draft.Metadata.Changelog,
 		License: draft.Metadata.License,
-	}, Modules: make([]ReviewSnapshotModule, 0, len(modules))}
+	}, Modules: make([]ReviewSnapshotModule, 0, len(modules)), Assessments: []ReviewSnapshotAssessment{}}
 	includedLessons := 0
 	for _, module := range modules {
 		moduleLessons := byModule[module.ID]
@@ -220,6 +229,29 @@ func (s ReviewSnapshot) Validate() error {
 				}
 			}
 		}
+	}
+	referencedAssessments := make(map[string]struct{})
+	for _, module := range s.Modules {
+		for _, lesson := range module.Lessons {
+			for _, block := range lesson.Content.Blocks {
+				if payload, ok := block.Payload.(courses.KnowledgeCheckBlockPayload); ok {
+					referencedAssessments[payload.AssessmentKey] = struct{}{}
+				}
+			}
+		}
+	}
+	previousKey := ""
+	for _, frozen := range s.Assessments {
+		if _, err := assessments.ParseAssessmentID(frozen.AssessmentKey); err != nil || frozen.Questions == nil || previousKey != "" && frozen.AssessmentKey <= previousKey {
+			return ErrReviewSnapshot
+		}
+		if _, referenced := referencedAssessments[frozen.AssessmentKey]; !referenced {
+			return ErrReviewSnapshot
+		}
+		if err := (assessments.AssessmentUpdate{Title: "Frozen assessment", Questions: frozen.Questions}).Validate(); err != nil {
+			return ErrReviewSnapshot
+		}
+		previousKey = frozen.AssessmentKey
 	}
 	return nil
 }
@@ -297,9 +329,79 @@ func MarshalReviewSnapshot(snapshot ReviewSnapshot) ([]byte, error) {
 	if err := snapshot.Validate(); err != nil {
 		return nil, err
 	}
-	encoded, err := json.Marshal(snapshot)
+	encoded, err := json.Marshal(reviewSnapshotDocumentFrom(snapshot))
 	if err != nil {
 		return nil, ErrReviewSnapshot
 	}
 	return encoded, nil
+}
+
+// UnmarshalReviewSnapshot reconstructs private frozen Assessment definitions
+// from persistence without adding answer keys to the Review HTTP projection.
+func UnmarshalReviewSnapshot(encoded []byte) (ReviewSnapshot, error) {
+	var document reviewSnapshotDocument
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		return ReviewSnapshot{}, ErrReviewSnapshot
+	}
+	snapshot := document.reviewSnapshot()
+	if err := snapshot.Validate(); err != nil {
+		return ReviewSnapshot{}, err
+	}
+	return snapshot, nil
+}
+
+type reviewSnapshotDocument struct {
+	SchemaVersion int                                `json:"schemaVersion"`
+	Draft         ReviewSnapshotDraft                `json:"draft"`
+	Modules       []ReviewSnapshotModule             `json:"modules"`
+	Assessments   []reviewSnapshotAssessmentDocument `json:"assessments"`
+}
+
+type reviewSnapshotAssessmentDocument struct {
+	AssessmentKey string                           `json:"assessmentKey"`
+	Questions     []reviewSnapshotQuestionDocument `json:"questions"`
+}
+
+type reviewSnapshotQuestionDocument struct {
+	StableKey         string                     `json:"stableKey"`
+	Type              assessments.QuestionType   `json:"type"`
+	Prompt            string                     `json:"prompt"`
+	Position          int                        `json:"position"`
+	Options           []assessments.ChoiceOption `json:"options,omitempty"`
+	CorrectOptionKeys []string                   `json:"correctOptionKeys,omitempty"`
+	LeftItems         []assessments.MatchingItem `json:"leftItems,omitempty"`
+	RightItems        []assessments.MatchingItem `json:"rightItems,omitempty"`
+	CorrectPairs      []assessments.MatchingPair `json:"correctPairs,omitempty"`
+}
+
+func reviewSnapshotDocumentFrom(snapshot ReviewSnapshot) reviewSnapshotDocument {
+	document := reviewSnapshotDocument{SchemaVersion: snapshot.SchemaVersion, Draft: snapshot.Draft, Modules: snapshot.Modules, Assessments: make([]reviewSnapshotAssessmentDocument, 0, len(snapshot.Assessments))}
+	for _, frozen := range snapshot.Assessments {
+		item := reviewSnapshotAssessmentDocument{AssessmentKey: frozen.AssessmentKey, Questions: make([]reviewSnapshotQuestionDocument, 0, len(frozen.Questions))}
+		for _, question := range frozen.Questions {
+			item.Questions = append(item.Questions, reviewSnapshotQuestionDocument{
+				StableKey: question.StableKey, Type: question.Type, Prompt: question.Prompt, Position: question.Position,
+				Options: append([]assessments.ChoiceOption(nil), question.Options...), CorrectOptionKeys: append([]string(nil), question.CorrectOptionKeys...),
+				LeftItems: append([]assessments.MatchingItem(nil), question.LeftItems...), RightItems: append([]assessments.MatchingItem(nil), question.RightItems...), CorrectPairs: append([]assessments.MatchingPair(nil), question.CorrectPairs...),
+			})
+		}
+		document.Assessments = append(document.Assessments, item)
+	}
+	return document
+}
+
+func (document reviewSnapshotDocument) reviewSnapshot() ReviewSnapshot {
+	snapshot := ReviewSnapshot{SchemaVersion: document.SchemaVersion, Draft: document.Draft, Modules: document.Modules, Assessments: make([]ReviewSnapshotAssessment, 0, len(document.Assessments))}
+	for _, frozen := range document.Assessments {
+		item := ReviewSnapshotAssessment{AssessmentKey: frozen.AssessmentKey, Questions: make([]assessments.Question, 0, len(frozen.Questions))}
+		for _, question := range frozen.Questions {
+			item.Questions = append(item.Questions, assessments.Question{
+				StableKey: question.StableKey, Type: question.Type, Prompt: question.Prompt, Position: question.Position,
+				Options: append([]assessments.ChoiceOption(nil), question.Options...), CorrectOptionKeys: append([]string(nil), question.CorrectOptionKeys...),
+				LeftItems: append([]assessments.MatchingItem(nil), question.LeftItems...), RightItems: append([]assessments.MatchingItem(nil), question.RightItems...), CorrectPairs: append([]assessments.MatchingPair(nil), question.CorrectPairs...),
+			})
+		}
+		snapshot.Assessments = append(snapshot.Assessments, item)
+	}
+	return snapshot
 }

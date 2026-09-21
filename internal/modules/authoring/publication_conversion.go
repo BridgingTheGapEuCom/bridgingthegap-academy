@@ -17,10 +17,11 @@ var (
 // Courses model that are deliberately not invented by the frozen Review
 // snapshot. The publishing orchestrator will provide them explicitly.
 type PublicationConversionMetadata struct {
-	PublishedAt       time.Time
-	PublishedByUserID string
-	Attribution       []courses.ContributorSnapshot
-	AssetBindings     []courses.PublishedAssetBinding
+	PublishedAt        time.Time
+	PublishedByUserID  string
+	Attribution        []courses.ContributorSnapshot
+	AssetBindings      []courses.PublishedAssetBinding
+	AssessmentBindings []courses.PublishedAssessmentBinding
 }
 
 // PublicationValidationFailure preserves every deterministic M4.5a issue for
@@ -46,7 +47,7 @@ func NewPublicationConverter() PublicationConverter {
 }
 
 func (c PublicationConverter) Convert(cycle ReviewCycle, snapshot *ReviewSnapshot, metadata PublicationConversionMetadata) (courses.ImmutableCourseVersion, error) {
-	validation := c.validator.ValidateResolved(cycle, snapshot, metadata.AssetBindings)
+	validation := c.validator.ValidateResolvedBindings(cycle, snapshot, metadata.AssetBindings, metadata.AssessmentBindings)
 	if !validation.Publishable {
 		return courses.ImmutableCourseVersion{}, &PublicationValidationFailure{Result: validation}
 	}
@@ -93,8 +94,9 @@ func buildImmutableCourseVersion(cycle ReviewCycle, snapshot ReviewSnapshot, met
 			ApprovedAt:            cloneTime(cycle.DecidedAt),
 			PublishedByUserID:     metadata.PublishedByUserID,
 		},
-		Modules:       make([]courses.ImmutableCourseVersionModule, 0, len(snapshot.Modules)),
-		AssetBindings: append([]courses.PublishedAssetBinding{}, metadata.AssetBindings...),
+		Modules:            make([]courses.ImmutableCourseVersionModule, 0, len(snapshot.Modules)),
+		AssetBindings:      append([]courses.PublishedAssetBinding{}, metadata.AssetBindings...),
+		AssessmentBindings: clonePublishedAssessmentBindings(metadata.AssessmentBindings),
 	}
 	for _, module := range snapshot.Modules {
 		convertedModule := courses.ImmutableCourseVersionModule{
@@ -128,6 +130,23 @@ func buildImmutableCourseVersion(cycle ReviewCycle, snapshot ReviewSnapshot, met
 		return courses.ImmutableCourseVersion{}, err
 	}
 	return result, nil
+}
+
+func clonePublishedAssessmentBindings(source []courses.PublishedAssessmentBinding) []courses.PublishedAssessmentBinding {
+	result := make([]courses.PublishedAssessmentBinding, 0, len(source))
+	for _, binding := range source {
+		cloned := courses.PublishedAssessmentBinding{AssessmentKey: binding.AssessmentKey, Questions: make([]courses.PublishedAssessmentQuestion, 0, len(binding.Questions))}
+		for _, question := range binding.Questions {
+			question.Options = append([]courses.PublishedAssessmentOption(nil), question.Options...)
+			question.CorrectOptionKeys = append([]string(nil), question.CorrectOptionKeys...)
+			question.LeftItems = append([]courses.PublishedAssessmentItem(nil), question.LeftItems...)
+			question.RightItems = append([]courses.PublishedAssessmentItem(nil), question.RightItems...)
+			question.CorrectPairs = append([]courses.PublishedAssessmentPair(nil), question.CorrectPairs...)
+			cloned.Questions = append(cloned.Questions, question)
+		}
+		result = append(result, cloned)
+	}
+	return result
 }
 
 func clonePublicationContent(content courses.LessonContent) (courses.LessonContent, error) {
