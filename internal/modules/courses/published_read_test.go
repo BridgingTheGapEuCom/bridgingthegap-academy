@@ -2,7 +2,9 @@ package courses
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -40,9 +42,17 @@ func publishedReadAggregate(t *testing.T) ImmutableCourseVersion {
 			PrerequisiteStableKeys: []string{},
 			Content: LessonContent{SchemaVersion: LessonContentSchemaVersion, Blocks: []Block{
 				{Key: "diagram", Type: BlockImage, Payload: ImageBlockPayload{Asset: AssetReference{AssetKey: "architecture-diagram"}, AltText: "A course-version boundary diagram"}},
-				{Key: "assessment", Type: BlockKnowledgeCheck, Payload: KnowledgeCheckBlockPayload{AssessmentKey: "publication-check"}},
+				{Key: "assessment", Type: BlockKnowledgeCheck, Payload: KnowledgeCheckBlockPayload{AssessmentKey: "72000000-0000-4000-8000-000000000001"}},
 			}},
 		}},
+	}}
+	aggregate.AssessmentBindings = []PublishedAssessmentBinding{{
+		AssessmentKey: "72000000-0000-4000-8000-000000000001",
+		Questions: []PublishedAssessmentQuestion{
+			{StableKey: "single", Type: PublishedQuestionSingleChoice, Prompt: "Choose one", Position: 0, Options: []PublishedAssessmentOption{{StableKey: "one", Text: "One", Position: 0}, {StableKey: "two", Text: "Two", Position: 1}}, CorrectOptionKeys: []string{"one"}},
+			{StableKey: "multiple", Type: PublishedQuestionMultipleChoice, Prompt: "Choose all", Position: 1, Options: []PublishedAssessmentOption{{StableKey: "first", Text: "First", Position: 0}, {StableKey: "second", Text: "Second", Position: 1}}, CorrectOptionKeys: []string{"first", "second"}},
+			{StableKey: "matching", Type: PublishedQuestionMatching, Prompt: "Match items", Position: 2, LeftItems: []PublishedAssessmentItem{{StableKey: "left-one", Text: "Left one", Position: 0}, {StableKey: "left-two", Text: "Left two", Position: 1}}, RightItems: []PublishedAssessmentItem{{StableKey: "right-one", Text: "Right one", Position: 0}, {StableKey: "right-two", Text: "Right two", Position: 1}}, CorrectPairs: []PublishedAssessmentPair{{LeftKey: "left-one", RightKey: "right-one"}, {LeftKey: "left-two", RightKey: "right-two"}}},
+		},
 	}}
 	return aggregate
 }
@@ -67,6 +77,29 @@ func TestPublishedReadServiceReturnsProvenanceFreeImmutableProjection(t *testing
 	}
 	if len(got.Modules) != 1 || len(got.Modules[0].Lessons) != 1 || got.Modules[0].Lessons[0].Content.Blocks[0].Type != BlockImage || got.Modules[0].Lessons[0].Content.Blocks[1].Type != BlockKnowledgeCheck {
 		t.Fatalf("module, lesson, asset, or assessment payload was lost: %#v", got.Modules)
+	}
+	if len(got.Assessments) != 1 || len(got.Assessments[0].Questions) != 3 || got.Assessments[0].Questions[2].Type != PublishedQuestionMatching {
+		t.Fatalf("learner-safe assessments were not preserved: %#v", got.Assessments)
+	}
+	if len(got.Assessments[0].Questions[0].Options) != 2 || len(got.Assessments[0].Questions[2].LeftItems) != 2 {
+		t.Fatalf("learner answer choices/items were not preserved: %#v", got.Assessments[0])
+	}
+}
+
+func TestPublishedAssessmentLearnerViewNeverSerializesAnswers(t *testing.T) {
+	aggregate := publishedReadAggregate(t)
+	view, err := publishedAssessmentLearnerView(aggregate.AssessmentBindings[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, privateField := range []string{"CorrectOptionKeys", "CorrectPairs", "correctOptionKeys", "correctPairs", "answers", "answerKey"} {
+		if strings.Contains(string(encoded), privateField) {
+			t.Fatalf("learner projection leaked private answer data %q: %s", privateField, encoded)
+		}
 	}
 }
 

@@ -10,6 +10,7 @@ export type LessonSummary = components['schemas']['LessonSummary']
 export type PublishedCourseCatalogPage = components['schemas']['PublishedCourseCatalogPage']
 export type PublishedCourseCatalogItem = components['schemas']['PublishedCourseCatalogItem']
 export type PublishedCourseVersionDetail = components['schemas']['PublishedCourseVersionDetail']
+export type PublishedAssessmentLearnerView = components['schemas']['PublishedAssessmentLearnerView']
 
 export const publishedCatalogPageSize = 20
 export const maxPublishedCatalogOffset = 2_147_483_647
@@ -179,7 +180,8 @@ function isPublishedCourseVersionDetail(value: unknown): value is PublishedCours
     || !isPublishedContentLicense(value.license)
     || !isPublishedContributors(value.contributors)
     || !isDateTime(value.publishedAt)
-    || !Array.isArray(value.modules)) return false
+    || !Array.isArray(value.modules)
+    || !isPublishedAssessmentLearnerViews(value.assessments)) return false
 
   const moduleKeys = new Set<string>()
   const lessonKeys = new Set<string>()
@@ -211,6 +213,77 @@ function isPublishedCourseVersionDetail(value: unknown): value is PublishedCours
   })
 }
 
+function isPublishedAssessmentLearnerViews(value: unknown): value is PublishedAssessmentLearnerView[] {
+  if (!Array.isArray(value)) return false
+  const assessmentKeys = new Set<string>()
+  return value.every((assessment) => {
+    if (!hasOnlyKeys(assessment, ['assessmentKey', 'questions'])
+      || typeof assessment.assessmentKey !== 'string'
+      || !isPublishedCourseID(assessment.assessmentKey)
+      || assessmentKeys.has(assessment.assessmentKey)
+      || !Array.isArray(assessment.questions)) return false
+    assessmentKeys.add(assessment.assessmentKey)
+    const questionKeys = new Set<string>()
+    return assessment.questions.every((question, position) => {
+      if (!hasOnlyKeys(question, ['stableKey', 'type', 'prompt', 'position', 'options', 'leftItems', 'rightItems'])
+        || !isAssessmentStableKey(question.stableKey)
+        || questionKeys.has(question.stableKey)
+        || (question.type !== 'SINGLE_CHOICE' && question.type !== 'MULTIPLE_CHOICE' && question.type !== 'MATCHING')
+        || !isAssessmentText(question.prompt, 10000)
+        || question.position !== position
+        || !Array.isArray(question.options)
+        || !Array.isArray(question.leftItems)
+        || !Array.isArray(question.rightItems)) return false
+      questionKeys.add(question.stableKey)
+      if (question.type === 'MATCHING') {
+        return question.options.length === 0
+          && question.leftItems.length > 0
+          && question.leftItems.length === question.rightItems.length
+          && isPublishedAssessmentItems(question.leftItems)
+          && isPublishedAssessmentItems(question.rightItems)
+      }
+      return question.leftItems.length === 0
+        && question.rightItems.length === 0
+        && question.options.length >= 2
+        && isPublishedAssessmentOptions(question.options)
+    })
+  })
+}
+
+function isPublishedAssessmentOptions(value: unknown[]): boolean {
+  const keys = new Set<string>()
+  return value.every((option, position) => {
+    if (!hasOnlyKeys(option, ['stableKey', 'text', 'position'])
+      || !isAssessmentStableKey(option.stableKey)
+      || !isAssessmentText(option.text, 4000)
+      || option.position !== position) return false
+    if (keys.has(option.stableKey)) return false
+    keys.add(option.stableKey)
+    return true
+  })
+}
+
+function isPublishedAssessmentItems(value: unknown[]): boolean {
+  const keys = new Set<string>()
+  return value.every((item, position) => {
+    if (!hasOnlyKeys(item, ['stableKey', 'text', 'position'])
+      || !isAssessmentStableKey(item.stableKey)
+      || !isAssessmentText(item.text, 4000)
+      || item.position !== position) return false
+    if (keys.has(item.stableKey)) return false
+    keys.add(item.stableKey)
+    return true
+  })
+}
+
+function isAssessmentStableKey(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 1 && value.length <= 160 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
+}
+
+function isAssessmentText(value: unknown, maximum: number): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= maximum && value.trim() === value
+}
+
 function isPublishedContentLicense(value: unknown): value is PublishedCourseCatalogItem['license'] {
   return isRecord(value)
     && (value.kind === 'STANDARD' || value.kind === 'ALL_RIGHTS_RESERVED' || value.kind === 'CUSTOM')
@@ -229,6 +302,10 @@ function isPublishedContributors(value: unknown): value is PublishedCourseCatalo
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasOnlyKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
+  return isRecord(value) && Object.keys(value).every((key) => keys.includes(key))
 }
 
 function isStringArray(value: unknown): value is string[] {

@@ -20,6 +20,14 @@ const publishedCourse = {
   courseId: catalogFirst.courseId, version: catalogFirst.version, title: catalogFirst.title, description: 'Authoritative reader detail.',
   objectives: ['Explain event ownership'], sourceLanguage: 'en-GB', changelog: 'First public release.', license: catalogFirst.license,
   contributors: catalogFirst.contributors, publishedAt: catalogFirst.publishedAt,
+	assessments: [{
+	  assessmentKey: '70000000-0000-4000-8000-000000000001',
+	  questions: [
+	    { stableKey: 'single', type: 'SINGLE_CHOICE', prompt: 'Choose one event boundary', position: 0, options: [{ stableKey: 'first', text: 'Producer boundary', position: 0 }, { stableKey: 'second', text: 'Consumer boundary', position: 1 }], leftItems: [], rightItems: [] },
+	    { stableKey: 'multiple', type: 'MULTIPLE_CHOICE', prompt: 'Choose applicable properties', position: 1, options: [{ stableKey: 'one', text: 'Explicit ownership', position: 0 }, { stableKey: 'two', text: 'Shared hidden state', position: 1 }], leftItems: [], rightItems: [] },
+	    { stableKey: 'matching', type: 'MATCHING', prompt: 'Match the terms', position: 2, options: [], leftItems: [{ stableKey: 'left-one', text: 'Event', position: 0 }, { stableKey: 'left-two', text: 'Consumer', position: 1 }], rightItems: [{ stableKey: 'right-one', text: 'A fact', position: 0 }, { stableKey: 'right-two', text: 'Handles a fact', position: 1 }] },
+	  ],
+	}],
   modules: [{
     stableKey: 'fundamentals', title: 'Fundamentals', description: 'Core concepts.', position: 0,
     lessons: [
@@ -32,6 +40,7 @@ const publishedCourse = {
             { key: 'code', type: 'CODE', payload: { language: 'go', code: 'fmt.Println("inert")' } },
             { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: '50000000-0000-4000-8000-000000000001' }, decorative: false, altText: 'Event flow' } },
             { key: 'table', type: 'TABLE', payload: { caption: 'Terms', headers: ['Term'], rows: [['Event']] } },
+			{ key: 'knowledge-check', type: 'KNOWLEDGE_CHECK', payload: { assessmentKey: '70000000-0000-4000-8000-000000000001' } },
           ],
         },
       },
@@ -129,6 +138,13 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await assetRequest
   await expect(page.getByRole('img', { name: 'Event flow' })).toBeVisible()
   await expect(page.getByRole('table')).toBeVisible()
+	await page.getByRole('radio', { name: 'Producer boundary' }).focus()
+	await page.keyboard.press('Space')
+	await expect(page.getByRole('radio', { name: 'Producer boundary' })).toBeChecked()
+	await page.getByRole('checkbox', { name: 'Explicit ownership' }).check()
+	await expect(page.getByRole('checkbox', { name: 'Explicit ownership' })).toBeChecked()
+	await page.getByRole('combobox', { name: 'Match Event' }).selectOption('right-one')
+	await expect(page.getByText(/not saved or graded yet/i)).toBeVisible()
   await page.getByRole('link', { name: 'Synchronous and asynchronous, estimated duration 1 hr 15 min' }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/lesson=sync-vs-async/)

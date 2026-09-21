@@ -50,7 +50,7 @@
           :selected-lesson-key="state.selectedLesson?.stableKey"
         />
         <div class="published-course-reader__lesson-view">
-          <PublishedCourseReaderLesson :lesson="state.selectedLesson" :course-id="state.course.courseId" :version="state.course.version" />
+          <PublishedCourseReaderLesson :lesson="state.selectedLesson" :assessments="state.course.assessments" :course-id="state.course.courseId" :version="state.course.version" />
           <p v-if="!state.selectedLesson" class="published-course-reader__empty" role="status">This course does not contain any lessons yet.</p>
         </div>
       </div>

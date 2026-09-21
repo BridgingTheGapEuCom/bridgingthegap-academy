@@ -10,6 +10,7 @@ const publishedCourse = {
   ...publishedCatalogItem,
   objectives: ['Understand boundaries'],
   changelog: 'Initial release.',
+	assessments: [],
   modules: [{
     stableKey: 'foundations', title: 'Foundations', description: 'Core concepts.', position: 0,
     lessons: [{
@@ -85,5 +86,8 @@ describe('Courses service', () => {
 
     const malformedCourse = { request: vi.fn().mockResolvedValue({ ...publishedCourse, modules: null }) }
     await expect(getLatestPublishedCourse(publishedCatalogItem.courseId, malformedCourse)).rejects.toThrow('Invalid published course response')
+
+	const answerLeak = { request: vi.fn().mockResolvedValue({ ...publishedCourse, assessments: [{ assessmentKey: publishedCatalogItem.courseId, questions: [{ stableKey: 'question', type: 'SINGLE_CHOICE', prompt: 'Choose', position: 0, options: [], leftItems: [], rightItems: [], correctOptionKey: 'secret' }] }] }) }
+	await expect(getLatestPublishedCourse(publishedCatalogItem.courseId, answerLeak)).rejects.toThrow('Invalid published course response')
   })
 })

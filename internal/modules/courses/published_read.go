@@ -36,6 +36,37 @@ type PublishedCourseVersion struct {
 	Contributors       []PublishedContributor
 	PublishedAt        time.Time
 	Modules            []PublishedCourseModule
+	Assessments        []PublishedAssessmentLearnerView
+}
+
+// PublishedAssessmentLearnerView is the public, learner-safe representation
+// of a frozen assessment binding. It deliberately has no answer definitions:
+// grading remains server-side in a later slice.
+type PublishedAssessmentLearnerView struct {
+	AssessmentKey string
+	Questions     []PublishedAssessmentLearnerQuestion
+}
+
+type PublishedAssessmentLearnerQuestion struct {
+	StableKey  string
+	Type       PublishedAssessmentQuestionType
+	Prompt     string
+	Position   int
+	Options    []PublishedAssessmentLearnerOption
+	LeftItems  []PublishedAssessmentLearnerItem
+	RightItems []PublishedAssessmentLearnerItem
+}
+
+type PublishedAssessmentLearnerOption struct {
+	StableKey string
+	Text      string
+	Position  int
+}
+
+type PublishedAssessmentLearnerItem struct {
+	StableKey string
+	Text      string
+	Position  int
 }
 
 // PublishedContributor preserves public attribution without exposing an
@@ -141,6 +172,7 @@ func publicPublishedCourseVersion(aggregate ImmutableCourseVersion, courseID Cou
 		Contributors:       make([]PublishedContributor, 0, len(metadata.Attribution)),
 		PublishedAt:        metadata.PublishedAt.UTC(),
 		Modules:            make([]PublishedCourseModule, 0, len(aggregate.Modules)),
+		Assessments:        make([]PublishedAssessmentLearnerView, 0, len(aggregate.AssessmentBindings)),
 	}
 	for _, contributor := range metadata.Attribution {
 		result.Contributors = append(result.Contributors, PublishedContributor{
@@ -171,6 +203,48 @@ func publicPublishedCourseVersion(aggregate ImmutableCourseVersion, courseID Cou
 			publicModule.Lessons = append(publicModule.Lessons, publicLesson)
 		}
 		result.Modules = append(result.Modules, publicModule)
+	}
+	for _, binding := range aggregate.AssessmentBindings {
+		learnerView, err := publishedAssessmentLearnerView(binding)
+		if err != nil {
+			return PublishedCourseVersion{}, errors.New("invalid stored published assessment")
+		}
+		result.Assessments = append(result.Assessments, learnerView)
+	}
+	return result, nil
+}
+
+// publishedAssessmentLearnerView copies only the presentation fields from a
+// Courses-owned immutable binding. Correct options and matching pairs remain
+// deliberately absent from the public read model.
+func publishedAssessmentLearnerView(binding PublishedAssessmentBinding) (PublishedAssessmentLearnerView, error) {
+	if err := binding.Validate(); err != nil {
+		return PublishedAssessmentLearnerView{}, err
+	}
+	result := PublishedAssessmentLearnerView{
+		AssessmentKey: binding.AssessmentKey,
+		Questions:     make([]PublishedAssessmentLearnerQuestion, 0, len(binding.Questions)),
+	}
+	for _, question := range binding.Questions {
+		learnerQuestion := PublishedAssessmentLearnerQuestion{
+			StableKey:  question.StableKey,
+			Type:       question.Type,
+			Prompt:     question.Prompt,
+			Position:   question.Position,
+			Options:    make([]PublishedAssessmentLearnerOption, 0, len(question.Options)),
+			LeftItems:  make([]PublishedAssessmentLearnerItem, 0, len(question.LeftItems)),
+			RightItems: make([]PublishedAssessmentLearnerItem, 0, len(question.RightItems)),
+		}
+		for _, option := range question.Options {
+			learnerQuestion.Options = append(learnerQuestion.Options, PublishedAssessmentLearnerOption(option))
+		}
+		for _, item := range question.LeftItems {
+			learnerQuestion.LeftItems = append(learnerQuestion.LeftItems, PublishedAssessmentLearnerItem(item))
+		}
+		for _, item := range question.RightItems {
+			learnerQuestion.RightItems = append(learnerQuestion.RightItems, PublishedAssessmentLearnerItem(item))
+		}
+		result.Questions = append(result.Questions, learnerQuestion)
 	}
 	return result, nil
 }

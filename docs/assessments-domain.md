@@ -51,7 +51,10 @@ Review copy into a Courses-owned immutable binding; it never reads the current
 Assessment. Questions, stable keys, order, and authoritative answers are
 copied, while Draft owner, creator, revision, and Authoring timestamps are
 excluded. Answers remain server-private and are not part of public Course
-projections. Learner rendering, attempts, and grading are still deferred.
+projections. Exact CourseVersion reads map the binding to an answer-free learner
+projection containing only semantic keys, frozen presentation text, and order.
+The learner reader supports unsaved, ungraded local practice responses; attempts
+and grading remain deferred.
 
 The Draft Authoring workspace provides private Assessment list and editor
 routes. The editor uses native radios, checkboxes, selects, and move controls;

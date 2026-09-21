@@ -20,7 +20,7 @@
       <p v-else-if="content.kind === 'invalid-content'" role="note">This lesson content cannot be displayed safely.</p>
       <p v-else-if="!content.blocks.length">This lesson has no published content yet.</p>
       <div v-else v-for="block in content.blocks" :key="block.key" class="published-course-reader-lesson__block">
-        <LessonBlockRenderer :block="block" :published-asset-context="assetContext" />
+        <LessonBlockRenderer :block="block" :published-asset-context="assetContext" :published-assessment="assessmentFor(block)" />
       </div>
     </section>
   </article>
@@ -31,10 +31,11 @@ import { computed, onMounted, onUpdated, ref } from 'vue'
 import LessonBlockRenderer from './LessonBlockRenderer.vue'
 import type { PublishedCourseVersionDetail } from '../courses/courses'
 import { formatDuration } from '../courses/courses'
-import { decodeLessonContent } from '../lesson/content'
+import { decodeLessonContent, type RenderableBlock } from '../lesson/content'
 
 const props = defineProps<{
-  lesson: PublishedCourseVersionDetail['modules'][number]['lessons'][number] | null
+	lesson: PublishedCourseVersionDetail['modules'][number]['lessons'][number] | null
+	assessments?: PublishedCourseVersionDetail['assessments']
   courseId?: string
   version?: string
 }>()
@@ -42,6 +43,11 @@ const lessonTitle = ref<HTMLHeadingElement | null>(null)
 let previousLessonStableKey: string | undefined
 const content = computed(() => props.lesson ? decodeLessonContent(props.lesson.content) : { kind: 'invalid-content' } as const)
 const assetContext = computed(() => props.courseId && props.version ? { courseID: props.courseId, version: props.version } : undefined)
+
+function assessmentFor(block: RenderableBlock) {
+  if (block.type !== 'KNOWLEDGE_CHECK') return undefined
+	return props.assessments?.find((assessment) => assessment.assessmentKey === block.payload.assessmentKey)
+}
 
 onMounted(() => { previousLessonStableKey = props.lesson?.stableKey })
 onUpdated(() => {

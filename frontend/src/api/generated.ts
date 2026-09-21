@@ -1142,6 +1142,32 @@ export interface components {
             /** Format: date-time */
             publishedAt: string;
             modules: components["schemas"]["PublishedCourseModule"][];
+            assessments: components["schemas"]["PublishedAssessmentLearnerView"][];
+        };
+        PublishedAssessmentLearnerView: {
+            /** Format: uuid */
+            assessmentKey: string;
+            questions: components["schemas"]["PublishedAssessmentLearnerQuestion"][];
+        };
+        PublishedAssessmentLearnerQuestion: {
+            stableKey: string;
+            /** @enum {string} */
+            type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "MATCHING";
+            prompt: string;
+            position: number;
+            options: components["schemas"]["PublishedAssessmentLearnerOption"][];
+            leftItems: components["schemas"]["PublishedAssessmentLearnerItem"][];
+            rightItems: components["schemas"]["PublishedAssessmentLearnerItem"][];
+        };
+        PublishedAssessmentLearnerOption: {
+            stableKey: string;
+            text: string;
+            position: number;
+        };
+        PublishedAssessmentLearnerItem: {
+            stableKey: string;
+            text: string;
+            position: number;
         };
         PublishedContentLicense: {
             /** @enum {string} */

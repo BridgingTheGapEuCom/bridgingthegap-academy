@@ -511,6 +511,7 @@ test('Authoring publishes an approved Review with keyboard and focuses authorita
     license: { kind: 'STANDARD', identifier: 'CC-BY-4.0', displayName: 'Creative Commons Attribution 4.0', url: '', customText: '' },
     contributors: [{ displayName: 'Author', role: 'AUTHOR', order: 0 }],
     publishedAt,
+	assessments: [],
     modules: [{
       stableKey: 'foundations', title: 'Frozen foundations', description: 'Historical module.', position: 0,
       lessons: [{

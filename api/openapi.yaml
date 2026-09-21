@@ -1343,7 +1343,7 @@ components:
     PublishedCourseVersionDetail:
       type: object
       additionalProperties: false
-      required: [courseId, version, title, description, objectives, sourceLanguage, changelog, license, contributors, publishedAt, modules]
+      required: [courseId, version, title, description, objectives, sourceLanguage, changelog, license, contributors, publishedAt, modules, assessments]
       properties:
         courseId: { type: string, format: uuid }
         version: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
@@ -1356,6 +1356,42 @@ components:
         contributors: { type: array, items: { $ref: '#/components/schemas/PublishedContributor' } }
         publishedAt: { type: string, format: date-time }
         modules: { type: array, items: { $ref: '#/components/schemas/PublishedCourseModule' } }
+        assessments: { type: array, items: { $ref: '#/components/schemas/PublishedAssessmentLearnerView' } }
+    PublishedAssessmentLearnerView:
+      type: object
+      additionalProperties: false
+      required: [assessmentKey, questions]
+      properties:
+        assessmentKey: { type: string, format: uuid }
+        questions: { type: array, items: { $ref: '#/components/schemas/PublishedAssessmentLearnerQuestion' } }
+    PublishedAssessmentLearnerQuestion:
+      type: object
+      additionalProperties: false
+      required: [stableKey, type, prompt, position, options, leftItems, rightItems]
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        type: { type: string, enum: [SINGLE_CHOICE, MULTIPLE_CHOICE, MATCHING] }
+        prompt: { type: string, minLength: 1, maxLength: 10000 }
+        position: { type: integer, minimum: 0 }
+        options: { type: array, items: { $ref: '#/components/schemas/PublishedAssessmentLearnerOption' } }
+        leftItems: { type: array, items: { $ref: '#/components/schemas/PublishedAssessmentLearnerItem' } }
+        rightItems: { type: array, items: { $ref: '#/components/schemas/PublishedAssessmentLearnerItem' } }
+    PublishedAssessmentLearnerOption:
+      type: object
+      additionalProperties: false
+      required: [stableKey, text, position]
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        text: { type: string, minLength: 1, maxLength: 4000 }
+        position: { type: integer, minimum: 0 }
+    PublishedAssessmentLearnerItem:
+      type: object
+      additionalProperties: false
+      required: [stableKey, text, position]
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        text: { type: string, minLength: 1, maxLength: 4000 }
+        position: { type: integer, minimum: 0 }
     PublishedContentLicense: { type: object, additionalProperties: false, required: [kind, identifier, displayName, url, customText], properties: { kind: { type: string, enum: [STANDARD, ALL_RIGHTS_RESERVED, CUSTOM] }, identifier: { type: string }, displayName: { type: string }, url: { type: string, description: Empty when no public license URL is present. }, customText: { type: string } } }
     PublishedContributor: { type: object, additionalProperties: false, required: [displayName, role, order], properties: { displayName: { type: string }, role: { type: string, enum: [AUTHOR, MAINTAINER] }, order: { type: integer, minimum: 0 } } }
     PublishedCourseModule: { type: object, additionalProperties: false, required: [stableKey, title, description, position, lessons], properties: { stableKey: { type: string }, title: { type: string }, description: { type: string }, position: { type: integer, minimum: 0 }, lessons: { type: array, items: { $ref: '#/components/schemas/PublishedCourseLesson' } } } }

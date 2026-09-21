@@ -50,8 +50,10 @@ mutable Assessments table.
 
 Correct answers are required internal grading data, so the Courses aggregate
 and persistence retain them. The entire binding collection is excluded from
-default JSON and existing public Course/catalog DTOs; learner question delivery
-will require a separate answer-free projection. Exact publication recovery uses
+default JSON and existing public Course/catalog DTOs. Exact CourseVersion reads
+map it explicitly to an answer-free learner projection containing only
+assessment, question, option, and matching-item semantic keys plus presentation
+text and order. Exact publication recovery uses
 the binding already owned by Courses, ensuring later Assessment edits cannot
 alter or block the published artifact.
 
@@ -63,7 +65,7 @@ The immutable publication read boundary is Courses-owned: `/api/courses/by-id/{c
 
 `/api/courses/catalog` is also Courses-owned and returns a paginated lightweight summary for each logical Course with a complete immutable `PUBLISHED` version. It selects one latest version per Course by numeric SemVer, then orders summaries by title and Course ID. Its optional normalized source-language filter applies to that selected latest version. The catalog never consults unpublished Authoring state or exposes Review/Draft provenance, modules, lessons, or canonical content; consumers fetch a selected full version through the immutable `by-id` read API.
 
-The published course reader renders canonical LessonContent from the exact loaded CourseVersion through the shared closed block renderer. It rejects Course/version payloads that do not match the active route, strictly normalizes Lesson selection within that version, and never substitutes Authoring or Draft data. The renderer never executes authored HTML. IMAGE, VIDEO, AUDIO, and DOWNLOAD blocks build same-origin URLs using only the exact loaded Course ID, SemVer, and canonical `assetKey`; the server resolves those URLs through that CourseVersion's immutable binding. Images retain canonical alt/decorative semantics, native audio/video controls do not autoplay, and downloads use meaningful canonical labels. Captions and asset-backed transcripts remain truthful download links until a separate validated timed-text design exists. Knowledge checks remain non-interactive placeholders until assessment delivery exists. Enrollment, progress, and completion are not part of the reader.
+The published course reader renders canonical LessonContent from the exact loaded CourseVersion through the shared closed block renderer. It rejects Course/version payloads that do not match the active route, strictly normalizes Lesson selection within that version, and never substitutes Authoring or Draft data. The renderer never executes authored HTML. IMAGE, VIDEO, AUDIO, and DOWNLOAD blocks build same-origin URLs using only the exact loaded Course ID, SemVer, and canonical `assetKey`; the server resolves those URLs through that CourseVersion's immutable binding. Images retain canonical alt/decorative semantics, native audio/video controls do not autoplay, and downloads use meaningful canonical labels. Captions and asset-backed transcripts remain truthful download links until a separate validated timed-text design exists. Knowledge checks use only the answer-free exact-version projection and provide native local practice controls; responses are neither saved nor graded. Enrollment, progress, and completion are not part of the reader.
 
 `GET /api/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}` is a public immutable binary representation for one exact PUBLISHED CourseVersion binding. It never falls back to latest or Authoring state. Binding metadata provides Content-Type, Content-Length, and safe filename; a SHA-256-derived strong ETag supports `If-None-Match`, and the exact immutable URL is cacheable for one year. Storage object IDs and all Authoring provenance remain private. The current `BinaryStorage.Open` contract is streaming-only, so delivery intentionally does not advertise or emulate byte-range responses. Inline media is limited to safe raster image, audio, and video types; SVG and active/document types are forced to attachment with `nosniff`. Future asset retention must preserve every storage object referenced by a Courses binding.
 

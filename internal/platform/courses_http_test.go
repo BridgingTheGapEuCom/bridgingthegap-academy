@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,27 @@ import (
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 )
+
+func TestPublishedCourseVersionDTOOmitsAssessmentAnswerDefinitions(t *testing.T) {
+	value := courses.PublishedCourseVersion{
+		Assessments: []courses.PublishedAssessmentLearnerView{{
+			AssessmentKey: "10000000-0000-4000-8000-000000000001",
+			Questions: []courses.PublishedAssessmentLearnerQuestion{{
+				StableKey: "question", Type: courses.PublishedQuestionSingleChoice, Prompt: "Choose", Position: 0,
+				Options: []courses.PublishedAssessmentLearnerOption{{StableKey: "one", Text: "One", Position: 0}, {StableKey: "two", Text: "Two", Position: 1}},
+			}},
+		}},
+	}
+	encoded, err := json.Marshal(publishedCourseVersion(value))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, private := range []string{"correctOption", "correctPairs", "answerKey", "answers", "creator", "draft"} {
+		if strings.Contains(strings.ToLower(string(encoded)), strings.ToLower(private)) {
+			t.Fatalf("public DTO leaked %q: %s", private, encoded)
+		}
+	}
+}
 
 type publishedCourseHTTPRepository struct {
 	exact     courses.ImmutableCourseVersion
