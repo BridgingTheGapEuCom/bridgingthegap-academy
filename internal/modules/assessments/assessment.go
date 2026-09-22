@@ -24,6 +24,10 @@ var (
 	ErrAssessmentNotFound = errors.New("assessment record not found")
 	ErrAssessmentConflict = errors.New("assessment record conflicts with existing data")
 	ErrRevisionMismatch   = errors.New("assessment revision mismatch")
+	ErrInvalidAttempt     = errors.New("invalid assessment attempt")
+	ErrAttemptNotFound    = errors.New("assessment attempt record not found")
+	ErrAttemptConflict    = errors.New("assessment attempt record conflicts with existing data")
+	ErrAttemptImmutable   = errors.New("submitted assessment attempt is immutable")
 )
 
 // Assessment is a mutable Authoring-owned definition. OwnerDraftID,

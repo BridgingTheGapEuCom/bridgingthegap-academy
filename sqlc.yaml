@@ -37,7 +37,12 @@ sql:
         out: internal/modules/assets/db/sqlc
         sql_package: pgx/v5
   - engine: postgresql
-    schema: internal/modules/infrastructure/postgres/db/migrations/00017_assessments.sql
+    schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00002_identity.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00017_assessments.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00018_course_version_assessment_binding.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00019_assessment_attempts.sql
     queries: internal/modules/assessments/db/query
     gen:
       go:

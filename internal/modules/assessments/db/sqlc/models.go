@@ -18,3 +18,96 @@ type AssessmentsAssessment struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 }
+
+type AssessmentsAssessmentAttempt struct {
+	ID              pgtype.UUID
+	LearnerUserID   pgtype.UUID
+	CourseVersionID pgtype.UUID
+	AssessmentKey   pgtype.UUID
+	State           string
+	Revision        int64
+	Responses       []byte
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+	SubmittedAt     pgtype.Timestamptz
+}
+
+type CoursesCourse struct {
+	ID        pgtype.UUID
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+}
+
+type CoursesCourseVersion struct {
+	ID                 pgtype.UUID
+	CourseID           pgtype.UUID
+	Version            string
+	VersionMajor       pgtype.Int4
+	VersionMinor       pgtype.Int4
+	VersionPatch       pgtype.Int4
+	Status             string
+	Title              string
+	Description        string
+	LearningObjectives []byte
+	SourceLanguage     string
+	Changelog          string
+	LicenseKind        string
+	LicenseIdentifier  pgtype.Text
+	LicenseDisplayName string
+	LicenseUrl         pgtype.Text
+	LicenseCustomText  pgtype.Text
+	Attribution        []byte
+	CreatedAt          pgtype.Timestamptz
+	PublishedAt        pgtype.Timestamptz
+}
+
+type CoursesCourseVersionAssessmentBinding struct {
+	CourseVersionID pgtype.UUID
+	AssessmentKey   pgtype.UUID
+	Definition      []byte
+}
+
+type IdentityGlobalRoleAssignment struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Role      string
+	GrantedAt pgtype.Timestamptz
+	GrantedBy pgtype.UUID
+	RevokedAt pgtype.Timestamptz
+}
+
+type IdentityLocalPasswordCredential struct {
+	UserID pgtype.UUID
+	// Sensitive password verifier; never log or expose through unrelated queries
+	PasswordHash string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
+type IdentitySession struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+	// SHA-256 digest of opaque session token; raw browser token must not be stored
+	TokenDigest []byte
+	CreatedAt   pgtype.Timestamptz
+	LastSeenAt  pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	RevokedAt   pgtype.Timestamptz
+}
+
+type IdentityUser struct {
+	ID        pgtype.UUID
+	Status    string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type IdentityUserEmail struct {
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	NormalizedEmail string
+	DisplayEmail    string
+	VerifiedAt      pgtype.Timestamptz
+	IsPrimary       bool
+	CreatedAt       pgtype.Timestamptz
+}

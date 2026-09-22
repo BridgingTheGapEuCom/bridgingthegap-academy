@@ -21,3 +21,12 @@ type Repository interface {
 	UpdateAssessment(context.Context, AssessmentID, int64, AssessmentUpdate) (Assessment, error)
 	ListAssessmentSummariesForDraft(context.Context, string, int, int) ([]AssessmentSummary, int, error)
 }
+
+// AttemptRepository owns private learner response aggregates. It deliberately
+// does not expose learner history or grading queries in this foundation slice.
+type AttemptRepository interface {
+	CreateAssessmentAttempt(context.Context, AttemptInput) (AssessmentAttempt, error)
+	GetAssessmentAttempt(context.Context, AttemptID) (AssessmentAttempt, error)
+	UpdateAssessmentAttempt(context.Context, AttemptID, int64, AttemptUpdate) (AssessmentAttempt, error)
+	SubmitAssessmentAttempt(context.Context, AttemptID, int64, time.Time) (AssessmentAttempt, error)
+}

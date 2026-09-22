@@ -2,6 +2,7 @@
   "audit.events": "audit",
   "assets.asset": "assets",
   "assessments.assessment": "assessments",
+  "assessments.assessment_attempt": "assessments",
   "authoring.course_draft": "authoring",
   "authoring.workspace": "authoring",
   "authoring.workspace_member": "authoring",

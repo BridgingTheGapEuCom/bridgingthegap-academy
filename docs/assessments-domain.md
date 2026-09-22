@@ -56,6 +56,24 @@ projection containing only semantic keys, frozen presentation text, and order.
 The learner reader supports unsaved, ungraded local practice responses; attempts
 and grading remain deferred.
 
+`assessments.assessment_attempt` now owns private persisted learner response
+aggregates. Every Attempt has its own opaque UUID, one durable Identity user,
+one exact internal CourseVersion UUID, and one canonical `assessmentKey`. A
+composite foreign key requires that key to exist in the exact Courses-owned
+published Assessment binding, so an Attempt cannot silently drift to another
+CourseVersion or mutable Authoring Assessment. There is intentionally no
+foreign key to `assessments.assessment`.
+
+Attempts begin as `IN_PROGRESS` and may contain no responses while a future API
+is saving progress. Responses use stable question, option, and matching-item
+keys: a single selected option, a canonical option-key set, or canonical
+one-to-one matching pairs. The stored JSONB response document is validated on
+write and read; it never includes correct answers, grading data, or feedback.
+Revision-based compare-and-swap protects `IN_PROGRESS` updates. `SUBMITTED`
+sets a server-owned timestamp and is immutable. Submission and grading HTTP
+APIs remain separate work, and anonymous learner practice remains in memory
+until a durable authenticated learner identity is available at that boundary.
+
 The Draft Authoring workspace provides private Assessment list and editor
 routes. The editor uses native radios, checkboxes, selects, and move controls;
 stable question, option, and matching-item keys survive text edits and
