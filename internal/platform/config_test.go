@@ -185,3 +185,19 @@ func TestAssetStorageConfigurationIsExplicitAndBounded(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenBadgesSubjectSecretIsOptionalUntilExportIsEnabledButNeverWeak(t *testing.T) {
+	setValidCertificateIssuer(t)
+	t.Setenv("BTG_LMS_MODE", "production")
+	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
+	t.Setenv("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET", "short")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("accepted weak Open Badges subject secret")
+	}
+	t.Setenv("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET", "01234567890123456789012345678901")
+	cfg, err := LoadConfig()
+	if err != nil || len(cfg.OpenBadgesSubjectSecret) != 32 {
+		t.Fatalf("secret configuration=%d,%v", len(cfg.OpenBadgesSubjectSecret), err)
+	}
+}

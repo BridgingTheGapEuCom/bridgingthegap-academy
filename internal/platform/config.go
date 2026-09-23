@@ -23,6 +23,7 @@ type Config struct {
 	AssetStoragePath         string
 	AssetMaxBytes            int64
 	CertificateIssuer        credentials.Issuer
+	OpenBadgesSubjectSecret  []byte
 }
 
 func LoadConfig() (Config, error) {
@@ -42,6 +43,7 @@ func LoadConfig() (Config, error) {
 		RequireIndependentReview: requireIndependentReview,
 		AssetStoragePath:         os.Getenv("BTG_LMS_ASSET_STORAGE_PATH"),
 		AssetMaxBytes:            assetMaxBytes,
+		OpenBadgesSubjectSecret:  []byte(os.Getenv("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET")),
 		CertificateIssuer: credentials.Issuer{
 			ID: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_ID"), Name: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_NAME"),
 		},
@@ -68,6 +70,9 @@ func LoadConfig() (Config, error) {
 	}
 	if err := cfg.CertificateIssuer.Validate(); err != nil {
 		return Config{}, errors.New("BTG_LMS_CERTIFICATE_ISSUER_ID and BTG_LMS_CERTIFICATE_ISSUER_NAME are required")
+	}
+	if len(cfg.OpenBadgesSubjectSecret) > 0 && len(cfg.OpenBadgesSubjectSecret) < 32 {
+		return Config{}, errors.New("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET must contain at least 32 bytes")
 	}
 	for name, address := range map[string]string{"BTG_LMS_HTTP_ADDR": cfg.HTTPAddr, "BTG_LMS_METRICS_ADDR": cfg.MetricsAddr} {
 		if _, _, err := net.SplitHostPort(address); err != nil {

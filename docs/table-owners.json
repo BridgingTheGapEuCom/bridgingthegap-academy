@@ -30,5 +30,7 @@
   "community.course_community": "community",
   "community.thread": "community",
   "community.post": "community",
-  "credentials.certificate": "credentials"
+  "credentials.certificate": "credentials",
+  "open_badges.status_list": "openbadges",
+  "open_badges.status_list_entry": "openbadges"
 }

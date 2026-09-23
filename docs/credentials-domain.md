@@ -67,3 +67,30 @@ are deliberately rejected for portable export until a truthful standard
 credential-status service exists. No `proof` is emitted. This is an unsigned
 pre-signing representation, not an Open Badges-conformant signed credential or
 cryptographic verification result.
+
+## Open Badges publication prerequisites
+
+The deployment-held `BTG_LMS_OPEN_BADGES_SUBJECT_SECRET` is validated at a
+minimum of 32 bytes when configured. It is never returned or logged. It is an
+installation-stable credential-identity secret: rotating it would change the
+HMAC-derived recipient URI on a reserialization, so rotation is a deliberate
+future migration, not a routine configuration change.
+
+The unsigned adapter derives the credential identifier from the Academy public
+verification route (`/verify/certificates/{certificateId}`), and creates an
+exact CourseVersion Achievement identifier at
+`/achievements/course-versions/{courseVersionId}`. Frozen issuer claims remain
+from the Certificate; current configuration does not rewrite historical
+claims.
+
+`open_badges.status_list` and `open_badges.status_list_entry` reserve stable
+W3C Bitstring Status List v1.0 `revocation` positions. Lists have the W3C
+minimum capacity of 131,072 entries and new lists are allocated after a list is
+full. The entry is idempotent per Certificate and does not store lifecycle
+truth: `credentials.certificate.status` remains authoritative. ACTIVE and
+REVOKED Certificates retain the same reserved entry, so a later signed status
+list can change the bit without re-signing the credential.
+
+No status-list Verifiable Credential, bitstring payload, verification method,
+key, or proof is published in this milestone. Portable Open Badges revocation
+verification is therefore not implemented yet.

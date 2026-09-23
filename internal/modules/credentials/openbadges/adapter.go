@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
@@ -34,6 +35,7 @@ type Credential struct {
 	Issuer            Profile            `json:"issuer"`
 	ValidFrom         string             `json:"validFrom"`
 	CredentialSubject AchievementSubject `json:"credentialSubject"`
+	CredentialStatus  *StatusReference   `json:"credentialStatus,omitempty"`
 }
 type Profile struct {
 	ID   string   `json:"id"`
@@ -83,7 +85,7 @@ func (m *Mapper) Map(c credentials.Certificate) (Credential, error) {
 	if err != nil {
 		return Credential{}, ErrInvalidCertificate
 	}
-	return Credential{Context: []string{VCContext, OBContext}, ID: m.url("certificates", string(c.ID)), Type: []string{"VerifiableCredential", "OpenBadgeCredential"}, Issuer: issuer, ValidFrom: c.IssuedAt.UTC().Format("2006-01-02T15:04:05Z"), CredentialSubject: AchievementSubject{ID: m.subject(c.LearnerUserID), Type: []string{"AchievementSubject"}, Achievement: Achievement{ID: m.url("achievements", "course-versions", c.CourseVersionID), Type: []string{"Achievement"}, Name: c.Achievement.CourseTitle, Description: "Certificate awarded for completing " + c.Achievement.CourseTitle + " version " + c.Achievement.CourseVersion + ".", Criteria: Criteria{Narrative: c.Achievement.Criteria}, Creator: issuer, InLanguage: c.Achievement.Language}}}, nil
+	return Credential{Context: []string{VCContext, OBContext}, ID: m.url("verify", "certificates", string(c.ID)), Type: []string{"VerifiableCredential", "OpenBadgeCredential"}, Issuer: issuer, ValidFrom: c.IssuedAt.UTC().Format("2006-01-02T15:04:05Z"), CredentialSubject: AchievementSubject{ID: m.subject(c.LearnerUserID), Type: []string{"AchievementSubject"}, Achievement: Achievement{ID: m.url("achievements", "course-versions", c.CourseVersionID), Type: []string{"Achievement"}, Name: c.Achievement.CourseTitle, Description: "Certificate awarded for completing " + c.Achievement.CourseTitle + " version " + c.Achievement.CourseVersion + ".", Criteria: Criteria{Narrative: c.Achievement.Criteria}, Creator: issuer, InLanguage: c.Achievement.Language}}}, nil
 }
 func (m *Mapper) url(parts ...string) string {
 	u := *m.base
@@ -102,4 +104,14 @@ func profile(i credentials.Issuer) (Profile, error) {
 		return Profile{}, ErrInvalidCertificate
 	}
 	return Profile{ID: i.ID, Type: []string{"Profile"}, Name: i.Name}, nil
+}
+
+// StatusReferenceFor prepares the exact W3C BitstringStatusListEntry claim for
+// a future signed credential. It is intentionally not attached to M7.2a output
+// until a signed BitstringStatusListCredential can be published.
+func (m *Mapper) StatusReferenceFor(entry StatusListEntry) (StatusReference, error) {
+	if m == nil || m.base == nil || entry.Validate() != nil {
+		return StatusReference{}, ErrInvalidConfiguration
+	}
+	return StatusReference{ID: m.url("open-badges", "status", "revocation", entry.StatusListID, "entries", entry.CertificateID), Type: "BitstringStatusListEntry", StatusPurpose: RevocationPurpose, StatusListIndex: strconv.Itoa(entry.StatusListIndex), StatusListCredential: m.url("open-badges", "status", "revocation", entry.StatusListID)}, nil
 }
