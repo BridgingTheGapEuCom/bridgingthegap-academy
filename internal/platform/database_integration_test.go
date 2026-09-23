@@ -59,6 +59,7 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("assessment attempt persistence", func(t *testing.T) { testAssessmentAttemptPersistence(t, ctx, pool) })
 	t.Run("certificate persistence", func(t *testing.T) { testCertificatePersistence(t, ctx, pool) })
 	t.Run("certificate issuance", func(t *testing.T) { testCertificateIssuance(t, ctx, pool) })
+	t.Run("Open Badges status allocation and payload", func(t *testing.T) { testOpenBadgesStatus(t, ctx, pool) })
 	t.Run("learner assessment attempt API", func(t *testing.T) { testLearnerAssessmentAttemptAPI(t, ctx, pool) })
 	t.Run("published asset binary delivery", func(t *testing.T) { testPublishedAssetBinaryDelivery(t, ctx, pool) })
 	t.Run("authoring publication API", func(t *testing.T) { testAuthoringPublicationAPI(t, ctx, pool) })

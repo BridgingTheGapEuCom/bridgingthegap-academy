@@ -85,12 +85,26 @@ claims.
 
 `open_badges.status_list` and `open_badges.status_list_entry` reserve stable
 W3C Bitstring Status List v1.0 `revocation` positions. Lists have the W3C
-minimum capacity of 131,072 entries and new lists are allocated after a list is
-full. The entry is idempotent per Certificate and does not store lifecycle
-truth: `credentials.certificate.status` remains authoritative. ACTIVE and
+minimum capacity of 131,072 entries. New allocations use cryptographically
+secure random indices, with database uniqueness, bounded collision retries, and
+a free-slot fallback near capacity. Existing allocated indices stay unchanged.
+`next_index` tracks the number of reserved slots, not the allocated index; a
+new list is created when the current list reaches capacity. The entry is
+idempotent per Certificate and does not store lifecycle truth: `credentials.certificate.status` remains authoritative. ACTIVE and
 REVOKED Certificates retain the same reserved entry, so a later signed status
 list can change the bit without re-signing the credential.
 
-No status-list Verifiable Credential, bitstring payload, verification method,
-key, or proof is published in this milestone. Portable Open Badges revocation
-verification is therefore not implemented yet.
+The prepared `BitstringStatusListEntry` uses a decimal-string index and an
+entry ID distinct from the list URL. It omits optional `statusSize`, using the
+standard one-bit default; it is not attached to exported unsigned badges.
+The internal builder reads allocation and Certificate lifecycle from one
+consistent database snapshot. It creates a full-size bitstring (index zero is
+the most significant bit of the first byte), GZIP-compresses it, then encodes
+it as multibase base64url without padding. A typed, unsigned
+`BitstringStatusListCredential` snapshot can be constructed with an explicitly
+supplied `validFrom`; it has no proof or verification method. Publishing a
+status-list VC requires constructing, signing, and publishing a complete
+snapshot atomically. The list URL stays stable while its signed representation
+can be refreshed after revocation. No status-list VC is published yet.
+Portable revocation verification remains unavailable until the status-list
+credential is cryptographically secured and published.
