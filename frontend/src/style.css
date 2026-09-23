@@ -37,6 +37,16 @@
 .site-session { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: var(--btg-space-2); }
 .site-session > p { margin: 0; color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); }
 .site-session__error { max-width: min(100%, 22rem); border-inline-start: 0.25rem solid var(--btg-color-danger); background: var(--btg-color-surface-muted); padding: var(--btg-space-2) var(--btg-space-3); color: var(--btg-color-text) !important; }
+.community-page { display: grid; gap: var(--btg-space-5); }
+.community-page__back { inline-size: fit-content; }
+.community-page__empty { padding: var(--btg-space-4); background: var(--btg-color-surface-muted); }
+.community-form { display: grid; gap: var(--btg-space-2); max-inline-size: 48rem; }
+.community-form input, .community-form textarea { inline-size: 100%; box-sizing: border-box; font: inherit; }
+.community-error { color: var(--btg-color-danger); font-weight: 600; }
+.community-threads, .community-posts { display: grid; gap: var(--btg-space-3); margin: 0; padding: 0; list-style: none; }
+.community-threads li, .community-posts article { border-block-start: 1px solid var(--btg-color-border); padding-block-start: var(--btg-space-3); }
+.community-threads p, .community-posts__meta { color: var(--btg-color-text-secondary); margin-block: var(--btg-space-1) 0; }
+.community-posts__body { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Intrinsic grid/fieldset minima must not impose a viewport width when text grows. */
 .authoring-home,

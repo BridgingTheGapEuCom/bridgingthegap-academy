@@ -23,6 +23,7 @@
         <p class="published-course-reader__eyebrow">Bridging the Gap Academy</p>
         <h1 id="published-course-title" ref="courseTitle" tabindex="-1">{{ state.course.title }}</h1>
         <p v-if="state.course.description" class="published-course-reader__description">{{ state.course.description }}</p>
+        <RouterLink :to="`/courses/by-id/${state.course.courseId}/community`">Course discussions</RouterLink>
         <dl class="published-course-reader__metadata">
           <div><dt>Version</dt><dd>{{ state.course.version }}</dd></div>
           <div v-if="state.course.sourceLanguage"><dt>Source language</dt><dd>{{ state.course.sourceLanguage }}</dd></div>

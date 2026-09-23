@@ -28,3 +28,13 @@ by activity (`updatedAt DESC`, then ID); Post pages are chronological
 (`createdAt ASC`, then ID). Creating a reply updates its Thread activity in the
 same database statement. Participant DTOs carry only opaque author IDs and
 plain text, never Identity account data or moderation state.
+
+## Learner experience
+
+Authenticated learners can open the durable Course Community routes, create a
+plain-text Thread, and append flat replies. The learner UI renders author data
+as the neutral label “Participant” because no public profile projection exists.
+It keeps unsent form text only in memory, renders Posts as plain text with line
+breaks, and shows the server’s ENABLED or DISABLED mode distinctly. Moderation
+controls, nested replies, editing, deletion, and browser draft persistence are
+deferred.
