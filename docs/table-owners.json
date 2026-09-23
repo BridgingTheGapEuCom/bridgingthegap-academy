@@ -29,5 +29,6 @@
   "progress.lesson_completion": "progress",
   "community.course_community": "community",
   "community.thread": "community",
-  "community.post": "community"
+  "community.post": "community",
+  "credentials.certificate": "credentials"
 }

@@ -1,4 +1,4 @@
-// Package credentials owns certificates, badges, issuance, and verification.
-//
-// Domain contracts are intentionally deferred in the M0 skeleton.
+// Package credentials owns durable course-completion certificates. Open Badges
+// adapters, public verification, issuance eligibility, and rendering are
+// separate future boundaries.
 package credentials
