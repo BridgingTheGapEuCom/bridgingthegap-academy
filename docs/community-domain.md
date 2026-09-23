@@ -38,3 +38,14 @@ It keeps unsent form text only in memory, renders Posts as plain text with line
 breaks, and shows the server’s ENABLED or DISABLED mode distinctly. Moderation
 controls, nested replies, editing, deletion, and browser draft persistence are
 deferred.
+
+## Moderation
+
+`community.moderate` is granted to a durable published-Course contributor whose
+recorded role is AUTHOR or MAINTAINER. It is separate from participation; global
+ADMIN has no implicit bypass. Moderators may hide or unhide Threads and reply
+Posts while Community is disabled. These idempotent state changes preserve
+content, authorship, creation times, and Thread activity ordering. An opening
+Post cannot be hidden alone: hide its Thread instead. Participant reads remain
+visible-only; audit events are deferred because no reusable Community audit
+stream exists yet.

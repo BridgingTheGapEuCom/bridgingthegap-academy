@@ -88,6 +88,51 @@ func (s *Service) CreatePost(ctx context.Context, input PostInput) (Post, error)
 	return s.repository.CreatePost(ctx, input)
 }
 
+// Moderate uses immutable published attribution as the durable Course policy:
+// a current authenticated contributor recorded as AUTHOR or MAINTAINER may
+// moderate. Instance administrators receive no implicit bypass.
+func (s *Service) ModerateThread(ctx context.Context, courseID, actorID, threadID string, state Visibility) (Thread, error) {
+	if err := s.requireModerator(ctx, courseID, actorID); err != nil {
+		return Thread{}, err
+	}
+	return s.repository.SetThreadState(ctx, courseID, threadID, state)
+}
+func (s *Service) ModeratePost(ctx context.Context, courseID, actorID, threadID, postID string, state Visibility) (Post, error) {
+	if err := s.requireModerator(ctx, courseID, actorID); err != nil {
+		return Post{}, err
+	}
+	if state == Hidden {
+		posts, _, err := s.repository.ListVisiblePosts(ctx, threadID, 1, 0)
+		if err != nil {
+			return Post{}, err
+		}
+		if len(posts) > 0 && posts[0].ID == postID {
+			return Post{}, ErrOpeningPost
+		}
+	}
+	return s.repository.SetPostState(ctx, courseID, threadID, postID, state)
+}
+func (s *Service) requireModerator(ctx context.Context, courseID, actorID string) error {
+	if !uuid(courseID) || !uuid(actorID) {
+		return ErrNotFound
+	}
+	versions, err := s.courses.ListPublishedCourseVersions(ctx)
+	if err != nil {
+		return err
+	}
+	for _, v := range versions {
+		if string(v.CourseID) != courseID || v.Status != courses.CourseVersionPublished {
+			continue
+		}
+		for _, c := range v.Attribution {
+			if c.UserID == actorID && (c.Role == courses.ContributorAuthor || c.Role == courses.ContributorMaintainer) {
+				return nil
+			}
+		}
+	}
+	return ErrNotFound
+}
+
 func (s *Service) requirePublishedCourse(ctx context.Context, courseID string) error {
 	versions, err := s.courses.ListPublishedCourseVersions(ctx)
 	if err != nil {

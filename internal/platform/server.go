@@ -214,6 +214,8 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Post("/courses/by-id/{courseId}/community/threads", auth.handleCommunityCreateThread)
 					protected.Get("/courses/by-id/{courseId}/community/threads/{threadId}", auth.handleCommunityThread)
 					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/posts", auth.handleCommunityCreatePost)
+					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/{action:hide|unhide}", auth.handleCommunityModerateThread)
+					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/posts/{postId}/{action:hide|unhide}", auth.handleCommunityModeratePost)
 				}
 				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
 				if auth.authoring != nil {

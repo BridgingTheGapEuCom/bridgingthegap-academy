@@ -210,7 +210,62 @@ func communityProblem(w http.ResponseWriter, r *http.Request, err error) {
 		problemCode(w, r, http.StatusConflict, "Community is disabled", "community_disabled")
 	case errors.Is(err, community.ErrInvalid):
 		problemCode(w, r, http.StatusBadRequest, "Invalid community content", "invalid_community_content")
+	case errors.Is(err, community.ErrOpeningPost):
+		problemCode(w, r, http.StatusConflict, "Hide the thread to hide its opening post", "opening_post_requires_thread_moderation")
 	default:
 		problem(w, r, http.StatusInternalServerError, "Internal server error")
 	}
+}
+
+func (h *authHTTP) handleCommunityModerateThread(w http.ResponseWriter, r *http.Request) {
+	actor, ok := learnerActor(w, r)
+	if !ok {
+		return
+	}
+	course, ok := communityCourseID(w, r)
+	if !ok {
+		return
+	}
+	thread, ok := communityUUIDParam(w, r, "threadId", "Invalid thread ID")
+	if !ok {
+		return
+	}
+	state := community.Visible
+	if chi.URLParam(r, "action") == "hide" {
+		state = community.Hidden
+	}
+	x, err := h.community.ModerateThread(r.Context(), course, string(actor.UserID()), thread, state)
+	if err != nil {
+		communityProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"threadId": x.ID, "state": string(x.State)})
+}
+func (h *authHTTP) handleCommunityModeratePost(w http.ResponseWriter, r *http.Request) {
+	actor, ok := learnerActor(w, r)
+	if !ok {
+		return
+	}
+	course, ok := communityCourseID(w, r)
+	if !ok {
+		return
+	}
+	thread, ok := communityUUIDParam(w, r, "threadId", "Invalid thread ID")
+	if !ok {
+		return
+	}
+	post, ok := communityUUIDParam(w, r, "postId", "Invalid post ID")
+	if !ok {
+		return
+	}
+	state := community.Visible
+	if chi.URLParam(r, "action") == "hide" {
+		state = community.Hidden
+	}
+	x, err := h.community.ModeratePost(r.Context(), course, string(actor.UserID()), thread, post, state)
+	if err != nil {
+		communityProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"postId": x.ID, "state": string(x.State)})
 }

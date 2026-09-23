@@ -120,6 +120,16 @@ func (r *Repository) CreatePost(c context.Context, in community.PostInput) (comm
 	e := r.pool.QueryRow(c, `WITH active_thread AS (UPDATE community.thread SET updated_at=now() WHERE id=$1 AND course_id=$2 AND state='VISIBLE' RETURNING id) INSERT INTO community.post(thread_id,author_user_id,body) SELECT id,$3,$4 FROM active_thread RETURNING id,thread_id,author_user_id,body,state,created_at,updated_at`, in.ThreadID, in.CourseID, in.AuthorUserID, body).Scan(&p.ID, &p.ThreadID, &p.AuthorUserID, &p.Body, &p.State, &p.CreatedAt, &p.UpdatedAt)
 	return p, err(e)
 }
+func (r *Repository) SetThreadState(c context.Context, course, id string, state community.Visibility) (community.Thread, error) {
+	var t community.Thread
+	e := r.pool.QueryRow(c, `UPDATE community.thread SET state=$3 WHERE course_id=$1 AND id=$2 RETURNING id,course_id,title,created_by_user_id,state,created_at,updated_at`, course, id, state).Scan(&t.ID, &t.CourseID, &t.Title, &t.CreatedByUserID, &t.State, &t.CreatedAt, &t.UpdatedAt)
+	return t, err(e)
+}
+func (r *Repository) SetPostState(c context.Context, course, thread, id string, state community.Visibility) (community.Post, error) {
+	var p community.Post
+	e := r.pool.QueryRow(c, `UPDATE community.post p SET state=$4 FROM community.thread t WHERE p.id=$3 AND p.thread_id=$2 AND t.id=p.thread_id AND t.course_id=$1 RETURNING p.id,p.thread_id,p.author_user_id,p.body,p.state,p.created_at,p.updated_at`, course, thread, id, state).Scan(&p.ID, &p.ThreadID, &p.AuthorUserID, &p.Body, &p.State, &p.CreatedAt, &p.UpdatedAt)
+	return p, err(e)
+}
 func err(e error) error {
 	if errors.Is(e, pgx.ErrNoRows) {
 		return community.ErrNotFound

@@ -10,9 +10,11 @@ import (
 var ErrInvalid = errors.New("invalid community entity")
 var ErrNotFound = errors.New("community entity not found")
 var ErrDisabled = errors.New("community is disabled")
+var ErrOpeningPost = errors.New("opening post must be moderated with its thread")
 
 type Mode string
 type Visibility string
+type Capability string
 
 const (
 	CommunityEnabled  Mode       = "ENABLED"
@@ -20,6 +22,7 @@ const (
 	Visible           Visibility = "VISIBLE"
 	Hidden            Visibility = "HIDDEN"
 )
+const CapabilityModerate Capability = "community.moderate"
 const (
 	maxTitle = 240
 	maxBody  = 20000
@@ -75,6 +78,8 @@ type Repository interface {
 	GetVisibleThread(context.Context, string, string) (Thread, error)
 	ListVisiblePosts(context.Context, string, int, int) ([]Post, int, error)
 	CreatePost(context.Context, PostInput) (Post, error)
+	SetThreadState(context.Context, string, string, Visibility) (Thread, error)
+	SetPostState(context.Context, string, string, string, Visibility) (Post, error)
 }
 
 func NormalizeTitle(v string) (string, error) { return normalize(v, maxTitle) }

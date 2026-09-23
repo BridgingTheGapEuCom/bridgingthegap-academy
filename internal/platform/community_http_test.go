@@ -69,6 +69,12 @@ func (f *communityRepositoryFake) CreatePost(_ context.Context, in community.Pos
 	now := time.Now()
 	return community.Post{ID: communityTestPost, ThreadID: in.ThreadID, AuthorUserID: in.AuthorUserID, Body: strings.TrimSpace(in.Body), State: community.Visible, CreatedAt: now, UpdatedAt: now}, nil
 }
+func (f *communityRepositoryFake) SetThreadState(_ context.Context, course, id string, state community.Visibility) (community.Thread, error) {
+	return community.Thread{ID: id, CourseID: course, Title: "Thread", CreatedByUserID: "44444444-4444-4444-8444-444444444444", State: state, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
+}
+func (f *communityRepositoryFake) SetPostState(_ context.Context, _, thread, id string, state community.Visibility) (community.Post, error) {
+	return community.Post{ID: id, ThreadID: thread, AuthorUserID: "44444444-4444-4444-8444-444444444444", Body: "Post", State: state, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
+}
 
 func communityHTTP(t *testing.T, repo *communityRepositoryFake, session identity.ResolvedSession) http.Handler {
 	t.Helper()
