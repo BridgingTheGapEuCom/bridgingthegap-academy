@@ -49,3 +49,21 @@ issuance triggers, and learner UI are also deferred.
 Authenticated learners issue a certificate only for an exact published CourseVersion. The server derives the learner from the session and delegates eligibility and idempotent replay to the issuance service; it accepts no certificate metadata from the request. Learners may read only certificates they own through the private API.
 
 Public verification is an opaque certificate-ID lookup. It exposes frozen achievement, issuer, issued time, and `ACTIVE` or `REVOKED` status, but deliberately omits every recipient identity field. It is a registry-status statement, not a cryptographic verification or Open Badges claim. Verification uses conservative `no-store` caching because revocation can change. PDF rendering, Open Badges/VC serialization and signing remain deferred.
+
+## Open Badges 3.0 unsigned adapter
+
+`internal/modules/credentials/openbadges` is the only Open Badges/VC-aware
+boundary. It maps an ACTIVE Certificate snapshot to an unsigned VC 2.0/Open
+Badges 3.0 JSON-LD document with the VC 2.0 context followed by the Open Badges
+3.0.3 context, and `VerifiableCredential` plus `OpenBadgeCredential` types.
+The adapter never reads Courses, Authoring, Identity, or current configuration
+for a Certificate's frozen achievement and issuer fields.
+
+A configured HTTPS public base URL supplies stable credential and achievement
+identifiers. The recipient is an issuer-scoped HMAC-SHA-256 pseudonymous URI
+created from a deployment-held 32-byte-or-longer salt and the internal learner
+ID; the internal learner ID itself is never serialized. Revoked Certificates
+are deliberately rejected for portable export until a truthful standard
+credential-status service exists. No `proof` is emitted. This is an unsigned
+pre-signing representation, not an Open Badges-conformant signed credential or
+cryptographic verification result.
