@@ -619,6 +619,69 @@ paths:
         '304': { description: The immutable binary matches If-None-Match. }
         '404': { $ref: '#/components/responses/Problem' }
         '503': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts:
+    post:
+      operationId: createLearnerAssessmentAttempt
+      description: Creates a private IN_PROGRESS Attempt for the authenticated learner and an Assessment bound to this exact immutable PUBLISHED CourseVersion. Learner ownership comes exclusively from the session. Responses are private and not cacheable.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CourseID' }
+        - { $ref: '#/components/parameters/CourseVersion' }
+        - { $ref: '#/components/parameters/LearnerAssessmentKey' }
+        - { $ref: '#/components/parameters/AuthoringOrigin' }
+        - { $ref: '#/components/parameters/AuthoringCSRFToken' }
+      responses:
+        '201': { description: New private IN_PROGRESS Attempt, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttempt' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/learner/assessment-attempts/{attemptId}:
+    get:
+      operationId: getLearnerAssessmentAttempt
+      description: Returns one private Attempt only to its authenticated learner owner. It contains the learner's own responses and never authoritative answer keys.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/LearnerAttemptID' }]
+      responses:
+        '200': { description: Private learner Attempt, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttempt' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: replaceLearnerAssessmentAttemptResponses
+      description: Atomically replaces the complete partial response set for an IN_PROGRESS Attempt when expectedRevision matches. Responses are validated against the exact immutable published Assessment binding.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/LearnerAttemptID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttemptUpdateRequest' } } }
+      responses:
+        '200': { description: Updated private IN_PROGRESS Attempt, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttempt' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/learner/assessment-attempts/{attemptId}/submit:
+    post:
+      operationId: submitLearnerAssessmentAttempt
+      description: Validates complete responses and deterministically grades once against the exact immutable Courses binding. The response exposes only aggregate score counts, never answer keys.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/LearnerAttemptID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttemptSubmitRequest' } } }
+      responses:
+        '200': { description: Immutable submitted Attempt with aggregate result, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttempt' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/courses/by-id/{courseId}/latest:
     get:
       operationId: getLatestPublishedCourseVersionById
@@ -746,6 +809,8 @@ components:
     AuthoringCSRFToken: { name: X-CSRF-Token, in: header, required: true, schema: { type: string }, description: CSRF token bound to the authenticated session. }
     AuthoringDraftID: { name: draftId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringAssessmentID: { name: assessmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    LearnerAttemptID: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
+    LearnerAssessmentKey: { name: assessmentKey, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringUserID: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringModuleID: { name: moduleId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringLessonID: { name: lessonId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -886,6 +951,60 @@ components:
         limit: { type: integer, minimum: 1, maximum: 100 }
         offset: { type: integer, minimum: 0 }
         total: { type: integer, minimum: 0 }
+    LearnerAttemptID: { type: string, format: uuid }
+    LearnerAssessmentAttemptResponsePair:
+      type: object
+      additionalProperties: false
+      required: [leftItemKey, rightItemKey]
+      properties:
+        leftItemKey: { type: string, minLength: 1, maxLength: 160 }
+        rightItemKey: { type: string, minLength: 1, maxLength: 160 }
+    LearnerAssessmentAttemptResponse:
+      type: object
+      additionalProperties: false
+      required: [questionKey, type, selectedOptionKey, selectedOptionKeys, pairs]
+      properties:
+        questionKey: { type: string, minLength: 1, maxLength: 160 }
+        type: { type: string, enum: [SINGLE_CHOICE, MULTIPLE_CHOICE, MATCHING] }
+        selectedOptionKey: { type: string }
+        selectedOptionKeys: { type: array, maxItems: 20, items: { type: string, minLength: 1, maxLength: 160 } }
+        pairs: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/LearnerAssessmentAttemptResponsePair' } }
+    LearnerAssessmentAttemptResult:
+      type: object
+      additionalProperties: false
+      required: [correctCount, totalCount, percentage]
+      properties:
+        correctCount: { type: integer, minimum: 0 }
+        totalCount: { type: integer, minimum: 1 }
+        percentage: { type: integer, minimum: 0, maximum: 100 }
+    LearnerAssessmentAttempt:
+      type: object
+      description: Private learner-owned Attempt. It includes only the learner's own responses and aggregate score, never authoritative answers or Authoring provenance.
+      additionalProperties: false
+      required: [attemptId, assessmentKey, state, revision, responses, createdAt, updatedAt, submittedAt, result]
+      properties:
+        attemptId: { $ref: '#/components/schemas/LearnerAttemptID' }
+        assessmentKey: { type: string, format: uuid }
+        state: { type: string, enum: [IN_PROGRESS, SUBMITTED] }
+        revision: { type: integer, minimum: 1 }
+        responses: { type: array, items: { $ref: '#/components/schemas/LearnerAssessmentAttemptResponse' }, maxItems: 100 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        submittedAt: { type: [string, 'null'], format: date-time }
+        result: { anyOf: [{ $ref: '#/components/schemas/LearnerAssessmentAttemptResult' }, { type: 'null' }] }
+    LearnerAssessmentAttemptUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision, responses]
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+        responses: { type: array, items: { $ref: '#/components/schemas/LearnerAssessmentAttemptResponse' }, maxItems: 100 }
+    LearnerAssessmentAttemptSubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
     AuthoringReviewSubmitRequest:
       type: object
       additionalProperties: false

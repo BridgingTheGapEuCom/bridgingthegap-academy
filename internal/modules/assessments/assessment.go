@@ -28,6 +28,7 @@ var (
 	ErrAttemptNotFound    = errors.New("assessment attempt record not found")
 	ErrAttemptConflict    = errors.New("assessment attempt record conflicts with existing data")
 	ErrAttemptImmutable   = errors.New("submitted assessment attempt is immutable")
+	ErrAttemptUnavailable = errors.New("published assessment attempt context unavailable")
 )
 
 // Assessment is a mutable Authoring-owned definition. OwnerDraftID,

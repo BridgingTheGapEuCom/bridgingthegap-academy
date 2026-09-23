@@ -2,9 +2,10 @@
 
 `assessments` is a neutral module for mutable, deterministic Assessment
 definitions. It owns Assessment identity, Draft ownership, creator provenance,
-question validation, and persistence. It does not import Authoring or Courses;
-Authoring will later authorize Draft access before calling it, and Courses will
-later own an immutable published assessment representation.
+question validation, and persistence. It does not import Authoring. Its learner
+Attempt service reads only the narrow Courses-owned immutable CourseVersion
+binding boundary for validation and grading; Courses never imports Attempts or
+mutable Authoring Assessments.
 
 An Assessment has an opaque lowercase UUID identity. Its `owner_draft_id` and
 `created_by_user_id` are internal provenance fields, never default public JSON.
@@ -68,11 +69,32 @@ Attempts begin as `IN_PROGRESS` and may contain no responses while a future API
 is saving progress. Responses use stable question, option, and matching-item
 keys: a single selected option, a canonical option-key set, or canonical
 one-to-one matching pairs. The stored JSONB response document is validated on
-write and read; it never includes correct answers, grading data, or feedback.
-Revision-based compare-and-swap protects `IN_PROGRESS` updates. `SUBMITTED`
-sets a server-owned timestamp and is immutable. Submission and grading HTTP
-APIs remain separate work, and anonymous learner practice remains in memory
-until a durable authenticated learner identity is available at that boundary.
+write and read; it never includes correct answers or feedback. Revision-based
+compare-and-swap protects `IN_PROGRESS` updates.
+
+Authenticated learner APIs create an Attempt only through an exact published
+Course ID, SemVer, and bound `assessmentKey`; the learner identity always comes
+from the server session. Reads, response replacement, and submission verify
+that same learner ownership and hide other learners' Attempts as not found.
+All Attempt routes use the normal session Origin/CSRF protections and
+`Cache-Control: no-store`. Anonymous public-course practice remains in memory;
+it never creates persistent Attempt state.
+
+An IN_PROGRESS update may be partial. Submission requires one response for
+every frozen question, a selection for choice questions, and a complete mapping
+for every MATCHING left item. The server validates those response keys against
+the exact immutable Courses binding, then grades single choice by equality,
+multiple choice by exact key-set equality, and matching by exact one-to-one
+mapping. Each question has equal weight and there is no partial credit. Wrong
+answers are valid submissions, not validation failures.
+
+`SUBMITTED` is terminal. Its single atomic CAS update writes the server-owned
+submission time plus the private aggregate `correctCount` and `totalCount`;
+there can be no submitted Attempt without a result. The learner DTO exposes
+only that aggregate result and the learner's own responses. It never exposes
+correct options, correct sets, matching answers, mutable Authoring data, or
+learner identity. Repeated submission returns a conflict rather than grading
+again. Learner UI wiring and detailed feedback remain deferred.
 
 The Draft Authoring workspace provides private Assessment list and editor
 routes. The editor uses native radios, checkboxes, selects, and move controls;

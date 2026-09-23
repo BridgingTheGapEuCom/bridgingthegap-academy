@@ -100,9 +100,9 @@ func testAssessmentAttemptPersistence(t *testing.T, ctx context.Context, pool *p
 	if err != nil {
 		t.Fatal(err)
 	}
-	submittedAt := time.Date(2026, time.September, 22, 12, 0, 0, 0, time.UTC)
-	submitted, err := repository.SubmitAssessmentAttempt(ctx, created.ID, current.Revision, submittedAt)
-	if err != nil || submitted.State != assessments.AttemptSubmitted || submitted.SubmittedAt == nil || !submitted.SubmittedAt.Equal(submittedAt) {
+	submittedAt := current.UpdatedAt.Add(time.Minute).UTC()
+	submitted, err := repository.SubmitAssessmentAttempt(ctx, created.ID, current.Revision, assessments.AttemptResult{CorrectCount: 2, TotalCount: 3}, submittedAt)
+	if err != nil || submitted.State != assessments.AttemptSubmitted || submitted.SubmittedAt == nil || !submitted.SubmittedAt.Equal(submittedAt) || submitted.Result == nil || submitted.Result.CorrectCount != 2 || submitted.Result.TotalCount != 3 {
 		t.Fatalf("submit attempt = %#v, %v", submitted, err)
 	}
 	if _, err := repository.UpdateAssessmentAttempt(ctx, created.ID, submitted.Revision, assessments.AttemptUpdate{}); !errors.Is(err, assessments.ErrAttemptImmutable) {
@@ -134,5 +134,6 @@ func testAssessmentAttemptPersistence(t *testing.T, ctx context.Context, pool *p
 func sameAttempt(left, right assessments.AssessmentAttempt) bool {
 	return left.ID == right.ID && left.LearnerUserID == right.LearnerUserID && left.CourseVersionID == right.CourseVersionID && left.AssessmentKey == right.AssessmentKey &&
 		left.State == right.State && left.Revision == right.Revision && reflect.DeepEqual(left.Responses, right.Responses) && left.CreatedAt.Equal(right.CreatedAt) && left.UpdatedAt.Equal(right.UpdatedAt) &&
-		(left.SubmittedAt == nil && right.SubmittedAt == nil || left.SubmittedAt != nil && right.SubmittedAt != nil && left.SubmittedAt.Equal(*right.SubmittedAt))
+		(left.SubmittedAt == nil && right.SubmittedAt == nil || left.SubmittedAt != nil && right.SubmittedAt != nil && left.SubmittedAt.Equal(*right.SubmittedAt)) &&
+		reflect.DeepEqual(left.Result, right.Result)
 }

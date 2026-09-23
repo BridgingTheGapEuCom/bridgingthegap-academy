@@ -20,6 +20,8 @@ RETURNING *;
 UPDATE assessments.assessment_attempt
 SET state = 'SUBMITTED',
     submitted_at = $3,
+    correct_count = $4,
+    total_count = $5,
     revision = revision + 1,
     updated_at = $3
 WHERE id = $1 AND revision = $2 AND state = 'IN_PROGRESS'

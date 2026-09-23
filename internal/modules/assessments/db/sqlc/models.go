@@ -30,6 +30,8 @@ type AssessmentsAssessmentAttempt struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	SubmittedAt     pgtype.Timestamptz
+	CorrectCount    pgtype.Int4
+	TotalCount      pgtype.Int4
 }
 
 type CoursesCourse struct {

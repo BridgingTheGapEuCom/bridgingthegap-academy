@@ -27,6 +27,21 @@ type AssessmentAttempt struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	SubmittedAt     *time.Time
+	Result          *AttemptResult
+}
+
+// AttemptResult is the private aggregate score frozen with a submitted
+// Attempt. It deliberately contains no answer keys or per-question feedback.
+type AttemptResult struct {
+	CorrectCount int
+	TotalCount   int
+}
+
+func (result AttemptResult) Validate() error {
+	if result.TotalCount < 1 || result.CorrectCount < 0 || result.CorrectCount > result.TotalCount {
+		return ErrInvalidAttempt
+	}
+	return nil
 }
 
 type AttemptInput struct {
@@ -82,11 +97,11 @@ func (attempt AssessmentAttempt) Validate() error {
 	}
 	switch attempt.State {
 	case AttemptInProgress:
-		if attempt.SubmittedAt != nil {
+		if attempt.SubmittedAt != nil || attempt.Result != nil {
 			return ErrInvalidAttempt
 		}
 	case AttemptSubmitted:
-		if attempt.SubmittedAt == nil || attempt.SubmittedAt.IsZero() || attempt.SubmittedAt.Before(attempt.CreatedAt) {
+		if attempt.SubmittedAt == nil || attempt.SubmittedAt.IsZero() || attempt.SubmittedAt.Before(attempt.CreatedAt) || attempt.Result == nil || attempt.Result.Validate() != nil {
 			return ErrInvalidAttempt
 		}
 	default:
@@ -142,14 +157,15 @@ func (attempt AssessmentAttempt) WithResponses(responses []AttemptResponse, upda
 	return updated, nil
 }
 
-func (attempt AssessmentAttempt) Submit(submittedAt time.Time) (AssessmentAttempt, error) {
-	if attempt.State != AttemptInProgress || submittedAt.IsZero() {
+func (attempt AssessmentAttempt) Submit(result AttemptResult, submittedAt time.Time) (AssessmentAttempt, error) {
+	if attempt.State != AttemptInProgress || submittedAt.IsZero() || result.Validate() != nil {
 		return AssessmentAttempt{}, ErrAttemptImmutable
 	}
 	submitted := attempt
 	at := submittedAt.UTC()
 	submitted.State = AttemptSubmitted
 	submitted.SubmittedAt = &at
+	submitted.Result = &AttemptResult{CorrectCount: result.CorrectCount, TotalCount: result.TotalCount}
 	submitted.UpdatedAt = at
 	submitted.Revision++
 	if err := submitted.Validate(); err != nil {

@@ -74,6 +74,10 @@ func TestAssessmentAttemptRejectsMalformedOrDuplicateResponses(t *testing.T) {
 		"invalid state":                func(attempt *AssessmentAttempt) { attempt.State = "GRADED" },
 		"in progress submitted at":     func(attempt *AssessmentAttempt) { at := testAttemptTime; attempt.SubmittedAt = &at },
 		"submitted missing timestamp":  func(attempt *AssessmentAttempt) { attempt.State = AttemptSubmitted },
+		"submitted missing result": func(attempt *AssessmentAttempt) {
+			at := testAttemptTime.Add(time.Minute)
+			attempt.State, attempt.SubmittedAt = AttemptSubmitted, &at
+		},
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -93,17 +97,17 @@ func TestAssessmentAttemptRejectsMalformedOrDuplicateResponses(t *testing.T) {
 
 func TestAssessmentAttemptSubmissionIsOneWayAndPreservesResponses(t *testing.T) {
 	attempt := validAttempt()
-	submitted, err := attempt.Submit(testAttemptTime.Add(time.Minute))
+	submitted, err := attempt.Submit(AttemptResult{CorrectCount: 2, TotalCount: 3}, testAttemptTime.Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if submitted.State != AttemptSubmitted || submitted.SubmittedAt == nil || submitted.Revision != 2 || !reflect.DeepEqual(submitted.Responses, attempt.Responses) {
+	if submitted.State != AttemptSubmitted || submitted.SubmittedAt == nil || submitted.Result == nil || *submitted.Result != (AttemptResult{CorrectCount: 2, TotalCount: 3}) || submitted.Revision != 2 || !reflect.DeepEqual(submitted.Responses, attempt.Responses) {
 		t.Fatalf("submission did not preserve immutable attempt state: %#v", submitted)
 	}
 	if _, err := submitted.WithResponses(nil, testAttemptTime.Add(2*time.Minute)); !errors.Is(err, ErrAttemptImmutable) {
 		t.Fatalf("submitted response update = %v, want immutable", err)
 	}
-	if _, err := submitted.Submit(testAttemptTime.Add(2 * time.Minute)); !errors.Is(err, ErrAttemptImmutable) {
+	if _, err := submitted.Submit(AttemptResult{CorrectCount: 2, TotalCount: 3}, testAttemptTime.Add(2*time.Minute)); !errors.Is(err, ErrAttemptImmutable) {
 		t.Fatalf("resubmit = %v, want immutable", err)
 	}
 }

@@ -533,6 +533,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates a private IN_PROGRESS Attempt for the authenticated learner and an Assessment bound to this exact immutable PUBLISHED CourseVersion. Learner ownership comes exclusively from the session. Responses are private and not cacheable. */
+        post: operations["createLearnerAssessmentAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/learner/assessment-attempts/{attemptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns one private Attempt only to its authenticated learner owner. It contains the learner's own responses and never authoritative answer keys. */
+        get: operations["getLearnerAssessmentAttempt"];
+        /** @description Atomically replaces the complete partial response set for an IN_PROGRESS Attempt when expectedRevision matches. Responses are validated against the exact immutable published Assessment binding. */
+        put: operations["replaceLearnerAssessmentAttemptResponses"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/learner/assessment-attempts/{attemptId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validates complete responses and deterministically grades once against the exact immutable Courses binding. The response exposes only aggregate score counts, never answer keys. */
+        post: operations["submitLearnerAssessmentAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/by-id/{courseId}/latest": {
         parameters: {
             query?: never;
@@ -744,6 +796,49 @@ export interface components {
             limit: number;
             offset: number;
             total: number;
+        };
+        /** Format: uuid */
+        LearnerAttemptID: string;
+        LearnerAssessmentAttemptResponsePair: {
+            leftItemKey: string;
+            rightItemKey: string;
+        };
+        LearnerAssessmentAttemptResponse: {
+            questionKey: string;
+            /** @enum {string} */
+            type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "MATCHING";
+            selectedOptionKey: string;
+            selectedOptionKeys: string[];
+            pairs: components["schemas"]["LearnerAssessmentAttemptResponsePair"][];
+        };
+        LearnerAssessmentAttemptResult: {
+            correctCount: number;
+            totalCount: number;
+            percentage: number;
+        };
+        /** @description Private learner-owned Attempt. It includes only the learner's own responses and aggregate score, never authoritative answers or Authoring provenance. */
+        LearnerAssessmentAttempt: {
+            attemptId: components["schemas"]["LearnerAttemptID"];
+            /** Format: uuid */
+            assessmentKey: string;
+            /** @enum {string} */
+            state: "IN_PROGRESS" | "SUBMITTED";
+            revision: number;
+            responses: components["schemas"]["LearnerAssessmentAttemptResponse"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            result: components["schemas"]["LearnerAssessmentAttemptResult"] | null;
+        };
+        LearnerAssessmentAttemptUpdateRequest: {
+            expectedRevision: number;
+            responses: components["schemas"]["LearnerAssessmentAttemptResponse"][];
+        };
+        LearnerAssessmentAttemptSubmitRequest: {
+            expectedRevision: number;
         };
         AuthoringReviewSubmitRequest: {
             expectedDraftRevision: number;
@@ -1516,6 +1611,8 @@ export interface components {
         AuthoringCSRFToken: string;
         AuthoringDraftID: string;
         AuthoringAssessmentID: string;
+        LearnerAttemptID: string;
+        LearnerAssessmentKey: string;
         AuthoringUserID: string;
         AuthoringModuleID: string;
         AuthoringLessonID: string;
@@ -2930,6 +3027,140 @@ export interface operations {
             };
             404: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
+        };
+    };
+    createLearnerAssessmentAttempt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                assessmentKey: components["parameters"]["LearnerAssessmentKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New private IN_PROGRESS Attempt */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerAssessmentAttempt"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getLearnerAssessmentAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attemptId: components["parameters"]["LearnerAttemptID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private learner Attempt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerAssessmentAttempt"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    replaceLearnerAssessmentAttemptResponses: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                attemptId: components["parameters"]["LearnerAttemptID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearnerAssessmentAttemptUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated private IN_PROGRESS Attempt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerAssessmentAttempt"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    submitLearnerAssessmentAttempt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                attemptId: components["parameters"]["LearnerAttemptID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearnerAssessmentAttemptSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Immutable submitted Attempt with aggregate result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerAssessmentAttempt"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
     getLatestPublishedCourseVersionById: {

@@ -14,7 +14,7 @@ import (
 const createAssessmentAttempt = `-- name: CreateAssessmentAttempt :one
 INSERT INTO assessments.assessment_attempt (learner_user_id, course_version_id, assessment_key, responses)
 VALUES ($1, $2, $3, $4)
-RETURNING id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at
+RETURNING id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at, correct_count, total_count
 `
 
 type CreateAssessmentAttemptParams struct {
@@ -43,12 +43,14 @@ func (q *Queries) CreateAssessmentAttempt(ctx context.Context, arg CreateAssessm
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SubmittedAt,
+		&i.CorrectCount,
+		&i.TotalCount,
 	)
 	return i, err
 }
 
 const getAssessmentAttempt = `-- name: GetAssessmentAttempt :one
-SELECT id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at
+SELECT id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at, correct_count, total_count
 FROM assessments.assessment_attempt
 WHERE id = $1
 `
@@ -67,6 +69,8 @@ func (q *Queries) GetAssessmentAttempt(ctx context.Context, id pgtype.UUID) (Ass
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SubmittedAt,
+		&i.CorrectCount,
+		&i.TotalCount,
 	)
 	return i, err
 }
@@ -75,20 +79,30 @@ const submitAssessmentAttempt = `-- name: SubmitAssessmentAttempt :one
 UPDATE assessments.assessment_attempt
 SET state = 'SUBMITTED',
     submitted_at = $3,
+    correct_count = $4,
+    total_count = $5,
     revision = revision + 1,
     updated_at = $3
 WHERE id = $1 AND revision = $2 AND state = 'IN_PROGRESS'
-RETURNING id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at
+RETURNING id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at, correct_count, total_count
 `
 
 type SubmitAssessmentAttemptParams struct {
-	ID          pgtype.UUID
-	Revision    int64
-	SubmittedAt pgtype.Timestamptz
+	ID           pgtype.UUID
+	Revision     int64
+	SubmittedAt  pgtype.Timestamptz
+	CorrectCount pgtype.Int4
+	TotalCount   pgtype.Int4
 }
 
 func (q *Queries) SubmitAssessmentAttempt(ctx context.Context, arg SubmitAssessmentAttemptParams) (AssessmentsAssessmentAttempt, error) {
-	row := q.db.QueryRow(ctx, submitAssessmentAttempt, arg.ID, arg.Revision, arg.SubmittedAt)
+	row := q.db.QueryRow(ctx, submitAssessmentAttempt,
+		arg.ID,
+		arg.Revision,
+		arg.SubmittedAt,
+		arg.CorrectCount,
+		arg.TotalCount,
+	)
 	var i AssessmentsAssessmentAttempt
 	err := row.Scan(
 		&i.ID,
@@ -101,6 +115,8 @@ func (q *Queries) SubmitAssessmentAttempt(ctx context.Context, arg SubmitAssessm
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SubmittedAt,
+		&i.CorrectCount,
+		&i.TotalCount,
 	)
 	return i, err
 }
@@ -111,7 +127,7 @@ SET responses = $3,
     revision = revision + 1,
     updated_at = now()
 WHERE id = $1 AND revision = $2 AND state = 'IN_PROGRESS'
-RETURNING id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at
+RETURNING id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at, correct_count, total_count
 `
 
 type UpdateAssessmentAttemptParams struct {
@@ -134,6 +150,8 @@ func (q *Queries) UpdateAssessmentAttempt(ctx context.Context, arg UpdateAssessm
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SubmittedAt,
+		&i.CorrectCount,
+		&i.TotalCount,
 	)
 	return i, err
 }

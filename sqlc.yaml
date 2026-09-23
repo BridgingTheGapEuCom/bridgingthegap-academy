@@ -43,6 +43,7 @@ sql:
       - internal/modules/infrastructure/postgres/db/migrations/00017_assessments.sql
       - internal/modules/infrastructure/postgres/db/migrations/00018_course_version_assessment_binding.sql
       - internal/modules/infrastructure/postgres/db/migrations/00019_assessment_attempts.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00020_assessment_attempt_results.sql
     queries: internal/modules/assessments/db/query
     gen:
       go:

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
@@ -78,6 +79,7 @@ type authHTTP struct {
 	authoringAssetUploads       *authoring.AssetUploadService
 	authoringAssets             *authoring.AssetListService
 	authoringAssessments        *authoring.AssessmentManagementService
+	learnerAttempts             *assessments.LearnerAttemptService
 	assetMaxBytes               int64
 	cookieSecure                bool
 	now                         func() time.Time

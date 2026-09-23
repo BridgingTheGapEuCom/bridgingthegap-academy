@@ -93,15 +93,15 @@ func (r *Repository) UpdateAssessmentAttempt(ctx context.Context, id assessments
 	return mapAttempt(row)
 }
 
-func (r *Repository) SubmitAssessmentAttempt(ctx context.Context, id assessments.AttemptID, expectedRevision int64, submittedAt time.Time) (assessments.AssessmentAttempt, error) {
-	if expectedRevision < 1 || submittedAt.IsZero() {
+func (r *Repository) SubmitAssessmentAttempt(ctx context.Context, id assessments.AttemptID, expectedRevision int64, result assessments.AttemptResult, submittedAt time.Time) (assessments.AssessmentAttempt, error) {
+	if expectedRevision < 1 || submittedAt.IsZero() || result.Validate() != nil {
 		return assessments.AssessmentAttempt{}, assessments.ErrInvalidAttempt
 	}
 	key, err := uuid(string(id))
 	if err != nil {
 		return assessments.AssessmentAttempt{}, assessments.ErrInvalidAttempt
 	}
-	row, err := r.q.SubmitAssessmentAttempt(ctx, sqlc.SubmitAssessmentAttemptParams{ID: key, Revision: expectedRevision, SubmittedAt: pgtype.Timestamptz{Time: submittedAt.UTC(), Valid: true}})
+	row, err := r.q.SubmitAssessmentAttempt(ctx, sqlc.SubmitAssessmentAttemptParams{ID: key, Revision: expectedRevision, CorrectCount: pgtype.Int4{Int32: int32(result.CorrectCount), Valid: true}, TotalCount: pgtype.Int4{Int32: int32(result.TotalCount), Valid: true}, SubmittedAt: pgtype.Timestamptz{Time: submittedAt.UTC(), Valid: true}})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r.attemptUpdateMiss(ctx, id)
 	}
@@ -184,6 +184,9 @@ func mapAttempt(row sqlc.AssessmentsAssessmentAttempt) (assessments.AssessmentAt
 	if row.SubmittedAt.Valid {
 		at := row.SubmittedAt.Time.UTC()
 		attempt.SubmittedAt = &at
+	}
+	if row.CorrectCount.Valid && row.TotalCount.Valid {
+		attempt.Result = &assessments.AttemptResult{CorrectCount: int(row.CorrectCount.Int32), TotalCount: int(row.TotalCount.Int32)}
 	}
 	if err := attempt.Validate(); err != nil {
 		return assessments.AssessmentAttempt{}, err

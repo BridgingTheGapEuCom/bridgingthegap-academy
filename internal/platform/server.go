@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
 	assessmentspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	assetslocal "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/localstorage"
@@ -115,6 +116,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringAssetUploads:       authoring.NewAssetUploadService(assetIngestion, authoringAuthorizer),
 		authoringAssets:             authoring.NewAssetListService(assetRepository, authoringAuthorizer),
 		authoringAssessments:        authoring.NewAssessmentManagementService(assessmentRepository, authoringAuthorizer),
+		learnerAttempts:             assessments.NewLearnerAttemptService(assessmentRepository, coursesRepository, time.Now),
 		assetMaxBytes:               cfg.AssetMaxBytes,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
@@ -197,6 +199,12 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				// per-request resolution and unsafe-method CSRF are inherited.
 				protected.Use(auth.authenticated)
 				protected.Get("/auth/session", auth.handleSession)
+				if auth.learnerAttempts != nil {
+					protected.Post("/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts", auth.handleLearnerAttemptCreate)
+					protected.Get("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptGet)
+					protected.Put("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptUpdate)
+					protected.Post("/learner/assessment-attempts/{attemptId}/submit", auth.handleLearnerAttemptSubmit)
+				}
 				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
 				if auth.authoring != nil {
 					protected.Get("/authoring/drafts", auth.handleAuthoringDraftList)
