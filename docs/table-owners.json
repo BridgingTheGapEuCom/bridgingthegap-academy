@@ -26,5 +26,8 @@
   "identity.global_role_assignments": "identity",
   "identity.sessions": "identity",
   "progress.course_progress": "progress",
-  "progress.lesson_completion": "progress"
+  "progress.lesson_completion": "progress",
+  "community.course_community": "community",
+  "community.thread": "community",
+  "community.post": "community"
 }
