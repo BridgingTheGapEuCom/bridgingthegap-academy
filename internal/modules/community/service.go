@@ -101,6 +101,12 @@ func (s *Service) ModeratePost(ctx context.Context, courseID, actorID, threadID,
 	if err := s.requireModerator(ctx, courseID, actorID); err != nil {
 		return Post{}, err
 	}
+	// Establish the Course/Thread boundary before inspecting the Thread's Posts.
+	// In particular, the opening-Post rule must not reveal data from a Thread in
+	// a different Course to a moderator of this Course.
+	if _, err := s.repository.GetThreadForModeration(ctx, courseID, threadID); err != nil {
+		return Post{}, err
+	}
 	if state == Hidden {
 		posts, _, err := s.repository.ListVisiblePosts(ctx, threadID, 1, 0)
 		if err != nil {

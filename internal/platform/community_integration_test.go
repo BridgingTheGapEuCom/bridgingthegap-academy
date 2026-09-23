@@ -73,6 +73,18 @@ func testCourseCommunityPersistence(t *testing.T, ctx context.Context, pool *pgx
 	if _, err := r.GetVisibleThread(ctx, string(c.ID), thread.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := cr.CreateCourseVersion(ctx, createCourseVersionInput(t, c.ID, "1.0.0")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cr.CreateCourseVersion(ctx, createCourseVersionInput(t, c.ID, "1.1.0")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := r.GetCommunity(ctx, string(c.ID)); err != nil || got.Mode != community.CommunityEnabled {
+		t.Fatalf("community changed after new CourseVersion: %#v %v", got, err)
+	}
+	if got, err := r.GetThreadForModeration(ctx, string(c.ID), thread.ID); err != nil || got.ID != thread.ID {
+		t.Fatalf("Thread changed after new CourseVersion: %#v %v", got, err)
+	}
 	other, err := cr.CreateCourse(ctx, "community-other")
 	if err != nil {
 		t.Fatal(err)

@@ -90,6 +90,18 @@ func communityHTTP(t *testing.T, repo *communityRepositoryFake, session identity
 	service := community.NewService(repo, communityCourseFake{versions: []courses.CourseVersion{{CourseID: courses.CourseID(communityTestCourse), Status: courses.CourseVersionPublished}}})
 	return authTestRouter(&authHTTP{sessions: &authResolverFake{current: session}, community: service})
 }
+func communityModeratorHTTP(t *testing.T, repo *communityRepositoryFake, session identity.ResolvedSession) http.Handler {
+	t.Helper()
+	service := community.NewService(repo, communityCourseFake{versions: []courses.CourseVersion{{
+		CourseID: courses.CourseID(communityTestCourse),
+		Status:   courses.CourseVersionPublished,
+		Attribution: []courses.ContributorSnapshot{{
+			UserID: string(loginTestUser),
+			Role:   courses.ContributorAuthor,
+		}},
+	}}})
+	return authTestRouter(&authHTTP{sessions: &authResolverFake{current: session}, community: service})
+}
 func communitySession(t *testing.T) identity.ResolvedSession { t.Helper(); return loginTestCurrent(t) }
 func communityCookie() *http.Cookie {
 	return &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
@@ -138,5 +150,14 @@ func TestCommunityHTTPUsesCourseScopedVisibleReadAndPagination(t *testing.T) {
 	invalid := authRequest(router, http.MethodGet, "/api/courses/by-id/"+communityTestCourse+"/community/threads?limit=101", "", communityCookie())
 	if invalid.Code != http.StatusBadRequest {
 		t.Fatalf("unbounded page accepted: %d", invalid.Code)
+	}
+}
+
+func TestCommunityHTTPRejectsModerationRequestBodies(t *testing.T) {
+	repo := &communityRepositoryFake{mode: community.CommunityEnabled}
+	router := communityModeratorHTTP(t, repo, communitySession(t))
+	response := authRequest(router, http.MethodPost, "/api/courses/by-id/"+communityTestCourse+"/community/threads/"+communityTestThread+"/hide", `{"state":"HIDDEN","moderatorId":"forged"}`, communityCookie(), authTestCSRFToken().Value())
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "unexpected_community_moderation_body") {
+		t.Fatalf("moderation body = %d %s", response.Code, response.Body.String())
 	}
 }

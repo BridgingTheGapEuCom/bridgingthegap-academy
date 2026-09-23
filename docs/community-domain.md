@@ -7,9 +7,9 @@ space. It stores only opaque authenticated user IDs for authorship.
 A Community is enabled or disabled. Threads have a plain-text title and one
 opening Post; the repository writes those two records in one PostgreSQL
 transaction. Replies are flat Posts. Thread and Post state is `VISIBLE` or
-`HIDDEN`; no physical deletion, role logic, moderation authorization, HTTP, or
-frontend exists yet. Titles are limited to 240 characters and bodies to 20,000;
-leading/trailing whitespace is normalized while internal line breaks remain.
+`HIDDEN`; no physical deletion exists. Titles are limited to 240 characters and
+bodies to 20,000; leading/trailing whitespace is normalized while internal line
+breaks remain.
 
 ## Participant API
 
@@ -54,3 +54,11 @@ Moderators can ask the Course-scoped server probe whether `canModerate` is true
 without receiving attribution roles. Separate moderator list/detail reads keep
 hidden Threads rediscoverable and include hidden Posts with state; participant
 reads remain visible-only.
+
+## v1 boundary
+
+Community v1 deliberately excludes audit events and moderation reasons,
+reports or flags, bans or warnings, author profiles, nested replies, editing or
+deletion, reactions, notifications, search, attachments, rich text, and
+real-time updates. Moderation mutations are bodyless: their Course, resource,
+and target state come only from the route and the authenticated session.

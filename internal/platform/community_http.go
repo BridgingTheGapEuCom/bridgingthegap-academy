@@ -2,6 +2,7 @@ package platform
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -239,7 +240,22 @@ func communityProblem(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
+func communityNoBody(w http.ResponseWriter, r *http.Request) bool {
+	if r.Body == nil {
+		return true
+	}
+	content, err := io.ReadAll(io.LimitReader(r.Body, 1))
+	if err != nil || len(content) != 0 {
+		problemCode(w, r, http.StatusBadRequest, "Unexpected request body", "unexpected_community_moderation_body")
+		return false
+	}
+	return true
+}
+
 func (h *authHTTP) handleCommunityModerateThread(w http.ResponseWriter, r *http.Request) {
+	if !communityNoBody(w, r) {
+		return
+	}
 	actor, ok := learnerActor(w, r)
 	if !ok {
 		return
@@ -264,6 +280,9 @@ func (h *authHTTP) handleCommunityModerateThread(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, map[string]string{"threadId": x.ID, "state": string(x.State)})
 }
 func (h *authHTTP) handleCommunityModeratePost(w http.ResponseWriter, r *http.Request) {
+	if !communityNoBody(w, r) {
+		return
+	}
 	actor, ok := learnerActor(w, r)
 	if !ok {
 		return
