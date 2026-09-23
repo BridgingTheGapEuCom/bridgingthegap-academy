@@ -19,6 +19,8 @@ import (
 	assetspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	authoringpostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community"
+	communitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
@@ -117,6 +119,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringAssets:             authoring.NewAssetListService(assetRepository, authoringAuthorizer),
 		authoringAssessments:        authoring.NewAssessmentManagementService(assessmentRepository, authoringAuthorizer),
 		learnerAttempts:             assessments.NewLearnerAttemptService(assessmentRepository, coursesRepository, time.Now),
+		community:                   community.NewService(communitypostgres.New(pool), coursesRepository),
 		assetMaxBytes:               cfg.AssetMaxBytes,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
@@ -204,6 +207,13 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Get("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptGet)
 					protected.Put("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptUpdate)
 					protected.Post("/learner/assessment-attempts/{attemptId}/submit", auth.handleLearnerAttemptSubmit)
+				}
+				if auth.community != nil {
+					protected.Get("/courses/by-id/{courseId}/community", auth.handleCommunity)
+					protected.Get("/courses/by-id/{courseId}/community/threads", auth.handleCommunityThreads)
+					protected.Post("/courses/by-id/{courseId}/community/threads", auth.handleCommunityCreateThread)
+					protected.Get("/courses/by-id/{courseId}/community/threads/{threadId}", auth.handleCommunityThread)
+					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/posts", auth.handleCommunityCreatePost)
 				}
 				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
 				if auth.authoring != nil {

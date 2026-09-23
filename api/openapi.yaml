@@ -682,6 +682,66 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/community:
+    get:
+      operationId: getCourseCommunity
+      description: Returns the authenticated participant view of a published Course's durable community mode. Community is Course-scoped, not CourseVersion-scoped.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }]
+      responses:
+        '200': { description: Safe Community metadata, content: { application/json: { schema: { $ref: '#/components/schemas/CourseCommunity' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/community/threads:
+    get:
+      operationId: listCourseCommunityThreads
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }, { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }]
+      responses:
+        '200': { description: Bounded visible thread summaries ordered by activity, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityThreadPage' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createCourseCommunityThread
+      description: Atomically creates a visible Thread and its opening plain-text Post for the authenticated participant. Server-owned identity and moderation fields cannot be supplied.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityCreateThreadRequest' } } } }
+      responses:
+        '201': { description: Created Thread with opening Post, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityThread' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/community/threads/{threadId}:
+    get:
+      operationId: getCourseCommunityThread
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CommunityThreadID' }, { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }, { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }]
+      responses:
+        '200': { description: Visible Thread and a bounded chronological page of visible Posts, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityThread' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/community/threads/{threadId}/posts:
+    post:
+      operationId: createCourseCommunityPost
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CommunityThreadID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityCreatePostRequest' } } } }
+      responses:
+        '201': { description: Created visible plain-text reply, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityPost' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
   /api/courses/by-id/{courseId}/latest:
     get:
       operationId: getLatestPublishedCourseVersionById
@@ -811,6 +871,7 @@ components:
     AuthoringAssessmentID: { name: assessmentId, in: path, required: true, schema: { type: string, format: uuid } }
     LearnerAttemptID: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
     LearnerAssessmentKey: { name: assessmentKey, in: path, required: true, schema: { type: string, format: uuid } }
+    CommunityThreadID: { name: threadId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringUserID: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringModuleID: { name: moduleId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringLessonID: { name: lessonId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1511,6 +1572,14 @@ components:
         stableKey: { type: string, minLength: 1, maxLength: 160 }
         text: { type: string, minLength: 1, maxLength: 4000 }
         position: { type: integer, minimum: 0 }
+    CourseCommunity: { type: object, additionalProperties: false, required: [courseId, mode], properties: { courseId: { type: string, format: uuid }, mode: { type: string, enum: [ENABLED, DISABLED] } } }
+    CommunityAuthor: { type: object, additionalProperties: false, required: [userId], properties: { userId: { type: string, format: uuid } } }
+    CommunityThreadSummary: { type: object, additionalProperties: false, required: [threadId, title, author, postCount, createdAt, updatedAt], properties: { threadId: { type: string, format: uuid }, title: { type: string, minLength: 1, maxLength: 240 }, author: { $ref: '#/components/schemas/CommunityAuthor' }, postCount: { type: integer, minimum: 0 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } } }
+    CommunityPost: { type: object, additionalProperties: false, required: [postId, author, body, createdAt, updatedAt], properties: { postId: { type: string, format: uuid }, author: { $ref: '#/components/schemas/CommunityAuthor' }, body: { type: string, minLength: 1, maxLength: 20000 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } } }
+    CommunityThread: { type: object, additionalProperties: false, required: [threadId, title, author, createdAt, updatedAt, posts, postTotal], properties: { threadId: { type: string, format: uuid }, title: { type: string, minLength: 1, maxLength: 240 }, author: { $ref: '#/components/schemas/CommunityAuthor' }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time }, posts: { type: array, items: { $ref: '#/components/schemas/CommunityPost' } }, postTotal: { type: integer, minimum: 0 } } }
+    CommunityThreadPage: { type: object, additionalProperties: false, required: [threads, total, limit, offset], properties: { threads: { type: array, items: { $ref: '#/components/schemas/CommunityThreadSummary' } }, total: { type: integer, minimum: 0 }, limit: { type: integer, minimum: 1, maximum: 100 }, offset: { type: integer, minimum: 0 } } }
+    CommunityCreateThreadRequest: { type: object, additionalProperties: false, required: [title, body], properties: { title: { type: string, minLength: 1, maxLength: 240 }, body: { type: string, minLength: 1, maxLength: 20000 } } }
+    CommunityCreatePostRequest: { type: object, additionalProperties: false, required: [body], properties: { body: { type: string, minLength: 1, maxLength: 20000 } } }
     PublishedContentLicense: { type: object, additionalProperties: false, required: [kind, identifier, displayName, url, customText], properties: { kind: { type: string, enum: [STANDARD, ALL_RIGHTS_RESERVED, CUSTOM] }, identifier: { type: string }, displayName: { type: string }, url: { type: string, description: Empty when no public license URL is present. }, customText: { type: string } } }
     PublishedContributor: { type: object, additionalProperties: false, required: [displayName, role, order], properties: { displayName: { type: string }, role: { type: string, enum: [AUTHOR, MAINTAINER] }, order: { type: integer, minimum: 0 } } }
     PublishedCourseModule: { type: object, additionalProperties: false, required: [stableKey, title, description, position, lessons], properties: { stableKey: { type: string }, title: { type: string }, description: { type: string }, position: { type: integer, minimum: 0 }, lessons: { type: array, items: { $ref: '#/components/schemas/PublishedCourseLesson' } } } }

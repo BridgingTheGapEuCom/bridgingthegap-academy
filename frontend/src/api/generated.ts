@@ -585,6 +585,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/by-id/{courseId}/community": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the authenticated participant view of a published Course's durable community mode. Community is Course-scoped, not CourseVersion-scoped. */
+        get: operations["getCourseCommunity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCourseCommunityThreads"];
+        put?: never;
+        /** @description Atomically creates a visible Thread and its opening plain-text Post for the authenticated participant. Server-owned identity and moderation fields cannot be supplied. */
+        post: operations["createCourseCommunityThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCourseCommunityThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/threads/{threadId}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createCourseCommunityPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/by-id/{courseId}/latest": {
         parameters: {
             query?: never;
@@ -1264,6 +1330,62 @@ export interface components {
             text: string;
             position: number;
         };
+        CourseCommunity: {
+            /** Format: uuid */
+            courseId: string;
+            /** @enum {string} */
+            mode: "ENABLED" | "DISABLED";
+        };
+        CommunityAuthor: {
+            /** Format: uuid */
+            userId: string;
+        };
+        CommunityThreadSummary: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            author: components["schemas"]["CommunityAuthor"];
+            postCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunityPost: {
+            /** Format: uuid */
+            postId: string;
+            author: components["schemas"]["CommunityAuthor"];
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunityThread: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            author: components["schemas"]["CommunityAuthor"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            posts: components["schemas"]["CommunityPost"][];
+            postTotal: number;
+        };
+        CommunityThreadPage: {
+            threads: components["schemas"]["CommunityThreadSummary"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CommunityCreateThreadRequest: {
+            title: string;
+            body: string;
+        };
+        CommunityCreatePostRequest: {
+            body: string;
+        };
         PublishedContentLicense: {
             /** @enum {string} */
             kind: "STANDARD" | "ALL_RIGHTS_RESERVED" | "CUSTOM";
@@ -1613,6 +1735,7 @@ export interface components {
         AuthoringAssessmentID: string;
         LearnerAttemptID: string;
         LearnerAssessmentKey: string;
+        CommunityThreadID: string;
         AuthoringUserID: string;
         AuthoringModuleID: string;
         AuthoringLessonID: string;
@@ -3158,6 +3281,164 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getCourseCommunity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Safe Community metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseCommunity"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listCourseCommunityThreads: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded visible thread summaries ordered by activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityThreadPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createCourseCommunityThread: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunityCreateThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Created Thread with opening Post */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityThread"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getCourseCommunityThread: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                threadId: components["parameters"]["CommunityThreadID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visible Thread and a bounded chronological page of visible Posts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityThread"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createCourseCommunityPost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                threadId: components["parameters"]["CommunityThreadID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunityCreatePostRequest"];
+            };
+        };
+        responses: {
+            /** @description Created visible plain-text reply */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityPost"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];

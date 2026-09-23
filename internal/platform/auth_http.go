@@ -14,6 +14,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	"github.com/prometheus/client_golang/prometheus"
@@ -80,6 +81,7 @@ type authHTTP struct {
 	authoringAssets             *authoring.AssetListService
 	authoringAssessments        *authoring.AssessmentManagementService
 	learnerAttempts             *assessments.LearnerAttemptService
+	community                   *community.Service
 	assetMaxBytes               int64
 	cookieSecure                bool
 	now                         func() time.Time

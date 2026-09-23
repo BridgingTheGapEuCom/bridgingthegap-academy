@@ -9,6 +9,7 @@ import (
 
 var ErrInvalid = errors.New("invalid community entity")
 var ErrNotFound = errors.New("community entity not found")
+var ErrDisabled = errors.New("community is disabled")
 
 type Mode string
 type Visibility string
@@ -54,12 +55,26 @@ type ThreadInput struct {
 	CreatedByUserID string `json:"-"`
 	OpeningBody     string
 }
+type PostInput struct {
+	CourseID     string
+	ThreadID     string
+	AuthorUserID string `json:"-"`
+	Body         string
+}
+type ThreadSummary struct {
+	Thread
+	PostCount int
+}
 type Repository interface {
 	CreateCommunity(context.Context, string, Mode) (CourseCommunity, error)
 	GetCommunity(context.Context, string) (CourseCommunity, error)
 	CreateThread(context.Context, ThreadInput) (Thread, Post, error)
 	GetThread(context.Context, string) (Thread, error)
 	GetPost(context.Context, string) (Post, error)
+	ListVisibleThreads(context.Context, string, int, int) ([]ThreadSummary, int, error)
+	GetVisibleThread(context.Context, string, string) (Thread, error)
+	ListVisiblePosts(context.Context, string, int, int) ([]Post, int, error)
+	CreatePost(context.Context, PostInput) (Post, error)
 }
 
 func NormalizeTitle(v string) (string, error) { return normalize(v, maxTitle) }
@@ -93,6 +108,13 @@ func (i ThreadInput) Validate() error {
 	_, a := NormalizeTitle(i.Title)
 	_, b := NormalizeBody(i.OpeningBody)
 	if !uuid(i.CourseID) || !uuid(i.CreatedByUserID) || a != nil || b != nil {
+		return ErrInvalid
+	}
+	return nil
+}
+func (i PostInput) Validate() error {
+	_, bodyErr := NormalizeBody(i.Body)
+	if !uuid(i.CourseID) || !uuid(i.ThreadID) || !uuid(i.AuthorUserID) || bodyErr != nil {
 		return ErrInvalid
 	}
 	return nil
