@@ -24,5 +24,7 @@
   "identity.user_emails": "identity",
   "identity.local_password_credentials": "identity",
   "identity.global_role_assignments": "identity",
-  "identity.sessions": "identity"
+  "identity.sessions": "identity",
+  "progress.course_progress": "progress",
+  "progress.lesson_completion": "progress"
 }
