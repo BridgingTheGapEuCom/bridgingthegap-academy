@@ -16,6 +16,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -40,6 +41,10 @@ const maxSessionCookieValueBytes = 128
 type loginLogoutService interface {
 	LoginWithPassword(context.Context, string, []byte, string) (LoginResult, error)
 	Logout(context.Context, identity.ResolvedSession, string) error
+}
+
+type certificateIssuanceHTTP interface {
+	Issue(context.Context, string, courses.CourseID, courses.Version) (credentials.IssuanceResult, error)
 }
 
 type sessionResolver interface {
@@ -82,6 +87,8 @@ type authHTTP struct {
 	authoringAssessments        *authoring.AssessmentManagementService
 	learnerAttempts             *assessments.LearnerAttemptService
 	community                   *community.Service
+	certificateIssuance         certificateIssuanceHTTP
+	certificates                credentials.Repository
 	assetMaxBytes               int64
 	cookieSecure                bool
 	now                         func() time.Time

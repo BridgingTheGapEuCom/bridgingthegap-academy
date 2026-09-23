@@ -585,6 +585,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/by-id/{courseId}/versions/{version}/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Issues or replays the authenticated learner's Certificate for this exact published CourseVersion. Eligibility is server-authoritative and no client certificate fields are accepted. */
+        post: operations["issueLearnerCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/learner/certificates/{certificateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLearnerCertificate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/certificates/{certificateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public registry verification of a recorded Certificate. It states registry ACTIVE or REVOKED status and makes no cryptographic or Open Badges claim. */
+        get: operations["verifyPublicCertificate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/by-id/{courseId}/community": {
         parameters: {
             query?: never;
@@ -1378,6 +1428,43 @@ export interface components {
             text: string;
             position: number;
         };
+        CertificateIssuer: {
+            id: string;
+            name: string;
+        };
+        CertificateAchievement: {
+            /** Format: uuid */
+            courseId: string;
+            title: string;
+            version: string;
+            language: string;
+            criteria: string;
+        };
+        LearnerCertificate: {
+            /** Format: uuid */
+            certificateId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+            achievement: components["schemas"]["CertificateAchievement"];
+            issuer: components["schemas"]["CertificateIssuer"];
+            verificationPath: string;
+        };
+        PublicCertificate: {
+            /** Format: uuid */
+            certificateId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+            achievement: components["schemas"]["CertificateAchievement"];
+            issuer: components["schemas"]["CertificateIssuer"];
+        };
         CommunityModerationProbe: {
             canModerate: boolean;
         };
@@ -1831,6 +1918,7 @@ export interface components {
         AuthoringDraftID: string;
         AuthoringAssessmentID: string;
         LearnerAttemptID: string;
+        CertificateID: string;
         LearnerAssessmentKey: string;
         CommunityThreadID: string;
         AuthoringUserID: string;
@@ -3381,6 +3469,95 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
+        };
+    };
+    issueLearnerCertificate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Existing Certificate replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerCertificate"];
+                };
+            };
+            /** @description Newly issued private Certificate */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerCertificate"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getLearnerCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificateId: components["parameters"]["CertificateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private Certificate belonging only to the authenticated learner */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerCertificate"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    verifyPublicCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificateId: components["parameters"]["CertificateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Privacy-preserving public Certificate verification */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCertificate"];
+                };
+            };
+            404: components["responses"]["Problem"];
         };
     };
     getCourseCommunity: {

@@ -42,3 +42,10 @@ from this internal model, but JSON-LD, Verifiable Credential proofs,
 cryptosuites, signing, wallets, Badge Connect, and exports remain outside the
 core domain. PDF rendering, public verification, HTTP APIs, automatic
 issuance triggers, and learner UI are also deferred.
+
+
+## Learner and public reads
+
+Authenticated learners issue a certificate only for an exact published CourseVersion. The server derives the learner from the session and delegates eligibility and idempotent replay to the issuance service; it accepts no certificate metadata from the request. Learners may read only certificates they own through the private API.
+
+Public verification is an opaque certificate-ID lookup. It exposes frozen achievement, issuer, issued time, and `ACTIVE` or `REVOKED` status, but deliberately omits every recipient identity field. It is a registry-status statement, not a cryptographic verification or Open Badges claim. Verification uses conservative `no-store` caching because revocation can change. PDF rendering, Open Badges/VC serialization and signing remain deferred.

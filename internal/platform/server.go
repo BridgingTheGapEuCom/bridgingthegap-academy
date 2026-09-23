@@ -23,9 +23,12 @@ import (
 	communitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
+	credentialspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
+	progresspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/web"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -88,6 +91,11 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		return err
 	}
 	coursesRepository := coursespostgres.New(pool)
+	certificateRepository := credentialspostgres.New(pool)
+	certificateIssuance, err := credentials.NewCertificateIssuanceService(certificateRepository, coursesRepository, progresspostgres.New(pool), cfg.CertificateIssuer, time.Now)
+	if err != nil {
+		return err
+	}
 	publicationAssetResolver := authoring.NewAssetPublicationResolver(assetRepository)
 	publicationService := authoring.NewPublicationServiceWithAssets(authoringRepository, publicationAssetResolver, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
 	auth := &authHTTP{
@@ -120,6 +128,8 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringAssessments:        authoring.NewAssessmentManagementService(assessmentRepository, authoringAuthorizer),
 		learnerAttempts:             assessments.NewLearnerAttemptService(assessmentRepository, coursesRepository, time.Now),
 		community:                   community.NewService(communitypostgres.New(pool), coursesRepository),
+		certificateIssuance:         certificateIssuance,
+		certificates:                certificateRepository,
 		assetMaxBytes:               cfg.AssetMaxBytes,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
@@ -192,6 +202,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				api.Get("/courses/by-id/{courseId}/versions/{version}", auth.handlePublishedCourseVersion)
 				api.Get("/courses/by-id/{courseId}/latest", auth.handleLatestPublishedCourseVersion)
 			}
+			if auth.certificates != nil {
+				api.Get("/public/certificates/{certificateId}", auth.handlePublicCertificate)
+			}
 			if auth.publishedAssets != nil && auth.assetStorage != nil {
 				api.Get("/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}", auth.handlePublishedCourseAsset)
 				api.Head("/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}", auth.handlePublishedCourseAsset)
@@ -202,6 +215,10 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				// per-request resolution and unsafe-method CSRF are inherited.
 				protected.Use(auth.authenticated)
 				protected.Get("/auth/session", auth.handleSession)
+				if auth.certificateIssuance != nil && auth.certificates != nil {
+					protected.Post("/courses/by-id/{courseId}/versions/{version}/certificate", auth.handleCertificateIssue)
+					protected.Get("/learner/certificates/{certificateId}", auth.handleLearnerCertificateGet)
+				}
 				if auth.learnerAttempts != nil {
 					protected.Post("/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts", auth.handleLearnerAttemptCreate)
 					protected.Get("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptGet)

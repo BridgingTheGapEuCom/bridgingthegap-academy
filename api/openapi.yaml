@@ -682,6 +682,37 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/versions/{version}/certificate:
+    post:
+      operationId: issueLearnerCertificate
+      description: Issues or replays the authenticated learner's Certificate for this exact published CourseVersion. Eligibility is server-authoritative and no client certificate fields are accepted.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses:
+        '200': { description: Existing Certificate replay, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerCertificate' } } } }
+        '201': { description: Newly issued private Certificate, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerCertificate' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /api/learner/certificates/{certificateId}:
+    get:
+      operationId: getLearnerCertificate
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CertificateID' }]
+      responses:
+        '200': { description: Private Certificate belonging only to the authenticated learner, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerCertificate' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/public/certificates/{certificateId}:
+    get:
+      operationId: verifyPublicCertificate
+      description: Public registry verification of a recorded Certificate. It states registry ACTIVE or REVOKED status and makes no cryptographic or Open Badges claim.
+      parameters: [{ $ref: '#/components/parameters/CertificateID' }]
+      responses:
+        '200': { description: Privacy-preserving public Certificate verification, content: { application/json: { schema: { $ref: '#/components/schemas/PublicCertificate' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/courses/by-id/{courseId}/community:
     get:
       operationId: getCourseCommunity
@@ -897,6 +928,7 @@ components:
     AuthoringDraftID: { name: draftId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringAssessmentID: { name: assessmentId, in: path, required: true, schema: { type: string, format: uuid } }
     LearnerAttemptID: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
+    CertificateID: { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
     LearnerAssessmentKey: { name: assessmentKey, in: path, required: true, schema: { type: string, format: uuid } }
     CommunityThreadID: { name: threadId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringUserID: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1599,6 +1631,26 @@ components:
         stableKey: { type: string, minLength: 1, maxLength: 160 }
         text: { type: string, minLength: 1, maxLength: 4000 }
         position: { type: integer, minimum: 0 }
+    CertificateIssuer:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties: { id: { type: string }, name: { type: string } }
+    CertificateAchievement:
+      type: object
+      additionalProperties: false
+      required: [courseId, title, version, language, criteria]
+      properties: { courseId: { type: string, format: uuid }, title: { type: string }, version: { type: string }, language: { type: string }, criteria: { type: string } }
+    LearnerCertificate:
+      type: object
+      additionalProperties: false
+      required: [certificateId, status, issuedAt, revokedAt, achievement, issuer, verificationPath]
+      properties: { certificateId: { type: string, format: uuid }, status: { type: string, enum: [ACTIVE, REVOKED] }, issuedAt: { type: string, format: date-time }, revokedAt: { type: [string, 'null'], format: date-time }, achievement: { $ref: '#/components/schemas/CertificateAchievement' }, issuer: { $ref: '#/components/schemas/CertificateIssuer' }, verificationPath: { type: string } }
+    PublicCertificate:
+      type: object
+      additionalProperties: false
+      required: [certificateId, status, issuedAt, revokedAt, achievement, issuer]
+      properties: { certificateId: { type: string, format: uuid }, status: { type: string, enum: [ACTIVE, REVOKED] }, issuedAt: { type: string, format: date-time }, revokedAt: { type: [string, 'null'], format: date-time }, achievement: { $ref: '#/components/schemas/CertificateAchievement' }, issuer: { $ref: '#/components/schemas/CertificateIssuer' } }
     CommunityModerationProbe: { type: object, additionalProperties: false, required: [canModerate], properties: { canModerate: { type: boolean } } }
     CommunityModeratorThreadSummary: { type: object, additionalProperties: false, required: [threadId, title, author, state, postCount, createdAt, updatedAt], properties: { threadId: { type: string, format: uuid }, title: { type: string }, author: { $ref: '#/components/schemas/CommunityAuthor' }, state: { type: string, enum: [VISIBLE, HIDDEN] }, postCount: { type: integer, minimum: 0 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } } }
     CommunityModeratorThreadPage: { type: object, additionalProperties: false, required: [threads, total, limit, offset], properties: { threads: { type: array, items: { $ref: '#/components/schemas/CommunityModeratorThreadSummary' } }, total: { type: integer }, limit: { type: integer }, offset: { type: integer } } }

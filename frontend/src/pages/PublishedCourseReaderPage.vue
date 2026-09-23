@@ -24,6 +24,7 @@
         <h1 id="published-course-title" ref="courseTitle" tabindex="-1">{{ state.course.title }}</h1>
         <p v-if="state.course.description" class="published-course-reader__description">{{ state.course.description }}</p>
         <RouterLink :to="`/courses/by-id/${state.course.courseId}/community`">Course discussions</RouterLink>
+        <button v-if="auth.state.value.status === 'authenticated'" type="button" @click="claimCertificate" :disabled="claiming">{{ claiming ? 'Requesting certificate…' : 'Get certificate' }}</button><p v-if="certificateMessage" role="status">{{ certificateMessage }}</p>
         <dl class="published-course-reader__metadata">
           <div><dt>Version</dt><dd>{{ state.course.version }}</dd></div>
           <div v-if="state.course.sourceLanguage"><dt>Source language</dt><dd>{{ state.course.sourceLanguage }}</dd></div>
@@ -63,6 +64,8 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
+import { useAuth } from '../auth/auth'
+import { issueCertificate, certificatePath } from '../courses/certificates'
 import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
 import PublishedCourseReaderLesson from '../components/PublishedCourseReaderLesson.vue'
@@ -84,11 +87,14 @@ type State =
   | { kind: 'unavailable' }
 
 const route = useRoute()
+const auth = useAuth()
 const router = useRouter()
 const state = ref<State>({ kind: 'loading' })
 const courseTitle = ref<HTMLHeadingElement | null>(null)
 let requestVersion = 0
 let active = true
+const claiming = ref(false)
+const certificateMessage = ref('')
 
 watch([() => route.params.courseId, () => route.params.version], () => { void load() }, { immediate: true })
 watch(() => route.query.lesson, () => {
@@ -140,6 +146,15 @@ async function retryLoad() {
   if (!active || !applied) return
   await nextTick()
   courseTitle.value?.focus()
+}
+
+
+async function claimCertificate() {
+  if (claiming.value || state.value.kind !== 'ready') return
+  claiming.value = true; certificateMessage.value = ''
+  try { const certificate = await issueCertificate(state.value.course.courseId, state.value.course.version); await router.push(certificatePath(certificate.certificateId)) }
+  catch (error) { certificateMessage.value = error instanceof APIProblemError && error.problem?.code === 'certificate_not_eligible' ? 'Complete this course before requesting a certificate.' : 'Your certificate could not be requested. Please try again.' }
+  finally { claiming.value = false }
 }
 
 function routeParameter(name: 'courseId' | 'version'): string {
