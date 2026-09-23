@@ -54,8 +54,7 @@ copied, while Draft owner, creator, revision, and Authoring timestamps are
 excluded. Answers remain server-private and are not part of public Course
 projections. Exact CourseVersion reads map the binding to an answer-free learner
 projection containing only semantic keys, frozen presentation text, and order.
-The learner reader supports unsaved, ungraded local practice responses; attempts
-and grading remain deferred.
+The learner reader receives only this answer-free projection. Authenticated Attempt persistence and grading use the private binding server-side; learner delivery never consults mutable Authoring Assessments.
 
 `assessments.assessment_attempt` now owns private persisted learner response
 aggregates. Every Attempt has its own opaque UUID, one durable Identity user,
@@ -80,9 +79,9 @@ All Attempt routes use the normal session Origin/CSRF protections and
 `Cache-Control: no-store`. Anonymous public-course practice remains in memory;
 it never creates persistent Attempt state.
 
-An IN_PROGRESS update may be partial. Submission requires one response for
-every frozen question, a selection for choice questions, and a complete mapping
-for every MATCHING left item. The server validates those response keys against
+An IN_PROGRESS update may be partial. Submission requires one response for every frozen question and a selection for
+choice questions. A partial MATCHING map is accepted as an answered response
+and grades incorrect; this is the explicit unanswered-pair policy. The server validates those response keys against
 the exact immutable Courses binding, then grades single choice by equality,
 multiple choice by exact key-set equality, and matching by exact one-to-one
 mapping. Each question has equal weight and there is no partial credit. Wrong
@@ -94,7 +93,7 @@ there can be no submitted Attempt without a result. The learner DTO exposes
 only that aggregate result and the learner's own responses. It never exposes
 correct options, correct sets, matching answers, mutable Authoring data, or
 learner identity. Repeated submission returns a conflict rather than grading
-again. Learner UI wiring and detailed feedback remain deferred.
+again. Learner UI wiring displays only the persisted aggregate result; detailed feedback remains deferred.
 
 The Draft Authoring workspace provides private Assessment list and editor
 routes. The editor uses native radios, checkboxes, selects, and move controls;

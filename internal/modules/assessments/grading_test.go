@@ -62,3 +62,12 @@ func TestValidateResponsesForPublishedAssessmentAllowsPartialButRejectsForeignSe
 		})
 	}
 }
+
+func TestGradePublishedAssessmentTreatsPartialMatchingAsIncorrect(t *testing.T) {
+	responses := completeCorrectResponses()
+	responses[2].Pairs = []AttemptMatchingPair{{LeftItemKey: "left-a", RightItemKey: "right-one"}}
+	result, err := GradePublishedAssessment(gradingBinding(), responses)
+	if err != nil || result != (AttemptResult{CorrectCount: 2, TotalCount: 3}) {
+		t.Fatalf("partial matching result = %#v, %v", result, err)
+	}
+}
