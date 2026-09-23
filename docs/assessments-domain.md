@@ -104,3 +104,13 @@ revision. A revision conflict preserves local edits and requires an explicit
 reload; it is never merged or retried automatically. Correct answers appear
 only in this authenticated editor, never in Assessment lists or Lesson block
 choosers.
+
+The published learner reader now connects authenticated knowledge checks to
+private Attempts. It deliberately creates an Attempt only when the learner
+saves or submits, replaces the full response aggregate with revision CAS, and
+saves unsaved local changes before submission. The reader uses the exact Course
+ID, SemVer, and Assessment key already loaded for that CourseVersion. Responses
+remain in memory for anonymous practice; there is no anonymous Attempt or
+browser-persistent answer storage. Submitted controls become terminal and show
+only the server-returned aggregate score. Correct choices, matching pairs, and
+per-question correctness remain server-private.

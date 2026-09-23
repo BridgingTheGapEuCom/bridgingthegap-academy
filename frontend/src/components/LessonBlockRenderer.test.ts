@@ -64,6 +64,6 @@ describe('LessonBlockRenderer', () => {
     render(LessonBlockRenderer, { props: { block: { key: 'check', type: 'KNOWLEDGE_CHECK', payload: { assessmentKey: learnerAssessment.assessmentKey } }, publishedAssessment: learnerAssessment } })
     expect(screen.getByRole('radio', { name: 'One' })).toBeTruthy()
     expect(screen.queryByText(/Interactive knowledge checks will be available/i)).toBeNull()
-    expect(document.body.innerHTML).not.toMatch(/correctOption|correctPairs|answerKey|answers/i)
+    expect(document.body.innerHTML).not.toMatch(/correctOption|correctPairs|answerKey/i)
   })
 })

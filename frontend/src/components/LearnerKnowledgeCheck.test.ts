@@ -31,7 +31,7 @@ describe('LearnerKnowledgeCheck', () => {
 
   it('keeps answer keys and correctness data out of the rendered DOM', () => {
     const { container } = render(LearnerKnowledgeCheck, { props: { assessment } })
-    expect(container.innerHTML).not.toMatch(/correctOption|correctPairs|answerKey|answers/i)
-    expect(screen.getByText(/not saved or graded yet/i)).toBeTruthy()
+    expect(container.innerHTML).not.toMatch(/correctOption|correctPairs|answerKey/i)
+    expect(screen.getByText(/sign in to save and submit/i)).toBeTruthy()
   })
 })

@@ -143,8 +143,8 @@ test('published course catalog and reader shell are accessible, navigable, and r
 	await expect(page.getByRole('radio', { name: 'Producer boundary' })).toBeChecked()
 	await page.getByRole('checkbox', { name: 'Explicit ownership' }).check()
 	await expect(page.getByRole('checkbox', { name: 'Explicit ownership' })).toBeChecked()
-	await page.getByRole('combobox', { name: 'Match Event' }).selectOption('right-one')
-	await expect(page.getByText(/not saved or graded yet/i)).toBeVisible()
+	await page.getByRole('combobox', { name: 'Event' }).selectOption('right-one')
+	await expect(page.getByText(/sign in to save and submit/i)).toBeVisible()
   await page.getByRole('link', { name: 'Synchronous and asynchronous, estimated duration 1 hr 15 min' }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/lesson=sync-vs-async/)
@@ -190,4 +190,24 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await expect(page).toHaveURL('/courses?offset=20')
   await expect(page.getByRole('link', { name: 'Boundary design' })).toBeVisible()
 
+})
+
+test('authenticated learner saves and submits a knowledge-check Attempt', async ({ page }) => {
+  await servePublicCourses(page)
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, user_id: '90000000-0000-4000-8000-000000000001', csrf_token: 'csrf', expires_at: '2027-01-01T00:00:00Z' }) }))
+  const attemptId = '80000000-0000-4000-8000-000000000001'
+  const base = { attemptId, assessmentKey: '70000000-0000-4000-8000-000000000001', state: 'IN_PROGRESS', revision: 1, responses: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', submittedAt: null, result: null }
+  await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}/assessments/${base.assessmentKey}/attempts`, (route) => route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(base) }))
+  await page.route(`**/api/learner/assessment-attempts/${attemptId}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...base, revision: 2, responses: [{ questionKey: 'single', type: 'SINGLE_CHOICE', selectedOptionKey: 'first', selectedOptionKeys: [], pairs: [] }] }) }))
+  await page.route(`**/api/learner/assessment-attempts/${attemptId}/submit`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...base, state: 'SUBMITTED', revision: 3, responses: [{ questionKey: 'single', type: 'SINGLE_CHOICE', selectedOptionKey: 'first', selectedOptionKeys: [], pairs: [] }], submittedAt: '2026-01-01T00:01:00Z', result: { correctCount: 1, totalCount: 3, percentage: 33.3333333333 } }) }))
+  await page.goto(`/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}`)
+  await page.getByRole('radio', { name: 'Producer boundary' }).check()
+  await expect(page.getByText('Unsaved changes.')).toBeVisible()
+  await page.getByRole('button', { name: 'Save progress' }).click()
+  await expect(page.getByText('Progress saved.')).toBeVisible()
+  await page.getByRole('button', { name: 'Submit answers' }).click()
+  await expect(page.getByRole('heading', { name: 'Submitted result' })).toBeVisible()
+  await expect(page.getByText(/1 of 3 questions correct/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Submit answers' })).toBeDisabled()
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

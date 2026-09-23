@@ -6,8 +6,9 @@ import LessonRichText from './LessonRichText.vue'
 import LessonRichTextInlines from './LessonRichTextInlines.vue'
 import LearnerKnowledgeCheck from './LearnerKnowledgeCheck.vue'
 import type { PublishedAssessmentLearnerView } from '../courses/courses'
+import type { LearnerAttemptSession } from '../courses/attempts'
 
-const props = defineProps<{ block: RenderableBlock; publishedAssetContext?: PublishedAssetDeliveryContext; publishedAssessment?: PublishedAssessmentLearnerView }>()
+const props = defineProps<{ block: RenderableBlock; publishedAssetContext?: PublishedAssetDeliveryContext; publishedAssessment?: PublishedAssessmentLearnerView; attemptSession?: LearnerAttemptSession }>()
 
 const headingTag = computed(() => props.block.type === 'HEADING' ? `h${props.block.payload.level}` : 'h2')
 const calloutLabel = computed(() => props.block.type === 'CALLOUT' ? ({ INFO: 'Information', NOTE: 'Note', WARNING: 'Warning', TIP: 'Tip' }[props.block.payload.kind]) : '')
@@ -97,7 +98,7 @@ function assetURL(asset: { assetKey: string }, download = false): string | undef
     <p v-if="!assetURL(block.payload.asset, true)">Download unavailable.</p>
   </section>
 
-  <LearnerKnowledgeCheck v-else-if="block.type === 'KNOWLEDGE_CHECK' && publishedAssessment" :assessment="publishedAssessment" />
+  <LearnerKnowledgeCheck v-else-if="block.type === 'KNOWLEDGE_CHECK' && publishedAssessment" :assessment="publishedAssessment" :attempt-session="attemptSession" :block-key="block.key" />
 
   <div v-else-if="block.type === 'KNOWLEDGE_CHECK'" class="lesson-block lesson-knowledge-check" role="note" aria-label="Knowledge check">
     <p class="lesson-block__label">Knowledge check</p>
