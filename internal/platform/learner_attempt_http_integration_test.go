@@ -50,9 +50,7 @@ func testLearnerAssessmentAttemptAPI(t *testing.T, ctx context.Context, pool *pg
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := assessments.NewLearnerAttemptService(assessmentspostgres.New(pool), courseRepository, func() time.Time {
-		return time.Date(2026, time.September, 23, 12, 0, 0, 0, time.UTC)
-	})
+	service := assessments.NewLearnerAttemptService(assessmentspostgres.New(pool), courseRepository, time.Now)
 	router := authTestRouter(&authHTTP{sessions: sessions, learnerAttempts: service})
 	assessmentKey := published.AssessmentBindings[0].AssessmentKey
 	base := "/api/courses/by-id/" + string(course.ID) + "/versions/1.0.0/assessments/" + assessmentKey + "/attempts"
@@ -85,7 +83,7 @@ func testLearnerAssessmentAttemptAPI(t *testing.T, ctx context.Context, pool *pg
 	if submitResponse.Code != http.StatusOK || strings.Contains(submitResponse.Body.String(), "correctOptionKeys") {
 		t.Fatalf("submit response=%d body=%s", submitResponse.Code, submitResponse.Body.String())
 	}
-	if err := json.Unmarshal(submitResponse.Body.Bytes(), &attempt); err != nil || attempt.State != assessments.AttemptSubmitted || attempt.Result == nil || attempt.Result.CorrectCount != 1 || attempt.Result.TotalCount != 1 {
+	if err := json.Unmarshal(submitResponse.Body.Bytes(), &attempt); err != nil || attempt.State != assessments.AttemptSubmitted || attempt.Result == nil || attempt.Result.CorrectCount != 1 || attempt.Result.TotalCount != 1 || attempt.SubmittedAt == nil || attempt.SubmittedAt.Before(attempt.CreatedAt) {
 		t.Fatalf("submitted attempt=%#v err=%v", attempt, err)
 	}
 
