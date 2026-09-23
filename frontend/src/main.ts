@@ -13,6 +13,8 @@ import LessonPage from './pages/LessonPage.vue'
 import PublishedCourseReaderPage from './pages/PublishedCourseReaderPage.vue'
 import CourseCommunityPage from './pages/CourseCommunityPage.vue'
 import CourseCommunityThreadPage from './pages/CourseCommunityThreadPage.vue'
+import CourseCommunityModerationPage from './pages/CourseCommunityModerationPage.vue'
+import CourseCommunityModeratorThreadPage from './pages/CourseCommunityModeratorThreadPage.vue'
 import AuthoringHomePage from './pages/AuthoringHomePage.vue'
 import AuthoringDraftCreatePage from './pages/AuthoringDraftCreatePage.vue'
 import AuthoringDraftShell from './pages/AuthoringDraftShell.vue'
@@ -43,6 +45,8 @@ const router = createRouter({
     { path: '/courses/by-id/:courseId', name: 'published-course-latest', component: PublishedCourseReaderPage },
     { path: '/courses/by-id/:courseId/community', name: 'course-community', component: CourseCommunityPage, meta: { requiresAuth: true } },
     { path: '/courses/by-id/:courseId/community/threads/:threadId', name: 'course-community-thread', component: CourseCommunityThreadPage, meta: { requiresAuth: true } },
+    { path: '/courses/by-id/:courseId/community/moderation', component: CourseCommunityModerationPage, meta: { requiresAuth: true } },
+    { path: '/courses/by-id/:courseId/community/moderation/threads/:threadId', component: CourseCommunityModeratorThreadPage, meta: { requiresAuth: true } },
     { path: '/courses/:slug', component: CourseOverviewPage },
     { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPage },
     { path: '/authoring', name: 'authoring-home', component: AuthoringHomePage, meta: { requiresAuth: true } },
