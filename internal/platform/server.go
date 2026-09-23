@@ -209,6 +209,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Post("/learner/assessment-attempts/{attemptId}/submit", auth.handleLearnerAttemptSubmit)
 				}
 				if auth.community != nil {
+					protected.Get("/courses/by-id/{courseId}/community/moderation", auth.handleCommunityModerationProbe)
+					protected.Get("/courses/by-id/{courseId}/community/moderation/threads", auth.handleCommunityModeratorThreads)
+					protected.Get("/courses/by-id/{courseId}/community/moderation/threads/{threadId}", auth.handleCommunityModeratorThread)
 					protected.Get("/courses/by-id/{courseId}/community", auth.handleCommunity)
 					protected.Get("/courses/by-id/{courseId}/community/threads", auth.handleCommunityThreads)
 					protected.Post("/courses/by-id/{courseId}/community/threads", auth.handleCommunityCreateThread)

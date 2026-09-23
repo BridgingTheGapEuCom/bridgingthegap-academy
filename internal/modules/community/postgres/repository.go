@@ -130,6 +130,51 @@ func (r *Repository) SetPostState(c context.Context, course, thread, id string, 
 	e := r.pool.QueryRow(c, `UPDATE community.post p SET state=$4 FROM community.thread t WHERE p.id=$3 AND p.thread_id=$2 AND t.id=p.thread_id AND t.course_id=$1 RETURNING p.id,p.thread_id,p.author_user_id,p.body,p.state,p.created_at,p.updated_at`, course, thread, id, state).Scan(&p.ID, &p.ThreadID, &p.AuthorUserID, &p.Body, &p.State, &p.CreatedAt, &p.UpdatedAt)
 	return p, err(e)
 }
+func (r *Repository) ListThreadsForModeration(c context.Context, course string, limit, offset int) ([]community.ThreadSummary, int, error) {
+	var n int
+	if e := r.pool.QueryRow(c, `SELECT count(*) FROM community.thread WHERE course_id=$1`, course).Scan(&n); e != nil {
+		return nil, 0, err(e)
+	}
+	rows, e := r.pool.Query(c, `SELECT t.id,t.course_id,t.title,t.created_by_user_id,t.state,t.created_at,t.updated_at,count(p.id) FROM community.thread t LEFT JOIN community.post p ON p.thread_id=t.id WHERE t.course_id=$1 GROUP BY t.id ORDER BY t.updated_at DESC,t.id DESC LIMIT $2 OFFSET $3`, course, limit, offset)
+	if e != nil {
+		return nil, 0, err(e)
+	}
+	defer rows.Close()
+	out := []community.ThreadSummary{}
+	for rows.Next() {
+		var x community.ThreadSummary
+		if e := rows.Scan(&x.ID, &x.CourseID, &x.Title, &x.CreatedByUserID, &x.State, &x.CreatedAt, &x.UpdatedAt, &x.PostCount); e != nil {
+			return nil, 0, err(e)
+		}
+		out = append(out, x)
+	}
+	return out, n, rows.Err()
+}
+func (r *Repository) GetThreadForModeration(c context.Context, course, id string) (community.Thread, error) {
+	var t community.Thread
+	e := r.pool.QueryRow(c, `SELECT id,course_id,title,created_by_user_id,state,created_at,updated_at FROM community.thread WHERE course_id=$1 AND id=$2`, course, id).Scan(&t.ID, &t.CourseID, &t.Title, &t.CreatedByUserID, &t.State, &t.CreatedAt, &t.UpdatedAt)
+	return t, err(e)
+}
+func (r *Repository) ListPostsForModeration(c context.Context, thread string, limit, offset int) ([]community.Post, int, error) {
+	var n int
+	if e := r.pool.QueryRow(c, `SELECT count(*) FROM community.post WHERE thread_id=$1`, thread).Scan(&n); e != nil {
+		return nil, 0, err(e)
+	}
+	rows, e := r.pool.Query(c, `SELECT id,thread_id,author_user_id,body,state,created_at,updated_at FROM community.post WHERE thread_id=$1 ORDER BY created_at,id LIMIT $2 OFFSET $3`, thread, limit, offset)
+	if e != nil {
+		return nil, 0, err(e)
+	}
+	defer rows.Close()
+	out := []community.Post{}
+	for rows.Next() {
+		var p community.Post
+		if e := rows.Scan(&p.ID, &p.ThreadID, &p.AuthorUserID, &p.Body, &p.State, &p.CreatedAt, &p.UpdatedAt); e != nil {
+			return nil, 0, err(e)
+		}
+		out = append(out, p)
+	}
+	return out, n, rows.Err()
+}
 func err(e error) error {
 	if errors.Is(e, pgx.ErrNoRows) {
 		return community.ErrNotFound

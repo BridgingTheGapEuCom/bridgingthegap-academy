@@ -742,6 +742,33 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/community/moderation:
+    get:
+      operationId: getCourseCommunityModerationProbe
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }]
+      responses:
+        '200': { description: Server-authoritative exact-Course moderation capability, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityModerationProbe' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/community/moderation/threads:
+    get:
+      operationId: listCourseCommunityModeratorThreads
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }, { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }]
+      responses:
+        '200': { description: Private moderator page including hidden Threads, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityModeratorThreadPage' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/community/moderation/threads/{threadId}:
+    get:
+      operationId: getCourseCommunityModeratorThread
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CommunityThreadID' }, { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }, { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }]
+      responses:
+        '200': { description: Private moderator Thread including hidden Posts and state, content: { application/json: { schema: { $ref: '#/components/schemas/CommunityModeratorThread' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/courses/by-id/{courseId}/latest:
     get:
       operationId: getLatestPublishedCourseVersionById
@@ -1572,6 +1599,11 @@ components:
         stableKey: { type: string, minLength: 1, maxLength: 160 }
         text: { type: string, minLength: 1, maxLength: 4000 }
         position: { type: integer, minimum: 0 }
+    CommunityModerationProbe: { type: object, additionalProperties: false, required: [canModerate], properties: { canModerate: { type: boolean } } }
+    CommunityModeratorThreadSummary: { type: object, additionalProperties: false, required: [threadId, title, author, state, postCount, createdAt, updatedAt], properties: { threadId: { type: string, format: uuid }, title: { type: string }, author: { $ref: '#/components/schemas/CommunityAuthor' }, state: { type: string, enum: [VISIBLE, HIDDEN] }, postCount: { type: integer, minimum: 0 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } } }
+    CommunityModeratorThreadPage: { type: object, additionalProperties: false, required: [threads, total, limit, offset], properties: { threads: { type: array, items: { $ref: '#/components/schemas/CommunityModeratorThreadSummary' } }, total: { type: integer }, limit: { type: integer }, offset: { type: integer } } }
+    CommunityModeratorPost: { type: object, additionalProperties: false, required: [postId, author, body, state, isOpeningPost, createdAt, updatedAt], properties: { postId: { type: string, format: uuid }, author: { $ref: '#/components/schemas/CommunityAuthor' }, body: { type: string }, state: { type: string, enum: [VISIBLE, HIDDEN] }, isOpeningPost: { type: boolean }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } } }
+    CommunityModeratorThread: { type: object, additionalProperties: false, required: [threadId, title, author, state, createdAt, updatedAt, posts, postTotal], properties: { threadId: { type: string, format: uuid }, title: { type: string }, author: { $ref: '#/components/schemas/CommunityAuthor' }, state: { type: string, enum: [VISIBLE, HIDDEN] }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time }, posts: { type: array, items: { $ref: '#/components/schemas/CommunityModeratorPost' } }, postTotal: { type: integer } } }
     CourseCommunity: { type: object, additionalProperties: false, required: [courseId, mode], properties: { courseId: { type: string, format: uuid }, mode: { type: string, enum: [ENABLED, DISABLED] } } }
     CommunityAuthor: { type: object, additionalProperties: false, required: [userId], properties: { userId: { type: string, format: uuid } } }
     CommunityThreadSummary: { type: object, additionalProperties: false, required: [threadId, title, author, postCount, createdAt, updatedAt], properties: { threadId: { type: string, format: uuid }, title: { type: string, minLength: 1, maxLength: 240 }, author: { $ref: '#/components/schemas/CommunityAuthor' }, postCount: { type: integer, minimum: 0 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } } }

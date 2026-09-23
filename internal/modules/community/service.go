@@ -112,6 +112,30 @@ func (s *Service) ModeratePost(ctx context.Context, courseID, actorID, threadID,
 	}
 	return s.repository.SetPostState(ctx, courseID, threadID, postID, state)
 }
+func (s *Service) CanModerate(ctx context.Context, courseID, actorID string) (bool, error) {
+	err := s.requireModerator(ctx, courseID, actorID)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+func (s *Service) ModeratorThreads(ctx context.Context, course, actor string, limit, offset int) ([]ThreadSummary, int, error) {
+	if err := s.requireModerator(ctx, course, actor); err != nil {
+		return nil, 0, err
+	}
+	return s.repository.ListThreadsForModeration(ctx, course, limit, offset)
+}
+func (s *Service) ModeratorThread(ctx context.Context, course, actor, thread string, limit, offset int) (Thread, []Post, int, error) {
+	if err := s.requireModerator(ctx, course, actor); err != nil {
+		return Thread{}, nil, 0, err
+	}
+	t, err := s.repository.GetThreadForModeration(ctx, course, thread)
+	if err != nil {
+		return Thread{}, nil, 0, err
+	}
+	p, n, err := s.repository.ListPostsForModeration(ctx, thread, limit, offset)
+	return t, p, n, err
+}
 func (s *Service) requireModerator(ctx context.Context, courseID, actorID string) error {
 	if !uuid(courseID) || !uuid(actorID) {
 		return ErrNotFound

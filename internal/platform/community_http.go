@@ -61,6 +61,28 @@ type communityCreateThreadRequest struct {
 type communityCreatePostRequest struct {
 	Body string `json:"body"`
 }
+type communityModerationProbeDTO struct {
+	CanModerate bool `json:"canModerate"`
+}
+type communityModeratorPostDTO struct {
+	PostID        string               `json:"postId"`
+	Author        communityAuthorDTO   `json:"author"`
+	Body          string               `json:"body"`
+	State         community.Visibility `json:"state"`
+	IsOpeningPost bool                 `json:"isOpeningPost"`
+	CreatedAt     time.Time            `json:"createdAt"`
+	UpdatedAt     time.Time            `json:"updatedAt"`
+}
+type communityModeratorThreadDTO struct {
+	ThreadID  string                      `json:"threadId"`
+	Title     string                      `json:"title"`
+	Author    communityAuthorDTO          `json:"author"`
+	State     community.Visibility        `json:"state"`
+	CreatedAt time.Time                   `json:"createdAt"`
+	UpdatedAt time.Time                   `json:"updatedAt"`
+	Posts     []communityModeratorPostDTO `json:"posts"`
+	PostTotal int                         `json:"postTotal"`
+}
 
 func (h *authHTTP) handleCommunity(w http.ResponseWriter, r *http.Request) {
 	courseID, ok := communityCourseID(w, r)
@@ -268,4 +290,72 @@ func (h *authHTTP) handleCommunityModeratePost(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"postId": x.ID, "state": string(x.State)})
+}
+func (h *authHTTP) handleCommunityModerationProbe(w http.ResponseWriter, r *http.Request) {
+	actor, ok := learnerActor(w, r)
+	if !ok {
+		return
+	}
+	course, ok := communityCourseID(w, r)
+	if !ok {
+		return
+	}
+	can, err := h.community.CanModerate(r.Context(), course, string(actor.UserID()))
+	if err != nil {
+		communityProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, communityModerationProbeDTO{CanModerate: can})
+}
+func (h *authHTTP) handleCommunityModeratorThreads(w http.ResponseWriter, r *http.Request) {
+	actor, ok := learnerActor(w, r)
+	if !ok {
+		return
+	}
+	course, ok := communityCourseID(w, r)
+	if !ok {
+		return
+	}
+	limit, offset, ok := communityPage(w, r)
+	if !ok {
+		return
+	}
+	threads, total, err := h.community.ModeratorThreads(r.Context(), course, string(actor.UserID()), limit, offset)
+	if err != nil {
+		communityProblem(w, r, err)
+		return
+	}
+	out := make([]map[string]any, 0, len(threads))
+	for _, t := range threads {
+		out = append(out, map[string]any{"threadId": t.ID, "title": t.Title, "author": communityAuthorDTO{UserID: t.CreatedByUserID}, "state": t.State, "createdAt": t.CreatedAt, "updatedAt": t.UpdatedAt, "postCount": t.PostCount})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"threads": out, "total": total, "limit": limit, "offset": offset})
+}
+func (h *authHTTP) handleCommunityModeratorThread(w http.ResponseWriter, r *http.Request) {
+	actor, ok := learnerActor(w, r)
+	if !ok {
+		return
+	}
+	course, ok := communityCourseID(w, r)
+	if !ok {
+		return
+	}
+	thread, ok := communityUUIDParam(w, r, "threadId", "Invalid thread ID")
+	if !ok {
+		return
+	}
+	limit, offset, ok := communityPage(w, r)
+	if !ok {
+		return
+	}
+	t, posts, total, err := h.community.ModeratorThread(r.Context(), course, string(actor.UserID()), thread, limit, offset)
+	if err != nil {
+		communityProblem(w, r, err)
+		return
+	}
+	out := make([]communityModeratorPostDTO, 0, len(posts))
+	for i, p := range posts {
+		out = append(out, communityModeratorPostDTO{PostID: p.ID, Author: communityAuthorDTO{UserID: p.AuthorUserID}, Body: p.Body, State: p.State, IsOpeningPost: offset == 0 && i == 0, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt})
+	}
+	writeJSON(w, http.StatusOK, communityModeratorThreadDTO{ThreadID: t.ID, Title: t.Title, Author: communityAuthorDTO{UserID: t.CreatedByUserID}, State: t.State, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, Posts: out, PostTotal: total})
 }

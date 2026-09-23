@@ -75,6 +75,15 @@ func (f *communityRepositoryFake) SetThreadState(_ context.Context, course, id s
 func (f *communityRepositoryFake) SetPostState(_ context.Context, _, thread, id string, state community.Visibility) (community.Post, error) {
 	return community.Post{ID: id, ThreadID: thread, AuthorUserID: "44444444-4444-4444-8444-444444444444", Body: "Post", State: state, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 }
+func (f *communityRepositoryFake) ListThreadsForModeration(context.Context, string, int, int) ([]community.ThreadSummary, int, error) {
+	return f.threads, len(f.threads), nil
+}
+func (f *communityRepositoryFake) GetThreadForModeration(ctx context.Context, course, id string) (community.Thread, error) {
+	return f.GetVisibleThread(ctx, course, id)
+}
+func (f *communityRepositoryFake) ListPostsForModeration(context.Context, string, int, int) ([]community.Post, int, error) {
+	return f.posts, len(f.posts), nil
+}
 
 func communityHTTP(t *testing.T, repo *communityRepositoryFake, session identity.ResolvedSession) http.Handler {
 	t.Helper()

@@ -80,6 +80,9 @@ type Repository interface {
 	CreatePost(context.Context, PostInput) (Post, error)
 	SetThreadState(context.Context, string, string, Visibility) (Thread, error)
 	SetPostState(context.Context, string, string, string, Visibility) (Post, error)
+	ListThreadsForModeration(context.Context, string, int, int) ([]ThreadSummary, int, error)
+	GetThreadForModeration(context.Context, string, string) (Thread, error)
+	ListPostsForModeration(context.Context, string, int, int) ([]Post, int, error)
 }
 
 func NormalizeTitle(v string) (string, error) { return normalize(v, maxTitle) }

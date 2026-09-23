@@ -651,6 +651,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/by-id/{courseId}/community/moderation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCourseCommunityModerationProbe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/moderation/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCourseCommunityModeratorThreads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/moderation/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCourseCommunityModeratorThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/by-id/{courseId}/latest": {
         parameters: {
             query?: never;
@@ -1329,6 +1377,55 @@ export interface components {
             stableKey: string;
             text: string;
             position: number;
+        };
+        CommunityModerationProbe: {
+            canModerate: boolean;
+        };
+        CommunityModeratorThreadSummary: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            author: components["schemas"]["CommunityAuthor"];
+            /** @enum {string} */
+            state: "VISIBLE" | "HIDDEN";
+            postCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunityModeratorThreadPage: {
+            threads: components["schemas"]["CommunityModeratorThreadSummary"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CommunityModeratorPost: {
+            /** Format: uuid */
+            postId: string;
+            author: components["schemas"]["CommunityAuthor"];
+            body: string;
+            /** @enum {string} */
+            state: "VISIBLE" | "HIDDEN";
+            isOpeningPost: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunityModeratorThread: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            author: components["schemas"]["CommunityAuthor"];
+            /** @enum {string} */
+            state: "VISIBLE" | "HIDDEN";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            posts: components["schemas"]["CommunityModeratorPost"][];
+            postTotal: number;
         };
         CourseCommunity: {
             /** Format: uuid */
@@ -3442,6 +3539,85 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
+        };
+    };
+    getCourseCommunityModerationProbe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-authoritative exact-Course moderation capability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityModerationProbe"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCourseCommunityModeratorThreads: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private moderator page including hidden Threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityModeratorThreadPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCourseCommunityModeratorThread: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                threadId: components["parameters"]["CommunityThreadID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private moderator Thread including hidden Posts and state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityModeratorThread"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getLatestPublishedCourseVersionById: {

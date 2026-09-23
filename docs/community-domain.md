@@ -49,3 +49,8 @@ content, authorship, creation times, and Thread activity ordering. An opening
 Post cannot be hidden alone: hide its Thread instead. Participant reads remain
 visible-only; audit events are deferred because no reusable Community audit
 stream exists yet.
+
+Moderators can ask the Course-scoped server probe whether `canModerate` is true
+without receiving attribution roles. Separate moderator list/detail reads keep
+hidden Threads rediscoverable and include hidden Posts with state; participant
+reads remain visible-only.
