@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { APIProblemError, type APIClient } from '../api/client'
-import { CommunityDisabledError, createCommunityPost, createCommunityThread, getCourseCommunity, listCommunityThreads } from './community'
+import { CommunityDisabledError, createCommunityPost, createCommunityThread, getCommunityModerationProbe, getCommunityThreadForModeration, hideCommunityPost, hideCommunityThread, listCommunityThreads, listCommunityThreadsForModeration, unhideCommunityPost, unhideCommunityThread, getCourseCommunity } from './community'
 
 const courseId = '10000000-0000-4000-8000-000000000001'
 const threadId = '20000000-0000-4000-8000-000000000001'
@@ -26,5 +26,15 @@ describe('community API helpers', () => {
     await expect(getCourseCommunity(courseId, client({ ...metadata, mode: 'HIDDEN' }))).rejects.toThrow('Invalid published course response')
     const disabled: APIClient = { request: vi.fn().mockRejectedValue(new APIProblemError(409, { type: '', title: '', status: 409, instance: '', request_id: '', code: 'community_disabled' }, undefined)) }
     await expect(createCommunityThread(courseId, 'Title', 'Body', disabled)).rejects.toBeInstanceOf(CommunityDisabledError)
+  })
+  it('validates the server-authoritative moderator surface and sends bodyless actions', async () => {
+    await expect(getCommunityModerationProbe(courseId, client({ canModerate: true }))).resolves.toEqual({ canModerate: true })
+    await expect(getCommunityModerationProbe(courseId, client({ canModerate: 'AUTHOR' }))).rejects.toThrow('Invalid published course response')
+    const moderator = { threadId, title: 'Question', author: { userId: '30000000-0000-4000-8000-000000000001' }, state: 'HIDDEN', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', posts: [{ postId: '40000000-0000-4000-8000-000000000001', author: { userId: '30000000-0000-4000-8000-000000000001' }, body: 'Reply', state: 'HIDDEN', isOpeningPost: false, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }], postTotal: 1 }
+    await expect(getCommunityThreadForModeration(courseId, threadId, client(moderator))).resolves.toEqual(moderator)
+    await expect(listCommunityThreadsForModeration(courseId, 0, client({ threads: [{ ...moderator, postCount: 1, posts: undefined, postTotal: undefined }], total: 1, limit: 20, offset: 0 }))).resolves.toBeTruthy()
+    const api = client({}); await hideCommunityThread(courseId, threadId, api); await unhideCommunityThread(courseId, threadId, api); await hideCommunityPost(courseId, threadId, moderator.posts[0].postId, api); await unhideCommunityPost(courseId, threadId, moderator.posts[0].postId, api)
+    for (const [, options] of (api.request as ReturnType<typeof vi.fn>).mock.calls) expect(options).toMatchObject({ method: 'POST', cache: 'no-store' })
+    expect(JSON.stringify((api.request as ReturnType<typeof vi.fn>).mock.calls)).not.toContain('state')
   })
 })
