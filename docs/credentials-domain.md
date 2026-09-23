@@ -19,14 +19,26 @@ record is never normally deleted. PostgreSQL enforces one Certificate per
 learner and exact CourseVersion, so a retry converges to the already-issued
 record instead of minting a duplicate.
 
-This foundation contains no automatic issuance or completion policy. A later
-server-authoritative eligibility service must derive an exact published
-CourseVersion and create the frozen snapshot. Assessment Attempts remain
-separate facts and a single Attempt does not itself award a certificate.
+Certificate issuance is a transport-independent application service. Its v1
+rule is explicit: the learner must have durable `progress.CourseProgress` facts
+for **every published Lesson** in the exact immutable CourseVersion. A version
+with no Lessons is not issuable because it has no completion signal. Progress
+belongs to the exact CourseVersion, so facts for another learner or Version do
+not qualify. Assessment Attempts remain separate facts: submitted Attempts,
+scores, Community activity, reader visits, and frontend state neither grant nor
+block this v1 rule.
+
+`BTG_LMS_CERTIFICATE_ISSUER_ID` and `BTG_LMS_CERTIFICATE_ISSUER_NAME` are
+required server configuration and are validated at startup. They are frozen
+into each Certificate. The criteria text states the all-published-Lessons rule.
+Issuance first returns any existing Certificate for the learner and exact
+CourseVersion, including a REVOKED Certificate, before evaluating current
+eligibility. This makes retries and concurrent issuance converge and never
+silently replaces or restores historical credentials.
 
 Open Badges 3.0 is a future interoperability target. Its achievement,
 criteria, issuer, recipient, issuance, and revocation concepts can be mapped
 from this internal model, but JSON-LD, Verifiable Credential proofs,
 cryptosuites, signing, wallets, Badge Connect, and exports remain outside the
-core domain. PDF rendering, public verification, HTTP APIs, and learner UI are
-also deferred.
+core domain. PDF rendering, public verification, HTTP APIs, automatic
+issuance triggers, and learner UI are also deferred.

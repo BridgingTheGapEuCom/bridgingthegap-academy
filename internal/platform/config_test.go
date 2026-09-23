@@ -10,7 +10,14 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 )
 
+func setValidCertificateIssuer(t *testing.T) {
+	t.Helper()
+	t.Setenv("BTG_LMS_CERTIFICATE_ISSUER_ID", "https://academy.example.com")
+	t.Setenv("BTG_LMS_CERTIFICATE_ISSUER_NAME", "Academy")
+}
+
 func TestLoadConfigRequiresDatabaseAndValidAddresses(t *testing.T) {
+	setValidCertificateIssuer(t)
 	t.Setenv("BTG_LMS_MODE", "production")
 	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
 	t.Setenv("BTG_LMS_DATABASE_URL", "")
@@ -24,7 +31,24 @@ func TestLoadConfigRequiresDatabaseAndValidAddresses(t *testing.T) {
 	}
 }
 
+func TestCertificateIssuerConfigurationIsRequiredAndValidated(t *testing.T) {
+	t.Setenv("BTG_LMS_MODE", "production")
+	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
+	t.Setenv("BTG_LMS_CERTIFICATE_ISSUER_ID", "")
+	t.Setenv("BTG_LMS_CERTIFICATE_ISSUER_NAME", "")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("accepted missing certificate issuer")
+	}
+	setValidCertificateIssuer(t)
+	cfg, err := LoadConfig()
+	if err != nil || cfg.CertificateIssuer.ID != "https://academy.example.com" || cfg.CertificateIssuer.Name != "Academy" {
+		t.Fatalf("certificate issuer = %#v, %v", cfg.CertificateIssuer, err)
+	}
+}
+
 func TestCookieModeRequiresExplicitLoopbackDevelopment(t *testing.T) {
+	setValidCertificateIssuer(t)
 	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
 	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
 	t.Setenv("BTG_LMS_HTTP_ADDR", ":8080")
@@ -54,6 +78,7 @@ func TestCookieModeRequiresExplicitLoopbackDevelopment(t *testing.T) {
 }
 
 func TestIndependentReviewConfigurationDefaultsToRequiredAndCanBeDisabled(t *testing.T) {
+	setValidCertificateIssuer(t)
 	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
 	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
 	t.Setenv("BTG_LMS_HTTP_ADDR", ":8080")
@@ -91,6 +116,7 @@ func TestConfiguredReviewApplicationUsesIndependentReviewSetting(t *testing.T) {
 		t.Setenv("BTG_LMS_MODE", "production")
 		t.Setenv("BTG_LMS_REQUIRE_INDEPENDENT_REVIEW", value)
 		t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
+		setValidCertificateIssuer(t)
 		cfg, loadErr := LoadConfig()
 		if loadErr != nil {
 			t.Fatal(loadErr)
@@ -129,6 +155,7 @@ func TestConfiguredReviewApplicationUsesIndependentReviewSetting(t *testing.T) {
 }
 
 func TestAssetStorageConfigurationIsExplicitAndBounded(t *testing.T) {
+	setValidCertificateIssuer(t)
 	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
 	t.Setenv("BTG_LMS_HTTP_ADDR", ":8080")
 	t.Setenv("BTG_LMS_MODE", "production")

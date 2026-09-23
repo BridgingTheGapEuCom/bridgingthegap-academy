@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
 )
 
 const defaultAssetMaxBytes int64 = 100 * 1024 * 1024
@@ -20,6 +22,7 @@ type Config struct {
 	RequireIndependentReview bool
 	AssetStoragePath         string
 	AssetMaxBytes            int64
+	CertificateIssuer        credentials.Issuer
 }
 
 func LoadConfig() (Config, error) {
@@ -39,6 +42,9 @@ func LoadConfig() (Config, error) {
 		RequireIndependentReview: requireIndependentReview,
 		AssetStoragePath:         os.Getenv("BTG_LMS_ASSET_STORAGE_PATH"),
 		AssetMaxBytes:            assetMaxBytes,
+		CertificateIssuer: credentials.Issuer{
+			ID: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_ID"), Name: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_NAME"),
+		},
 	}
 	switch envOr("BTG_LMS_MODE", "production") {
 	case "production":
@@ -59,6 +65,9 @@ func LoadConfig() (Config, error) {
 	}
 	if !filepath.IsAbs(cfg.AssetStoragePath) {
 		return Config{}, errors.New("BTG_LMS_ASSET_STORAGE_PATH must be absolute")
+	}
+	if err := cfg.CertificateIssuer.Validate(); err != nil {
+		return Config{}, errors.New("BTG_LMS_CERTIFICATE_ISSUER_ID and BTG_LMS_CERTIFICATE_ISSUER_NAME are required")
 	}
 	for name, address := range map[string]string{"BTG_LMS_HTTP_ADDR": cfg.HTTPAddr, "BTG_LMS_METRICS_ADDR": cfg.MetricsAddr} {
 		if _, _, err := net.SplitHostPort(address); err != nil {

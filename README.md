@@ -97,6 +97,8 @@ docker compose up -d db
 docker compose run --rm --no-deps app migrate
 export BTG_LMS_PUBLIC_ORIGIN=https://academy.example.com # replace with your actual browser origin
 export BTG_LMS_ASSET_STORAGE_PATH=/var/lib/btg-lms/assets # absolute, writable application data directory
+export BTG_LMS_CERTIFICATE_ISSUER_ID=https://academy.example.com
+export BTG_LMS_CERTIFICATE_ISSUER_NAME="Academy"
 # Optional temporary default is 100 MiB; set an explicit deployment limit as needed.
 export BTG_LMS_ASSET_MAX_BYTES=104857600
 docker compose --profile app up -d app
