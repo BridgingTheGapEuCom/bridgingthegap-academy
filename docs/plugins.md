@@ -44,10 +44,13 @@ The artifact digest is SHA-256 over the canonical v1 manifest JSON and its
 ordered resource inventory. The Ed25519 signing payload is exactly:
 
 ```text
-btg-plugin-signature-v1\n
-<lowercase artifact SHA-256>\n
+btg-plugin-signature-v1
+<lowercase artifact SHA-256>
 <canonical manifest JSON>
 ```
+
+The three lines are joined with a single LF byte. There is no trailing LF
+after the canonical manifest JSON.
 
 The manifest inventory binds every resource path, size, and SHA-256 digest, so
 changing metadata, an entrypoint, permissions, or any resource invalidates the
@@ -114,4 +117,3 @@ runtime will map validated course widget references through a controlled block
 and sandbox boundary; this foundation does not modify canonical LessonContent.
 Dashboard rendering, sandboxing, marketplace discovery, downloads, updates,
 signing services, and runtime unloading after trust changes remain deferred.
-

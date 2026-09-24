@@ -42,6 +42,20 @@ func TestPackageManifestAndSignature(t *testing.T) {
 	}
 }
 
+func TestManifestSupportsBothWidgetTypes(t *testing.T) {
+	m := testManifest("1.0.0")
+	m.PluginTypes = []PluginType{TypeCourseWidget, TypeDashboardWidget}
+	m.Entrypoints = append(m.Entrypoints, Entrypoint{ID: "dashboard-timeline", Type: TypeDashboardWidget, Name: "Dashboard timeline", Resource: "resources/dashboard.js"})
+	b, err := BuildPackageForTesting(m, map[string][]byte{"resources/timeline.js": []byte("course"), "resources/dashboard.js": []byte("dashboard")}, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validated := readTestPackage(t, b)
+	if len(validated.Manifest().PluginTypes) != 2 || len(validated.Manifest().Entrypoints) != 2 {
+		t.Fatalf("both widget types were not preserved: %#v", validated.Manifest())
+	}
+}
+
 func TestManifestRejectsInvalidValues(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -66,6 +80,14 @@ func TestPackageArchiveSecurity(t *testing.T) {
 		_, err := NewPackageReader(Limits{}).Read(context.Background(), bytes.NewReader(b))
 		if !IsPackageError(err, ErrInvalidArchive) {
 			t.Fatalf("got %v", err)
+		}
+	})
+	t.Run("absolute path", func(t *testing.T) {
+		for _, name := range []string{"/manifest.json", "C:/manifest.json", `C:\manifest.json`} {
+			_, err := NewPackageReader(Limits{}).Read(context.Background(), bytes.NewReader(zipEntries(t, map[string][]byte{name: []byte("{}")})))
+			if !IsPackageError(err, ErrInvalidArchive) {
+				t.Fatalf("accepted absolute path %q: %v", name, err)
+			}
 		}
 	})
 	t.Run("duplicate", func(t *testing.T) {
@@ -127,6 +149,58 @@ func TestPackageArchiveSecurity(t *testing.T) {
 			t.Fatalf("got %v", err)
 		}
 	})
+	t.Run("malformed manifest", func(t *testing.T) {
+		entries := unzipEntries(t, valid)
+		entries[manifestPath] = []byte(`{"format":`)
+		_, err := NewPackageReader(Limits{}).Read(context.Background(), bytes.NewReader(zipEntries(t, entries)))
+		if !IsPackageError(err, ErrInvalidManifest) {
+			t.Fatalf("got %v", err)
+		}
+	})
+	t.Run("trailing manifest value", func(t *testing.T) {
+		entries := unzipEntries(t, valid)
+		entries[manifestPath] = append(entries[manifestPath], []byte(` {}`)...)
+		_, err := NewPackageReader(Limits{}).Read(context.Background(), bytes.NewReader(zipEntries(t, entries)))
+		if !IsPackageError(err, ErrInvalidManifest) {
+			t.Fatalf("got %v", err)
+		}
+	})
+}
+
+func TestRecognizedSignatureRejectsManifestTamperingAndWrongKey(t *testing.T) {
+	ctx := context.Background()
+	publicKey, privateKey, _ := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{21}, 64)))
+	archive, err := BuildPackageForTesting(testManifest("3.0.0"), map[string][]byte{"resources/timeline.js": []byte("signed")}, "owned-2026", privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("tampered manifest", func(t *testing.T) {
+		entries := unzipEntries(t, archive)
+		var manifest Manifest
+		if err := json.Unmarshal(entries[manifestPath], &manifest); err != nil {
+			t.Fatal(err)
+		}
+		manifest.Name = "Tampered"
+		entries[manifestPath], _ = json.Marshal(manifest)
+		pkg := readTestPackage(t, zipEntries(t, entries))
+		repo := newMemoryRepository()
+		_ = repo.RegisterKey(ctx, VerificationKey{ID: "owned-2026", PublicKey: publicKey, Purpose: KeyPurposeOwned, AllowedPluginIDs: []PluginID{manifest.ID}, Enabled: true})
+		_, _, err := NewRegistryService(repo, Policy{}).Register(ctx, pkg)
+		if !IsPackageError(err, ErrInvalidSignature) {
+			t.Fatalf("tampered manifest was not rejected: %v", err)
+		}
+	})
+
+	t.Run("wrong recognized key", func(t *testing.T) {
+		wrongPublicKey, _, _ := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{22}, 64)))
+		repo := newMemoryRepository()
+		_ = repo.RegisterKey(ctx, VerificationKey{ID: "owned-2026", PublicKey: wrongPublicKey, Purpose: KeyPurposeOwned, AllowedPluginIDs: []PluginID{"com.example.academy.timeline"}, Enabled: true})
+		_, _, err := NewRegistryService(repo, Policy{}).Register(ctx, readTestPackage(t, archive))
+		if !IsPackageError(err, ErrInvalidSignature) {
+			t.Fatalf("wrong recognized key was not rejected: %v", err)
+		}
+	})
 }
 
 func TestRegistryTrustReplayMutationAndRevocation(t *testing.T) {
@@ -186,6 +260,10 @@ func TestApprovedIsExactReleaseAndInvalidSignatureIsNotUnknown(t *testing.T) {
 	approved, err := svc.Get(ctx, p.manifest.ID, p.manifest.Version)
 	if err != nil || approved.CurrentTrust != TrustBTGApproved {
 		t.Fatalf("approved: %#v %v", approved, err)
+	}
+	enabled, err := svc.Enable(ctx, p.manifest.ID, p.manifest.Version)
+	if err != nil || !enabled.Enabled || enabled.CurrentTrust != TrustBTGApproved {
+		t.Fatalf("approved release did not enable: %#v %v", enabled, err)
 	}
 	b2, _ := BuildPackageForTesting(testManifest("1.1.0"), map[string][]byte{"resources/timeline.js": []byte("v2")}, key.ID, private)
 	newVersion, _, err := svc.Register(ctx, readTestPackage(t, b2))

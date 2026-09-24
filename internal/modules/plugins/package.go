@@ -399,10 +399,14 @@ func (m Manifest) Validate() error {
 }
 
 func safePath(v string) (string, error) {
-	if v == "" || strings.Contains(v, "\\") || strings.HasPrefix(v, "/") || path.Clean(v) != v || v == "." || strings.HasPrefix(v, "../") || strings.ContainsRune(v, '\x00') {
+	if v == "" || strings.Contains(v, "\\") || strings.HasPrefix(v, "/") || hasWindowsDrivePrefix(v) || path.Clean(v) != v || v == "." || strings.HasPrefix(v, "../") || strings.ContainsRune(v, '\x00') {
 		return "", packageError(ErrInvalidArchive, "path")
 	}
 	return v, nil
+}
+
+func hasWindowsDrivePrefix(v string) bool {
+	return len(v) >= 3 && ((v[0] >= 'A' && v[0] <= 'Z') || (v[0] >= 'a' && v[0] <= 'z')) && v[1] == ':' && v[2] == '/'
 }
 func strictDecode(b []byte, out any) error {
 	if !json.Valid(b) || duplicateJSONKey(b) {
