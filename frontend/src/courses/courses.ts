@@ -166,7 +166,7 @@ function isPublishedCourseCatalogItem(value: unknown): value is PublishedCourseC
     && isDateTime(value.publishedAt)
 }
 
-function isPublishedCourseVersionDetail(value: unknown): value is PublishedCourseVersionDetail {
+export function isPublishedCourseVersionDetail(value: unknown): value is PublishedCourseVersionDetail {
   if (!isRecord(value)
     || typeof value.courseId !== 'string'
     || !isPublishedCourseID(value.courseId)

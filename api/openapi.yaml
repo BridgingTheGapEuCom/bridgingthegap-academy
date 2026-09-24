@@ -4,6 +4,16 @@ info:
   version: 0.1.0
   description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads and mutations. Authoring responses are no-store. Every Authoring mutation requires a trusted Origin and the authenticated session-bound CSRF token; unauthorized resources are hidden as 404.
 paths:
+  /api/courses/by-id/{courseId}/versions/{version}/translations/{language}:
+    get:
+      operationId: getLearnerTranslatedCourse
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }, { name: language, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: Immutable translated CourseVersion with bounded-freshness lag metadata, content: { application/json: { schema: { $ref: '#/components/schemas/TranslatedCourse' } } } }, '404': { $ref: '#/components/responses/Problem' } }
+  /api/courses/by-id/{courseId}/versions/{version}/languages:
+    get:
+      operationId: listCourseVersionLanguages
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }]
+      responses: { '200': { description: Published language choices for exactly this source version, content: { application/json: { schema: { $ref: '#/components/schemas/CourseVersionLanguages' } } } }, '404': { $ref: '#/components/responses/Problem' } }
   /api/courses/by-id/{courseId}/versions/{version}/translations:
     get:
       operationId: listTranslations
@@ -1024,6 +1034,10 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    TranslatedCourse: { type: object, required: [course, translation, sourceLag], properties: { course: { $ref: '#/components/schemas/PublishedCourseVersionDetail' }, translation: { $ref: '#/components/schemas/TranslationReadMetadata' }, sourceLag: { $ref: '#/components/schemas/TranslationSourceLag' } } }
+    TranslationReadMetadata: { type: object, required: [language, sourceLanguage, sourceVersion, publicationId, publishedAt], properties: { language: { type: string }, sourceLanguage: { type: string }, sourceVersion: { type: string }, publicationId: { type: string, format: uuid }, publishedAt: { type: string, format: date-time } } }
+    TranslationSourceLag: { type: object, required: [translatedSourceVersion], properties: { translatedSourceVersion: { type: string }, latestSourceVersion: { type: [string, 'null'] }, isLatest: { type: [boolean, 'null'] } } }
+    CourseVersionLanguages: { type: object, required: [sourceLanguage, languages], properties: { sourceLanguage: { type: string }, languages: { type: array, items: { type: object, required: [language, kind], properties: { language: { type: string }, kind: { type: string, enum: [SOURCE, TRANSLATION] }, translationPublicationId: { type: [string, 'null'], format: uuid } } } } } }
     TranslationCreateRequest: { type: object, additionalProperties: false, required: [targetLanguage], properties: { targetLanguage: { type: string } } }
     TranslationSummary: { type: object, additionalProperties: false, required: [translationId, targetLanguage, lifecycle, revision, completeness], properties: { translationId: { type: string, format: uuid }, targetLanguage: { type: string }, lifecycle: { type: string, enum: [DRAFT, PUBLISHED] }, revision: { type: integer, minimum: 1 }, completeness: { $ref: '#/components/schemas/TranslationCompleteness' } } }
     TranslationList: { type: object, additionalProperties: false, required: [translations], properties: { translations: { type: array, items: { $ref: '#/components/schemas/TranslationSummary' } } } }

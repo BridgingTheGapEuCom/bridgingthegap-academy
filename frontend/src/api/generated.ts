@@ -4,6 +4,38 @@
  */
 
 export interface paths {
+    "/api/courses/by-id/{courseId}/versions/{version}/translations/{language}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLearnerTranslatedCourse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCourseVersionLanguages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/by-id/{courseId}/versions/{version}/translations": {
         parameters: {
             query?: never;
@@ -985,6 +1017,35 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        TranslatedCourse: {
+            course: components["schemas"]["PublishedCourseVersionDetail"];
+            translation: components["schemas"]["TranslationReadMetadata"];
+            sourceLag: components["schemas"]["TranslationSourceLag"];
+        };
+        TranslationReadMetadata: {
+            language: string;
+            sourceLanguage: string;
+            sourceVersion: string;
+            /** Format: uuid */
+            publicationId: string;
+            /** Format: date-time */
+            publishedAt: string;
+        };
+        TranslationSourceLag: {
+            translatedSourceVersion: string;
+            latestSourceVersion?: string | null;
+            isLatest?: boolean | null;
+        };
+        CourseVersionLanguages: {
+            sourceLanguage: string;
+            languages: {
+                language: string;
+                /** @enum {string} */
+                kind: "SOURCE" | "TRANSLATION";
+                /** Format: uuid */
+                translationPublicationId?: string | null;
+            }[];
+        };
         TranslationCreateRequest: {
             targetLanguage: string;
         };
@@ -2240,6 +2301,55 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getLearnerTranslatedCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                language: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Immutable translated CourseVersion with bounded-freshness lag metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslatedCourse"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCourseVersionLanguages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published language choices for exactly this source version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseVersionLanguages"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
     listTranslations: {
         parameters: {
             query?: never;

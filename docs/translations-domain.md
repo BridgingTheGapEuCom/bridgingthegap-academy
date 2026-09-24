@@ -111,3 +111,43 @@ translation reads remain deferred.
 The private translator UI uses `/authoring/courses/{courseId}/versions/{version}/translations` for exact-source discovery and creation, and `/authoring/translations/{translationId}` for a reload-safe workspace. It always displays the bound source SemVer and language, never a latest-version claim. Translators compare read-only source text with editable translation values, save explicit source-keyed changes manually, and receive the server-authoritative completeness result after a save.
 
 An empty saved input is an intentional empty translation. The separate **Mark as untranslated** action sends `null`; it is the only UI action that clears an override. Save conflicts retain local text and offer a reload action. Publishing is available only when the server says the workspace is complete and requires a concise browser confirmation. The pages use grouped labels, semantic headings, native controls, textual status messages, and vertically stack naturally at narrow widths. Learner translation delivery, language selection, and source migration remain deferred.
+
+## Immutable learner translated reads
+
+Public translated reads resolve only the latest `TranslationPublication` for the
+requested exact source CourseVersion and target language. They compose that
+immutable snapshot with its exact immutable source CourseVersion; mutable
+workspaces and Authoring state are never queried. Missing publications return
+not found and no source-language fallback occurs. Intentional empty overrides
+remain empty.
+
+`GET /api/courses/by-id/{courseId}/versions/{version}/translations/{language}`
+returns the learner-safe Course tree plus translation metadata and derived lag
+metadata. Its `sourceLag` compares the translation’s fixed source SemVer with
+the current latest source version only; it never changes rendered content. If
+latest-version lookup is unavailable, the immutable translated course remains
+readable and the optional latest/isLatest fields are absent. The combined
+response uses the ordinary conservative public API caching policy because lag
+can change. `GET .../languages` lists source first and published translation
+languages for that exact source version only; it is discovery data and must not
+be treated as immutable.
+
+Translations preserve CourseVersion Assessment keys and grading identity,
+source asset bindings, the durable Course Community, and Certificate identity.
+Learner language selection and fallback remain deferred.
+
+## Learner language selection
+
+The exact CourseVersion reader accepts an explicit `lang` query parameter for a
+published translation. The parameter is reload-safe and does not establish a
+browser, account, cookie, or global language preference. The source reader is
+canonical without `lang`; an unavailable requested translation shows an explicit
+unavailable state with a source-version action, never a silent fallback.
+
+When language discovery succeeds, the reader offers the source language and
+only translations published for that exact source version. Discovery failure is
+additive: the source Course remains usable. A lagging translation calmly states
+its fixed translated source version and the newer source version, then offers a
+learner-chosen route to that newer source version without carrying an unavailable
+language query. Attempts, Community, and certificates retain their existing
+CourseVersion/Course identities across presentation-language changes.

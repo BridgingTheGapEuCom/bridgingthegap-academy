@@ -132,6 +132,10 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	translatedCourses, err := translations.NewLearnerReader(translationService, courses.NewPublishedReadService(coursesRepository))
+	if err != nil {
+		return err
+	}
 	publicationService := authoring.NewPublicationServiceWithAssets(authoringRepository, publicationAssetResolver, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
@@ -165,6 +169,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		community:                   community.NewService(communitypostgres.New(pool), coursesRepository),
 		translations:                translationApplication,
 		translationWorkspace:        translationWorkspace,
+		translatedCourses:           translatedCourses,
 		certificateIssuance:         certificateIssuance,
 		certificates:                certificateRepository,
 		badgePublication:            badgePublication,
@@ -235,6 +240,10 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				api.Get("/courses/{slug}", auth.handleCourseCurrent)
 				api.Get("/courses/{slug}/versions/{version}", auth.handleCourseVersion)
 				api.Get("/courses/{slug}/versions/{version}/lessons/{lessonKey}", auth.handleLesson)
+			}
+			if auth.translatedCourses != nil {
+				api.Get("/courses/by-id/{courseId}/versions/{version}/translations/{language}", auth.handleLearnerTranslatedCourse)
+				api.Get("/courses/by-id/{courseId}/versions/{version}/languages", auth.handleTranslationLanguages)
 			}
 			if auth.publishedCourses != nil {
 				// The legacy public Courses routes are slug-addressed. The ID

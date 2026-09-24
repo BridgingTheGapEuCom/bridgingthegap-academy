@@ -91,6 +91,7 @@ type authHTTP struct {
 	community                   *community.Service
 	translations                *translations.ApplicationService
 	translationWorkspace        *translations.WorkspaceQueryService
+	translatedCourses           *translations.LearnerReader
 	certificateIssuance         certificateIssuanceHTTP
 	certificates                credentials.Repository
 	badgePublication            *publication.Service
