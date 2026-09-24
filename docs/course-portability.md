@@ -108,3 +108,39 @@ HTTP upload/export endpoints, import UI, imported Course ownership and
 authorization, editing or forking imported content, package merge/overwrite,
 external identity mapping, learner-data migration, and package signing/trust
 remain deferred.
+
+## M9.1d authenticated API
+
+`GET /api/courses/by-id/{courseId}/versions/{version}/export` downloads exactly
+the requested immutable version as `application/zip`. It is a private,
+no-store download and uses the frozen Course attribution capability: only the
+Course AUTHOR or MAINTAINER represented on that version can export it.
+Unauthorized and missing versions share the normal hidden-resource response.
+
+Package import is installation-scoped and requires the explicit
+`portability.import` capability. It is not granted by authentication, package
+attribution, or imported Course authorship. The API is deliberately two phase:
+`POST /api/portability/imports/preview` accepts one bounded `application/zip`,
+performs hostile-package validation, and returns a safe preview plus a random
+opaque token. `POST /api/portability/imports/{previewToken}/execute` rechecks
+the capability and token owner, then delegates unchanged to `Importer.Import`.
+Both mutations use the existing Origin and session CSRF protections and all
+responses are no-store.
+
+Validated package data remains node-local and server-side for fifteen minutes;
+the token contains no path, identity, fingerprint, or package contents. It is
+bound to the creating authenticated user and session, expires during normal session access, and
+is removed after an `IMPORTED` or `REPLAYED` result. Invalid uploads create no
+session. Operational import failures retain the preview until expiry for a
+retry; source/version conflicts are terminal and remove it. The parser itself
+streams the bounded archive into a controlled temporary file and removes it
+after validation, rather than retaining the uploaded ZIP or exposing its
+answer-bearing payload to the client.
+
+`REPLAYED` is a normal successful execute response. A different package for an
+already imported portable source CourseVersion returns a stable
+`package_source_version_conflict` HTTP 409. Parser errors map to their stable
+package error codes without returning archive paths or parser details.
+Imported Course ownership, authorization, editing, and Draft-fork workflows
+remain deliberately deferred; a successful import does not grant AUTHOR or
+MAINTAINER to the importing user.

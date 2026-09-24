@@ -31,6 +31,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/portability"
 	progresspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
 	translationspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations/postgres"
@@ -137,6 +138,18 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		return err
 	}
 	publicationService := authoring.NewPublicationServiceWithAssets(authoringRepository, publicationAssetResolver, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
+	packageExporter, err := portability.NewExporter(coursesRepository, translationService, assetStorage, time.Now)
+	if err != nil {
+		return err
+	}
+	packageImportRepository, err := portability.NewPostgresImportRepository(pool, assetStorage, cfg.AssetMaxBytes)
+	if err != nil {
+		return err
+	}
+	packageImporter, err := portability.NewImporter(packageImportRepository, time.Now)
+	if err != nil {
+		return err
+	}
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
 		sessions:                    identity.NewSessionService(identitypostgres.New(pool), nil, nil),
@@ -177,6 +190,11 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		badgeIssuer:                 cfg.CertificateIssuer,
 		achievementVersions:         coursesRepository,
 		assetMaxBytes:               cfg.AssetMaxBytes,
+		portabilityExporter:         packageExporter,
+		portabilityImporter:         packageImporter,
+		portabilityReader:           portability.NewReader(portability.DefaultLimits()),
+		portabilityCourses:          coursesRepository,
+		portabilityPreviews:         newPortabilityPreviewStore(time.Now),
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -267,6 +285,14 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				// Future cookie-authenticated APIs belong in this group: both
 				// per-request resolution and unsafe-method CSRF are inherited.
 				protected.Use(auth.authenticated)
+				if auth.portabilityExporter != nil {
+					protected.Get("/courses/by-id/{courseId}/versions/{version}/export", auth.handleCoursePackageExport)
+				}
+				if auth.portabilityImporter != nil && auth.portabilityReader != nil {
+					portable := protected.With(auth.requireCapability(identity.CapabilityPortabilityImport, identity.InstanceResource()))
+					portable.Post("/portability/imports/preview", auth.handlePortabilityPreview)
+					portable.Post("/portability/imports/{previewToken}/execute", auth.handlePortabilityExecute)
+				}
 				protected.Get("/auth/session", auth.handleSession)
 				if auth.certificateIssuance != nil && auth.certificates != nil {
 					protected.Post("/courses/by-id/{courseId}/versions/{version}/certificate", auth.handleCertificateIssue)

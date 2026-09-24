@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+    "/api/courses/by-id/{courseId}/versions/{version}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Downloads exactly the requested immutable CourseVersion package. The authenticated caller must be a frozen Course AUTHOR or MAINTAINER; unavailable and unauthorized versions are hidden. */
+        get: operations["exportCourseVersionPackage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portability/imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validates one bounded ZIP package and retains its opaque validated representation in a short-lived, user-bound server-side preview session. Requires the installation-level portability.import capability. */
+        post: operations["previewCoursePackageImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portability/imports/{previewToken}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Imports the exact validated package held by an owned, unexpired preview token. The token is removed after a successful import or replay. */
+        post: operations["executeCoursePackageImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/by-id/{courseId}/versions/{version}/translations/{language}": {
         parameters: {
             query?: never;
@@ -2248,6 +2299,50 @@ export interface components {
             /** @constant */
             status: "ok";
         };
+        CoursePackageLicense: {
+            kind: string;
+            identifier?: string;
+            displayName: string;
+            url?: string;
+            customText?: string;
+        };
+        CoursePackageAttribution: {
+            displayName: string;
+            role: string;
+            order: number;
+        };
+        CoursePackagePreview: {
+            format: string;
+            formatVersion: number;
+            title: string;
+            version: string;
+            language: string;
+            license: components["schemas"]["CoursePackageLicense"];
+            attribution: components["schemas"]["CoursePackageAttribution"][];
+            moduleCount: number;
+            lessonCount: number;
+            assessmentCount: number;
+            assetCount: number;
+            /** Format: int64 */
+            assetBytes: number;
+            translationLanguages: string[];
+        };
+        CoursePackagePreviewResponse: {
+            previewToken: string;
+            preview: components["schemas"]["CoursePackagePreview"];
+        };
+        CoursePackageImportResult: {
+            /** Format: uuid */
+            importId: string;
+            /** Format: uuid */
+            courseId: string;
+            /** Format: uuid */
+            courseVersionId: string;
+            semVer: string;
+            /** @enum {string} */
+            status: "IMPORTED" | "REPLAYED";
+            translationLanguages: string[];
+        };
         Health: {
             status: string;
         };
@@ -2301,6 +2396,98 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    exportCourseVersionPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private ZIP Course package */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    previewCoursePackageImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": string;
+            };
+        };
+        responses: {
+            /** @description Safe preview and opaque execution token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoursePackagePreviewResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    executeCoursePackageImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                previewToken: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Imported or replayed immutable CourseVersion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoursePackageImportResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     getLearnerTranslatedCourse: {
         parameters: {
             query?: never;

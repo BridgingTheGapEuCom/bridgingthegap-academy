@@ -4,6 +4,44 @@ info:
   version: 0.1.0
   description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads and mutations. Authoring responses are no-store. Every Authoring mutation requires a trusted Origin and the authenticated session-bound CSRF token; unauthorized resources are hidden as 404.
 paths:
+  /api/courses/by-id/{courseId}/versions/{version}/export:
+    get:
+      operationId: exportCourseVersionPackage
+      description: Downloads exactly the requested immutable CourseVersion package. The authenticated caller must be a frozen Course AUTHOR or MAINTAINER; unavailable and unauthorized versions are hidden.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }]
+      responses:
+        '200': { description: Private ZIP Course package, content: { application/zip: { schema: { type: string, format: binary } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/portability/imports/preview:
+    post:
+      operationId: previewCoursePackageImport
+      description: Validates one bounded ZIP package and retains its opaque validated representation in a short-lived, user-bound server-side preview session. Requires the installation-level portability.import capability.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/zip: { schema: { type: string, format: binary } } } }
+      responses:
+        '200': { description: Safe preview and opaque execution token, content: { application/json: { schema: { $ref: '#/components/schemas/CoursePackagePreviewResponse' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /api/portability/imports/{previewToken}/execute:
+    post:
+      operationId: executeCoursePackageImport
+      description: Imports the exact validated package held by an owned, unexpired preview token. The token is removed after a successful import or replay.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: previewToken, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses:
+        '200': { description: Imported or replayed immutable CourseVersion, content: { application/json: { schema: { $ref: '#/components/schemas/CoursePackageImportResult' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/courses/by-id/{courseId}/versions/{version}/translations/{language}:
     get:
       operationId: getLearnerTranslatedCourse
@@ -1899,6 +1937,50 @@ components:
       required: [status]
       properties:
         status: { type: string, const: ok }
+    CoursePackageLicense:
+      type: object
+      additionalProperties: false
+      required: [kind, displayName]
+      properties: { kind: { type: string }, identifier: { type: string }, displayName: { type: string }, url: { type: string }, customText: { type: string } }
+    CoursePackageAttribution:
+      type: object
+      additionalProperties: false
+      required: [displayName, role, order]
+      properties: { displayName: { type: string }, role: { type: string }, order: { type: integer } }
+    CoursePackagePreview:
+      type: object
+      additionalProperties: false
+      required: [format, formatVersion, title, version, language, license, attribution, moduleCount, lessonCount, assessmentCount, assetCount, assetBytes, translationLanguages]
+      properties:
+        format: { type: string }
+        formatVersion: { type: integer }
+        title: { type: string }
+        version: { type: string }
+        language: { type: string }
+        license: { $ref: '#/components/schemas/CoursePackageLicense' }
+        attribution: { type: array, items: { $ref: '#/components/schemas/CoursePackageAttribution' } }
+        moduleCount: { type: integer }
+        lessonCount: { type: integer }
+        assessmentCount: { type: integer }
+        assetCount: { type: integer }
+        assetBytes: { type: integer, format: int64 }
+        translationLanguages: { type: array, items: { type: string } }
+    CoursePackagePreviewResponse:
+      type: object
+      additionalProperties: false
+      required: [previewToken, preview]
+      properties: { previewToken: { type: string }, preview: { $ref: '#/components/schemas/CoursePackagePreview' } }
+    CoursePackageImportResult:
+      type: object
+      additionalProperties: false
+      required: [importId, courseId, courseVersionId, semVer, status, translationLanguages]
+      properties:
+        importId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        courseVersionId: { type: string, format: uuid }
+        semVer: { type: string }
+        status: { type: string, enum: [IMPORTED, REPLAYED] }
+        translationLanguages: { type: array, items: { type: string } }
     Health:
       type: object
       required: [status]
