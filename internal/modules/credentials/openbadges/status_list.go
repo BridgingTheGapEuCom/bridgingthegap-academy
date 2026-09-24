@@ -79,9 +79,17 @@ type UnsignedStatusListCredential struct {
 	Context           []string          `json:"@context"`
 	ID                string            `json:"id"`
 	Type              []string          `json:"type"`
-	Issuer            Profile           `json:"issuer"`
+	Issuer            VCIssuer          `json:"issuer"`
 	ValidFrom         string            `json:"validFrom"`
 	CredentialSubject StatusListSubject `json:"credentialSubject"`
+}
+
+// VCIssuer uses only VC 2.0-defined terms. A status-list credential does not
+// carry the Open Badges context, so the Open Badges-only Profile type would be
+// an undeclared JSON-LD term under safe processing.
+type VCIssuer struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 type StatusListSubject struct {
 	ID            string `json:"id"`
@@ -94,8 +102,7 @@ func (m *Mapper) BuildUnsignedStatusListCredential(list StatusList, facts []Stat
 	if m == nil || m.base == nil || validFrom.IsZero() {
 		return UnsignedStatusListCredential{}, ErrInvalidConfiguration
 	}
-	p, err := profile(issuer)
-	if err != nil {
+	if _, err := profile(issuer); err != nil {
 		return UnsignedStatusListCredential{}, ErrInvalidConfiguration
 	}
 	encoded, err := BuildEncodedList(list, facts)
@@ -107,5 +114,5 @@ func (m *Mapper) BuildUnsignedStatusListCredential(list StatusList, facts []Stat
 	if err != nil || u.Scheme != "https" || u.Host == "" {
 		return UnsignedStatusListCredential{}, ErrInvalidConfiguration
 	}
-	return UnsignedStatusListCredential{Context: []string{VCContext}, ID: id, Type: []string{"VerifiableCredential", "BitstringStatusListCredential"}, Issuer: p, ValidFrom: validFrom.UTC().Format(time.RFC3339), CredentialSubject: StatusListSubject{ID: id + "#list", Type: "BitstringStatusList", StatusPurpose: RevocationPurpose, EncodedList: encoded}}, nil
+	return UnsignedStatusListCredential{Context: []string{VCContext}, ID: id, Type: []string{"VerifiableCredential", "BitstringStatusListCredential"}, Issuer: VCIssuer{ID: issuer.ID, Name: issuer.Name}, ValidFrom: validFrom.UTC().Format(time.RFC3339), CredentialSubject: StatusListSubject{ID: id + "#list", Type: "BitstringStatusList", StatusPurpose: RevocationPurpose, EncodedList: encoded}}, nil
 }

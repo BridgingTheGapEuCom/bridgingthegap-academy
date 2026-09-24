@@ -33,6 +33,7 @@ type learnerCertificateDTO struct {
 	Achievement      certificateAchievementDTO     `json:"achievement"`
 	Issuer           certificateIssuerDTO          `json:"issuer"`
 	VerificationPath string                        `json:"verificationPath"`
+	OpenBadgePath    *string                       `json:"openBadgePath,omitempty"`
 }
 type publicCertificateDTO struct {
 	CertificateID string                        `json:"certificateId"`
@@ -72,7 +73,7 @@ func (h *authHTTP) handleCertificateIssue(w http.ResponseWriter, r *http.Request
 		status = http.StatusOK
 	}
 	w.Header().Set("Location", "/api/learner/certificates/"+string(result.Certificate.ID))
-	writeJSON(w, status, learnerCertificateDetail(*result.Certificate))
+	writeJSON(w, status, learnerCertificateDetail(*result.Certificate, h.badgePublication != nil))
 }
 func (h *authHTTP) handleLearnerCertificateGet(w http.ResponseWriter, r *http.Request) {
 	actor, ok := learnerActor(w, r)
@@ -88,7 +89,7 @@ func (h *authHTTP) handleLearnerCertificateGet(w http.ResponseWriter, r *http.Re
 		problem(w, r, http.StatusNotFound, "Not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, learnerCertificateDetail(c))
+	writeJSON(w, http.StatusOK, learnerCertificateDetail(c, h.badgePublication != nil))
 }
 func (h *authHTTP) handlePublicCertificate(w http.ResponseWriter, r *http.Request) {
 	id, ok := certificateID(w, r)
@@ -125,8 +126,13 @@ func certificateID(w http.ResponseWriter, r *http.Request) (credentials.Certific
 	}
 	return credentials.CertificateID(raw), true
 }
-func learnerCertificateDetail(c credentials.Certificate) learnerCertificateDTO {
-	return learnerCertificateDTO{CertificateID: string(c.ID), Status: c.Status, IssuedAt: c.IssuedAt, RevokedAt: c.RevokedAt, Achievement: certificateAchievementDTO{CourseID: c.CourseID, Title: c.Achievement.CourseTitle, Version: c.Achievement.CourseVersion, Language: c.Achievement.Language, Criteria: c.Achievement.Criteria}, Issuer: certificateIssuerDTO{ID: c.Issuer.ID, Name: c.Issuer.Name}, VerificationPath: "/verify/certificates/" + string(c.ID)}
+func learnerCertificateDetail(c credentials.Certificate, signedOpenBadgesEnabled bool) learnerCertificateDTO {
+	result := learnerCertificateDTO{CertificateID: string(c.ID), Status: c.Status, IssuedAt: c.IssuedAt, RevokedAt: c.RevokedAt, Achievement: certificateAchievementDTO{CourseID: c.CourseID, Title: c.Achievement.CourseTitle, Version: c.Achievement.CourseVersion, Language: c.Achievement.Language, Criteria: c.Achievement.Criteria}, Issuer: certificateIssuerDTO{ID: c.Issuer.ID, Name: c.Issuer.Name}, VerificationPath: "/verify/certificates/" + string(c.ID)}
+	if signedOpenBadgesEnabled {
+		path := "/api/public/open-badges/" + string(c.ID)
+		result.OpenBadgePath = &path
+	}
+	return result
 }
 func publicCertificateDetail(c credentials.Certificate) publicCertificateDTO {
 	return publicCertificateDTO{CertificateID: string(c.ID), Status: c.Status, IssuedAt: c.IssuedAt, RevokedAt: c.RevokedAt, Achievement: certificateAchievementDTO{CourseID: c.CourseID, Title: c.Achievement.CourseTitle, Version: c.Achievement.CourseVersion, Language: c.Achievement.Language, Criteria: c.Achievement.Criteria}, Issuer: certificateIssuerDTO{ID: c.Issuer.ID, Name: c.Issuer.Name}}

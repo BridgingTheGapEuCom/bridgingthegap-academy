@@ -28,6 +28,7 @@ type Config struct {
 	CertificateIssuer        credentials.Issuer
 	OpenBadgesSubjectSecret  secretBytes
 	OpenBadgesKeyID          string
+	OpenBadgesSeedFile       string
 	openBadgesSeed           secretSeed
 }
 
@@ -44,6 +45,10 @@ func LoadConfig() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	seed, seedFile, err := openBadgesSigningSeed()
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
 		DatabaseURL:              os.Getenv("BTG_LMS_DATABASE_URL"),
 		HTTPAddr:                 envOr("BTG_LMS_HTTP_ADDR", ":8080"),
@@ -54,7 +59,8 @@ func LoadConfig() (Config, error) {
 		AssetMaxBytes:            assetMaxBytes,
 		OpenBadgesSubjectSecret:  secretBytes(os.Getenv("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET")),
 		OpenBadgesKeyID:          os.Getenv("BTG_LMS_OPEN_BADGES_KEY_ID"),
-		openBadgesSeed:           secretSeed(os.Getenv("BTG_LMS_OPEN_BADGES_ED25519_SEED_B64URL")),
+		OpenBadgesSeedFile:       seedFile,
+		openBadgesSeed:           seed,
 		CertificateIssuer: credentials.Issuer{
 			ID: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_ID"), Name: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_NAME"),
 		},
@@ -89,11 +95,12 @@ func LoadConfig() (Config, error) {
 		if cfg.openBadgesSeed == "" || cfg.OpenBadgesKeyID == "" || len(cfg.OpenBadgesSubjectSecret) < 32 {
 			return Config{}, errors.New("signed Open Badges requires a key ID, Ed25519 seed, and subject secret")
 		}
-		origin, err := url.Parse(cfg.PublicOrigin)
-		if err != nil || origin.Scheme != "https" || origin.Host == "" || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" {
+		origin, err := normalizeSignedOpenBadgesOrigin(cfg.PublicOrigin, cfg.DevelopmentHTTP)
+		if err != nil {
 			return Config{}, errors.New("signed Open Badges requires a public HTTPS origin")
 		}
-		if cfg.CertificateIssuer.ID != strings.TrimRight(cfg.PublicOrigin, "/")+"/open-badges/issuer" {
+		cfg.PublicOrigin = origin
+		if cfg.CertificateIssuer.ID != cfg.PublicOrigin+"/open-badges/issuer" {
 			return Config{}, errors.New("signed Open Badges issuer must resolve at the public issuer resource")
 		}
 		if !strings.HasPrefix(cfg.OpenBadgesKeyID, cfg.CertificateIssuer.ID+"#") {
@@ -109,6 +116,54 @@ func LoadConfig() (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// openBadgesSigningSeed supports exactly one production secret source: a
+// base64url seed supplied directly by the environment or by a regular 0600
+// (or stricter) secret file mounted for the LMS service account. A file is
+// read once at startup; it is never watched, logged, or returned by HTTP.
+func openBadgesSigningSeed() (secretSeed, string, error) {
+	inline := os.Getenv("BTG_LMS_OPEN_BADGES_ED25519_SEED_B64URL")
+	file := os.Getenv("BTG_LMS_OPEN_BADGES_ED25519_SEED_FILE")
+	if inline != "" && file != "" {
+		return "", "", errors.New("configure only one Open Badges Ed25519 seed source")
+	}
+	if file == "" {
+		return secretSeed(inline), "", nil
+	}
+	info, err := os.Stat(file)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+		return "", "", errors.New("Open Badges Ed25519 seed file must be a regular owner-only file")
+	}
+	bytes, err := os.ReadFile(file)
+	if err != nil || strings.TrimSpace(string(bytes)) == "" {
+		return "", "", errors.New("Open Badges Ed25519 seed file is unavailable")
+	}
+	return secretSeed(strings.TrimSpace(string(bytes))), file, nil
+}
+
+func normalizeSignedOpenBadgesOrigin(value string, development bool) (string, error) {
+	origin, err := url.Parse(value)
+	if err != nil || origin.Scheme != "https" || origin.Host == "" || origin.User != nil || (origin.Path != "" && origin.Path != "/") || origin.RawQuery != "" || origin.Fragment != "" {
+		return "", errors.New("invalid public origin")
+	}
+	host := origin.Hostname()
+	if !development && (strings.EqualFold(host, "localhost") || net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback()) {
+		return "", errors.New("production public origin must not be loopback")
+	}
+	origin.Path, origin.RawPath = "", ""
+	return strings.TrimRight(origin.String(), "/"), nil
+}
+
+func (cfg Config) signedOpenBadgesKey() (signing.KeyProvider, bool, error) {
+	if cfg.openBadgesSeed == "" {
+		return nil, false, nil
+	}
+	key, err := signing.NewLocalKey(cfg.OpenBadgesKeyID, cfg.CertificateIssuer.ID, string(cfg.openBadgesSeed))
+	if err != nil {
+		return nil, true, errors.New("invalid signed Open Badges key material")
+	}
+	return key, true, nil
 }
 
 func envPositiveInt64(key string, fallback int64) (int64, error) {

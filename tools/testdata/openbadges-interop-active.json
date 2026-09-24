@@ -1,0 +1,63 @@
+{
+  "achievement": {
+    "id": "https://academy.example/achievements/course-versions/44444444-4444-4444-8444-444444444444",
+    "type": ["Achievement"],
+    "name": "Interoperability Course",
+    "description": "Certificate awarded for completing Interoperability Course version 1.0.0.",
+    "criteria": {"narrative": "Complete every published lesson."},
+    "creator": {"id": "https://academy.example/open-badges/issuer", "type": ["Profile"], "name": "Academy"},
+    "inLanguage": "en"
+  },
+  "badge": {
+    "@context": ["https://www.w3.org/ns/credentials/v2", "https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json"],
+    "credentialStatus": {
+      "id": "https://academy.example/open-badges/status/revocation/55555555-5555-4555-8555-555555555555/entries/11111111-1111-4111-8111-111111111111",
+      "statusListCredential": "https://academy.example/open-badges/status/revocation/55555555-5555-4555-8555-555555555555",
+      "statusListIndex": "41",
+      "statusPurpose": "revocation",
+      "type": "BitstringStatusListEntry"
+    },
+    "credentialSubject": {
+      "achievement": {
+        "creator": {"id": "https://academy.example/open-badges/issuer", "name": "Academy", "type": ["Profile"]},
+        "criteria": {"narrative": "Complete every published lesson."},
+        "description": "Certificate awarded for completing Interoperability Course version 1.0.0.",
+        "id": "https://academy.example/achievements/course-versions/44444444-4444-4444-8444-444444444444",
+        "inLanguage": "en",
+        "name": "Interoperability Course",
+        "type": ["Achievement"]
+      },
+      "id": "urn:btg:subject:326adc6457a9a53b9fd71def0f5aeef808573b409b24c19a0696b7fdc977664b",
+      "type": ["AchievementSubject"]
+    },
+    "id": "https://academy.example/verify/certificates/11111111-1111-4111-8111-111111111111",
+    "issuer": {"id": "https://academy.example/open-badges/issuer", "name": "Academy", "type": ["Profile"]},
+    "proof": {
+      "created": "2026-09-23T12:01:00Z",
+      "cryptosuite": "eddsa-rdfc-2022",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "zTsCv95x9TUqtcpx1Rp4fkYp3RyQDKpTZgHMa77dTTCsm8yNCxLUT72hUSLfvEnNvsw2zJ9amKhW5J2JVbvjRbQH",
+      "type": "DataIntegrityProof",
+      "verificationMethod": "https://academy.example/open-badges/issuer#key-1"
+    },
+    "type": ["VerifiableCredential", "OpenBadgeCredential"],
+    "validFrom": "2026-09-23T12:00:00Z"
+  },
+  "expected": {"revoked": false},
+  "issuer": {
+    "name": "Academy",
+    "@context": ["https://www.w3.org/ns/cid/v1", "https://www.w3.org/ns/credentials/v2"],
+    "id": "https://academy.example/open-badges/issuer",
+    "verificationMethod": [{"id": "https://academy.example/open-badges/issuer#key-1", "type": "Multikey", "controller": "https://academy.example/open-badges/issuer", "publicKeyMultibase": "z6MkwVDfCg9LbbY6xjH3EZk8YSFQZujV5Y4y1ZWeER9tDiN3"}],
+    "assertionMethod": ["https://academy.example/open-badges/issuer#key-1"]
+  },
+  "statusList": {
+    "@context": ["https://www.w3.org/ns/credentials/v2"],
+    "credentialSubject": {"encodedList": "uH4sIAAAAAAAA_-zAMQEAAADCIPunNsYeGAAAAAAAAAAAAAAAAAAAAJD7AIbSVKsAQAAA", "id": "https://academy.example/open-badges/status/revocation/55555555-5555-4555-8555-555555555555#list", "statusPurpose": "revocation", "type": "BitstringStatusList"},
+    "id": "https://academy.example/open-badges/status/revocation/55555555-5555-4555-8555-555555555555",
+    "issuer": {"id": "https://academy.example/open-badges/issuer", "name": "Academy"},
+    "proof": {"created": "2026-09-23T12:01:00Z", "cryptosuite": "eddsa-rdfc-2022", "proofPurpose": "assertionMethod", "proofValue": "z26EsurBQ1RFMPEoiEkrefQjv62AMdD1KvgtNSBowSxWHwPb4u7bRjny7j1gd4RLQr9Raue2UctHKoTkcmTNYudi3", "type": "DataIntegrityProof", "verificationMethod": "https://academy.example/open-badges/issuer#key-1"},
+    "type": ["VerifiableCredential", "BitstringStatusListCredential"],
+    "validFrom": "2026-09-23T12:01:00Z"
+  }
+}

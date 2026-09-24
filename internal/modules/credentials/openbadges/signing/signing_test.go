@@ -90,6 +90,21 @@ func TestRejectUnknownContextOrTerm(t *testing.T) {
 	if _, err := signing.Sign(context.Background(), []byte(bad), time.Now(), key(t)); !errors.Is(err, signing.ErrUnsupportedContext) {
 		t.Fatal(err)
 	}
+	secured, err := signing.Sign(context.Background(), []byte(document), time.Now(), key(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	method, _ := signing.PublicMultikey(key(t))
+	controller, _ := signing.NewControllerDocument(key(t).Controller(), []signing.Multikey{method})
+	var value map[string]any
+	if err = json.Unmarshal(secured, &value); err != nil {
+		t.Fatal(err)
+	}
+	value["@context"] = []string{"https://attacker.example/context"}
+	unknown, _ := json.Marshal(value)
+	if !errors.Is(signing.Verify(unknown, controller), signing.ErrUnsupportedContext) {
+		t.Fatal("verification accepted an unknown remote context")
+	}
 }
 
 func TestOpenBadgeContextSigning(t *testing.T) {

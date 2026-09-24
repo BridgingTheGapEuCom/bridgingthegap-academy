@@ -112,12 +112,28 @@ Signed export is optional. It requires the stable HTTPS
 `BTG_LMS_OPEN_BADGES_SUBJECT_SECRET`, a frozen issuer ID matching
 `<origin>/open-badges/issuer`, a stable
 `BTG_LMS_OPEN_BADGES_KEY_ID` under that issuer URI, and a base64url-encoded
-32-byte Ed25519 seed in `BTG_LMS_OPEN_BADGES_ED25519_SEED_B64URL`. Startup
-rejects malformed key material and inconsistent identifiers. Provision and
-back up the seed as a deployment secret; it is never generated at startup,
-persisted with credentials, returned by HTTP, or printed by config diagnostics.
-Changing the subject secret changes recipient pseudonyms, so do not rotate it
-without a deliberate migration.
+32-byte Ed25519 seed. Supply the seed through exactly one source:
+`BTG_LMS_OPEN_BADGES_ED25519_SEED_B64URL`, or
+`BTG_LMS_OPEN_BADGES_ED25519_SEED_FILE`. The file source is read once at
+startup and must be a regular owner-only file (`0600` or stricter), owned by
+the LMS service account. Startup rejects a missing companion setting, malformed
+seed, mixed sources, non-HTTPS/loopback production origin, URL credentials,
+inconsistent issuer/key IDs, and unsafe seed-file permissions. The feature is
+disabled when no seed and key ID are configured: Certificate issuance and
+registry verification continue normally, while signed-badge routes are absent.
+
+Provision and back up the seed, the subject secret, and the PostgreSQL database
+that retains public verification methods and signed status snapshots. The seed
+is never generated at startup, persisted with credentials, returned by HTTP,
+or printed by config diagnostics. Losing it must not lead to a replacement key
+under the same issuer/key ID: old credentials remain mathematically verifiable
+with their retained public key, but new signatures with that identity cannot be
+created. Losing an active key requires an intentional new-key rollout; losing
+only a historical private key does not prevent historical verification. Changing
+the subject secret changes recipient pseudonyms, so do not rotate it without a
+deliberate migration. `btg-lms doctor` reports only whether signed Open Badges
+are disabled or whether the active public signing capability initializes; it
+does not sign or publish anything.
 
 `openbadges/signing` uses the TrustBloc VC Data Integrity implementation of
 `eddsa-rdfc-2022`: JSON-LD safe-mode expansion, RDFC-1.0 canonicalization,
@@ -142,18 +158,43 @@ unsigned list is published. Issuer and exact CourseVersion Achievement
 resources are public at their mapped URLs. The signed badge includes the
 Certificate's stable list/index reference for both ACTIVE and REVOKED states.
 
+`publication.Service.Revoke` is the signed-Open-Badges revocation workflow.
+It establishes an ACTIVE baseline list, performs the one-way Certificate
+transition, then signs and publishes the new list. It returns an explicit
+`ErrRevocationPublicationFailed` if portable publication cannot be completed;
+it never reports that outcome as success. In that narrow partial state the
+Certificate is durably revoked, the old signed list remains stored, and the
+public status route fails closed until a retry completes the fresh signed
+snapshot. Retrying is idempotent: the Certificate, stable list entry, and list
+revision are retained and only the missing current snapshot is rebuilt.
+
 Certificate revocation increments the durable list lifecycle revision in the
-same database transaction. A published snapshot is served only while its
-revision matches; after revocation, the next status read builds, signs,
-verifies, and atomically replaces the snapshot. If signing or publication
-fails, the service retains the previous signed document in storage but returns
-an unavailable response instead of serving a stale ACTIVE bit or unsigned
-document. Revocation does not change the already-signed individual badge.
-There is no revocation HTTP API yet; any future revocation workflow should
-coordinate a successful status refresh and report publication failures.
+same database transaction. Allocating a new status entry also increments it.
+Publishing an unchanged snapshot and retrying an already-published revocation
+does not. A snapshot is served only while its persisted revision matches the
+current list revision; complete signed bytes are atomically replaced only after
+they have been built, signed, and locally verified. Revocation never changes
+the already-signed individual badge. This is a recovery-safe state machine,
+rather than a cross-module transaction that holds external cryptographic work
+inside the neutral Certificate repository.
 
 Verification requires both a valid authorized issuer proof and the current
 signed status-list proof/bit. A valid credential signature alone says nothing
-about current revocation. These APIs implement the OB3 Data Integrity EdDSA
-path; 1EdTech certification, wallet integration, and external conformance
-testing have not been completed.
+about current revocation. Signed badges use long immutable caching;
+exact-version Achievement resources use one day, issuer/controller documents
+use five minutes, and revocable status lists use `no-store`. All public
+responses omit learner identity, account data, role data, signing seeds, and
+the subject secret.
+
+The integration suite verifies ACTIVE and REVOKED documents with Digital
+Bazaar's independent `@digitalbazaar/data-integrity` 2.0.0 and
+`@digitalbazaar/eddsa-rdfc-2022-cryptosuite` 1.3.0 verifier. It uses a local,
+allowlisted document loader and independently decodes the GZIP/multibase status
+bit. It also proves that an old badge verifies after key rotation and that an
+Ed25519 signature from a method absent from `assertionMethod` is rejected.
+`pnpm test:openbadges-interop` verifies the checked-in deterministic ACTIVE
+fixture with that independent verifier; the PostgreSQL integration test covers
+the corresponding ACTIVE-to-REVOKED snapshot transition. This is
+interoperability evidence, not a 1EdTech certification claim. Formal
+1EdTech certification, wallet integration, and external certification workflow
+remain outside this release.

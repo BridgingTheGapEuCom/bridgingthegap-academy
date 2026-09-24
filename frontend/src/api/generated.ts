@@ -1626,6 +1626,8 @@ export interface components {
             achievement: components["schemas"]["CertificateAchievement"];
             issuer: components["schemas"]["CertificateIssuer"];
             verificationPath: string;
+            /** @description Present only when signed Open Badges publication is configured. */
+            openBadgePath?: string;
         };
         PublicCertificate: {
             /** Format: uuid */

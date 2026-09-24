@@ -1741,7 +1741,7 @@ components:
       type: object
       additionalProperties: false
       required: [certificateId, status, issuedAt, revokedAt, achievement, issuer, verificationPath]
-      properties: { certificateId: { type: string, format: uuid }, status: { type: string, enum: [ACTIVE, REVOKED] }, issuedAt: { type: string, format: date-time }, revokedAt: { type: [string, 'null'], format: date-time }, achievement: { $ref: '#/components/schemas/CertificateAchievement' }, issuer: { $ref: '#/components/schemas/CertificateIssuer' }, verificationPath: { type: string } }
+      properties: { certificateId: { type: string, format: uuid }, status: { type: string, enum: [ACTIVE, REVOKED] }, issuedAt: { type: string, format: date-time }, revokedAt: { type: [string, 'null'], format: date-time }, achievement: { $ref: '#/components/schemas/CertificateAchievement' }, issuer: { $ref: '#/components/schemas/CertificateIssuer' }, verificationPath: { type: string }, openBadgePath: { type: string, description: Present only when signed Open Badges publication is configured. } }
     PublicCertificate:
       type: object
       additionalProperties: false

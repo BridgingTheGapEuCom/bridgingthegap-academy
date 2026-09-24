@@ -27,7 +27,6 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges"
 	statuspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/publication"
-	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/signing"
 	credentialspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
@@ -97,11 +96,9 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	coursesRepository := coursespostgres.New(pool)
 	certificateRepository := credentialspostgres.New(pool)
 	var badgePublication *publication.Service
-	if cfg.openBadgesSeed != "" {
-		key, keyErr := signing.NewLocalKey(cfg.OpenBadgesKeyID, cfg.CertificateIssuer.ID, string(cfg.openBadgesSeed))
-		if keyErr != nil {
-			return keyErr
-		}
+	if key, enabled, keyErr := cfg.signedOpenBadgesKey(); keyErr != nil {
+		return keyErr
+	} else if enabled {
 		mapper, mapErr := openbadges.NewMapper(openbadges.Config{PublicBaseURL: cfg.PublicOrigin, SubjectSalt: []byte(cfg.OpenBadgesSubjectSecret)})
 		if mapErr != nil {
 			return mapErr
@@ -110,6 +107,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		if mapErr != nil {
 			return mapErr
 		}
+		badgePublication = badgePublication.WithLogger(log)
 		if mapErr = badgePublication.RegisterKey(ctx); mapErr != nil {
 			return mapErr
 		}
