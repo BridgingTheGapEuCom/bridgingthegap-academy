@@ -7,6 +7,7 @@ import { loginLocation, routeReturnPath } from './auth/navigation'
 import HomePage from './pages/HomePage.vue'
 import LoginPage from './pages/LoginPage.vue'
 import AdminPage from './pages/AdminPage.vue'
+import CourseImportPage from './pages/CourseImportPage.vue'
 import CourseListPage from './pages/CourseListPage.vue'
 import CourseOverviewPage from './pages/CourseOverviewPage.vue'
 import LessonPage from './pages/LessonPage.vue'
@@ -44,6 +45,7 @@ const router = createRouter({
     { path: '/', component: HomePage },
     { path: '/login', component: LoginPage },
     { path: '/admin', component: AdminPage, meta: { requiresAuth: true } },
+    { path: '/admin/course-import', component: CourseImportPage, meta: { requiresAuth: true } },
     { path: '/courses', component: CourseListPage },
     { path: '/courses/by-id/:courseId/versions/:version', name: 'published-course-version', component: PublishedCourseReaderPage },
     { path: '/courses/by-id/:courseId', name: 'published-course-latest', component: PublishedCourseReaderPage },

@@ -144,3 +144,31 @@ package error codes without returning archive paths or parser details.
 Imported Course ownership, authorization, editing, and Draft-fork workflows
 remain deliberately deferred; a successful import does not grant AUTHOR or
 MAINTAINER to the importing user.
+
+## M9.1e frontend flow
+
+Authors and maintainers see **Export version X.Y.Z** on the published
+Authoring Review surface. The browser requests the exact-version export API,
+uses the server-supplied attachment filename, and never constructs a package
+locally. A failed download leaves the page intact and shows only a safe retry
+message.
+
+Administrators can open **Administration → Import course package**. The page
+uses a labelled native file input and one explicit **Validate package** action.
+It sends the selected bytes as `application/zip`, then shows only the safe
+preview metadata: Course, license, public attribution, content counts, asset
+size, and translation languages. It never renders package Assessment answers
+or parses Course content in the browser.
+
+Import is always an explicit second action. **Imported** and **Already
+imported** are success states and both offer the ordinary exact Course reader.
+A source/version conflict explains that overwrite is unavailable. Operational
+execute failures retain the reviewed preview so the user can retry; an expired
+or unknown preview requires validation again.
+
+The token and selected package stay only in page memory. They are not placed
+in browser storage or the route, so reload requires a new validation and
+back/forward cannot execute an import. Request-generation guards discard late
+validation responses after the user selects another file or leaves the page.
+The UI deliberately provides no imported Course edit, ownership assignment,
+merge, overwrite, signing, or trust controls.

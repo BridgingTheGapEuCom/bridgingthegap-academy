@@ -79,6 +79,24 @@
 .admin-page__eyebrow { margin-bottom: calc(-1 * var(--btg-space-3)); color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-strong); letter-spacing: 0.08em; text-transform: uppercase; }
 .admin-page__intro,
 .admin-page__state > p { color: var(--btg-color-text-secondary); }
+.admin-page__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--btg-space-3); }
+
+.course-import { display: grid; min-width: 0; gap: var(--btg-space-5); padding-block: clamp(var(--btg-space-6), 7vw, var(--btg-space-8)); overflow-wrap: anywhere; }
+.course-import > header, .course-import form, .course-import section, .course-import__summary { display: grid; min-width: 0; gap: var(--btg-space-4); }
+.course-import__eyebrow { margin: 0; color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-strong); letter-spacing: .08em; text-transform: uppercase; }
+.course-import__selection, .course-import__notice { color: var(--btg-color-text-secondary); }
+.course-import__summary { grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.course-import__summary section { border-inline-start: .25rem solid var(--btg-color-border); padding-inline-start: var(--btg-space-3); }
+.course-import__summary h3 { margin: 0; }
+.course-import__summary dl { display: grid; gap: var(--btg-space-2); margin: 0; }
+.course-import__summary dl div { display: grid; gap: var(--btg-space-1); }
+.course-import__summary dt { color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); }
+.course-import__summary dd { margin: 0; font-weight: var(--btg-font-weight-strong); }
+.course-import__summary ul { margin: 0; }
+.course-import__error { border-inline-start: .25rem solid var(--btg-color-danger); background: var(--btg-color-surface-muted); padding: var(--btg-space-3) var(--btg-space-4); }
+.course-import__notice { border-inline-start: .25rem solid var(--btg-color-border-strong); padding-inline-start: var(--btg-space-3); }
+.course-import__actions, .course-package-export { display: flex; flex-wrap: wrap; gap: var(--btg-space-3); align-items: center; }
+.course-package-export__error { color: var(--btg-color-danger); font-weight: var(--btg-font-weight-medium); }
 
 .authoring-shell { padding-block: clamp(var(--btg-space-6), 7vw, var(--btg-space-8)); }
 .authoring-home { padding-block: clamp(var(--btg-space-6), 7vw, var(--btg-space-8)); }

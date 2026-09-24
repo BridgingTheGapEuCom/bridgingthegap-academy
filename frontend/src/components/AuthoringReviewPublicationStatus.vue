@@ -13,6 +13,7 @@
         <RouterLink :to="publishedCourseVersionPath(publication.published.courseId, publication.published.courseVersion)">
           View published course version {{ publication.published.courseVersion }}
         </RouterLink>
+        <CoursePackageExportButton :course-id="publication.published.courseId" :version="publication.published.courseVersion" />
       </div>
     </template>
 
@@ -49,6 +50,7 @@
 <script setup lang="ts">
 import type { AuthoringReview, AuthoringReviewPublicationStatus } from '../authoring/authoring'
 import { publishedCourseVersionPath } from '../courses/courses'
+import CoursePackageExportButton from './CoursePackageExportButton.vue'
 
 defineProps<{
   review: AuthoringReview

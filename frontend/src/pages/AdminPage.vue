@@ -28,6 +28,7 @@
       <p class="admin-page__intro">Administrator access is available for this Academy instance.</p>
       <p class="admin-page__status">System status: OK</p>
       <div class="admin-page__actions">
+        <RouterLink to="/admin/course-import">Import course package</RouterLink>
         <BtgButton variant="secondary" @click="goHome">Return home</BtgButton>
       </div>
     </div>
