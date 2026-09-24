@@ -2,7 +2,9 @@ package translations
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -89,6 +91,153 @@ func TestTranslationServiceUsesExactSourceAndCAS(t *testing.T) {
 	if publication.Tree.Description != nil {
 		t.Fatalf("published snapshot mutated through draft update: %#v", publication.Tree)
 	}
+}
+
+func TestTranslationCapabilitiesUseSourceCourseAttributionOnly(t *testing.T) {
+	source := translationSource(t, testSourceID, testCourseID, "1.0.0")
+	resource := SourceCourseResource(mustSource(t, source))
+	author := "30000000-0000-4000-8000-000000000002"
+	maintainer := "30000000-0000-4000-8000-000000000003"
+	creatorOnly := "30000000-0000-4000-8000-000000000004"
+	globalAdminOnly := "30000000-0000-4000-8000-000000000005"
+	policy := NewAuthorizationService(authorityMemory{courses.CourseVersion{CourseID: testCourseID, Status: courses.CourseVersionPublished, Attribution: []courses.ContributorSnapshot{{UserID: author, Role: courses.ContributorAuthor}, {UserID: maintainer, Role: courses.ContributorMaintainer}}}})
+	for _, capability := range []Capability{CapabilityRead, CapabilityCreate, CapabilityEdit, CapabilityPublish} {
+		if err := policy.Authorize(context.Background(), author, capability, resource); err != nil {
+			t.Fatalf("AUTHOR %s: %v", capability, err)
+		}
+		if err := policy.Authorize(context.Background(), maintainer, capability, resource); err != nil {
+			t.Fatalf("MAINTAINER %s: %v", capability, err)
+		}
+	}
+	for _, actor := range []string{creatorOnly, globalAdminOnly} {
+		if err := policy.Authorize(context.Background(), actor, CapabilityRead, resource); !errors.Is(err, ErrAuthorizationDenied) {
+			t.Fatalf("non-attributed actor %s received access: %v", actor, err)
+		}
+	}
+	foreign := resource
+	foreign.source.CourseID = "10000000-0000-4000-8000-000000000099"
+	if err := policy.Authorize(context.Background(), author, CapabilityEdit, foreign); !errors.Is(err, ErrAuthorizationDenied) {
+		t.Fatalf("Course A authority reached Course B resource: %v", err)
+	}
+	// Application operations load the Translation's persisted source before
+	// authorizing; a caller cannot substitute a different Course resource.
+	repo := &translationMemory{next: "40000000-0000-4000-8000-000000000010"}
+	base, _ := NewService(sourceMemory{source}, repo, time.Now)
+	app, _ := NewApplicationService(base, policy)
+	created, err := app.Create(context.Background(), author, testSourceID, "es")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.Workspace(context.Background(), creatorOnly, created.ID); !errors.Is(err, ErrAuthorizationDenied) {
+		t.Fatalf("creator provenance became permanent authority: %v", err)
+	}
+	if _, err := app.Update(context.Background(), globalAdminOnly, created.ID, created.Revision, created.Tree); !errors.Is(err, ErrAuthorizationDenied) {
+		t.Fatalf("global administrator bypass: %v", err)
+	}
+}
+
+func TestWorkspaceViewPairsExactSourceAndOverridesWithoutCorrectnessLeak(t *testing.T) {
+	source := viewSource(t)
+	tree, err := SeedTranslationTree(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	title := "Título"
+	tree.Title = &title
+	empty := ""
+	tree.Modules[0].Lessons[0].ContentBlocks[1].Text = &empty // HEADING: intentional empty is translated.
+	prompt := "Pregunta"
+	tree.Assessments[0].Questions[0].Prompt = &prompt
+	option := "Opción A"
+	tree.Assessments[0].Questions[0].Options[0].Text = &option
+	translation := CourseTranslation{ID: "40000000-0000-4000-8000-000000000011", Source: mustSource(t, source), TargetLanguage: "es", CreatorUserID: testCreator, Status: TranslationDraft, Revision: 2, Tree: tree, CreatedAt: time.Now().Add(-time.Minute), UpdatedAt: time.Now()}
+	view, err := buildWorkspaceView(translation, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Course.Title.Source != "Source title" || view.Course.Title.Translated == nil || *view.Course.Title.Translated != title || view.Course.Title.State != FieldTranslated {
+		t.Fatalf("course source/translation pair %#v", view.Course.Title)
+	}
+	heading := view.Modules[0].Lessons[0].Blocks[1].Fields["text"]
+	if heading.Translated == nil || *heading.Translated != "" || heading.State != FieldTranslated {
+		t.Fatalf("empty override was collapsed: %#v", heading)
+	}
+	if view.Modules[0].Lessons[0].Blocks[2].Code != "fmt.Println(\"source\")" || len(view.Modules[0].Lessons[0].Blocks[6].Fields) != 0 || view.Modules[0].Lessons[0].Blocks[7].AssessmentKey == "" {
+		t.Fatalf("non-translatable block context incorrect: %#v", view.Modules[0].Lessons[0].Blocks)
+	}
+	if view.Assessments[0].Questions[0].Prompt.Translated == nil || *view.Assessments[0].Questions[0].Prompt.Translated != prompt || view.Assessments[0].Questions[0].Options[0].Text.Translated == nil {
+		t.Fatalf("assessment translated values omitted: %#v", view.Assessments)
+	}
+	encoded, _ := json.Marshal(view)
+	for _, secret := range []string{"CorrectOptionKeys", "correctOptionKeys", "CorrectPairs", "correctPairs"} {
+		if strings.Contains(string(encoded), secret) {
+			t.Fatalf("translator view leaked grading data %q: %s", secret, encoded)
+		}
+	}
+	if view.Completeness.TotalTranslatableFields == 0 || view.Completeness.TranslatedFields < 4 || view.Completeness.UntranslatedFields == 0 || view.Completeness.Complete {
+		t.Fatalf("unexpected completeness %#v", view.Completeness)
+	}
+	// A zero-field tree is deterministically complete rather than dividing by zero.
+	if zero := complete(nil); !zero.Complete || zero.TotalTranslatableFields != 0 || zero.TranslatedFields != 0 || zero.UntranslatedFields != 0 {
+		t.Fatalf("zero completeness %#v", zero)
+	}
+}
+
+func TestWorkspaceQueryUsesBoundVersionAndFailsOnIntegrityMismatch(t *testing.T) {
+	v1 := translationSource(t, testSourceID, testCourseID, "1.0.0")
+	v1.CourseVersion.Title = "Version one"
+	tree, _ := SeedTranslationTree(v1)
+	translation := CourseTranslation{ID: "40000000-0000-4000-8000-000000000012", Source: mustSource(t, v1), TargetLanguage: "es", CreatorUserID: testCreator, Status: TranslationDraft, Revision: 1, Tree: tree, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	repo := &translationMemory{item: translation}
+	base, _ := NewService(sourceMemory{v1}, repo, time.Now)
+	author := testCreator
+	policy := NewAuthorizationService(authorityMemory{courses.CourseVersion{CourseID: testCourseID, Status: courses.CourseVersionPublished, Attribution: []courses.ContributorSnapshot{{UserID: author, Role: courses.ContributorAuthor}}}})
+	query, _ := NewWorkspaceQueryService(base, policy)
+	view, err := query.View(context.Background(), author, translation.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Course.Title.Source != "Version one" {
+		t.Fatalf("query did not use exact bound source: %#v", view.Source)
+	}
+	repo.item.Tree.Modules[0].Lessons[0].ContentBlocks[0].SourceBlockKey = "invented"
+	if _, err := query.View(context.Background(), author, translation.ID); !errors.Is(err, ErrSourceIntegrity) {
+		t.Fatalf("integrity mismatch error = %v", err)
+	}
+}
+
+type authorityMemory []courses.CourseVersion
+
+func (a authorityMemory) ListPublishedCourseVersions(context.Context) ([]courses.CourseVersion, error) {
+	return a, nil
+}
+func mustSource(t *testing.T, source courses.ImmutableCourseVersion) SourceCourseVersion {
+	t.Helper()
+	binding, err := sourceFromImmutable(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return binding
+}
+
+func viewSource(t *testing.T) courses.ImmutableCourseVersion {
+	source := translationSource(t, testSourceID, testCourseID, "1.0.0")
+	asset := "70000000-0000-4000-8000-000000000001"
+	assessment := "60000000-0000-4000-8000-000000000001"
+	source.Modules[0].Lessons[0].Content.Blocks = []courses.Block{
+		{Key: "text", Type: courses.BlockText, Payload: courses.TextBlockPayload{Content: rich("Source text")}},
+		{Key: "heading", Type: courses.BlockHeading, Payload: courses.HeadingBlockPayload{Level: 2, Content: []courses.RichTextInline{{Type: "text", Text: "Source heading"}}}},
+		{Key: "code", Type: courses.BlockCode, Payload: courses.CodeBlockPayload{Code: "fmt.Println(\"source\")", Title: "Code title"}},
+		{Key: "quote", Type: courses.BlockQuote, Payload: courses.QuoteBlockPayload{Text: "Source quote", Attribution: "Author"}},
+		{Key: "callout", Type: courses.BlockCallout, Payload: courses.CalloutBlockPayload{Kind: "INFO", Title: "Note", Content: rich("Callout text")}},
+		{Key: "image", Type: courses.BlockImage, Payload: courses.ImageBlockPayload{Asset: courses.AssetReference{AssetKey: asset}, AltText: "Source alt", Caption: "Source caption"}},
+		{Key: "divider", Type: courses.BlockDivider, Payload: courses.DividerBlockPayload{}},
+		{Key: "check", Type: courses.BlockKnowledgeCheck, Payload: courses.KnowledgeCheckBlockPayload{AssessmentKey: assessment}},
+	}
+	return source
+}
+func rich(value string) courses.RichText {
+	return courses.RichText{Nodes: []courses.RichTextNode{{Type: "paragraph", Content: []courses.RichTextInline{{Type: "text", Text: value}}}}}
 }
 
 type sourceMemory struct {

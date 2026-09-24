@@ -39,3 +39,34 @@ tables. It has no HTTP API, authoring/learner UI, language fallback, translation
 review/membership workflow, machine/AI translation, notification, diff,
 import/export, or translated certificate/Open Badge metadata. Those require
 later product slices.
+
+## Authorization and translator workspace reads
+
+The application boundary exposes `translation.read`, `translation.create`,
+`translation.edit`, and `translation.publish`. For v1 all four are granted to a
+user recorded in published source-Course attribution as an `AUTHOR` or
+`MAINTAINER`. The policy is scoped to the Translation's durable source Course;
+the creator ID is private provenance only and does not confer permanent access.
+Global `ADMINISTRATOR` status has no implicit Translation bypass. Future
+translator membership can extend this capability resolver without changing the
+Translation aggregate or persistence schema. Unauthorized callers receive a
+domain authorization denial suitable for a later HTTP boundary to map to a
+hidden resource response.
+
+`TranslationWorkspaceView` is the private, translator-facing query model. It
+combines the persisted workspace with its exact immutable source CourseVersion,
+never a latest CourseVersion or Authoring Draft. Every supported translatable
+field is a source/translated pair plus `UNTRANSLATED` or `TRANSLATED` state.
+`nil` is untranslated, while a present empty string is intentionally translated
+and counts as translated. The view provides deterministic total, translated,
+untranslated, and complete counts for the whole workspace and useful structure
+levels. A zero-field structure is complete with all counts zero.
+
+Block views retain type, source key, order, and read-only context such as asset
+keys, code payload, table cells, or a knowledge-check Assessment reference.
+Only fields modeled by the foundation participate in completeness. Assessment
+views include learner-facing prompt, option, and matching labels with stable
+keys/order, but deliberately omit correct-option keys, matching pairs, and
+other grading internals. If the stored translation tree cannot exactly reconcile
+with its bound source keys and structure, workspace reading fails with a
+controlled source-integrity error rather than guessing or migrating data.
