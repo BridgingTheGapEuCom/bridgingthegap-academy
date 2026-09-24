@@ -14,6 +14,7 @@ import (
 type Repository struct{ q *sqlc.Queries }
 
 var _ assets.Repository = (*Repository)(nil)
+var _ assets.ImportRepository = (*Repository)(nil)
 
 func New(db sqlc.DBTX) *Repository { return &Repository{q: sqlc.New(db)} }
 
@@ -92,6 +93,25 @@ func (r *Repository) DiscardPendingAsset(ctx context.Context, id assets.AssetID)
 	return nil
 }
 
+func (r *Repository) CreateImportedAvailableAsset(ctx context.Context, input assets.ImportedAssetMetadata) (assets.Asset, error) {
+	if input.Validate() != nil {
+		return assets.Asset{}, assets.ErrInvalidAsset
+	}
+	importID, err := uuid(input.ImportID)
+	if err != nil {
+		return assets.Asset{}, assets.ErrInvalidAsset
+	}
+	storageID, err := uuid(string(input.StorageObjectID))
+	if err != nil {
+		return assets.Asset{}, assets.ErrInvalidAsset
+	}
+	row, err := r.q.CreateImportedAvailableAsset(ctx, sqlc.CreateImportedAvailableAssetParams{ImportID: importID, OriginalFilename: input.OriginalFilename, MediaType: input.MediaType, ByteSize: pgtype.Int8{Int64: input.ByteSize, Valid: true}, Sha256Digest: pgtype.Text{String: string(input.SHA256Digest), Valid: true}, StorageObjectID: storageID})
+	if err != nil {
+		return assets.Asset{}, storageError(err)
+	}
+	return mapAsset(row)
+}
+
 func (r *Repository) ListAvailableAssetsForDraft(ctx context.Context, draftID string, limit, offset int) ([]assets.Asset, int, error) {
 	ownerDraftID, err := uuid(draftID)
 	if err != nil || limit < 1 || offset < 0 {
@@ -121,9 +141,13 @@ func mapAsset(row sqlc.AssetsAsset) (assets.Asset, error) {
 	if err != nil {
 		return assets.Asset{}, assets.ErrInvalidAsset
 	}
+	origin := assets.Origin(row.Origin)
+	if origin != assets.OriginAuthoringDraft && origin != assets.OriginPackageImport {
+		return assets.Asset{}, assets.ErrInvalidAsset
+	}
 	asset := assets.Asset{
 		ID: assets.AssetID(row.ID.String()), OwnerDraftID: row.OwnerDraftID.String(), OriginalFilename: row.OriginalFilename,
-		MediaType: row.MediaType, Lifecycle: lifecycle, CreatedByUserID: row.CreatedByUserID.String(), CreatedAt: row.CreatedAt.Time.UTC(),
+		Origin: origin, ImportID: row.ImportID.String(), MediaType: row.MediaType, Lifecycle: lifecycle, CreatedByUserID: row.CreatedByUserID.String(), CreatedAt: row.CreatedAt.Time.UTC(),
 	}
 	if row.ByteSize.Valid {
 		asset.ByteSize = row.ByteSize.Int64

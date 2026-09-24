@@ -52,7 +52,7 @@ INSERT INTO courses.course_version (
     license_display_name, license_url, license_custom_text, attribution, published_at
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 `
 
 type CreateCourseVersionParams struct {
@@ -113,6 +113,7 @@ func (q *Queries) CreateCourseVersion(ctx context.Context, arg CreateCourseVersi
 		&i.Attribution,
 		&i.CreatedAt,
 		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }
@@ -326,6 +327,48 @@ func (q *Queries) CreateImmutableCourseVersionModule(ctx context.Context, arg Cr
 	return i, err
 }
 
+const createImportRecord = `-- name: CreateImportRecord :one
+INSERT INTO portability.import_record (
+    package_fingerprint, portable_source_course_id, portable_source_course_version_id,
+    source_version, target_course_id, target_course_version_id, imported_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, target_course_id, target_course_version_id, imported_at
+`
+
+type CreateImportRecordParams struct {
+	PackageFingerprint            string
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+	SourceVersion                 string
+	TargetCourseID                pgtype.UUID
+	TargetCourseVersionID         pgtype.UUID
+	ImportedAt                    pgtype.Timestamptz
+}
+
+func (q *Queries) CreateImportRecord(ctx context.Context, arg CreateImportRecordParams) (PortabilityImportRecord, error) {
+	row := q.db.QueryRow(ctx, createImportRecord,
+		arg.PackageFingerprint,
+		arg.PortableSourceCourseID,
+		arg.PortableSourceCourseVersionID,
+		arg.SourceVersion,
+		arg.TargetCourseID,
+		arg.TargetCourseVersionID,
+		arg.ImportedAt,
+	)
+	var i PortabilityImportRecord
+	err := row.Scan(
+		&i.ID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.TargetCourseID,
+		&i.TargetCourseVersionID,
+		&i.ImportedAt,
+	)
+	return i, err
+}
+
 const createLesson = `-- name: CreateLesson :one
 INSERT INTO courses.lesson (
     course_version_id, module_id, stable_key, title, description,
@@ -443,6 +486,24 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Cou
 	return i, err
 }
 
+const createPortableSourceCourseMapping = `-- name: CreatePortableSourceCourseMapping :one
+INSERT INTO portability.source_course_mapping (portable_source_course_id, local_course_id)
+VALUES ($1, $2)
+RETURNING local_course_id
+`
+
+type CreatePortableSourceCourseMappingParams struct {
+	PortableSourceCourseID string
+	LocalCourseID          pgtype.UUID
+}
+
+func (q *Queries) CreatePortableSourceCourseMapping(ctx context.Context, arg CreatePortableSourceCourseMappingParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createPortableSourceCourseMapping, arg.PortableSourceCourseID, arg.LocalCourseID)
+	var local_course_id pgtype.UUID
+	err := row.Scan(&local_course_id)
+	return local_course_id, err
+}
+
 const getCourse = `-- name: GetCourse :one
 SELECT id, slug, created_at
 FROM courses.course
@@ -470,7 +531,7 @@ func (q *Queries) GetCourseBySlug(ctx context.Context, slug string) (CoursesCour
 }
 
 const getCourseVersion = `-- name: GetCourseVersion :one
-SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 FROM courses.course_version
 WHERE id = $1
 `
@@ -499,12 +560,13 @@ func (q *Queries) GetCourseVersion(ctx context.Context, id pgtype.UUID) (Courses
 		&i.Attribution,
 		&i.CreatedAt,
 		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }
 
 const getCourseVersionByCourseAndVersion = `-- name: GetCourseVersionByCourseAndVersion :one
-SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 FROM courses.course_version
 WHERE course_id = $1 AND version = $2
 `
@@ -538,6 +600,7 @@ func (q *Queries) GetCourseVersionByCourseAndVersion(ctx context.Context, arg Ge
 		&i.Attribution,
 		&i.CreatedAt,
 		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }
@@ -553,6 +616,40 @@ func (q *Queries) GetCourseVersionIDByReviewID(ctx context.Context, reviewID pgt
 	var course_version_id pgtype.UUID
 	err := row.Scan(&course_version_id)
 	return course_version_id, err
+}
+
+const getCourseVersionImportProvenance = `-- name: GetCourseVersionImportProvenance :one
+SELECT imported.course_version_id, imported.import_id, record.package_fingerprint,
+       record.portable_source_course_id, record.portable_source_course_version_id,
+       record.source_version, record.imported_at
+FROM courses.course_version_import_provenance AS imported
+JOIN portability.import_record AS record ON record.id = imported.import_id
+WHERE imported.course_version_id = $1
+`
+
+type GetCourseVersionImportProvenanceRow struct {
+	CourseVersionID               pgtype.UUID
+	ImportID                      pgtype.UUID
+	PackageFingerprint            string
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+	SourceVersion                 string
+	ImportedAt                    pgtype.Timestamptz
+}
+
+func (q *Queries) GetCourseVersionImportProvenance(ctx context.Context, courseVersionID pgtype.UUID) (GetCourseVersionImportProvenanceRow, error) {
+	row := q.db.QueryRow(ctx, getCourseVersionImportProvenance, courseVersionID)
+	var i GetCourseVersionImportProvenanceRow
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.ImportID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.ImportedAt,
+	)
+	return i, err
 }
 
 const getCourseVersionPublicationProvenance = `-- name: GetCourseVersionPublicationProvenance :one
@@ -576,6 +673,52 @@ func (q *Queries) GetCourseVersionPublicationProvenance(ctx context.Context, cou
 		&i.ApprovedByUserID,
 		&i.ApprovedAt,
 		&i.PublishedByUserID,
+	)
+	return i, err
+}
+
+const getImportRecordByFingerprint = `-- name: GetImportRecordByFingerprint :one
+SELECT id, package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, target_course_id, target_course_version_id, imported_at FROM portability.import_record WHERE package_fingerprint = $1
+`
+
+func (q *Queries) GetImportRecordByFingerprint(ctx context.Context, packageFingerprint string) (PortabilityImportRecord, error) {
+	row := q.db.QueryRow(ctx, getImportRecordByFingerprint, packageFingerprint)
+	var i PortabilityImportRecord
+	err := row.Scan(
+		&i.ID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.TargetCourseID,
+		&i.TargetCourseVersionID,
+		&i.ImportedAt,
+	)
+	return i, err
+}
+
+const getImportRecordByPortableSourceVersion = `-- name: GetImportRecordByPortableSourceVersion :one
+SELECT id, package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, target_course_id, target_course_version_id, imported_at FROM portability.import_record
+WHERE portable_source_course_id = $1 AND portable_source_course_version_id = $2
+`
+
+type GetImportRecordByPortableSourceVersionParams struct {
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+}
+
+func (q *Queries) GetImportRecordByPortableSourceVersion(ctx context.Context, arg GetImportRecordByPortableSourceVersionParams) (PortabilityImportRecord, error) {
+	row := q.db.QueryRow(ctx, getImportRecordByPortableSourceVersion, arg.PortableSourceCourseID, arg.PortableSourceCourseVersionID)
+	var i PortabilityImportRecord
+	err := row.Scan(
+		&i.ID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.TargetCourseID,
+		&i.TargetCourseVersionID,
+		&i.ImportedAt,
 	)
 	return i, err
 }
@@ -701,6 +844,19 @@ func (q *Queries) GetModuleByCourseVersionAndKey(ctx context.Context, arg GetMod
 	return i, err
 }
 
+const getPortableSourceCourseMapping = `-- name: GetPortableSourceCourseMapping :one
+SELECT local_course_id
+FROM portability.source_course_mapping
+WHERE portable_source_course_id = $1
+`
+
+func (q *Queries) GetPortableSourceCourseMapping(ctx context.Context, portableSourceCourseID string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getPortableSourceCourseMapping, portableSourceCourseID)
+	var local_course_id pgtype.UUID
+	err := row.Scan(&local_course_id)
+	return local_course_id, err
+}
+
 const getPublishedAssetBindingByCourseAndVersionAndAssetKey = `-- name: GetPublishedAssetBindingByCourseAndVersionAndAssetKey :one
 SELECT binding.course_version_id, binding.asset_key, binding.storage_object_id, binding.original_filename, binding.media_type, binding.byte_size, binding.sha256_digest
 FROM courses.course_version_asset_binding AS binding
@@ -813,7 +969,7 @@ func (q *Queries) ListCourseVersionAssetBindings(ctx context.Context, courseVers
 }
 
 const listCourseVersions = `-- name: ListCourseVersions :many
-SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 FROM courses.course_version
 WHERE course_id = $1
 ORDER BY version_major DESC, version_minor DESC, version_patch DESC, id DESC
@@ -849,6 +1005,7 @@ func (q *Queries) ListCourseVersions(ctx context.Context, courseID pgtype.UUID) 
 			&i.Attribution,
 			&i.CreatedAt,
 			&i.PublishedAt,
+			&i.PublicationOrigin,
 		); err != nil {
 			return nil, err
 		}
@@ -895,7 +1052,7 @@ WITH latest AS (
     WHERE version.status = 'PUBLISHED'
     ORDER BY version.course_id, version.version_major DESC, version.version_minor DESC, version.version_patch DESC, version.id DESC
 )
-SELECT version.id, version.course_id, version.version, version.version_major, version.version_minor, version.version_patch, version.status, version.title, version.description, version.learning_objectives, version.source_language, version.changelog, version.license_kind, version.license_identifier, version.license_display_name, version.license_url, version.license_custom_text, version.attribution, version.created_at, version.published_at
+SELECT version.id, version.course_id, version.version, version.version_major, version.version_minor, version.version_patch, version.status, version.title, version.description, version.learning_objectives, version.source_language, version.changelog, version.license_kind, version.license_identifier, version.license_display_name, version.license_url, version.license_custom_text, version.attribution, version.created_at, version.published_at, version.publication_origin
 FROM courses.course_version AS version
 JOIN latest ON latest.id = version.id
 WHERE ($1::text IS NULL OR version.source_language = $1::text)
@@ -939,6 +1096,7 @@ func (q *Queries) ListLatestPublishedCourseVersions(ctx context.Context, arg Lis
 			&i.Attribution,
 			&i.CreatedAt,
 			&i.PublishedAt,
+			&i.PublicationOrigin,
 		); err != nil {
 			return nil, err
 		}
@@ -1211,7 +1369,7 @@ func (q *Queries) ListModulesForCourseVersion(ctx context.Context, courseVersion
 }
 
 const listPublishedCourseVersions = `-- name: ListPublishedCourseVersions :many
-SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 FROM courses.course_version
 WHERE status = 'PUBLISHED'
 ORDER BY course_id ASC, version_major DESC, version_minor DESC, version_patch DESC, id DESC
@@ -1247,6 +1405,7 @@ func (q *Queries) ListPublishedCourseVersions(ctx context.Context) ([]CoursesCou
 			&i.Attribution,
 			&i.CreatedAt,
 			&i.PublishedAt,
+			&i.PublicationOrigin,
 		); err != nil {
 			return nil, err
 		}
@@ -1262,7 +1421,7 @@ const transitionCourseVersionStatus = `-- name: TransitionCourseVersionStatus :o
 UPDATE courses.course_version
 SET status = $3
 WHERE id = $1 AND status = $2
-RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 `
 
 type TransitionCourseVersionStatusParams struct {
@@ -1295,6 +1454,7 @@ func (q *Queries) TransitionCourseVersionStatus(ctx context.Context, arg Transit
 		&i.Attribution,
 		&i.CreatedAt,
 		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }

@@ -8,6 +8,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AssetsAsset struct {
+	ID               pgtype.UUID
+	OwnerDraftID     pgtype.UUID
+	OriginalFilename string
+	MediaType        string
+	ByteSize         pgtype.Int8
+	Sha256Digest     pgtype.Text
+	StorageObjectID  pgtype.UUID
+	Lifecycle        string
+	CreatedByUserID  pgtype.UUID
+	CreatedAt        pgtype.Timestamptz
+	Origin           string
+	ImportID         pgtype.UUID
+}
+
 type CoursesCourse struct {
 	ID        pgtype.UUID
 	Slug      string
@@ -35,6 +50,7 @@ type CoursesCourseVersion struct {
 	Attribution        []byte
 	CreatedAt          pgtype.Timestamptz
 	PublishedAt        pgtype.Timestamptz
+	PublicationOrigin  string
 }
 
 type CoursesCourseVersionAssessmentBinding struct {
@@ -51,6 +67,11 @@ type CoursesCourseVersionAssetBinding struct {
 	MediaType        string
 	ByteSize         int64
 	Sha256Digest     string
+}
+
+type CoursesCourseVersionImportProvenance struct {
+	CourseVersionID pgtype.UUID
+	ImportID        pgtype.UUID
 }
 
 type CoursesCourseVersionPublicationProvenance struct {
@@ -98,4 +119,20 @@ type CoursesModule struct {
 	Position        int32
 	CreatedAt       pgtype.Timestamptz
 	SourceModuleID  pgtype.UUID
+}
+
+type PortabilityImportRecord struct {
+	ID                            pgtype.UUID
+	PackageFingerprint            string
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+	SourceVersion                 string
+	TargetCourseID                pgtype.UUID
+	TargetCourseVersionID         pgtype.UUID
+	ImportedAt                    pgtype.Timestamptz
+}
+
+type PortabilitySourceCourseMapping struct {
+	PortableSourceCourseID string
+	LocalCourseID          pgtype.UUID
 }

@@ -250,3 +250,35 @@ FROM courses.lesson_prerequisite AS prerequisite
 JOIN courses.lesson AS target ON target.id = prerequisite.prerequisite_lesson_id
 WHERE prerequisite.course_version_id = $1
 ORDER BY prerequisite.lesson_id ASC, prerequisite.position ASC, prerequisite.prerequisite_lesson_id ASC;
+
+-- name: GetCourseVersionImportProvenance :one
+SELECT imported.course_version_id, imported.import_id, record.package_fingerprint,
+       record.portable_source_course_id, record.portable_source_course_version_id,
+       record.source_version, record.imported_at
+FROM courses.course_version_import_provenance AS imported
+JOIN portability.import_record AS record ON record.id = imported.import_id
+WHERE imported.course_version_id = $1;
+
+-- name: GetPortableSourceCourseMapping :one
+SELECT local_course_id
+FROM portability.source_course_mapping
+WHERE portable_source_course_id = $1;
+
+-- name: CreatePortableSourceCourseMapping :one
+INSERT INTO portability.source_course_mapping (portable_source_course_id, local_course_id)
+VALUES ($1, $2)
+RETURNING local_course_id;
+
+-- name: GetImportRecordByFingerprint :one
+SELECT * FROM portability.import_record WHERE package_fingerprint = $1;
+
+-- name: GetImportRecordByPortableSourceVersion :one
+SELECT * FROM portability.import_record
+WHERE portable_source_course_id = $1 AND portable_source_course_version_id = $2;
+
+-- name: CreateImportRecord :one
+INSERT INTO portability.import_record (
+    package_fingerprint, portable_source_course_id, portable_source_course_version_id,
+    source_version, target_course_id, target_course_version_id, imported_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;

@@ -32,3 +32,11 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 SELECT count(*)
 FROM assets.asset
 WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE';
+
+-- name: CreateImportedAvailableAsset :one
+INSERT INTO assets.asset (
+    origin, import_id, original_filename, media_type, byte_size, sha256_digest,
+    storage_object_id, lifecycle
+)
+VALUES ('PACKAGE_IMPORT', $1, $2, $3, $4, $5, $6, 'AVAILABLE')
+RETURNING *;

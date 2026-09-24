@@ -30,7 +30,7 @@ INSERT INTO assets.asset (
     storage_object_id, lifecycle, created_by_user_id
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at
+RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
 `
 
 type CreateAssetParams struct {
@@ -67,6 +67,53 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 		&i.Lifecycle,
 		&i.CreatedByUserID,
 		&i.CreatedAt,
+		&i.Origin,
+		&i.ImportID,
+	)
+	return i, err
+}
+
+const createImportedAvailableAsset = `-- name: CreateImportedAvailableAsset :one
+INSERT INTO assets.asset (
+    origin, import_id, original_filename, media_type, byte_size, sha256_digest,
+    storage_object_id, lifecycle
+)
+VALUES ('PACKAGE_IMPORT', $1, $2, $3, $4, $5, $6, 'AVAILABLE')
+RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
+`
+
+type CreateImportedAvailableAssetParams struct {
+	ImportID         pgtype.UUID
+	OriginalFilename string
+	MediaType        string
+	ByteSize         pgtype.Int8
+	Sha256Digest     pgtype.Text
+	StorageObjectID  pgtype.UUID
+}
+
+func (q *Queries) CreateImportedAvailableAsset(ctx context.Context, arg CreateImportedAvailableAssetParams) (AssetsAsset, error) {
+	row := q.db.QueryRow(ctx, createImportedAvailableAsset,
+		arg.ImportID,
+		arg.OriginalFilename,
+		arg.MediaType,
+		arg.ByteSize,
+		arg.Sha256Digest,
+		arg.StorageObjectID,
+	)
+	var i AssetsAsset
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerDraftID,
+		&i.OriginalFilename,
+		&i.MediaType,
+		&i.ByteSize,
+		&i.Sha256Digest,
+		&i.StorageObjectID,
+		&i.Lifecycle,
+		&i.CreatedByUserID,
+		&i.CreatedAt,
+		&i.Origin,
+		&i.ImportID,
 	)
 	return i, err
 }
@@ -85,7 +132,7 @@ func (q *Queries) DiscardPendingAsset(ctx context.Context, id pgtype.UUID) (int6
 }
 
 const getAsset = `-- name: GetAsset :one
-SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at
+SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
 FROM assets.asset
 WHERE id = $1
 `
@@ -104,12 +151,14 @@ func (q *Queries) GetAsset(ctx context.Context, id pgtype.UUID) (AssetsAsset, er
 		&i.Lifecycle,
 		&i.CreatedByUserID,
 		&i.CreatedAt,
+		&i.Origin,
+		&i.ImportID,
 	)
 	return i, err
 }
 
 const listAvailableAssetsForDraft = `-- name: ListAvailableAssetsForDraft :many
-SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at
+SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
 FROM assets.asset
 WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE'
 ORDER BY created_at DESC, id DESC
@@ -142,6 +191,8 @@ func (q *Queries) ListAvailableAssetsForDraft(ctx context.Context, arg ListAvail
 			&i.Lifecycle,
 			&i.CreatedByUserID,
 			&i.CreatedAt,
+			&i.Origin,
+			&i.ImportID,
 		); err != nil {
 			return nil, err
 		}
@@ -157,7 +208,7 @@ const markAssetAvailable = `-- name: MarkAssetAvailable :one
 UPDATE assets.asset
 SET lifecycle = 'AVAILABLE', byte_size = $2, sha256_digest = $3, storage_object_id = $4
 WHERE id = $1 AND lifecycle = 'PENDING'
-RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at
+RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
 `
 
 type MarkAssetAvailableParams struct {
@@ -186,6 +237,8 @@ func (q *Queries) MarkAssetAvailable(ctx context.Context, arg MarkAssetAvailable
 		&i.Lifecycle,
 		&i.CreatedByUserID,
 		&i.CreatedAt,
+		&i.Origin,
+		&i.ImportID,
 	)
 	return i, err
 }

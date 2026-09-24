@@ -29,7 +29,10 @@ sql:
         out: internal/modules/audit/db/sqlc
         sql_package: pgx/v5
   - engine: postgresql
-    schema: internal/modules/infrastructure/postgres/db/migrations/00015_assets.sql
+    schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00015_assets.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00029_imported_publication_provenance.sql
     queries: internal/modules/assets/db/query
     gen:
       go:
@@ -59,6 +62,8 @@ sql:
       - internal/modules/infrastructure/postgres/db/migrations/00013_course_version_publication_actor.sql
       - internal/modules/infrastructure/postgres/db/migrations/00016_course_version_asset_binding.sql
       - internal/modules/infrastructure/postgres/db/migrations/00018_course_version_assessment_binding.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00015_assets.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00029_imported_publication_provenance.sql
     queries: internal/modules/courses/db/query
     gen:
       go:

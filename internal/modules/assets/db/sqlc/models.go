@@ -19,4 +19,57 @@ type AssetsAsset struct {
 	Lifecycle        string
 	CreatedByUserID  pgtype.UUID
 	CreatedAt        pgtype.Timestamptz
+	Origin           string
+	ImportID         pgtype.UUID
+}
+
+type CoursesCourse struct {
+	ID        pgtype.UUID
+	Slug      string
+	CreatedAt pgtype.Timestamptz
+}
+
+type CoursesCourseVersion struct {
+	ID                 pgtype.UUID
+	CourseID           pgtype.UUID
+	Version            string
+	VersionMajor       pgtype.Int4
+	VersionMinor       pgtype.Int4
+	VersionPatch       pgtype.Int4
+	Status             string
+	Title              string
+	Description        string
+	LearningObjectives []byte
+	SourceLanguage     string
+	Changelog          string
+	LicenseKind        string
+	LicenseIdentifier  pgtype.Text
+	LicenseDisplayName string
+	LicenseUrl         pgtype.Text
+	LicenseCustomText  pgtype.Text
+	Attribution        []byte
+	CreatedAt          pgtype.Timestamptz
+	PublishedAt        pgtype.Timestamptz
+	PublicationOrigin  string
+}
+
+type CoursesCourseVersionImportProvenance struct {
+	CourseVersionID pgtype.UUID
+	ImportID        pgtype.UUID
+}
+
+type PortabilityImportRecord struct {
+	ID                            pgtype.UUID
+	PackageFingerprint            string
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+	SourceVersion                 string
+	TargetCourseID                pgtype.UUID
+	TargetCourseVersionID         pgtype.UUID
+	ImportedAt                    pgtype.Timestamptz
+}
+
+type PortabilitySourceCourseMapping struct {
+	PortableSourceCourseID string
+	LocalCourseID          pgtype.UUID
 }
