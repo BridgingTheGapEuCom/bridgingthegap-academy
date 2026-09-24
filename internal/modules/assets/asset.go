@@ -38,7 +38,10 @@ var (
 // the stable content reference. StorageObjectID and CreatedByUserID are private
 // implementation/provenance values and are not learner-facing metadata.
 type Asset struct {
-	ID               AssetID
+	ID AssetID
+	// Origin defaults to AUTHORING_DRAFT for legacy/native reconstructions.
+	Origin           Origin
+	ImportID         string `json:"-"`
 	OwnerDraftID     string `json:"-"`
 	OriginalFilename string
 	MediaType        string
@@ -126,7 +129,40 @@ func (a Asset) Validate() error {
 	if !validUUID(string(a.ID)) || a.CreatedAt.IsZero() {
 		return ErrInvalidAsset
 	}
+	origin := a.Origin
+	if origin == "" {
+		origin = OriginAuthoringDraft
+	}
+	if origin == OriginPackageImport {
+		if !validUUID(a.ImportID) || a.OwnerDraftID != "" || a.CreatedByUserID != "" {
+			return ErrInvalidAsset
+		}
+		return validateImportedMetadata(a.OriginalFilename, a.MediaType, a.ByteSize, a.SHA256Digest, a.StorageObjectID, a.Lifecycle)
+	}
+	if origin != OriginAuthoringDraft || a.ImportID != "" {
+		return ErrInvalidAsset
+	}
 	return validateMetadata(a.OwnerDraftID, a.OriginalFilename, a.MediaType, a.ByteSize, a.SHA256Digest, a.StorageObjectID, a.Lifecycle, a.CreatedByUserID)
+}
+
+func validateImportedMetadata(filename, mediaType string, byteSize int64, digest SHA256Digest, objectID StorageObjectID, lifecycle Lifecycle) error {
+	if ValidateOriginalFilename(filename) != nil {
+		return ErrInvalidAsset
+	}
+	normalized, err := NormalizeMediaType(mediaType)
+	if err != nil || normalized != mediaType {
+		return ErrInvalidAsset
+	}
+	if lifecycle != LifecycleAvailable || byteSize <= 0 {
+		return ErrInvalidAsset
+	}
+	if parsed, err := ParseStorageObjectID(string(objectID)); err != nil || parsed != objectID {
+		return ErrInvalidAsset
+	}
+	if parsed, err := ParseSHA256Digest(string(digest)); err != nil || parsed != digest {
+		return ErrInvalidAsset
+	}
+	return nil
 }
 
 func (a AssetInput) Validate() error {

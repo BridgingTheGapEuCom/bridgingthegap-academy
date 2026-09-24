@@ -290,11 +290,8 @@ func (r *Reader) validate(ctx context.Context, z *zip.Reader) (*ValidatedCourseP
 		}
 		assets = append(assets, validatedAsset{entry: entry, bytes: b})
 	}
-	all := make([]byte, 0)
-	for _, name := range sortedNames(raw) {
-		all = append(all, raw[name]...)
-	}
-	sum := sha256.Sum256(all)
+	// checksums.json is the canonical, sorted v1 immutable-content identity. It excludes manifest exportedAt and ZIP metadata.
+	sum := sha256.Sum256(raw[checksumsPath])
 	return &ValidatedCoursePackage{manifest: manifest, course: course, assessments: assessments, translations: translationsPayload, assets: assets, digest: hex.EncodeToString(sum[:])}, nil
 }
 func safeArchivePath(name string) (string, error) {
@@ -681,14 +678,6 @@ func translationComplete(t translations.TranslationTree, source courses.Immutabl
 		}
 	}
 	return true
-}
-func sortedNames(m map[string][]byte) []string {
-	x := make([]string, 0, len(m))
-	for k := range m {
-		x = append(x, k)
-	}
-	sort.Strings(x)
-	return x
 }
 
 var _ = fmt.Sprintf
