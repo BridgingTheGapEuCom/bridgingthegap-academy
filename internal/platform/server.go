@@ -32,6 +32,8 @@ import (
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
 	progresspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
+	translationspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/web"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -117,6 +119,19 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		return err
 	}
 	publicationAssetResolver := authoring.NewAssetPublicationResolver(assetRepository)
+	translationService, err := translations.NewService(coursesRepository, translationspostgres.New(pool), time.Now)
+	if err != nil {
+		return err
+	}
+	translationAuthorizer := translations.NewAuthorizationService(coursesRepository)
+	translationApplication, err := translations.NewApplicationService(translationService, translationAuthorizer)
+	if err != nil {
+		return err
+	}
+	translationWorkspace, err := translations.NewWorkspaceQueryService(translationService, translationAuthorizer)
+	if err != nil {
+		return err
+	}
 	publicationService := authoring.NewPublicationServiceWithAssets(authoringRepository, publicationAssetResolver, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
@@ -148,6 +163,8 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringAssessments:        authoring.NewAssessmentManagementService(assessmentRepository, authoringAuthorizer),
 		learnerAttempts:             assessments.NewLearnerAttemptService(assessmentRepository, coursesRepository, time.Now),
 		community:                   community.NewService(communitypostgres.New(pool), coursesRepository),
+		translations:                translationApplication,
+		translationWorkspace:        translationWorkspace,
 		certificateIssuance:         certificateIssuance,
 		certificates:                certificateRepository,
 		badgePublication:            badgePublication,
@@ -251,6 +268,13 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Get("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptGet)
 					protected.Put("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptUpdate)
 					protected.Post("/learner/assessment-attempts/{attemptId}/submit", auth.handleLearnerAttemptSubmit)
+				}
+				if auth.translations != nil && auth.translationWorkspace != nil {
+					protected.Post("/courses/by-id/{courseId}/versions/{version}/translations", auth.handleTranslationCreate)
+					protected.Get("/courses/by-id/{courseId}/versions/{version}/translations", auth.handleTranslationList)
+					protected.Get("/translations/{translationId}", auth.handleTranslationWorkspace)
+					protected.Patch("/translations/{translationId}", auth.handleTranslationPatch)
+					protected.Post("/translations/{translationId}/publish", auth.handleTranslationPublish)
 				}
 				if auth.community != nil {
 					protected.Get("/courses/by-id/{courseId}/community/moderation", auth.handleCommunityModerationProbe)

@@ -12,10 +12,11 @@ import (
 )
 
 var (
-	ErrInvalidTranslation  = errors.New("invalid course translation")
-	ErrTranslationNotFound = errors.New("course translation not found")
-	ErrTranslationConflict = errors.New("course translation conflicts with existing data")
-	ErrRevisionMismatch    = errors.New("translation revision mismatch")
+	ErrInvalidTranslation    = errors.New("invalid course translation")
+	ErrTranslationNotFound   = errors.New("course translation not found")
+	ErrTranslationConflict   = errors.New("course translation conflicts with existing data")
+	ErrRevisionMismatch      = errors.New("translation revision mismatch")
+	ErrTranslationIncomplete = errors.New("translation is incomplete")
 )
 
 type TranslationID string
@@ -31,10 +32,10 @@ const (
 // the authoritative binding; the remaining facts make historical reads and
 // later source-lag detection independent of latest-version lookup.
 type SourceCourseVersion struct {
-	CourseID        courses.CourseID
-	CourseVersionID courses.CourseVersionID
-	Version         courses.Version
-	Language        courses.LanguageTag
+	CourseID        courses.CourseID        `json:"courseId"`
+	CourseVersionID courses.CourseVersionID `json:"courseVersionId"`
+	Version         courses.Version         `json:"version"`
+	Language        courses.LanguageTag     `json:"language"`
 }
 
 // CourseTranslation is a mutable derived workspace. The Tree contains only

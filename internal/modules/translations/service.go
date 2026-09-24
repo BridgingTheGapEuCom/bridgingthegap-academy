@@ -89,12 +89,22 @@ func (s *Service) Update(ctx context.Context, id TranslationID, expected int64, 
 	return s.repository.UpdateTree(ctx, id, expected, tree, s.now().UTC())
 }
 func (s *Service) Publish(ctx context.Context, id TranslationID) (TranslationPublication, error) {
-	if s == nil {
+	translation, err := s.Get(ctx, id)
+	if err != nil {
+		return TranslationPublication{}, err
+	}
+	return s.PublishExpected(ctx, id, translation.Revision)
+}
+func (s *Service) PublishExpected(ctx context.Context, id TranslationID, expected int64) (TranslationPublication, error) {
+	if s == nil || expected < 1 {
 		return TranslationPublication{}, ErrInvalidTranslation
 	}
 	translation, err := s.repository.Get(ctx, id)
 	if err != nil {
 		return TranslationPublication{}, err
+	}
+	if translation.Revision != expected {
+		return TranslationPublication{}, ErrRevisionMismatch
 	}
 	source, err := s.source.GetImmutableCourseVersion(ctx, translation.Source.CourseVersionID)
 	if err != nil {
@@ -122,6 +132,34 @@ func (s *Service) GetBySourceVersionAndLanguage(ctx context.Context, id courses.
 		return CourseTranslation{}, ErrInvalidTranslation
 	}
 	return s.repository.GetBySourceVersionAndLanguage(ctx, id, language)
+}
+
+type sourceVersionReader interface {
+	GetPublishedImmutableCourseVersionByCourseAndVersion(context.Context, courses.CourseID, courses.Version) (courses.ImmutableCourseVersion, error)
+}
+type sourceTranslationLister interface {
+	ListBySourceVersion(context.Context, courses.CourseVersionID) ([]CourseTranslation, error)
+}
+
+func (s *Service) PublishedSource(ctx context.Context, courseID courses.CourseID, version courses.Version) (courses.ImmutableCourseVersion, error) {
+	if s == nil {
+		return courses.ImmutableCourseVersion{}, ErrInvalidTranslation
+	}
+	reader, ok := s.source.(sourceVersionReader)
+	if !ok {
+		return courses.ImmutableCourseVersion{}, ErrInvalidTranslation
+	}
+	return reader.GetPublishedImmutableCourseVersionByCourseAndVersion(ctx, courseID, version)
+}
+func (s *Service) ListBySourceVersion(ctx context.Context, id courses.CourseVersionID) ([]CourseTranslation, error) {
+	if s == nil {
+		return nil, ErrInvalidTranslation
+	}
+	lister, ok := s.repository.(sourceTranslationLister)
+	if !ok {
+		return nil, ErrInvalidTranslation
+	}
+	return lister.ListBySourceVersion(ctx, id)
 }
 func (s *Service) LatestPublication(ctx context.Context, id courses.CourseVersionID, language courses.LanguageTag) (TranslationPublication, error) {
 	if s == nil {

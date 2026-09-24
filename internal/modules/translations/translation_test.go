@@ -315,3 +315,18 @@ func translationSource(t *testing.T, id courses.CourseVersionID, courseID course
 	}
 	return courses.ImmutableCourseVersion{ID: id, CourseVersion: courses.CourseVersionInput{CourseID: courseID, Version: parsed, Status: courses.CourseVersionPublished, Title: "Source title", Description: "Source description", LearningObjectives: []string{"Objective"}, SourceLanguage: "en"}, Modules: []courses.ImmutableCourseVersionModule{{StableKey: "module-one", Position: 0, Lessons: []courses.ImmutableCourseVersionLesson{{StableKey: "lesson-one", Position: 0, LearningObjectives: []string{"Lesson objective"}, Content: courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{{Key: "paragraph-one", Type: courses.BlockText, Payload: courses.TextBlockPayload{Content: courses.RichText{Nodes: []courses.RichTextNode{{Type: "paragraph", Content: []courses.RichTextInline{{Type: "text", Text: "Source prose"}}}}}}}}}}}}}, AssessmentBindings: []courses.PublishedAssessmentBinding{{AssessmentKey: "60000000-0000-4000-8000-000000000001", Questions: []courses.PublishedAssessmentQuestion{{StableKey: "question-one", Type: courses.PublishedQuestionSingleChoice, Prompt: "Prompt", Position: 0, Options: []courses.PublishedAssessmentOption{{StableKey: "option-a", Text: "A", Position: 0}, {StableKey: "option-b", Text: "B", Position: 1}}, CorrectOptionKeys: []string{"option-b"}}}}}}
 }
+
+func TestApplyTextChangesPreservesNullableAndRejectsStructuralTargets(t *testing.T) {
+	source := translationSource(t, testSourceID, testCourseID, "1.0.0")
+	tree, err := SeedTranslationTree(source)
+	if err != nil { t.Fatal(err) }
+	empty := ""
+	updated, err := ApplyTextChanges(tree, []TextChange{{Target: "COURSE", Field: "title", Translated: &empty}, {Target: "BLOCK", ModuleKey: "module-one", LessonKey: "lesson-one", BlockKey: "paragraph-one", Field: "text", Translated: stringPointer("Hola")}})
+	if err != nil { t.Fatal(err) }
+	if updated.Title == nil || *updated.Title != "" || updated.Modules[0].Lessons[0].ContentBlocks[0].Text == nil { t.Fatalf("nullable changes lost: %#v", updated) }
+	cleared, err := ApplyTextChanges(updated, []TextChange{{Target: "COURSE", Field: "title", Translated: nil}})
+	if err != nil || cleared.Title != nil { t.Fatalf("null clear = %#v, %v", cleared.Title, err) }
+	if _, err := ApplyTextChanges(tree, []TextChange{{Target: "BLOCK", ModuleKey: "module-one", LessonKey: "lesson-one", BlockKey: "paragraph-one", Field: "code", Translated: stringPointer("attack")}}); !errors.Is(err, ErrInvalidTranslation) { t.Fatalf("structural/code mutation error = %v", err) }
+	if _, err := ApplyTextChanges(tree, []TextChange{{Target: "ASSESSMENT_QUESTION", AssessmentKey: string(tree.Assessments[0].AssessmentKey), QuestionKey: "question-one", Field: "correctOptionKey", Translated: stringPointer("option-a")}}); !errors.Is(err, ErrInvalidTranslation) { t.Fatalf("correctness mutation error = %v", err) }
+}
+func stringPointer(value string) *string { return &value }

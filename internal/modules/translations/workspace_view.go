@@ -18,50 +18,50 @@ const (
 )
 
 type Completeness struct {
-	TotalTranslatableFields int
-	TranslatedFields        int
-	UntranslatedFields      int
-	Complete                bool
+	TotalTranslatableFields int  `json:"totalTranslatableFields"`
+	TranslatedFields        int  `json:"translatedFields"`
+	UntranslatedFields      int  `json:"untranslatedFields"`
+	Complete                bool `json:"complete"`
 }
 type TextFieldView struct {
-	Source     string
-	Translated *string
-	State      FieldState
+	Source     string     `json:"source"`
+	Translated *string    `json:"translated"`
+	State      FieldState `json:"state"`
 }
 type TranslationWorkspaceView struct {
-	TranslationID  TranslationID
-	Revision       int64
-	Lifecycle      TranslationStatus
-	Source         SourceCourseVersion
-	TargetLanguage courses.LanguageTag
-	CreatorUserID  string
-	Course         TranslationCourseView
-	Modules        []TranslationModuleView
-	Assessments    []TranslationAssessmentView
-	Completeness   Completeness
+	TranslationID  TranslationID               `json:"translationId"`
+	Revision       int64                       `json:"revision"`
+	Lifecycle      TranslationStatus           `json:"lifecycle"`
+	Source         SourceCourseVersion         `json:"source"`
+	TargetLanguage courses.LanguageTag         `json:"targetLanguage"`
+	CreatorUserID  string                      `json:"-"`
+	Course         TranslationCourseView       `json:"course"`
+	Modules        []TranslationModuleView     `json:"modules"`
+	Assessments    []TranslationAssessmentView `json:"assessments"`
+	Completeness   Completeness                `json:"completeness"`
 }
 type TranslationCourseView struct {
-	Title              TextFieldView
-	Description        TextFieldView
-	LearningObjectives []TextFieldView
+	Title              TextFieldView   `json:"title"`
+	Description        TextFieldView   `json:"description"`
+	LearningObjectives []TextFieldView `json:"learningObjectives"`
 }
 type TranslationModuleView struct {
-	SourceStableKey string
-	Position        int
-	Title           TextFieldView
-	Description     TextFieldView
-	Lessons         []TranslationLessonView
-	Completeness    Completeness
+	SourceStableKey string                  `json:"sourceStableKey"`
+	Position        int                     `json:"position"`
+	Title           TextFieldView           `json:"title"`
+	Description     TextFieldView           `json:"description"`
+	Lessons         []TranslationLessonView `json:"lessons"`
+	Completeness    Completeness            `json:"completeness"`
 }
 type TranslationLessonView struct {
-	SourceStableKey        string
-	Position               int
-	PrerequisiteStableKeys []string
-	Title                  TextFieldView
-	Description            TextFieldView
-	LearningObjectives     []TextFieldView
-	Blocks                 []TranslationContentBlockView
-	Completeness           Completeness
+	SourceStableKey        string                        `json:"sourceStableKey"`
+	Position               int                           `json:"position"`
+	PrerequisiteStableKeys []string                      `json:"prerequisiteStableKeys"`
+	Title                  TextFieldView                 `json:"title"`
+	Description            TextFieldView                 `json:"description"`
+	LearningObjectives     []TextFieldView               `json:"learningObjectives"`
+	Blocks                 []TranslationContentBlockView `json:"blocks"`
+	Completeness           Completeness                  `json:"completeness"`
 }
 
 // TranslationContentBlockView is type-aware source context. Asset keys, code,
@@ -69,38 +69,38 @@ type TranslationLessonView struct {
 // only values which participate in translation completeness.
 type TranslationContentBlockView struct {
 	SourceBlockKey string
-	Type           courses.BlockType
+	Type           courses.BlockType `json:"type"`
 	Position       int
-	Fields         map[string]TextFieldView
-	AssetKeys      []string
-	Code           string
-	TableHeaders   []string
-	TableRows      [][]string
-	AssessmentKey  string
+	Fields         map[string]TextFieldView `json:"fields"`
+	AssetKeys      []string                 `json:"assetKeys"`
+	Code           string                   `json:"code"`
+	TableHeaders   []string                 `json:"tableHeaders"`
+	TableRows      [][]string               `json:"tableRows"`
+	AssessmentKey  string                   `json:"assessmentKey"`
 }
 type TranslationAssessmentView struct {
-	AssessmentKey string
-	Questions     []TranslationQuestionView
+	AssessmentKey string                    `json:"assessmentKey"`
+	Questions     []TranslationQuestionView `json:"questions"`
 	Completeness  Completeness
 }
 type TranslationQuestionView struct {
-	SourceStableKey string
+	SourceStableKey string `json:"sourceStableKey"`
 	Type            courses.PublishedAssessmentQuestionType
-	Position        int
-	Prompt          TextFieldView
-	Options         []TranslationOptionView
-	LeftItems       []TranslationItemView
-	RightItems      []TranslationItemView
+	Position        int                     `json:"position"`
+	Prompt          TextFieldView           `json:"prompt"`
+	Options         []TranslationOptionView `json:"options"`
+	LeftItems       []TranslationItemView   `json:"leftItems"`
+	RightItems      []TranslationItemView   `json:"rightItems"`
 }
 type TranslationOptionView struct {
-	SourceStableKey string
-	Position        int
-	Text            TextFieldView
+	SourceStableKey string        `json:"sourceStableKey"`
+	Position        int           `json:"position"`
+	Text            TextFieldView `json:"text"`
 }
 type TranslationItemView struct {
-	SourceStableKey string
-	Position        int
-	Text            TextFieldView
+	SourceStableKey string        `json:"sourceStableKey"`
+	Position        int           `json:"position"`
+	Text            TextFieldView `json:"text"`
 }
 
 // WorkspaceQueryService constructs an authenticated translator view from the

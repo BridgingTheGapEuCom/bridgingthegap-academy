@@ -70,3 +70,38 @@ keys/order, but deliberately omit correct-option keys, matching pairs, and
 other grading internals. If the stored translation tree cannot exactly reconcile
 with its bound source keys and structure, workspace reading fails with a
 controlled source-integrity error rather than guessing or migrating data.
+
+## Authenticated authoring API
+
+M8.1c exposes only private, authenticated translator routes:
+
+- `POST` and `GET /api/courses/by-id/{courseId}/versions/{version}/translations`
+- `GET` and `PATCH /api/translations/{translationId}`
+- `POST /api/translations/{translationId}/publish`
+
+The source route resolves an exact published CourseVersion. Creation accepts only
+`targetLanguage`; the session supplies creator provenance. A duplicate workspace
+returns `translation_already_exists` and never discloses it to a caller without
+source-Course authority. Discovery is exact-version scoped and returns summaries,
+not trees. Existing workspace routes load the stored Translation and authorize
+against its stored source binding, so they use hidden 404 semantics for both
+unknown and unauthorized IDs.
+
+PATCH accepts a non-empty closed list of source-keyed text-field changes and a
+required `expectedRevision`. It supports only modeled text overrides. `null`
+clears an override back to untranslated and `""` records an intentional empty
+translation. It rejects structural fields, assets, code bodies, Assessment
+correctness, arbitrary JSON paths, and unknown source keys. Changes are applied
+atomically; stale revisions return `translation_revision_conflict` without any
+partial write.
+
+Publication requires the authoritative current expected revision and a complete
+workspace. `translation_incomplete` is returned without creating a snapshot.
+Each successful publication stores an immutable snapshot; later edits cannot
+alter it. Reads and publication validation always use the bound exact source
+version, never Authoring or a latest-version lookup.
+
+All authoring responses are `Cache-Control: no-store`. Session middleware
+requires authentication and enforces the existing Origin/CSRF protections for
+create, patch, and publication. Translation frontend and learner-facing
+translation reads remain deferred.

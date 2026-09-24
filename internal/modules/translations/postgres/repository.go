@@ -58,6 +58,28 @@ func (r *Repository) GetBySourceVersionAndLanguage(ctx context.Context, id cours
 	}
 	return result, nil
 }
+func (r *Repository) ListBySourceVersion(ctx context.Context, id courses.CourseVersionID) ([]translations.CourseTranslation, error) {
+	if r == nil || r.pool == nil || !validUUID(string(id)) {
+		return nil, translations.ErrInvalidTranslation
+	}
+	rows, err := r.pool.Query(ctx, `SELECT id,source_course_id,source_course_version_id,source_version,source_language,target_language,creator_user_id,status,revision,translated_tree,created_at,updated_at FROM translations.course_translation WHERE source_course_version_id=$1 ORDER BY target_language,id`, id)
+	if err != nil {
+		return nil, storage(err)
+	}
+	defer rows.Close()
+	result := make([]translations.CourseTranslation, 0)
+	for rows.Next() {
+		value, err := scanTranslation(rows)
+		if err != nil {
+			return nil, storage(err)
+		}
+		result = append(result, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, storage(err)
+	}
+	return result, nil
+}
 func (r *Repository) UpdateTree(ctx context.Context, id translations.TranslationID, expected int64, tree translations.TranslationTree, at time.Time) (translations.CourseTranslation, error) {
 	if r == nil || r.pool == nil || !validUUID(string(id)) || expected < 1 || at.IsZero() || tree.ValidateForPersistence() != nil {
 		return translations.CourseTranslation{}, translations.ErrInvalidTranslation

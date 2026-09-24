@@ -4,6 +4,37 @@ info:
   version: 0.1.0
   description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads and mutations. Authoring responses are no-store. Every Authoring mutation requires a trusted Origin and the authenticated session-bound CSRF token; unauthorized resources are hidden as 404.
 paths:
+  /api/courses/by-id/{courseId}/versions/{version}/translations:
+    get:
+      operationId: listTranslations
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }]
+      responses: { '200': { description: Private exact-source Translation summaries, content: { application/json: { schema: { $ref: '#/components/schemas/TranslationList' } } } }, '401': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' } }
+    post:
+      operationId: createTranslation
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TranslationCreateRequest' } } } }
+      responses: { '201': { description: Created Translation summary, content: { application/json: { schema: { $ref: '#/components/schemas/TranslationSummary' } } } }, '400': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '409': { $ref: '#/components/responses/Problem' } }
+  /api/translations/{translationId}:
+    get:
+      operationId: getTranslationWorkspace
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/TranslationID' }]
+      responses: { '200': { description: Private translator workspace, content: { application/json: { schema: { $ref: '#/components/schemas/TranslationWorkspace' } } } }, '401': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' } }
+    patch:
+      operationId: patchTranslation
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/TranslationID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TranslationPatchRequest' } } } }
+      responses: { '200': { description: Updated Translation summary, content: { application/json: { schema: { $ref: '#/components/schemas/TranslationSummary' } } } }, '400': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '409': { $ref: '#/components/responses/Problem' } }
+  /api/translations/{translationId}/publish:
+    post:
+      operationId: publishTranslation
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/TranslationID' }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TranslationPublishRequest' } } } }
+      responses: { '201': { description: Immutable Translation publication, content: { application/json: { schema: { $ref: '#/components/schemas/TranslationPublication' } } } }, '400': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '409': { $ref: '#/components/responses/Problem' } }
   /api/authoring/drafts:
     get:
       operationId: listAuthoringDrafts
@@ -956,6 +987,7 @@ paths:
                 $ref: '#/components/schemas/Problem'
 components:
   parameters:
+    TranslationID: { name: translationId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringOrigin: { name: Origin, in: header, required: true, schema: { type: string }, description: Trusted application Origin required for browser mutations. }
     AuthoringCSRFToken: { name: X-CSRF-Token, in: header, required: true, schema: { type: string }, description: CSRF token bound to the authenticated session. }
     AuthoringDraftID: { name: draftId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -992,6 +1024,16 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    TranslationCreateRequest: { type: object, additionalProperties: false, required: [targetLanguage], properties: { targetLanguage: { type: string } } }
+    TranslationSummary: { type: object, additionalProperties: false, required: [translationId, targetLanguage, lifecycle, revision, completeness], properties: { translationId: { type: string, format: uuid }, targetLanguage: { type: string }, lifecycle: { type: string, enum: [DRAFT, PUBLISHED] }, revision: { type: integer, minimum: 1 }, completeness: { $ref: '#/components/schemas/TranslationCompleteness' } } }
+    TranslationList: { type: object, additionalProperties: false, required: [translations], properties: { translations: { type: array, items: { $ref: '#/components/schemas/TranslationSummary' } } } }
+    TranslationTextChange: { type: object, additionalProperties: false, required: [target, field, translated], properties: { target: { type: string, enum: [COURSE, MODULE, LESSON, BLOCK, ASSESSMENT_QUESTION, ASSESSMENT_OPTION, ASSESSMENT_LEFT_ITEM, ASSESSMENT_RIGHT_ITEM] }, field: { type: string }, moduleKey: { type: string }, lessonKey: { type: string }, blockKey: { type: string }, assessmentKey: { type: string, format: uuid }, questionKey: { type: string }, itemKey: { type: string }, objective: { type: integer, minimum: 0 }, translated: { type: [string, 'null'] } } }
+    TranslationPatchRequest: { type: object, additionalProperties: false, required: [expectedRevision, changes], properties: { expectedRevision: { type: integer, minimum: 1 }, changes: { type: array, minItems: 1, items: { $ref: '#/components/schemas/TranslationTextChange' } } } }
+    TranslationPublishRequest: { type: object, additionalProperties: false, required: [expectedRevision], properties: { expectedRevision: { type: integer, minimum: 1 } } }
+    TranslationCompleteness: { type: object, additionalProperties: false, required: [totalTranslatableFields, translatedFields, untranslatedFields, complete], properties: { totalTranslatableFields: { type: integer, minimum: 0 }, translatedFields: { type: integer, minimum: 0 }, untranslatedFields: { type: integer, minimum: 0 }, complete: { type: boolean } } }
+    TranslationTextField: { type: object, additionalProperties: false, required: [source, translated, state], properties: { source: { type: string }, translated: { type: [string, 'null'] }, state: { type: string, enum: [UNTRANSLATED, TRANSLATED] } } }
+    TranslationWorkspace: { type: object, description: Private source-plus-override authoring view. Assessment correctness is excluded., required: [translationId, revision, lifecycle, source, targetLanguage, course, modules, assessments, completeness], properties: { translationId: { type: string, format: uuid }, revision: { type: integer, minimum: 1 }, lifecycle: { type: string, enum: [DRAFT, PUBLISHED] }, source: { type: object }, targetLanguage: { type: string }, course: { type: object }, modules: { type: array, items: { type: object } }, assessments: { type: array, items: { type: object } }, completeness: { $ref: '#/components/schemas/TranslationCompleteness' } } }
+    TranslationPublication: { type: object, additionalProperties: false, required: [publicationId, translationId, revision, targetLanguage, sourceCourseId, sourceCourseVersionId, sourceVersion, publishedAt], properties: { publicationId: { type: string, format: uuid }, translationId: { type: string, format: uuid }, revision: { type: integer, minimum: 1 }, targetLanguage: { type: string }, sourceCourseId: { type: string, format: uuid }, sourceCourseVersionId: { type: string, format: uuid }, sourceVersion: { type: string }, publishedAt: { type: string, format: date-time } } }
     AuthoringAsset:
       type: object
       additionalProperties: false

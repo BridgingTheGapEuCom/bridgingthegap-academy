@@ -4,6 +4,54 @@
  */
 
 export interface paths {
+    "/api/courses/by-id/{courseId}/versions/{version}/translations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTranslations"];
+        put?: never;
+        post: operations["createTranslation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/translations/{translationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTranslationWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["patchTranslation"];
+        trace?: never;
+    };
+    "/api/translations/{translationId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["publishTranslation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/authoring/drafts": {
         parameters: {
             query?: never;
@@ -937,6 +985,83 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        TranslationCreateRequest: {
+            targetLanguage: string;
+        };
+        TranslationSummary: {
+            /** Format: uuid */
+            translationId: string;
+            targetLanguage: string;
+            /** @enum {string} */
+            lifecycle: "DRAFT" | "PUBLISHED";
+            revision: number;
+            completeness: components["schemas"]["TranslationCompleteness"];
+        };
+        TranslationList: {
+            translations: components["schemas"]["TranslationSummary"][];
+        };
+        TranslationTextChange: {
+            /** @enum {string} */
+            target: "COURSE" | "MODULE" | "LESSON" | "BLOCK" | "ASSESSMENT_QUESTION" | "ASSESSMENT_OPTION" | "ASSESSMENT_LEFT_ITEM" | "ASSESSMENT_RIGHT_ITEM";
+            field: string;
+            moduleKey?: string;
+            lessonKey?: string;
+            blockKey?: string;
+            /** Format: uuid */
+            assessmentKey?: string;
+            questionKey?: string;
+            itemKey?: string;
+            objective?: number;
+            translated: string | null;
+        };
+        TranslationPatchRequest: {
+            expectedRevision: number;
+            changes: components["schemas"]["TranslationTextChange"][];
+        };
+        TranslationPublishRequest: {
+            expectedRevision: number;
+        };
+        TranslationCompleteness: {
+            totalTranslatableFields: number;
+            translatedFields: number;
+            untranslatedFields: number;
+            complete: boolean;
+        };
+        TranslationTextField: {
+            source: string;
+            translated: string | null;
+            /** @enum {string} */
+            state: "UNTRANSLATED" | "TRANSLATED";
+        };
+        /** @description Private source-plus-override authoring view. Assessment correctness is excluded. */
+        TranslationWorkspace: {
+            /** Format: uuid */
+            translationId: string;
+            revision: number;
+            /** @enum {string} */
+            lifecycle: "DRAFT" | "PUBLISHED";
+            source: Record<string, never>;
+            targetLanguage: string;
+            course: Record<string, never>;
+            modules: Record<string, never>[];
+            assessments: Record<string, never>[];
+            completeness: components["schemas"]["TranslationCompleteness"];
+        };
+        TranslationPublication: {
+            /** Format: uuid */
+            publicationId: string;
+            /** Format: uuid */
+            translationId: string;
+            revision: number;
+            targetLanguage: string;
+            /** Format: uuid */
+            sourceCourseId: string;
+            /** Format: uuid */
+            sourceCourseVersionId: string;
+            sourceVersion: string;
+            /** Format: date-time */
+            publishedAt: string;
+        };
         AuthoringAsset: {
             /**
              * Format: uuid
@@ -2087,6 +2212,7 @@ export interface components {
         };
     };
     parameters: {
+        TranslationID: string;
         /** @description Trusted application Origin required for browser mutations. */
         AuthoringOrigin: string;
         /** @description CSRF token bound to the authenticated session. */
@@ -2114,6 +2240,158 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listTranslations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private exact-source Translation summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createTranslation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created Translation summary */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationSummary"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getTranslationWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                translationId: components["parameters"]["TranslationID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private translator workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationWorkspace"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    patchTranslation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                translationId: components["parameters"]["TranslationID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslationPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated Translation summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationSummary"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    publishTranslation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                translationId: components["parameters"]["TranslationID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslationPublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Immutable Translation publication */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationPublication"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
     listAuthoringDrafts: {
         parameters: {
             query?: never;
