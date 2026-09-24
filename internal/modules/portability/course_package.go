@@ -152,10 +152,12 @@ type Pair struct {
 	RightKey string `json:"rightKey"`
 }
 type TranslationPayload struct {
-	Language      string                       `json:"language"`
-	SourceVersion string                       `json:"sourceVersion"`
-	PublishedAt   time.Time                    `json:"publishedAt"`
-	Tree          translations.TranslationTree `json:"tree"`
+	Language              string                       `json:"language"`
+	SourceCourseID        string                       `json:"sourceCourseId"`
+	SourceCourseVersionID string                       `json:"sourceCourseVersionId"`
+	SourceVersion         string                       `json:"sourceVersion"`
+	PublishedAt           time.Time                    `json:"publishedAt"`
+	Tree                  translations.TranslationTree `json:"tree"`
 }
 type Checksums struct {
 	Entries []ContentEntry `json:"entries"`
@@ -278,7 +280,7 @@ func (e *Exporter) translationsFor(ctx context.Context, v courses.ImmutableCours
 			return nil, nil, ErrExportIntegrity
 		}
 		file := path.Join("translations", string(lang)+".json")
-		body, err := json.Marshal(TranslationPayload{Language: string(lang), SourceVersion: v.CourseVersion.Version.String(), PublishedAt: p.PublishedAt.UTC(), Tree: p.Tree})
+		body, err := json.Marshal(TranslationPayload{Language: string(lang), SourceCourseID: string(v.CourseVersion.CourseID), SourceCourseVersionID: string(v.ID), SourceVersion: v.CourseVersion.Version.String(), PublishedAt: p.PublishedAt.UTC(), Tree: p.Tree})
 		if err != nil {
 			return nil, nil, ErrExportIntegrity
 		}

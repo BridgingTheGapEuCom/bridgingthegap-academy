@@ -32,3 +32,13 @@ For the same immutable inputs and injected `exportedAt`, logical JSON payloads, 
 ## v1 boundaries
 
 No import path, export HTTP endpoint, mutable Draft export, learner data migration, Community export, certificate export, package encryption, or package signing exists in M9.1a. A future importer must validate this strict versioned contract before it creates any local Course records.
+
+## M9.1b validation boundary
+
+Course packages are hostile input. `internal/modules/portability.Reader` accepts a bounded stream, uses a controlled temporary ZIP reader without extracting entries, removes that temporary file before returning, and performs no database, asset-storage, network, Course, or Translation writes.
+
+v1 accepts only `bridging-the-gap-course` format version `1`. It rejects unsafe paths, duplicate entries, special ZIP files, undeclared entries, missing core files, checksum omissions, checksum references to unknown files, excessive archive/input sizes, excessive expanded entry sizes, entry counts, asset counts, translation counts, and excessive compression ratios. JSON is decoded with unknown-field, duplicate-key, and trailing-value rejection.
+
+Validation checks every SHA-256 protected payload and asset binary, reconciles the manifest inventory with the archive, validates Course metadata/order/stable keys/prerequisites/canonical blocks, checks grading-capable Assessment bindings and KNOWLEDGE_CHECK references, requires assets to be referenced exactly as the published Course model requires, and validates complete exact-source Translation trees without accepting translation-specific grading rules. It makes no remote requests.
+
+A successful parse yields an opaque `ValidatedCoursePackage`; only its safe `ImportPreview` is exposed for this slice. The preview has title, version, language, license, public attribution, module/lesson/assessment/asset counts, translation languages, format version, and a package digest. It deliberately omits answer keys and package binary data. ID remapping, duplicate-course policy, persistence, asset ingestion, Draft/Course creation, and any HTTP upload endpoint remain deferred to M9.1c or later.
