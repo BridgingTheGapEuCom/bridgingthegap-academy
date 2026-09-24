@@ -595,6 +595,38 @@ func (q *Queries) CreatePortableSourceCourseMapping(ctx context.Context, arg Cre
 	return local_course_id, err
 }
 
+const finalizeImportRecord = `-- name: FinalizeImportRecord :one
+UPDATE portability.import_record
+SET target_course_id = $2,
+    target_course_version_id = $3
+WHERE id = $1
+  AND target_course_id IS NULL
+  AND target_course_version_id IS NULL
+RETURNING id, package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, target_course_id, target_course_version_id, imported_at
+`
+
+type FinalizeImportRecordParams struct {
+	ID                    pgtype.UUID
+	TargetCourseID        pgtype.UUID
+	TargetCourseVersionID pgtype.UUID
+}
+
+func (q *Queries) FinalizeImportRecord(ctx context.Context, arg FinalizeImportRecordParams) (PortabilityImportRecord, error) {
+	row := q.db.QueryRow(ctx, finalizeImportRecord, arg.ID, arg.TargetCourseID, arg.TargetCourseVersionID)
+	var i PortabilityImportRecord
+	err := row.Scan(
+		&i.ID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.TargetCourseID,
+		&i.TargetCourseVersionID,
+		&i.ImportedAt,
+	)
+	return i, err
+}
+
 const getCourse = `-- name: GetCourse :one
 SELECT id, slug, created_at
 FROM courses.course

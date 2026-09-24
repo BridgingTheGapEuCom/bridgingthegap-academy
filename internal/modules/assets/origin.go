@@ -96,3 +96,12 @@ func (s *ImportIngestionService) ImportValidatedAsset(ctx context.Context, in Im
 	}
 	return asset, nil
 }
+
+// CompensateImportedAsset removes only a binary created for a failed package
+// import. Its metadata must have been rolled back before this is called.
+func (s *ImportIngestionService) CompensateImportedAsset(ctx context.Context, asset Asset) error {
+	if s == nil || s.storage == nil || asset.Origin != OriginPackageImport || asset.Lifecycle != LifecycleAvailable || asset.StorageObjectID == "" {
+		return ErrInvalidAsset
+	}
+	return s.storage.DiscardUncommitted(ctx, asset.StorageObjectID)
+}

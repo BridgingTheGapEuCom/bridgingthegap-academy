@@ -283,6 +283,15 @@ INSERT INTO portability.import_record (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
+-- name: FinalizeImportRecord :one
+UPDATE portability.import_record
+SET target_course_id = $2,
+    target_course_version_id = $3
+WHERE id = $1
+  AND target_course_id IS NULL
+  AND target_course_version_id IS NULL
+RETURNING *;
+
 -- name: CreateCourseVersionImportProvenance :one
 INSERT INTO courses.course_version_import_provenance (course_version_id, import_id)
 VALUES ($1, $2)

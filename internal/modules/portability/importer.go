@@ -9,8 +9,12 @@ import (
 )
 
 var (
-	ErrImportSourceVersionConflict = errors.New("package source version conflicts with an existing import")
-	ErrImportUnavailable           = errors.New("package import persistence unavailable")
+	ErrImportSourceVersionConflict      = errors.New("package source version conflicts with an existing import")
+	ErrImportLocalCourseVersionConflict = errors.New("package version conflicts with an existing local course version")
+	ErrImportStorageFailed              = errors.New("package asset storage failed")
+	ErrImportPersistenceFailed          = errors.New("package import persistence failed")
+	ErrImportCleanupFailed              = errors.New("package import storage cleanup failed")
+	ErrImportUnavailable                = errors.New("package import persistence unavailable")
 )
 
 type ImportDisposition string

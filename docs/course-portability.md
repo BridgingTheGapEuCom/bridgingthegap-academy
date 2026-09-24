@@ -67,3 +67,44 @@ transaction boundary needed by M9.1c2; package import orchestration remains
 deferred. PostgreSQL constrains the per-row origin branches and imported
 source/language uniqueness. Cross-origin stream exclusion and complete tree
 validation are repository/domain invariants rather than cross-row SQL checks.
+
+## M9.1c2 transactional import
+
+`Importer.Import` accepts only the opaque `ValidatedCoursePackage` produced by
+the strict reader. Its PostgreSQL implementation owns one outer transaction.
+It first resolves a completed fingerprint replay, then serializes imports of
+the same portable Course identity with a transaction advisory lock. A portable
+Course identity maps to one fresh local Course ID; later source versions reuse
+that mapping. The same portable CourseVersion with a different package
+fingerprint is rejected, as is a collision with an existing local SemVer.
+
+The import record is inserted transactionally before dependent imported Asset,
+CourseVersion, and Translation provenance rows need its foreign key. Its target
+Course and CourseVersion IDs are finalized only after all immutable writes have
+succeeded. It is therefore never visible as a successful import before the
+single commit. Retrying a committed fingerprint returns the original IDs with
+`REPLAYED`; it does not ingest binaries or create duplicate publications.
+
+Package asset bytes enter only through Assets' validated import-ingestion
+service. Each successful binary is registered for reverse-order compensation.
+Any failure before a confirmed database commit rolls back all database writes,
+then removes only binary objects created by that attempt. A cleanup failure
+keeps the import failed and is surfaced as `import_cleanup_failed`; it never
+turns the operation into success. BinaryStorage remains physically external to
+PostgreSQL, so cleanup requires operations attention if the provider cannot
+remove an orphan.
+
+The orchestrator converts package DTOs to the ordinary immutable Courses and
+Translations models, generating fresh local opaque IDs while preserving module,
+lesson, block, Assessment, question, option, matching-item, prerequisite, and
+portable asset semantic keys. Imported CourseVersions and translations retain
+only truthful import provenance. They create no Draft, Review, local user,
+mutable Translation workspace, learner record, Community content, Certificate,
+or Open Badge. Ordinary catalog, exact-course, published-asset, language, and
+translated-reader paths use the imported records without a portability-specific
+runtime model.
+
+HTTP upload/export endpoints, import UI, imported Course ownership and
+authorization, editing or forking imported content, package merge/overwrite,
+external identity mapping, learner-data migration, and package signing/trust
+remain deferred.
