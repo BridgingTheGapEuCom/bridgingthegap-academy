@@ -186,6 +186,22 @@ func buildWorkspaceView(translation CourseTranslation, source courses.ImmutableC
 	view.Completeness = complete(all)
 	return view, nil
 }
+
+// ValidateImportedPublication applies the same exact-source and completeness
+// rules as authoring publication without creating a mutable workspace.
+func ValidateImportedPublication(source courses.ImmutableCourseVersion, target courses.LanguageTag, tree TranslationTree) error {
+	if source.ID == "" || source.CourseVersion.Status != courses.CourseVersionPublished || target == source.CourseVersion.SourceLanguage {
+		return ErrInvalidTranslation
+	}
+	view, err := buildWorkspaceView(CourseTranslation{Source: SourceCourseVersion{CourseID: source.CourseVersion.CourseID, CourseVersionID: source.ID, Version: source.CourseVersion.Version, Language: source.CourseVersion.SourceLanguage}, TargetLanguage: target, Tree: tree}, source)
+	if err != nil {
+		return err
+	}
+	if !view.Completeness.Complete {
+		return ErrTranslationIncomplete
+	}
+	return nil
+}
 func field(source string, translated *string) TextFieldView {
 	state := FieldUntranslated
 	if translated != nil {

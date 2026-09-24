@@ -54,3 +54,16 @@ PostgreSQL directly constrains the origin discriminators, Asset origin ownership
 The migration creates `portability.import_record` and `portability.source_course_mapping`. Package fingerprints are unique for future replay, while the portable CourseVersion identity is unique for future source/version collision detection.
 
 Courses exposes a transaction-owning convenience write for native publication and a PostgreSQL-adapter `StoreImmutableCourseVersionInTx` variant for platform orchestration. Both delegate to the same immutable write sequence, including provenance, structure, content, asset bindings, and Assessment bindings. The transaction-bound variant never begins, commits, or rolls back its caller transaction. M9.1c2 will own the cross-module transaction; BinaryStorage remains outside PostgreSQL transactions and must still be staged or compensated.
+
+Translation publications now have a corresponding explicit authoring/imported
+origin. A packaged publication is stored directly against the imported local
+CourseVersion with an import-record reference. It does not require a synthetic
+`course_translation` workspace, local translator, or revision history. The
+Translations repository validates the completed tree against that exact source
+and offers `StoreImportedPublicationInTx` for the caller-owned transaction. The
+ordinary learner read and language-discovery paths include these publications
+without exposing import provenance. This closes the Translation provenance and
+transaction boundary needed by M9.1c2; package import orchestration remains
+deferred. PostgreSQL constrains the per-row origin branches and imported
+source/language uniqueness. Cross-origin stream exclusion and complete tree
+validation are repository/domain invariants rather than cross-row SQL checks.

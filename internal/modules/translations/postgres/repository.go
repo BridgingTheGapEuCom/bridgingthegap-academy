@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -102,7 +103,7 @@ func (r *Repository) UpdateTree(ctx context.Context, id translations.Translation
 	return result, nil
 }
 func (r *Repository) Publish(ctx context.Context, id translations.TranslationID, input translations.TranslationPublication, at time.Time) (translations.TranslationPublication, error) {
-	if r == nil || r.pool == nil || !validUUID(string(id)) || input.TranslationID != id || input.Source.Validate() != nil || input.TargetLanguage == "" || input.Revision < 1 || at.IsZero() || input.Tree.ValidateForPersistence() != nil {
+	if r == nil || r.pool == nil || !validUUID(string(id)) || input.TranslationID != id || input.Source.Validate() != nil || input.TargetLanguage == "" || input.Revision < 1 || at.IsZero() || input.Tree.ValidateForPersistence() != nil || input.Provenance.Validate() != nil || input.Provenance.Origin != translations.PublicationOriginAuthoring || input.Provenance.Authoring.TranslationID != id || input.Provenance.Authoring.Revision != input.Revision {
 		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
 	}
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -110,6 +111,16 @@ func (r *Repository) Publish(ctx context.Context, id translations.TranslationID,
 		return translations.TranslationPublication{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := lockPublicationStream(ctx, tx, input.Source.CourseVersionID, input.TargetLanguage); err != nil {
+		return translations.TranslationPublication{}, storage(err)
+	}
+	var importedExists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM translations.translation_publication WHERE source_course_version_id=$1 AND target_language=$2 AND publication_origin='IMPORTED_PUBLICATION')`, input.Source.CourseVersionID, input.TargetLanguage).Scan(&importedExists); err != nil {
+		return translations.TranslationPublication{}, storage(err)
+	}
+	if importedExists {
+		return translations.TranslationPublication{}, translations.ErrTranslationConflict
+	}
 	current, err := scanTranslation(tx.QueryRow(ctx, `SELECT id,source_course_id,source_course_version_id,source_version,source_language,target_language,creator_user_id,status,revision,translated_tree,created_at,updated_at FROM translations.course_translation WHERE id=$1 FOR UPDATE`, id))
 	if err != nil {
 		return translations.TranslationPublication{}, storage(err)
@@ -121,14 +132,18 @@ func (r *Repository) Publish(ctx context.Context, id translations.TranslationID,
 	if err != nil {
 		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
 	}
-	publication, err := scanPublication(tx.QueryRow(ctx, `INSERT INTO translations.translation_publication(translation_id,source_course_id,source_course_version_id,source_version,source_language,target_language,translation_revision,translated_tree,published_at)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-RETURNING id,translation_id,source_course_id,source_course_version_id,source_version,source_language,target_language,translation_revision,translated_tree,published_at`, id, input.Source.CourseID, input.Source.CourseVersionID, input.Source.Version.String(), input.Source.Language, input.TargetLanguage, input.Revision, encoded, at.UTC()))
+	var publicationID translations.TranslationPublicationID
+	err = tx.QueryRow(ctx, `INSERT INTO translations.translation_publication(translation_id,source_course_id,source_course_version_id,source_version,source_language,target_language,translation_revision,translated_tree,published_at,publication_origin)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'AUTHORING_PUBLICATION') RETURNING id`, id, input.Source.CourseID, input.Source.CourseVersionID, input.Source.Version.String(), input.Source.Language, input.TargetLanguage, input.Revision, encoded, at.UTC()).Scan(&publicationID)
 	if err != nil {
 		return translations.TranslationPublication{}, storage(err)
 	}
 	if _, err = tx.Exec(ctx, `UPDATE translations.course_translation SET status='PUBLISHED',updated_at=$2 WHERE id=$1`, id, at.UTC()); err != nil {
 		return translations.TranslationPublication{}, storage(err)
+	}
+	publication, err := getPublicationByID(ctx, tx, publicationID)
+	if err != nil {
+		return translations.TranslationPublication{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return translations.TranslationPublication{}, err
@@ -139,12 +154,90 @@ func (r *Repository) GetLatestPublication(ctx context.Context, sourceID courses.
 	if r == nil || r.pool == nil || !validUUID(string(sourceID)) || language == "" {
 		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
 	}
-	result, err := scanPublication(r.pool.QueryRow(ctx, `SELECT id,translation_id,source_course_id,source_course_version_id,source_version,source_language,target_language,translation_revision,translated_tree,published_at FROM translations.translation_publication WHERE source_course_version_id=$1 AND target_language=$2 ORDER BY translation_revision DESC,id DESC LIMIT 1`, sourceID, language))
+	return getLatestPublication(ctx, r.pool, sourceID, language)
+}
+
+type publicationQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+const publicationColumns = `p.id,p.translation_id,p.source_course_id,p.source_course_version_id,p.source_version,p.source_language,p.target_language,p.translation_revision,p.translated_tree,p.published_at,p.publication_origin,p.import_id,r.package_fingerprint,r.portable_source_course_id,r.portable_source_course_version_id,r.imported_at,r.source_version`
+
+func getLatestPublication(ctx context.Context, q publicationQuerier, sourceID courses.CourseVersionID, language courses.LanguageTag) (translations.TranslationPublication, error) {
+	result, err := scanPublication(q.QueryRow(ctx, `SELECT `+publicationColumns+` FROM translations.translation_publication p LEFT JOIN portability.import_record r ON r.id=p.import_id WHERE p.source_course_version_id=$1 AND p.target_language=$2 ORDER BY p.translation_revision DESC NULLS LAST,p.published_at DESC,p.id DESC LIMIT 1`, sourceID, language))
 	if err != nil {
 		return translations.TranslationPublication{}, storage(err)
 	}
 	return result, nil
 }
+
+func lockPublicationStream(ctx context.Context, tx pgx.Tx, sourceID courses.CourseVersionID, language courses.LanguageTag) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))`, sourceID, language)
+	return err
+}
+
+// StoreImportedPublicationInTx writes a completed immutable translation using
+// the caller's transaction. It creates no workspace and owns no tx lifecycle.
+func (r *Repository) StoreImportedPublicationInTx(ctx context.Context, tx pgx.Tx, source courses.ImmutableCourseVersion, target courses.LanguageTag, tree translations.TranslationTree, provenance translations.ImportedPublicationProvenance, publishedAt time.Time) (translations.TranslationPublication, error) {
+	if r == nil || tx == nil || source.ID == "" || source.CourseVersion.Status != courses.CourseVersionPublished || provenance.ImportedAt.IsZero() || publishedAt.IsZero() {
+		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
+	}
+	binding := translations.SourceCourseVersion{CourseID: source.CourseVersion.CourseID, CourseVersionID: source.ID, Version: source.CourseVersion.Version, Language: source.CourseVersion.SourceLanguage}
+	input := translations.TranslationPublication{Source: binding, TargetLanguage: target, Tree: tree, PublishedAt: publishedAt, Provenance: translations.PublicationProvenance{Origin: translations.PublicationOriginImported, Imported: &provenance}}
+	if input.Provenance.Validate() != nil || translations.ValidateImportedPublication(source, target, tree) != nil || target == "" {
+		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
+	}
+	if normalized, err := courses.NormalizeLanguageTag(string(target)); err != nil || normalized != target {
+		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
+	}
+	var persistedCourseID, persistedVersionID string
+	var persistedVersion, persistedLanguage, persistedStatus string
+	err := tx.QueryRow(ctx, `SELECT course_id::text,id::text,version,source_language,status FROM courses.course_version WHERE id=$1`, source.ID).Scan(&persistedCourseID, &persistedVersionID, &persistedVersion, &persistedLanguage, &persistedStatus)
+	if err != nil {
+		return translations.TranslationPublication{}, storage(err)
+	}
+	if persistedCourseID != string(binding.CourseID) || persistedVersionID != string(binding.CourseVersionID) || persistedVersion != binding.Version.String() || persistedLanguage != string(binding.Language) || persistedStatus != "PUBLISHED" {
+		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
+	}
+	var persistedFingerprint, portableCourseID, portableVersionID, importedVersion string
+	var persistedImportedAt time.Time
+	err = tx.QueryRow(ctx, `SELECT package_fingerprint,portable_source_course_id,portable_source_course_version_id,source_version,imported_at FROM portability.import_record WHERE id=$1`, provenance.ImportID).Scan(&persistedFingerprint, &portableCourseID, &portableVersionID, &importedVersion, &persistedImportedAt)
+	if err != nil {
+		return translations.TranslationPublication{}, storage(err)
+	}
+	if persistedFingerprint != provenance.PackageFingerprint || portableCourseID != provenance.PortableSourceCourseID || portableVersionID != provenance.PortableSourceCourseVersionID || importedVersion != binding.Version.String() || !persistedImportedAt.Equal(provenance.ImportedAt) {
+		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
+	}
+	if err := lockPublicationStream(ctx, tx, source.ID, target); err != nil {
+		return translations.TranslationPublication{}, storage(err)
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM translations.translation_publication WHERE source_course_version_id=$1 AND target_language=$2)`, source.ID, target).Scan(&exists); err != nil {
+		return translations.TranslationPublication{}, storage(err)
+	}
+	if exists {
+		return translations.TranslationPublication{}, translations.ErrTranslationConflict
+	}
+	encoded, err := json.Marshal(tree)
+	if err != nil {
+		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
+	}
+	var id translations.TranslationPublicationID
+	err = tx.QueryRow(ctx, `INSERT INTO translations.translation_publication(source_course_id,source_course_version_id,source_version,source_language,target_language,translated_tree,published_at,publication_origin,import_id) VALUES($1,$2,$3,$4,$5,$6,$7,'IMPORTED_PUBLICATION',$8) RETURNING id`, binding.CourseID, binding.CourseVersionID, binding.Version.String(), binding.Language, target, encoded, publishedAt.UTC(), provenance.ImportID).Scan(&id)
+	if err != nil {
+		return translations.TranslationPublication{}, storage(err)
+	}
+	return getPublicationByID(ctx, tx, id)
+}
+
+func getPublicationByID(ctx context.Context, q publicationQuerier, id translations.TranslationPublicationID) (translations.TranslationPublication, error) {
+	result, err := scanPublication(q.QueryRow(ctx, `SELECT `+publicationColumns+` FROM translations.translation_publication p LEFT JOIN portability.import_record r ON r.id=p.import_id WHERE p.id=$1`, id))
+	if err != nil {
+		return translations.TranslationPublication{}, storage(err)
+	}
+	return result, nil
+}
+
 func (r *Repository) ListLanguages(ctx context.Context, sourceID courses.CourseVersionID) ([]courses.LanguageTag, error) {
 	if r == nil || r.pool == nil || !validUUID(string(sourceID)) {
 		return nil, translations.ErrInvalidTranslation
@@ -199,9 +292,31 @@ func scanPublication(row scanner) (translations.TranslationPublication, error) {
 	var p translations.TranslationPublication
 	var version string
 	var tree []byte
-	err := row.Scan(&p.ID, &p.TranslationID, &p.Source.CourseID, &p.Source.CourseVersionID, &version, &p.Source.Language, &p.TargetLanguage, &p.Revision, &tree, &p.PublishedAt)
+	var workspaceID, importID pgtype.UUID
+	var revision pgtype.Int8
+	var origin string
+	var fingerprint, portableCourseID, portableVersionID pgtype.Text
+	var importedSourceVersion pgtype.Text
+	var importedAt pgtype.Timestamptz
+	err := row.Scan(&p.ID, &workspaceID, &p.Source.CourseID, &p.Source.CourseVersionID, &version, &p.Source.Language, &p.TargetLanguage, &revision, &tree, &p.PublishedAt, &origin, &importID, &fingerprint, &portableCourseID, &portableVersionID, &importedAt, &importedSourceVersion)
 	if err != nil {
 		return translations.TranslationPublication{}, err
+	}
+	switch translations.PublicationOrigin(origin) {
+	case translations.PublicationOriginAuthoring:
+		if !workspaceID.Valid || !revision.Valid || importID.Valid || fingerprint.Valid || portableCourseID.Valid || portableVersionID.Valid || importedAt.Valid || importedSourceVersion.Valid {
+			return translations.TranslationPublication{}, translations.ErrInvalidTranslation
+		}
+		p.TranslationID = translations.TranslationID(workspaceID.String())
+		p.Revision = revision.Int64
+		p.Provenance = translations.PublicationProvenance{Origin: translations.PublicationOriginAuthoring, Authoring: &translations.AuthoringPublicationProvenance{TranslationID: p.TranslationID, Revision: p.Revision}}
+	case translations.PublicationOriginImported:
+		if workspaceID.Valid || revision.Valid || !importID.Valid || !fingerprint.Valid || !portableCourseID.Valid || !portableVersionID.Valid || !importedAt.Valid || !importedSourceVersion.Valid || importedSourceVersion.String != version {
+			return translations.TranslationPublication{}, translations.ErrInvalidTranslation
+		}
+		p.Provenance = translations.PublicationProvenance{Origin: translations.PublicationOriginImported, Imported: &translations.ImportedPublicationProvenance{ImportID: importID.String(), PackageFingerprint: fingerprint.String, PortableSourceCourseID: portableCourseID.String, PortableSourceCourseVersionID: portableVersionID.String, ImportedAt: importedAt.Time.UTC()}}
+	default:
+		return translations.TranslationPublication{}, translations.ErrInvalidTranslation
 	}
 	parsed, err := courses.ParseVersion(version)
 	if err != nil {

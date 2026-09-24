@@ -64,6 +64,7 @@ type TranslationPublication struct {
 	Revision       int64
 	Tree           TranslationTree
 	PublishedAt    time.Time
+	Provenance     PublicationProvenance `json:"-"`
 }
 
 // TranslationTree mirrors source ordering and stable keys. Nil text pointers
@@ -161,8 +162,18 @@ func (t CourseTranslation) Validate() error {
 }
 
 func (p TranslationPublication) Validate() error {
-	if !validUUID(string(p.ID)) || !validUUID(string(p.TranslationID)) || p.Source.Validate() != nil || p.TargetLanguage == "" || p.TargetLanguage == p.Source.Language || p.Revision < 1 || p.PublishedAt.IsZero() {
+	if !validUUID(string(p.ID)) || p.Source.Validate() != nil || p.TargetLanguage == "" || p.TargetLanguage == p.Source.Language || p.PublishedAt.IsZero() || p.Provenance.Validate() != nil {
 		return ErrInvalidTranslation
+	}
+	switch p.Provenance.Origin {
+	case PublicationOriginAuthoring:
+		if !validUUID(string(p.TranslationID)) || p.Revision < 1 || p.Provenance.Authoring.TranslationID != p.TranslationID || p.Provenance.Authoring.Revision != p.Revision {
+			return ErrInvalidTranslation
+		}
+	case PublicationOriginImported:
+		if p.TranslationID != "" || p.Revision != 0 {
+			return ErrInvalidTranslation
+		}
 	}
 	if normalized, err := courses.NormalizeLanguageTag(string(p.TargetLanguage)); err != nil || normalized != p.TargetLanguage {
 		return ErrInvalidTranslation

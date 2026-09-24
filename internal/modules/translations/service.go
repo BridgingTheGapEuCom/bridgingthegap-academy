@@ -118,7 +118,7 @@ func (s *Service) PublishExpected(ctx context.Context, id TranslationID, expecte
 		return TranslationPublication{}, err
 	}
 	now := s.now().UTC()
-	publication := TranslationPublication{TranslationID: id, Source: translation.Source, TargetLanguage: translation.TargetLanguage, Revision: translation.Revision, Tree: tree, PublishedAt: now}
+	publication := TranslationPublication{TranslationID: id, Source: translation.Source, TargetLanguage: translation.TargetLanguage, Revision: translation.Revision, Tree: tree, PublishedAt: now, Provenance: PublicationProvenance{Origin: PublicationOriginAuthoring, Authoring: &AuthoringPublicationProvenance{TranslationID: id, Revision: translation.Revision}}}
 	return s.repository.Publish(ctx, id, publication, now)
 }
 func (s *Service) Get(ctx context.Context, id TranslationID) (CourseTranslation, error) {

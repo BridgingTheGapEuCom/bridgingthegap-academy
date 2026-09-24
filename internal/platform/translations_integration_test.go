@@ -93,6 +93,17 @@ func testTranslationPersistence(t *testing.T, ctx context.Context, pool *pgxpool
 	if err != nil {
 		t.Fatal(err)
 	}
+	if first.Provenance.Origin != translations.PublicationOriginAuthoring || first.Provenance.Authoring == nil || first.Provenance.Imported != nil {
+		t.Fatalf("native Translation provenance = %#v", first.Provenance)
+	}
+	var nativeOrigin string
+	var nativeImportID *string
+	if err := pool.QueryRow(ctx, `SELECT publication_origin,import_id::text FROM translations.translation_publication WHERE id=$1`, first.ID).Scan(&nativeOrigin, &nativeImportID); err != nil {
+		t.Fatal(err)
+	}
+	if nativeOrigin != string(translations.PublicationOriginAuthoring) || nativeImportID != nil {
+		t.Fatalf("native Translation database provenance origin=%q import=%v", nativeOrigin, nativeImportID)
+	}
 	if first.Revision != es.Revision || first.Tree.Title == nil || *first.Tree.Title != title {
 		t.Fatalf("publication did not freeze current tree: %#v", first)
 	}

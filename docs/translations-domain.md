@@ -151,3 +151,24 @@ its fixed translated source version and the newer source version, then offers a
 learner-chosen route to that newer source version without carrying an unavailable
 language query. Attempts, Community, and certificates retain their existing
 CourseVersion/Course identities across presentation-language changes.
+
+## Publication origins for package import
+
+An immutable `TranslationPublication` has an explicit `AUTHORING_PUBLICATION` or
+`IMPORTED_PUBLICATION` origin. The authoring branch requires its mutable
+`course_translation` workspace and published revision, preserving the existing
+creator and revision history. The imported branch instead requires a portability
+import record, package fingerprint, portable source identities, and import time.
+It binds directly to the imported local CourseVersion and has no workspace,
+creator, or invented revision. Imported publications cannot be edited directly;
+creating a local editing workspace from one is future work.
+
+Both origins store the same immutable translated tree and use the same learner
+read and exact-version language discovery. Import provenance stays out of public
+Course responses and grants no authoring capability. The imported repository
+write accepts a caller-owned PostgreSQL transaction and neither commits nor
+rolls it back, so a later import failure can remove the CourseVersion and its
+translation together. Publication selection remains deterministic: native
+revision order takes precedence where native history exists, then publication
+time and ID break ties. Repository writes prevent an imported and authoring
+publication stream for the same exact source version and target language.
