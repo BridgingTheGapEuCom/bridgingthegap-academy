@@ -105,3 +105,9 @@ All authoring responses are `Cache-Control: no-store`. Session middleware
 requires authentication and enforces the existing Origin/CSRF protections for
 create, patch, and publication. Translation frontend and learner-facing
 translation reads remain deferred.
+
+## Translator authoring UI
+
+The private translator UI uses `/authoring/courses/{courseId}/versions/{version}/translations` for exact-source discovery and creation, and `/authoring/translations/{translationId}` for a reload-safe workspace. It always displays the bound source SemVer and language, never a latest-version claim. Translators compare read-only source text with editable translation values, save explicit source-keyed changes manually, and receive the server-authoritative completeness result after a save.
+
+An empty saved input is an intentional empty translation. The separate **Mark as untranslated** action sends `null`; it is the only UI action that clears an override. Save conflicts retain local text and offer a reload action. Publishing is available only when the server says the workspace is complete and requires a concise browser confirmation. The pages use grouped labels, semantic headings, native controls, textual status messages, and vertically stack naturally at narrow widths. Learner translation delivery, language selection, and source migration remain deferred.

@@ -28,6 +28,8 @@ import AuthoringDraftReviewPage from './pages/AuthoringDraftReviewPage.vue'
 import AuthoringDraftReviewSnapshotPage from './pages/AuthoringDraftReviewSnapshotPage.vue'
 import AuthoringDraftAssessmentsPage from './pages/AuthoringDraftAssessmentsPage.vue'
 import AuthoringDraftAssessmentPage from './pages/AuthoringDraftAssessmentPage.vue'
+import TranslationListPage from './pages/TranslationListPage.vue'
+import TranslationWorkspacePage from './pages/TranslationWorkspacePage.vue'
 import './style.css'
 
 const i18n = createI18n({
@@ -55,6 +57,8 @@ const router = createRouter({
     { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: LessonPage },
     { path: '/authoring', name: 'authoring-home', component: AuthoringHomePage, meta: { requiresAuth: true } },
     { path: '/authoring/new', name: 'authoring-draft-create', component: AuthoringDraftCreatePage, meta: { requiresAuth: true } },
+    { path: '/authoring/courses/:courseId/versions/:version/translations', name: 'translation-list', component: TranslationListPage, meta: { requiresAuth: true } },
+    { path: '/authoring/translations/:translationId', name: 'translation-workspace', component: TranslationWorkspacePage, meta: { requiresAuth: true } },
     {
       path: '/authoring/drafts/:draftId',
       component: AuthoringDraftShell,

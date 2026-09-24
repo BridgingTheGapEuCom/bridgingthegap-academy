@@ -642,3 +642,4 @@
   .site-navigation { gap: var(--btg-space-3); font-size: var(--btg-font-size-small); }
   .site-brand__context { display: none; }
 }
+.translation-field{margin:1.25rem 0;padding:1rem;border:1px solid var(--color-border, #b8c0c5);border-radius:.5rem}.translation-field__source{white-space:pre-wrap;color:inherit}.translation-field textarea{width:100%;min-height:7rem}.translation-list{padding-left:1.25rem}.translation-list article{padding:1rem 0;border-bottom:1px solid var(--color-border, #b8c0c5)}@media(max-width:480px){.translation-field{padding:.75rem}}
