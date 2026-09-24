@@ -24,6 +24,10 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges"
+	statuspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/publication"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/signing"
 	credentialspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
@@ -92,6 +96,24 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	}
 	coursesRepository := coursespostgres.New(pool)
 	certificateRepository := credentialspostgres.New(pool)
+	var badgePublication *publication.Service
+	if cfg.openBadgesSeed != "" {
+		key, keyErr := signing.NewLocalKey(cfg.OpenBadgesKeyID, cfg.CertificateIssuer.ID, string(cfg.openBadgesSeed))
+		if keyErr != nil {
+			return keyErr
+		}
+		mapper, mapErr := openbadges.NewMapper(openbadges.Config{PublicBaseURL: cfg.PublicOrigin, SubjectSalt: []byte(cfg.OpenBadgesSubjectSecret)})
+		if mapErr != nil {
+			return mapErr
+		}
+		badgePublication, mapErr = publication.NewService(certificateRepository, statuspostgres.New(pool), mapper, key, cfg.CertificateIssuer, time.Now)
+		if mapErr != nil {
+			return mapErr
+		}
+		if mapErr = badgePublication.RegisterKey(ctx); mapErr != nil {
+			return mapErr
+		}
+	}
 	certificateIssuance, err := credentials.NewCertificateIssuanceService(certificateRepository, coursesRepository, progresspostgres.New(pool), cfg.CertificateIssuer, time.Now)
 	if err != nil {
 		return err
@@ -130,6 +152,10 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		community:                   community.NewService(communitypostgres.New(pool), coursesRepository),
 		certificateIssuance:         certificateIssuance,
 		certificates:                certificateRepository,
+		badgePublication:            badgePublication,
+		badgePublicOrigin:           cfg.PublicOrigin,
+		badgeIssuer:                 cfg.CertificateIssuer,
+		achievementVersions:         coursesRepository,
 		assetMaxBytes:               cfg.AssetMaxBytes,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
@@ -204,6 +230,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 			}
 			if auth.certificates != nil {
 				api.Get("/public/certificates/{certificateId}", auth.handlePublicCertificate)
+			}
+			if auth.badgePublication != nil {
+				api.Get("/public/open-badges/{certificateId}", auth.handleSignedOpenBadge)
 			}
 			if auth.publishedAssets != nil && auth.assetStorage != nil {
 				api.Get("/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}", auth.handlePublishedCourseAsset)
@@ -307,6 +336,18 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 		r.Handle("/api/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			problem(w, req, http.StatusNotFound, "Not found")
 		}))
+	}
+	if auth != nil && auth.badgePublication != nil {
+		r.Get("/open-badges/issuer", auth.handleOpenBadgesIssuer)
+		r.Get("/open-badges/status/revocation/{listId}", auth.handleSignedStatusList)
+		r.Get("/achievements/course-versions/{versionId}", auth.handleOpenBadgesAchievement)
+		r.Get("/verify/certificates/{certificateId}", func(w http.ResponseWriter, req *http.Request) {
+			if strings.Contains(req.Header.Get("Accept"), "application/vc") {
+				auth.handleSignedOpenBadge(w, req)
+				return
+			}
+			web.Serve(w, req)
+		})
 	}
 	r.Get("/*", web.Serve)
 	return r

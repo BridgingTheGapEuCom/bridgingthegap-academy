@@ -108,7 +108,7 @@ func (s *CertificateIssuanceService) Issue(ctx context.Context, learnerID string
 	if eligibility.Status != EligibilityEligible {
 		return IssuanceResult{Eligibility: eligibility}, nil
 	}
-	achievement, err := CourseCompletionAchievement(immutable, courseCompletionCriteriaText)
+	achievement, err := CourseCompletionAchievement(immutable, CourseCompletionCriteriaText)
 	if err != nil {
 		return IssuanceResult{}, ErrEligibilityUnavailable
 	}
@@ -121,7 +121,8 @@ func (s *CertificateIssuanceService) Issue(ctx context.Context, learnerID string
 	return IssuanceResult{Eligibility: Eligibility{Status: EligibilityEligible}, Certificate: &certificate}, nil
 }
 
-const courseCompletionCriteriaText = "Completed every published lesson in this CourseVersion."
+const CourseCompletionCriteriaText = "Completed every published lesson in this CourseVersion."
+const courseCompletionCriteriaText = CourseCompletionCriteriaText
 
 func (s *CertificateIssuanceService) exactCourseVersion(ctx context.Context, courseID courses.CourseID, version courses.Version) (courses.ImmutableCourseVersion, error) {
 	if s == nil || s.courses == nil || !validUUID(string(courseID)) || !version.Valid() {

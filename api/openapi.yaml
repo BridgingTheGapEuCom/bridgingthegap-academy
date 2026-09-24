@@ -713,6 +713,39 @@ paths:
       responses:
         '200': { description: Privacy-preserving public Certificate verification, content: { application/json: { schema: { $ref: '#/components/schemas/PublicCertificate' } } } }
         '404': { $ref: '#/components/responses/Problem' }
+  /api/public/open-badges/{certificateId}:
+    get:
+      operationId: getSignedOpenBadge
+      description: Public signed Open Badges 3.0 credential with a revocation status-list reference. The proof and current status must both be verified.
+      parameters: [{ $ref: '#/components/parameters/CertificateID' }]
+      responses:
+        '200': { description: Signed immutable credential, content: { application/vc: { schema: { $ref: '#/components/schemas/SignedOpenBadge' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /open-badges/issuer:
+    get:
+      operationId: getOpenBadgesIssuerController
+      description: Public controller document retaining historical assertion verification methods.
+      responses:
+        '200': { description: Issuer controller document, content: { application/json: { schema: { $ref: '#/components/schemas/OpenBadgesController' } } } }
+        '503': { $ref: '#/components/responses/Problem' }
+  /open-badges/status/revocation/{listId}:
+    get:
+      operationId: getSignedOpenBadgesStatusList
+      description: Current fully signed Bitstring Status List snapshot; unavailable when a fresh secured snapshot cannot be produced.
+      parameters: [{ name: listId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: Signed status-list Verifiable Credential, content: { application/vc: { schema: { $ref: '#/components/schemas/SignedStatusListCredential' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /achievements/course-versions/{versionId}:
+    get:
+      operationId: getOpenBadgesAchievement
+      description: Public exact published CourseVersion achievement; contains no learner identity.
+      parameters: [{ name: versionId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: Exact-version Achievement, content: { application/json: { schema: { $ref: '#/components/schemas/OpenBadgesAchievement' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
   /api/courses/by-id/{courseId}/community:
     get:
       operationId: getCourseCommunity
@@ -1631,6 +1664,69 @@ components:
         stableKey: { type: string, minLength: 1, maxLength: 160 }
         text: { type: string, minLength: 1, maxLength: 4000 }
         position: { type: integer, minimum: 0 }
+    DataIntegrityProof:
+      type: object
+      additionalProperties: false
+      required: [type, cryptosuite, created, verificationMethod, proofPurpose, proofValue]
+      properties: { type: { type: string, const: DataIntegrityProof }, cryptosuite: { type: string, const: eddsa-rdfc-2022 }, created: { type: string, format: date-time }, verificationMethod: { type: string, format: uri }, proofPurpose: { type: string, const: assertionMethod }, proofValue: { type: string, pattern: '^z' } }
+    OpenBadgesMultikey:
+      type: object
+      additionalProperties: false
+      required: [id, type, controller, publicKeyMultibase]
+      properties: { id: { type: string, format: uri }, type: { type: string, const: Multikey }, controller: { type: string, format: uri }, publicKeyMultibase: { type: string, pattern: '^z' } }
+    OpenBadgesController:
+      type: object
+      additionalProperties: false
+      required: ['@context', id, verificationMethod, assertionMethod]
+      properties:
+        '@context': { type: array, items: { type: string, format: uri } }
+        id: { type: string, format: uri }
+        name: { type: string }
+        verificationMethod: { type: array, items: { $ref: '#/components/schemas/OpenBadgesMultikey' } }
+        assertionMethod: { type: array, items: { type: string, format: uri } }
+    OpenBadgesStatusReference:
+      type: object
+      additionalProperties: false
+      required: [id, type, statusPurpose, statusListIndex, statusListCredential]
+      properties: { id: { type: string, format: uri }, type: { type: string, const: BitstringStatusListEntry }, statusPurpose: { type: string, const: revocation }, statusListIndex: { type: string, pattern: '^[0-9]+$' }, statusListCredential: { type: string, format: uri } }
+    SignedOpenBadge:
+      type: object
+      additionalProperties: false
+      required: ['@context', id, type, issuer, validFrom, credentialSubject, credentialStatus, proof]
+      properties:
+        '@context': { type: array, items: { type: string, format: uri } }
+        id: { type: string, format: uri }
+        type: { type: array, items: { type: string } }
+        issuer: { type: object, required: [id, type, name], properties: { id: { type: string, format: uri }, type: { type: array, items: { type: string } }, name: { type: string } } }
+        validFrom: { type: string, format: date-time }
+        credentialSubject: { type: object, required: [id, type, achievement], properties: { id: { type: string }, type: { type: array, items: { type: string } }, achievement: { type: object } } }
+        credentialStatus: { $ref: '#/components/schemas/OpenBadgesStatusReference' }
+        proof: { $ref: '#/components/schemas/DataIntegrityProof' }
+    SignedStatusListCredential:
+      type: object
+      additionalProperties: false
+      required: ['@context', id, type, issuer, validFrom, credentialSubject, proof]
+      properties:
+        '@context': { type: array, items: { type: string, format: uri } }
+        id: { type: string, format: uri }
+        type: { type: array, items: { type: string } }
+        issuer: { type: object, required: [id, type, name], properties: { id: { type: string, format: uri }, type: { type: array, items: { type: string } }, name: { type: string } } }
+        validFrom: { type: string, format: date-time }
+        credentialSubject: { type: object, required: [id, type, statusPurpose, encodedList], properties: { id: { type: string, format: uri }, type: { type: string, const: BitstringStatusList }, statusPurpose: { type: string, const: revocation }, encodedList: { type: string, pattern: '^u' } } }
+        proof: { $ref: '#/components/schemas/DataIntegrityProof' }
+    OpenBadgesAchievement:
+      type: object
+      required: ['@context', id, type, name, description, version, inLanguage, criteria, creator]
+      properties:
+        '@context': { type: array, items: { type: string, format: uri } }
+        id: { type: string, format: uri }
+        type: { type: string, const: Achievement }
+        name: { type: string }
+        description: { type: string }
+        version: { type: string }
+        inLanguage: { type: string }
+        criteria: { type: object, required: [narrative], properties: { narrative: { type: string } } }
+        creator: { type: object, required: [id, type, name], properties: { id: { type: string, format: uri }, type: { type: array, items: { type: string } }, name: { type: string } } }
     CertificateIssuer:
       type: object
       additionalProperties: false

@@ -21,7 +21,7 @@ func (r *Repository) Snapshot(ctx context.Context, listID string) (openbadges.St
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var list openbadges.StatusList
-	err = tx.QueryRow(ctx, `SELECT id,capacity,status_purpose FROM open_badges.status_list WHERE id=$1`, listID).Scan(&list.ID, &list.Capacity, &list.StatusPurpose)
+	err = tx.QueryRow(ctx, `SELECT id,capacity,status_purpose,lifecycle_revision FROM open_badges.status_list WHERE id=$1`, listID).Scan(&list.ID, &list.Capacity, &list.StatusPurpose, &list.LifecycleRevision)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return list, nil, openbadges.ErrStatusEntryNotFound
 	}

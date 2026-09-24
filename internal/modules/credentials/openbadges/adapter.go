@@ -72,13 +72,22 @@ func NewMapper(config Config) (*Mapper, error) {
 	return &Mapper{base: u, salt: append([]byte(nil), config.SubjectSalt...)}, nil
 }
 func (m *Mapper) Map(c credentials.Certificate) (Credential, error) {
+	return m.mapCertificate(c, false)
+}
+
+// MapForSigning uses frozen facts for either lifecycle state. The mutable
+// status is represented by a separate signed status-list credential.
+func (m *Mapper) MapForSigning(c credentials.Certificate) (Credential, error) {
+	return m.mapCertificate(c, true)
+}
+func (m *Mapper) mapCertificate(c credentials.Certificate, allowRevoked bool) (Credential, error) {
 	if m == nil || m.base == nil || len(m.salt) < 32 {
 		return Credential{}, ErrInvalidConfiguration
 	}
 	if c.Validate() != nil {
 		return Credential{}, ErrInvalidCertificate
 	}
-	if c.Status == credentials.CertificateRevoked {
+	if c.Status == credentials.CertificateRevoked && !allowRevoked {
 		return Credential{}, ErrRevokedCertificate
 	}
 	issuer, err := profile(c.Issuer)

@@ -21,9 +21,10 @@ var (
 // StatusList is an immutable allocation identity; EntryCount is not part of
 // its payload. Certificate lifecycle is the sole source of revocation truth.
 type StatusList struct {
-	ID            string
-	Capacity      int
-	StatusPurpose string
+	ID                string
+	Capacity          int
+	StatusPurpose     string
+	LifecycleRevision int64
 }
 type StatusFact struct {
 	Entry              StatusListEntry

@@ -635,6 +635,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/open-badges/{certificateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public signed Open Badges 3.0 credential with a revocation status-list reference. The proof and current status must both be verified. */
+        get: operations["getSignedOpenBadge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/open-badges/issuer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public controller document retaining historical assertion verification methods. */
+        get: operations["getOpenBadgesIssuerController"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/open-badges/status/revocation/{listId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Current fully signed Bitstring Status List snapshot; unavailable when a fresh secured snapshot cannot be produced. */
+        get: operations["getSignedOpenBadgesStatusList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/achievements/course-versions/{versionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public exact published CourseVersion achievement; contains no learner identity. */
+        get: operations["getOpenBadgesAchievement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/by-id/{courseId}/community": {
         parameters: {
             query?: never;
@@ -1427,6 +1495,112 @@ export interface components {
             stableKey: string;
             text: string;
             position: number;
+        };
+        DataIntegrityProof: {
+            /** @constant */
+            type: "DataIntegrityProof";
+            /** @constant */
+            cryptosuite: "eddsa-rdfc-2022";
+            /** Format: date-time */
+            created: string;
+            /** Format: uri */
+            verificationMethod: string;
+            /** @constant */
+            proofPurpose: "assertionMethod";
+            proofValue: string;
+        };
+        OpenBadgesMultikey: {
+            /** Format: uri */
+            id: string;
+            /** @constant */
+            type: "Multikey";
+            /** Format: uri */
+            controller: string;
+            publicKeyMultibase: string;
+        };
+        OpenBadgesController: {
+            "@context": string[];
+            /** Format: uri */
+            id: string;
+            name?: string;
+            verificationMethod: components["schemas"]["OpenBadgesMultikey"][];
+            assertionMethod: string[];
+        };
+        OpenBadgesStatusReference: {
+            /** Format: uri */
+            id: string;
+            /** @constant */
+            type: "BitstringStatusListEntry";
+            /** @constant */
+            statusPurpose: "revocation";
+            statusListIndex: string;
+            /** Format: uri */
+            statusListCredential: string;
+        };
+        SignedOpenBadge: {
+            "@context": string[];
+            /** Format: uri */
+            id: string;
+            type: string[];
+            issuer: {
+                /** Format: uri */
+                id: string;
+                type: string[];
+                name: string;
+            };
+            /** Format: date-time */
+            validFrom: string;
+            credentialSubject: {
+                id: string;
+                type: string[];
+                achievement: Record<string, never>;
+            };
+            credentialStatus: components["schemas"]["OpenBadgesStatusReference"];
+            proof: components["schemas"]["DataIntegrityProof"];
+        };
+        SignedStatusListCredential: {
+            "@context": string[];
+            /** Format: uri */
+            id: string;
+            type: string[];
+            issuer: {
+                /** Format: uri */
+                id: string;
+                type: string[];
+                name: string;
+            };
+            /** Format: date-time */
+            validFrom: string;
+            credentialSubject: {
+                /** Format: uri */
+                id: string;
+                /** @constant */
+                type: "BitstringStatusList";
+                /** @constant */
+                statusPurpose: "revocation";
+                encodedList: string;
+            };
+            proof: components["schemas"]["DataIntegrityProof"];
+        };
+        OpenBadgesAchievement: {
+            "@context": string[];
+            /** Format: uri */
+            id: string;
+            /** @constant */
+            type: "Achievement";
+            name: string;
+            description: string;
+            version: string;
+            inLanguage: string;
+            criteria: {
+                narrative: string;
+            };
+            creator: {
+                /** Format: uri */
+                id: string;
+                type: string[];
+                name: string;
+            };
         };
         CertificateIssuer: {
             id: string;
@@ -3555,6 +3729,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicCertificate"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getSignedOpenBadge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificateId: components["parameters"]["CertificateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed immutable credential */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vc": components["schemas"]["SignedOpenBadge"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getOpenBadgesIssuerController: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issuer controller document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBadgesController"];
+                };
+            };
+            503: components["responses"]["Problem"];
+        };
+    };
+    getSignedOpenBadgesStatusList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed status-list Verifiable Credential */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vc": components["schemas"]["SignedStatusListCredential"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getOpenBadgesAchievement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact-version Achievement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBadgesAchievement"];
                 };
             };
             404: components["responses"]["Problem"];

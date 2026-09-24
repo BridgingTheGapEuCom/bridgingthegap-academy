@@ -17,6 +17,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/publication"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -89,9 +90,15 @@ type authHTTP struct {
 	community                   *community.Service
 	certificateIssuance         certificateIssuanceHTTP
 	certificates                credentials.Repository
-	assetMaxBytes               int64
-	cookieSecure                bool
-	now                         func() time.Time
+	badgePublication            *publication.Service
+	badgePublicOrigin           string
+	badgeIssuer                 credentials.Issuer
+	achievementVersions         interface {
+		GetImmutableCourseVersion(context.Context, courses.CourseVersionID) (courses.ImmutableCourseVersion, error)
+	}
+	assetMaxBytes int64
+	cookieSecure  bool
+	now           func() time.Time
 }
 
 type resolvedSessionKey struct{}

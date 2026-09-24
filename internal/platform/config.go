@@ -4,11 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/signing"
 )
 
 const defaultAssetMaxBytes int64 = 100 * 1024 * 1024
@@ -23,8 +26,14 @@ type Config struct {
 	AssetStoragePath         string
 	AssetMaxBytes            int64
 	CertificateIssuer        credentials.Issuer
-	OpenBadgesSubjectSecret  []byte
+	OpenBadgesSubjectSecret  secretBytes
+	OpenBadgesKeyID          string
+	openBadgesSeed           secretSeed
 }
+
+// String keeps credentials out of accidental structured configuration logs.
+func (Config) String() string   { return "platform.Config{secrets redacted}" }
+func (Config) GoString() string { return "platform.Config{secrets redacted}" }
 
 func LoadConfig() (Config, error) {
 	requireIndependentReview, err := envBool("BTG_LMS_REQUIRE_INDEPENDENT_REVIEW", true)
@@ -43,7 +52,9 @@ func LoadConfig() (Config, error) {
 		RequireIndependentReview: requireIndependentReview,
 		AssetStoragePath:         os.Getenv("BTG_LMS_ASSET_STORAGE_PATH"),
 		AssetMaxBytes:            assetMaxBytes,
-		OpenBadgesSubjectSecret:  []byte(os.Getenv("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET")),
+		OpenBadgesSubjectSecret:  secretBytes(os.Getenv("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET")),
+		OpenBadgesKeyID:          os.Getenv("BTG_LMS_OPEN_BADGES_KEY_ID"),
+		openBadgesSeed:           secretSeed(os.Getenv("BTG_LMS_OPEN_BADGES_ED25519_SEED_B64URL")),
 		CertificateIssuer: credentials.Issuer{
 			ID: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_ID"), Name: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_NAME"),
 		},
@@ -73,6 +84,24 @@ func LoadConfig() (Config, error) {
 	}
 	if len(cfg.OpenBadgesSubjectSecret) > 0 && len(cfg.OpenBadgesSubjectSecret) < 32 {
 		return Config{}, errors.New("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET must contain at least 32 bytes")
+	}
+	if cfg.openBadgesSeed != "" || cfg.OpenBadgesKeyID != "" {
+		if cfg.openBadgesSeed == "" || cfg.OpenBadgesKeyID == "" || len(cfg.OpenBadgesSubjectSecret) < 32 {
+			return Config{}, errors.New("signed Open Badges requires a key ID, Ed25519 seed, and subject secret")
+		}
+		origin, err := url.Parse(cfg.PublicOrigin)
+		if err != nil || origin.Scheme != "https" || origin.Host == "" || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" {
+			return Config{}, errors.New("signed Open Badges requires a public HTTPS origin")
+		}
+		if cfg.CertificateIssuer.ID != strings.TrimRight(cfg.PublicOrigin, "/")+"/open-badges/issuer" {
+			return Config{}, errors.New("signed Open Badges issuer must resolve at the public issuer resource")
+		}
+		if !strings.HasPrefix(cfg.OpenBadgesKeyID, cfg.CertificateIssuer.ID+"#") {
+			return Config{}, errors.New("signed Open Badges key ID must identify an issuer assertion method")
+		}
+		if _, err := signing.NewLocalKey(cfg.OpenBadgesKeyID, cfg.CertificateIssuer.ID, string(cfg.openBadgesSeed)); err != nil {
+			return Config{}, errors.New("invalid signed Open Badges key material")
+		}
 	}
 	for name, address := range map[string]string{"BTG_LMS_HTTP_ADDR": cfg.HTTPAddr, "BTG_LMS_METRICS_ADDR": cfg.MetricsAddr} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
@@ -115,3 +144,14 @@ func envBool(key string, fallback bool) (bool, error) {
 		return false, fmt.Errorf("%s must be true or false", key)
 	}
 }
+
+// secretSeed redacts private key configuration in formatted diagnostics.
+type secretSeed string
+
+func (secretSeed) String() string   { return "[redacted]" }
+func (secretSeed) GoString() string { return "[redacted]" }
+
+type secretBytes []byte
+
+func (secretBytes) String() string   { return "[redacted]" }
+func (secretBytes) GoString() string { return "[redacted]" }

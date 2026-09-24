@@ -1,8 +1,13 @@
 package platform
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -199,5 +204,34 @@ func TestOpenBadgesSubjectSecretIsOptionalUntilExportIsEnabledButNeverWeak(t *te
 	cfg, err := LoadConfig()
 	if err != nil || len(cfg.OpenBadgesSubjectSecret) != 32 {
 		t.Fatalf("secret configuration=%d,%v", len(cfg.OpenBadgesSubjectSecret), err)
+	}
+}
+
+func TestSignedOpenBadgesConfigurationRequiresStableIssuerAndKey(t *testing.T) {
+	t.Setenv("BTG_LMS_MODE", "production")
+	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
+	t.Setenv("BTG_LMS_PUBLIC_ORIGIN", "https://academy.example")
+	t.Setenv("BTG_LMS_CERTIFICATE_ISSUER_ID", "https://academy.example/open-badges/issuer")
+	t.Setenv("BTG_LMS_CERTIFICATE_ISSUER_NAME", "Academy")
+	t.Setenv("BTG_LMS_OPEN_BADGES_SUBJECT_SECRET", "01234567890123456789012345678901")
+	t.Setenv("BTG_LMS_OPEN_BADGES_KEY_ID", "https://academy.example/open-badges/issuer#key-1")
+	seed := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	t.Setenv("BTG_LMS_OPEN_BADGES_ED25519_SEED_B64URL", seed)
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", cfg), seed) || strings.Contains(fmt.Sprintf("%+v", cfg), "0123456789") {
+		t.Fatal("secret in config diagnostics")
+	}
+	t.Setenv("BTG_LMS_OPEN_BADGES_ED25519_SEED_B64URL", "bad")
+	if _, err = LoadConfig(); err == nil {
+		t.Fatal("accepted invalid Ed25519 seed")
+	}
+	t.Setenv("BTG_LMS_OPEN_BADGES_ED25519_SEED_B64URL", seed)
+	t.Setenv("BTG_LMS_PUBLIC_ORIGIN", "http://academy.example")
+	if _, err = LoadConfig(); err == nil {
+		t.Fatal("accepted non-HTTPS public origin")
 	}
 }
