@@ -35,5 +35,8 @@
   "open_badges.status_list_entry": "openbadges",
   "courses.course_version_import_provenance": "courses",
   "portability.import_record": "courses",
-  "portability.source_course_mapping": "courses"
+  "portability.source_course_mapping": "courses",
+  "plugins.verification_key": "plugins",
+  "plugins.installed_release": "plugins",
+  "plugins.release_approval": "plugins"
 }

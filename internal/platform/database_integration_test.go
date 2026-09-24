@@ -54,6 +54,7 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("translation persistence", func(t *testing.T) { testTranslationPersistence(t, ctx, pool) })
 	t.Run("imported translation publication", func(t *testing.T) { testImportedTranslationPublication(t, ctx, pool) })
 	t.Run("transactional Course package import", func(t *testing.T) { testPortabilityImport(t, ctx, pool) })
+	t.Run("plugin registry and trust persistence", func(t *testing.T) { testPluginRegistry(t, ctx, pool) })
 	t.Run("immutable published course version reads", func(t *testing.T) { testImmutablePublishedCourseVersionReads(t, ctx, pool) })
 	t.Run("published course catalog", func(t *testing.T) { testPublishedCourseCatalog(t, ctx, pool) })
 	t.Run("publication orchestration and recovery", func(t *testing.T) { testPublicationOrchestration(t, ctx, pool) })

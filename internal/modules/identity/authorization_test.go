@@ -30,8 +30,11 @@ func TestAuthorizationUsesCurrentAdministratorAssignment(t *testing.T) {
 	if err := service.Authorize(context.Background(), actor, CapabilityInstanceManage, InstanceResource()); err != nil || roles.userID != actor.UserID() || roles.role != RoleAdministrator {
 		t.Fatal("active administrator was not granted instance management")
 	}
+	if err := service.Authorize(context.Background(), actor, CapabilityPluginsManage, InstanceResource()); err != nil {
+		t.Fatal("active administrator was not granted plugin management")
+	}
 	roles.active = false // The repository now reports the assignment revoked.
-	if err := service.Authorize(context.Background(), actor, CapabilityInstanceManage, InstanceResource()); !errors.Is(err, ErrAuthorizationDenied) || roles.calls != 2 {
+	if err := service.Authorize(context.Background(), actor, CapabilityInstanceManage, InstanceResource()); !errors.Is(err, ErrAuthorizationDenied) || roles.calls != 3 {
 		t.Fatal("revoked administrator permission remained cached in the actor")
 	}
 	if actor.UserID() != "user-1" || actor.SessionID() != "session-1" {

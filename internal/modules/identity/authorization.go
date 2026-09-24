@@ -27,6 +27,7 @@ type Capability string
 const (
 	CapabilityInstanceManage    Capability = "instance.manage"
 	CapabilityPortabilityImport Capability = "portability.import"
+	CapabilityPluginsManage     Capability = "plugins.manage"
 )
 
 // Resource has a narrow instance constructor now. Domain modules can later
@@ -55,7 +56,7 @@ func (s AuthorizationService) Authorize(ctx context.Context, actor Authenticated
 	if actor.UserID() == "" || actor.SessionID() == "" {
 		return ErrAuthorizationDenied
 	}
-	if (capability != CapabilityInstanceManage && capability != CapabilityPortabilityImport) || resource != InstanceResource() {
+	if (capability != CapabilityInstanceManage && capability != CapabilityPortabilityImport && capability != CapabilityPluginsManage) || resource != InstanceResource() {
 		return ErrAuthorizationDenied
 	}
 	if s.roles == nil {

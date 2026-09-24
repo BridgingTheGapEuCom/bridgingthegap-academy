@@ -72,6 +72,15 @@ sql:
         sql_package: pgx/v5
   - engine: postgresql
     schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00031_plugins.sql
+    queries: internal/modules/plugins/db/query
+    gen:
+      go:
+        package: sqlc
+        out: internal/modules/plugins/db/sqlc
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema:
       - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
       - internal/modules/infrastructure/postgres/db/migrations/00009_authoring.sql
       - internal/modules/infrastructure/postgres/db/migrations/00010_authoring_content_integrity.sql
