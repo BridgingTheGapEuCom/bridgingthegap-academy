@@ -222,6 +222,9 @@ func samePublicationSource(stored, candidate courses.ImmutableCourseVersion) boo
 		normalized.Provenance.ApprovedAt = &approvedAt
 	}
 	normalized.ID = ""
+	if normalized.Publication.Origin == courses.PublicationOriginNative {
+		normalized.Publication.Native = &normalized.Provenance
+	}
 	for moduleIndex := range normalized.Modules {
 		normalized.Modules[moduleIndex].ID = ""
 		for lessonIndex := range normalized.Modules[moduleIndex].Lessons {
@@ -234,6 +237,9 @@ func samePublicationSource(stored, candidate courses.ImmutableCourseVersion) boo
 	if candidate.Provenance.ApprovedAt != nil {
 		approvedAt := candidate.Provenance.ApprovedAt.UTC()
 		candidate.Provenance.ApprovedAt = &approvedAt
+	}
+	if candidate.Publication.Origin == courses.PublicationOriginNative {
+		candidate.Publication.Native = &candidate.Provenance
 	}
 	return reflect.DeepEqual(normalized, candidate)
 }

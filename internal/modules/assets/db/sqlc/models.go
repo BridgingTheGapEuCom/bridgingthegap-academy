@@ -21,6 +21,7 @@ type AssetsAsset struct {
 	CreatedAt        pgtype.Timestamptz
 	Origin           string
 	ImportID         pgtype.UUID
+	PackageAssetKey  pgtype.Text
 }
 
 type CoursesCourse struct {

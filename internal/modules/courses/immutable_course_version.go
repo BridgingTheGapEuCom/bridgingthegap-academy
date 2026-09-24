@@ -31,7 +31,8 @@ type CourseVersionProvenance struct {
 type ImmutableCourseVersion struct {
 	ID                 CourseVersionID
 	CourseVersion      CourseVersionInput
-	Provenance         CourseVersionProvenance
+	Provenance         CourseVersionProvenance // native branch compatibility
+	Publication        PublicationProvenance
 	Modules            []ImmutableCourseVersionModule
 	AssetBindings      []PublishedAssetBinding      `json:"-"`
 	AssessmentBindings []PublishedAssessmentBinding `json:"-"`
@@ -67,11 +68,17 @@ func (v ImmutableCourseVersion) ValidateForPersistence() error {
 	if v.ID != "" || v.CourseVersion.Status != CourseVersionPublished || v.CourseVersion.Validate() != nil || v.Modules == nil {
 		return ErrInvalidImmutableCourseVersion
 	}
-	if !uuidPattern.MatchString(v.Provenance.ReviewID) || v.Provenance.ReviewRevision < 1 ||
-		!uuidPattern.MatchString(v.Provenance.DraftID) || v.Provenance.DraftRevision < 1 || v.Provenance.SnapshotSchemaVersion < 1 ||
-		!uuidPattern.MatchString(v.Provenance.SubmittedByUserID) || v.Provenance.SubmittedAt.IsZero() ||
-		!uuidPattern.MatchString(v.Provenance.ApprovedByUserID) || v.Provenance.ApprovedAt == nil || v.Provenance.ApprovedAt.IsZero() ||
-		!uuidPattern.MatchString(v.Provenance.PublishedByUserID) {
+	if v.Publication.Validate() != nil {
+		return ErrInvalidImmutableCourseVersion
+	}
+	if v.Publication.Origin == PublicationOriginNative {
+		if v.Publication.Native == nil || *v.Publication.Native != v.Provenance {
+			return ErrInvalidImmutableCourseVersion
+		}
+		if !uuidPattern.MatchString(v.Provenance.ReviewID) || v.Provenance.ReviewRevision < 1 || !uuidPattern.MatchString(v.Provenance.DraftID) || v.Provenance.DraftRevision < 1 || v.Provenance.SnapshotSchemaVersion < 1 || !uuidPattern.MatchString(v.Provenance.SubmittedByUserID) || v.Provenance.SubmittedAt.IsZero() || !uuidPattern.MatchString(v.Provenance.ApprovedByUserID) || v.Provenance.ApprovedAt == nil || v.Provenance.ApprovedAt.IsZero() || !uuidPattern.MatchString(v.Provenance.PublishedByUserID) {
+			return ErrInvalidImmutableCourseVersion
+		}
+	} else if v.Provenance != (CourseVersionProvenance{}) {
 		return ErrInvalidImmutableCourseVersion
 	}
 

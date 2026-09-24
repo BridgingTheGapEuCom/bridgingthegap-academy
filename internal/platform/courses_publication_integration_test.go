@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/db/sqlc"
 	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -46,6 +48,20 @@ func testImmutableCourseVersionPersistence(t *testing.T, ctx context.Context, po
 		t.Fatal(err)
 	}
 	assertImmutableCourseVersionRoundTrip(t, input, stored)
+	if stored.Publication.Origin != courses.PublicationOriginNative || stored.Publication.Native == nil || stored.Publication.Imported != nil {
+		t.Fatalf("native publication provenance = %#v", stored.Publication)
+	}
+	var storedOrigin string
+	var importedProvenanceCount int
+	if err := pool.QueryRow(ctx, `SELECT publication_origin FROM courses.course_version WHERE id=$1`, stored.ID).Scan(&storedOrigin); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version_import_provenance WHERE course_version_id=$1`, stored.ID).Scan(&importedProvenanceCount); err != nil {
+		t.Fatal(err)
+	}
+	if storedOrigin != string(courses.PublicationOriginNative) || importedProvenanceCount != 0 {
+		t.Fatalf("native database provenance origin=%q imported=%d", storedOrigin, importedProvenanceCount)
+	}
 	reloaded, err := repository.GetImmutableCourseVersion(ctx, stored.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -132,6 +148,191 @@ func testImmutableCourseVersionPersistence(t *testing.T, ctx context.Context, po
 		t.Fatal(err)
 	}
 	assertImmutableCourseVersionRoundTrip(t, concurrent, concurrentReloaded)
+}
+
+func testImportedPublicationProvenancePersistence(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	repository := coursespostgres.New(pool)
+	store := courses.NewCourseVersionStore(repository)
+	course, err := repository.CreateCourse(ctx, "imported-publication-persistence")
+	if err != nil {
+		t.Fatal(err)
+	}
+	queries := sqlc.New(pool)
+	if _, err := queries.CreatePortableSourceCourseMapping(ctx, sqlc.CreatePortableSourceCourseMappingParams{
+		PortableSourceCourseID: "portable-course-a", LocalCourseID: pgtype.UUID{Bytes: uuid.MustParse(string(course.ID)), Valid: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	other, err := repository.CreateCourse(ctx, "imported-publication-mapping-conflict")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queries.CreatePortableSourceCourseMapping(ctx, sqlc.CreatePortableSourceCourseMappingParams{
+		PortableSourceCourseID: "portable-course-a", LocalCourseID: pgtype.UUID{Bytes: uuid.MustParse(string(other.ID)), Valid: true},
+	}); err == nil {
+		t.Fatal("portable source Course accepted conflicting local mapping")
+	}
+	importedAt := time.Date(2026, time.September, 24, 12, 0, 0, 0, time.UTC)
+	record, err := queries.CreateImportRecord(ctx, sqlc.CreateImportRecordParams{
+		PackageFingerprint: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", PortableSourceCourseID: "portable-course-a",
+		PortableSourceCourseVersionID: "portable-course-a-v1", SourceVersion: "1.2.3", ImportedAt: pgtype.Timestamptz{Time: importedAt, Valid: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queries.CreateImportRecord(ctx, sqlc.CreateImportRecordParams{
+		PackageFingerprint: record.PackageFingerprint, PortableSourceCourseID: "portable-course-b", PortableSourceCourseVersionID: "portable-course-b-v1", SourceVersion: "1.0.0", ImportedAt: pgtype.Timestamptz{Time: importedAt, Valid: true},
+	}); err == nil {
+		t.Fatal("duplicate package fingerprint was accepted")
+	}
+	input := immutableCourseVersionFixture(t, course.ID, "1.2.3", "71000000-0000-4000-8000-000000000090")
+	input.Provenance = courses.CourseVersionProvenance{}
+	input.Publication = courses.PublicationProvenance{Origin: courses.PublicationOriginImported, Imported: &courses.ImportedPublicationProvenance{
+		ImportID: record.ID.String(), PackageFingerprint: record.PackageFingerprint, PortableSourceCourseID: record.PortableSourceCourseID,
+		PortableSourceCourseVersionID: record.PortableSourceCourseVersionID, SourceVersion: input.CourseVersion.Version, ImportedAt: importedAt,
+	}}
+	stored, err := store.Store(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Publication.Origin != courses.PublicationOriginImported || stored.Publication.Imported == nil || stored.Provenance != (courses.CourseVersionProvenance{}) {
+		t.Fatalf("imported provenance = %#v / %#v", stored.Publication, stored.Provenance)
+	}
+	if !reflect.DeepEqual(*stored.Publication.Imported, *input.Publication.Imported) {
+		t.Fatalf("imported provenance round-trip = %#v want %#v", stored.Publication.Imported, input.Publication.Imported)
+	}
+	reloaded, err := repository.GetImmutableCourseVersion(ctx, stored.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Publication.Origin != courses.PublicationOriginImported || !reflect.DeepEqual(reloaded.Publication, stored.Publication) {
+		t.Fatalf("reloaded imported provenance = %#v want %#v", reloaded.Publication, stored.Publication)
+	}
+	var origin string
+	var importID string
+	var nativeCount int
+	if err := pool.QueryRow(ctx, `SELECT publication_origin FROM courses.course_version WHERE id=$1`, stored.ID).Scan(&origin); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT import_id::text FROM courses.course_version_import_provenance WHERE course_version_id=$1`, stored.ID).Scan(&importID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version_publication_provenance WHERE course_version_id=$1`, stored.ID).Scan(&nativeCount); err != nil {
+		t.Fatal(err)
+	}
+	if origin != string(courses.PublicationOriginImported) || importID != record.ID.String() || nativeCount != 0 {
+		t.Fatalf("imported database representation origin=%q import=%q native=%d", origin, importID, nativeCount)
+	}
+	read := courses.NewPublishedReadService(repository)
+	learner, err := read.Exact(ctx, course.ID, input.CourseVersion.Version)
+	if err != nil || learner.Title != input.CourseVersion.Title || len(learner.Modules) != len(input.Modules) {
+		t.Fatalf("imported learner read = %#v, %v", learner, err)
+	}
+}
+
+func testCallerOwnedCourseVersionTransactionPersistence(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	repository := coursespostgres.New(pool)
+	queries := sqlc.New(pool)
+	course, err := repository.CreateCourse(ctx, "caller-owned-imported-course-version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	importedAt := time.Date(2026, 9, 24, 13, 0, 0, 0, time.UTC)
+	record, err := queries.CreateImportRecord(ctx, sqlc.CreateImportRecordParams{
+		PackageFingerprint: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", PortableSourceCourseID: "caller-owned-course", PortableSourceCourseVersionID: "caller-owned-v1", SourceVersion: "1.0.0", ImportedAt: pgtype.Timestamptz{Time: importedAt, Valid: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := immutableCourseVersionFixture(t, course.ID, "1.0.0", "71000000-0000-4000-8000-000000000091")
+	input.Provenance = courses.CourseVersionProvenance{}
+	input.Publication = courses.PublicationProvenance{Origin: courses.PublicationOriginImported, Imported: &courses.ImportedPublicationProvenance{ImportID: record.ID.String(), PackageFingerprint: record.PackageFingerprint, PortableSourceCourseID: record.PortableSourceCourseID, PortableSourceCourseVersionID: record.PortableSourceCourseVersionID, SourceVersion: input.CourseVersion.Version, ImportedAt: importedAt}}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := repository.StoreImmutableCourseVersionInTx(ctx, tx, input)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal(err)
+	}
+	var inside, outside int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM courses.course_version WHERE id=$1`, stored.ID).Scan(&inside); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version WHERE id=$1`, stored.ID).Scan(&outside); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if inside != 1 || outside != 0 {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("transaction visibility inside=%d outside=%d", inside, outside)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version WHERE id=$1`, stored.ID).Scan(&outside); err != nil || outside != 1 {
+		t.Fatalf("committed imported CourseVersion outside=%d err=%v", outside, err)
+	}
+
+	rollbackCourse, err := repository.CreateCourse(ctx, "caller-owned-imported-rollback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollbackRecord, err := queries.CreateImportRecord(ctx, sqlc.CreateImportRecordParams{PackageFingerprint: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", PortableSourceCourseID: "caller-owned-rollback", PortableSourceCourseVersionID: "caller-owned-rollback-v1", SourceVersion: "1.0.0", ImportedAt: pgtype.Timestamptz{Time: importedAt, Valid: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollbackInput := immutableCourseVersionFixture(t, rollbackCourse.ID, "1.0.0", "71000000-0000-4000-8000-000000000092")
+	rollbackInput.Provenance = courses.CourseVersionProvenance{}
+	rollbackInput.Publication = courses.PublicationProvenance{Origin: courses.PublicationOriginImported, Imported: &courses.ImportedPublicationProvenance{ImportID: rollbackRecord.ID.String(), PackageFingerprint: rollbackRecord.PackageFingerprint, PortableSourceCourseID: rollbackRecord.PortableSourceCourseID, PortableSourceCourseVersionID: rollbackRecord.PortableSourceCourseVersionID, SourceVersion: rollbackInput.CourseVersion.Version, ImportedAt: importedAt}}
+	tx, err = pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rolled, err := repository.StoreImmutableCourseVersionInTx(ctx, tx, rollbackInput)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal(err)
+	}
+	// Mimic a later portability write failure; Courses must not commit first.
+	if _, err := tx.Exec(ctx, `INSERT INTO portability.import_record (package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, imported_at) VALUES ($1, $2, $3, $4, $5)`, rollbackRecord.PackageFingerprint, "duplicate", "duplicate", "1.0.0", importedAt); err == nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal("expected downstream uniqueness failure")
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version_import_provenance WHERE course_version_id=$1`, rolled.ID).Scan(&outside); err != nil || outside != 0 {
+		t.Fatalf("rollback retained imported provenance count=%d err=%v", outside, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version WHERE id=$1`, rolled.ID).Scan(&outside); err != nil || outside != 0 {
+		t.Fatalf("rollback retained CourseVersion count=%d err=%v", outside, err)
+	}
+
+	nativeCourse, err := repository.CreateCourse(ctx, "caller-owned-native-rollback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := immutableCourseVersionFixture(t, nativeCourse.ID, "1.0.0", "71000000-0000-4000-8000-000000000093")
+	tx, err = pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeStored, err := repository.StoreImmutableCourseVersionInTx(ctx, tx, native)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM courses.course_version WHERE id=$1`, nativeStored.ID).Scan(&outside); err != nil || outside != 0 {
+		t.Fatalf("native rollback retained CourseVersion count=%d err=%v", outside, err)
+	}
 }
 
 func testImmutablePublishedCourseVersionReads(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
@@ -301,7 +502,7 @@ func immutableCourseVersionFixture(t *testing.T, courseID courses.CourseID, vers
 	publishedAt := time.Date(2026, time.September, 15, 12, 0, 0, 0, time.UTC)
 	approvedAt := time.Date(2026, time.September, 14, 11, 0, 0, 0, time.UTC)
 	duration := 35
-	return courses.ImmutableCourseVersion{
+	result := courses.ImmutableCourseVersion{
 		CourseVersion: courses.CourseVersionInput{
 			CourseID:           courseID,
 			Version:            version,
@@ -363,6 +564,8 @@ func immutableCourseVersionFixture(t *testing.T, courseID courses.CourseID, vers
 			},
 		},
 	}
+	result.Publication = courses.PublicationProvenance{Origin: courses.PublicationOriginNative, Native: &result.Provenance}
+	return result
 }
 
 func assertImmutableCourseVersionRoundTrip(t *testing.T, expected, actual courses.ImmutableCourseVersion) {
@@ -370,7 +573,7 @@ func assertImmutableCourseVersionRoundTrip(t *testing.T, expected, actual course
 	if _, err := uuid.Parse(string(actual.ID)); err != nil || actual.ID == courses.CourseVersionID(expected.Provenance.ReviewID) {
 		t.Fatalf("invalid generated CourseVersion ID: %q", actual.ID)
 	}
-	if !reflect.DeepEqual(actual.CourseVersion, expected.CourseVersion) || !reflect.DeepEqual(actual.Provenance, expected.Provenance) || !reflect.DeepEqual(actual.AssetBindings, expected.AssetBindings) || !reflect.DeepEqual(actual.AssessmentBindings, expected.AssessmentBindings) || len(actual.Modules) != len(expected.Modules) {
+	if !reflect.DeepEqual(actual.CourseVersion, expected.CourseVersion) || !reflect.DeepEqual(actual.Provenance, expected.Provenance) || !reflect.DeepEqual(actual.Publication, expected.Publication) || !reflect.DeepEqual(actual.AssetBindings, expected.AssetBindings) || !reflect.DeepEqual(actual.AssessmentBindings, expected.AssessmentBindings) || len(actual.Modules) != len(expected.Modules) {
 		t.Fatalf("CourseVersion metadata/provenance mismatch:\nexpected=%#v\nactual=%#v", expected, actual)
 	}
 	for moduleIndex := range expected.Modules {

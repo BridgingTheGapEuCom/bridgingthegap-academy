@@ -10,10 +10,13 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	assetslocal "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/localstorage"
 	assetspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/db/sqlc"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -80,6 +83,53 @@ func testAssetsPersistence(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 		pendingInput.OwnerDraftID, "40000000-0000-4000-8000-000000000006", pendingInput.CreatedByUserID); err == nil {
 		t.Fatal("database accepted invalid AVAILABLE integrity metadata")
 	}
+
+	t.Run("imported asset origin and Draft isolation", func(t *testing.T) {
+		record, err := sqlc.New(pool).CreateImportRecord(ctx, sqlc.CreateImportRecordParams{
+			PackageFingerprint: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", PortableSourceCourseID: "portable-asset-course",
+			PortableSourceCourseVersionID: "portable-asset-course-v1", SourceVersion: "1.0.0", ImportedAt: pgtype.Timestamptz{Time: time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC), Valid: true},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		storage, err := assetslocal.New(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer storage.Close()
+		content := []byte("validated imported asset")
+		digest := sha256.Sum256(content)
+		service, err := assets.NewImportIngestionService(repository, storage, 1024)
+		if err != nil {
+			t.Fatal(err)
+		}
+		imported, err := service.ImportValidatedAsset(ctx, assets.ImportedAssetInput{
+			ImportID: record.ID.String(), PackageAssetKey: "portable-diagram", OriginalFilename: "portable.txt", MediaType: "text/plain",
+			ByteSize: int64(len(content)), SHA256Digest: assets.SHA256Digest(hex.EncodeToString(digest[:])), Content: bytes.NewReader(content),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if imported.Origin != assets.OriginPackageImport || imported.Lifecycle != assets.LifecycleAvailable || imported.OwnerDraftID != "" || imported.CreatedByUserID != "" || imported.ImportID != record.ID.String() || imported.PackageAssetKey != "portable-diagram" {
+			t.Fatalf("imported Asset = %#v", imported)
+		}
+		items, _, err := repository.ListAvailableAssetsForDraft(ctx, pendingInput.OwnerDraftID, 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range items {
+			if item.ID == imported.ID {
+				t.Fatal("imported Asset leaked into Draft listing")
+			}
+		}
+		var origin, packageKey string
+		if err := pool.QueryRow(ctx, `SELECT origin, package_asset_key FROM assets.asset WHERE id=$1`, imported.ID).Scan(&origin, &packageKey); err != nil {
+			t.Fatal(err)
+		}
+		if origin != string(assets.OriginPackageImport) || packageKey != "portable-diagram" {
+			t.Fatalf("stored imported Asset origin=%q key=%q", origin, packageKey)
+		}
+	})
 
 	t.Run("real local ingestion round trip", func(t *testing.T) {
 		storage, err := assetslocal.New(t.TempDir())

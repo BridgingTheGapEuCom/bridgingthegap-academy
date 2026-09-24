@@ -98,6 +98,7 @@ func buildImmutableCourseVersion(cycle ReviewCycle, snapshot ReviewSnapshot, met
 		AssetBindings:      append([]courses.PublishedAssetBinding{}, metadata.AssetBindings...),
 		AssessmentBindings: clonePublishedAssessmentBindings(metadata.AssessmentBindings),
 	}
+	result.Publication = courses.PublicationProvenance{Origin: courses.PublicationOriginNative, Native: &result.Provenance}
 	for _, module := range snapshot.Modules {
 		convertedModule := courses.ImmutableCourseVersionModule{
 			SourceID:    string(module.ID),

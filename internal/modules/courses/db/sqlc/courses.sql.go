@@ -49,9 +49,9 @@ const createCourseVersion = `-- name: CreateCourseVersion :one
 INSERT INTO courses.course_version (
     course_id, version, status, title, description, learning_objectives,
     source_language, changelog, license_kind, license_identifier,
-    license_display_name, license_url, license_custom_text, attribution, published_at
+    license_display_name, license_url, license_custom_text, attribution, published_at, publication_origin
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'NATIVE_PUBLICATION')
 RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 `
 
@@ -178,6 +178,24 @@ func (q *Queries) CreateCourseVersionAssetBinding(ctx context.Context, arg Creat
 		&i.ByteSize,
 		&i.Sha256Digest,
 	)
+	return i, err
+}
+
+const createCourseVersionImportProvenance = `-- name: CreateCourseVersionImportProvenance :one
+INSERT INTO courses.course_version_import_provenance (course_version_id, import_id)
+VALUES ($1, $2)
+RETURNING course_version_id, import_id
+`
+
+type CreateCourseVersionImportProvenanceParams struct {
+	CourseVersionID pgtype.UUID
+	ImportID        pgtype.UUID
+}
+
+func (q *Queries) CreateCourseVersionImportProvenance(ctx context.Context, arg CreateCourseVersionImportProvenanceParams) (CoursesCourseVersionImportProvenance, error) {
+	row := q.db.QueryRow(ctx, createCourseVersionImportProvenance, arg.CourseVersionID, arg.ImportID)
+	var i CoursesCourseVersionImportProvenance
+	err := row.Scan(&i.CourseVersionID, &i.ImportID)
 	return i, err
 }
 
@@ -365,6 +383,79 @@ func (q *Queries) CreateImportRecord(ctx context.Context, arg CreateImportRecord
 		&i.TargetCourseID,
 		&i.TargetCourseVersionID,
 		&i.ImportedAt,
+	)
+	return i, err
+}
+
+const createImportedCourseVersion = `-- name: CreateImportedCourseVersion :one
+INSERT INTO courses.course_version (
+    course_id, version, status, title, description, learning_objectives,
+    source_language, changelog, license_kind, license_identifier,
+    license_display_name, license_url, license_custom_text, attribution, published_at, publication_origin
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'IMPORTED_PUBLICATION')
+RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
+`
+
+type CreateImportedCourseVersionParams struct {
+	CourseID           pgtype.UUID
+	Version            string
+	Status             string
+	Title              string
+	Description        string
+	LearningObjectives []byte
+	SourceLanguage     string
+	Changelog          string
+	LicenseKind        string
+	LicenseIdentifier  pgtype.Text
+	LicenseDisplayName string
+	LicenseUrl         pgtype.Text
+	LicenseCustomText  pgtype.Text
+	Attribution        []byte
+	PublishedAt        pgtype.Timestamptz
+}
+
+func (q *Queries) CreateImportedCourseVersion(ctx context.Context, arg CreateImportedCourseVersionParams) (CoursesCourseVersion, error) {
+	row := q.db.QueryRow(ctx, createImportedCourseVersion,
+		arg.CourseID,
+		arg.Version,
+		arg.Status,
+		arg.Title,
+		arg.Description,
+		arg.LearningObjectives,
+		arg.SourceLanguage,
+		arg.Changelog,
+		arg.LicenseKind,
+		arg.LicenseIdentifier,
+		arg.LicenseDisplayName,
+		arg.LicenseUrl,
+		arg.LicenseCustomText,
+		arg.Attribution,
+		arg.PublishedAt,
+	)
+	var i CoursesCourseVersion
+	err := row.Scan(
+		&i.ID,
+		&i.CourseID,
+		&i.Version,
+		&i.VersionMajor,
+		&i.VersionMinor,
+		&i.VersionPatch,
+		&i.Status,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.SourceLanguage,
+		&i.Changelog,
+		&i.LicenseKind,
+		&i.LicenseIdentifier,
+		&i.LicenseDisplayName,
+		&i.LicenseUrl,
+		&i.LicenseCustomText,
+		&i.Attribution,
+		&i.CreatedAt,
+		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }

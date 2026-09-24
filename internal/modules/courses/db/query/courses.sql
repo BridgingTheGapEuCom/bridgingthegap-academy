@@ -22,9 +22,9 @@ ORDER BY slug ASC, id ASC;
 INSERT INTO courses.course_version (
     course_id, version, status, title, description, learning_objectives,
     source_language, changelog, license_kind, license_identifier,
-    license_display_name, license_url, license_custom_text, attribution, published_at
+    license_display_name, license_url, license_custom_text, attribution, published_at, publication_origin
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'NATIVE_PUBLICATION')
 RETURNING *;
 
 -- name: CreateCourseVersionPublicationProvenance :one
@@ -281,4 +281,18 @@ INSERT INTO portability.import_record (
     package_fingerprint, portable_source_course_id, portable_source_course_version_id,
     source_version, target_course_id, target_course_version_id, imported_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: CreateCourseVersionImportProvenance :one
+INSERT INTO courses.course_version_import_provenance (course_version_id, import_id)
+VALUES ($1, $2)
+RETURNING *;
+
+-- name: CreateImportedCourseVersion :one
+INSERT INTO courses.course_version (
+    course_id, version, status, title, description, learning_objectives,
+    source_language, changelog, license_kind, license_identifier,
+    license_display_name, license_url, license_custom_text, attribution, published_at, publication_origin
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'IMPORTED_PUBLICATION')
 RETURNING *;

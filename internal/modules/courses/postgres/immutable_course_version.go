@@ -8,6 +8,7 @@ import (
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/db/sqlc"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -27,10 +28,38 @@ func (r *Repository) StoreImmutableCourseVersion(ctx context.Context, input cour
 		return courses.ImmutableCourseVersion{}, storageError(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	q := r.q.WithTx(tx)
-	txRepository := &Repository{q: q}
+	stored, err := r.storeImmutableCourseVersion(ctx, r.q.WithTx(tx), input)
+	if err != nil {
+		return courses.ImmutableCourseVersion{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return courses.ImmutableCourseVersion{}, storageError(err)
+	}
+	return stored, nil
+}
 
-	version, err := txRepository.CreateCourseVersion(ctx, input.CourseVersion)
+// StoreImmutableCourseVersionInTx writes one immutable CourseVersion through a
+// caller-owned PostgreSQL transaction. It never commits or rolls back that
+// transaction; platform import orchestration owns its lifecycle.
+func (r *Repository) StoreImmutableCourseVersionInTx(ctx context.Context, tx pgx.Tx, input courses.ImmutableCourseVersion) (courses.ImmutableCourseVersion, error) {
+	if input.ValidateForPersistence() != nil {
+		return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
+	}
+	if r == nil || tx == nil {
+		return courses.ImmutableCourseVersion{}, errors.New("course transaction unavailable")
+	}
+	return r.storeImmutableCourseVersion(ctx, r.q.WithTx(tx), input)
+}
+
+func (r *Repository) storeImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, input courses.ImmutableCourseVersion) (courses.ImmutableCourseVersion, error) {
+	var version courses.CourseVersion
+	var err error
+	txRepository := &Repository{q: q}
+	if input.Publication.Origin == courses.PublicationOriginImported {
+		version, err = txRepository.CreateImportedCourseVersion(ctx, input.CourseVersion)
+	} else {
+		version, err = txRepository.CreateCourseVersion(ctx, input.CourseVersion)
+	}
 	if err != nil {
 		return courses.ImmutableCourseVersion{}, err
 	}
@@ -38,8 +67,17 @@ func (r *Repository) StoreImmutableCourseVersion(ctx context.Context, input cour
 	if err != nil {
 		return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
 	}
-	if err := storePublicationProvenance(ctx, q, versionID, input.Provenance); err != nil {
-		return courses.ImmutableCourseVersion{}, immutableStoreError(err)
+	switch input.Publication.Origin {
+	case courses.PublicationOriginNative:
+		if err := storePublicationProvenance(ctx, q, versionID, input.Provenance); err != nil {
+			return courses.ImmutableCourseVersion{}, immutableStoreError(err)
+		}
+	case courses.PublicationOriginImported:
+		if err := storeImportedPublicationProvenance(ctx, q, versionID, *input.Publication.Imported); err != nil {
+			return courses.ImmutableCourseVersion{}, immutableStoreError(err)
+		}
+	default:
+		return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
 	}
 	for _, binding := range input.AssetBindings {
 		assetKey, err := uuid(binding.AssetKey)
@@ -79,12 +117,8 @@ func (r *Repository) StoreImmutableCourseVersion(ctx context.Context, input cour
 			return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
 		}
 		moduleRow, err := q.CreateImmutableCourseVersionModule(ctx, sqlc.CreateImmutableCourseVersionModuleParams{
-			CourseVersionID: versionID,
-			SourceModuleID:  sourceModuleID,
-			StableKey:       module.StableKey,
-			Title:           module.Title,
-			Description:     module.Description,
-			Position:        int32(module.Position),
+			CourseVersionID: versionID, SourceModuleID: sourceModuleID, StableKey: module.StableKey,
+			Title: module.Title, Description: module.Description, Position: int32(module.Position),
 		})
 		if err != nil {
 			return courses.ImmutableCourseVersion{}, immutableStoreError(err)
@@ -97,31 +131,16 @@ func (r *Repository) StoreImmutableCourseVersion(ctx context.Context, input cour
 			lessonIDs[lesson.StableKey] = row.ID
 		}
 	}
-
 	for _, module := range input.Modules {
 		for _, lesson := range module.Lessons {
 			for position, prerequisiteKey := range lesson.PrerequisiteStableKeys {
-				_, err := q.CreateLessonPrerequisite(ctx, sqlc.CreateLessonPrerequisiteParams{
-					CourseVersionID:      versionID,
-					LessonID:             lessonIDs[lesson.StableKey],
-					PrerequisiteLessonID: lessonIDs[prerequisiteKey],
-					Position:             int32(position),
-				})
-				if err != nil {
+				if _, err := q.CreateLessonPrerequisite(ctx, sqlc.CreateLessonPrerequisiteParams{CourseVersionID: versionID, LessonID: lessonIDs[lesson.StableKey], PrerequisiteLessonID: lessonIDs[prerequisiteKey], Position: int32(position)}); err != nil {
 					return courses.ImmutableCourseVersion{}, immutableStoreError(err)
 				}
 			}
 		}
 	}
-
-	stored, err := getImmutableCourseVersion(ctx, q, versionID)
-	if err != nil {
-		return courses.ImmutableCourseVersion{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return courses.ImmutableCourseVersion{}, storageError(err)
-	}
-	return stored, nil
+	return getImmutableCourseVersion(ctx, q, versionID)
 }
 
 func (r *Repository) GetImmutableCourseVersion(ctx context.Context, id courses.CourseVersionID) (courses.ImmutableCourseVersion, error) {
@@ -245,6 +264,15 @@ func storePublicationProvenance(ctx context.Context, q *sqlc.Queries, courseVers
 	return err
 }
 
+func storeImportedPublicationProvenance(ctx context.Context, q *sqlc.Queries, courseVersionID pgtype.UUID, provenance courses.ImportedPublicationProvenance) error {
+	importID, err := uuid(provenance.ImportID)
+	if err != nil {
+		return courses.ErrInvalidImmutableCourseVersion
+	}
+	_, err = q.CreateCourseVersionImportProvenance(ctx, sqlc.CreateCourseVersionImportProvenanceParams{CourseVersionID: courseVersionID, ImportID: importID})
+	return err
+}
+
 func createImmutableLesson(ctx context.Context, q *sqlc.Queries, versionID, moduleID pgtype.UUID, lesson courses.ImmutableCourseVersionLesson) (sqlc.CoursesLesson, error) {
 	sourceLessonID, err := uuid(lesson.SourceID)
 	if err != nil {
@@ -284,10 +312,6 @@ func getImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, versionID p
 	if err != nil {
 		return courses.ImmutableCourseVersion{}, err
 	}
-	provenanceRow, err := q.GetCourseVersionPublicationProvenance(ctx, versionID)
-	if err != nil {
-		return courses.ImmutableCourseVersion{}, storageError(err)
-	}
 	result := courses.ImmutableCourseVersion{
 		ID: version.ID,
 		CourseVersion: courses.CourseVersionInput{
@@ -303,21 +327,31 @@ func getImmutableCourseVersion(ctx context.Context, q *sqlc.Queries, versionID p
 			Attribution:        version.Attribution,
 			PublishedAt:        version.PublishedAt.UTC(),
 		},
-		Provenance: courses.CourseVersionProvenance{
-			ReviewID:              provenanceRow.ReviewID.String(),
-			ReviewRevision:        provenanceRow.ReviewRevision,
-			DraftID:               provenanceRow.DraftID.String(),
-			DraftRevision:         provenanceRow.DraftRevision,
-			SnapshotSchemaVersion: int(provenanceRow.SnapshotSchemaVersion),
-			SubmittedByUserID:     provenanceRow.SubmittedByUserID.String(),
-			SubmittedAt:           provenanceRow.SubmittedAt.Time.UTC(),
-			ApprovedByUserID:      provenanceRow.ApprovedByUserID.String(),
-			ApprovedAt:            cloneTime(provenanceRow.ApprovedAt.Time.UTC()),
-			PublishedByUserID:     provenanceRow.PublishedByUserID.String(),
-		},
 		Modules:            []courses.ImmutableCourseVersionModule{},
 		AssetBindings:      []courses.PublishedAssetBinding{},
 		AssessmentBindings: []courses.PublishedAssessmentBinding{},
+	}
+	switch courses.PublicationOrigin(versionRow.PublicationOrigin) {
+	case courses.PublicationOriginNative:
+		provenanceRow, err := q.GetCourseVersionPublicationProvenance(ctx, versionID)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, storageError(err)
+		}
+		result.Provenance = courses.CourseVersionProvenance{ReviewID: provenanceRow.ReviewID.String(), ReviewRevision: provenanceRow.ReviewRevision, DraftID: provenanceRow.DraftID.String(), DraftRevision: provenanceRow.DraftRevision, SnapshotSchemaVersion: int(provenanceRow.SnapshotSchemaVersion), SubmittedByUserID: provenanceRow.SubmittedByUserID.String(), SubmittedAt: provenanceRow.SubmittedAt.Time.UTC(), ApprovedByUserID: provenanceRow.ApprovedByUserID.String(), ApprovedAt: cloneTime(provenanceRow.ApprovedAt.Time.UTC()), PublishedByUserID: provenanceRow.PublishedByUserID.String()}
+		result.Publication = courses.PublicationProvenance{Origin: courses.PublicationOriginNative, Native: &result.Provenance}
+	case courses.PublicationOriginImported:
+		row, err := q.GetCourseVersionImportProvenance(ctx, versionID)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, storageError(err)
+		}
+		semver, err := courses.ParseVersion(row.SourceVersion)
+		if err != nil {
+			return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
+		}
+		imported := courses.ImportedPublicationProvenance{ImportID: row.ImportID.String(), PackageFingerprint: row.PackageFingerprint, PortableSourceCourseID: row.PortableSourceCourseID, PortableSourceCourseVersionID: row.PortableSourceCourseVersionID, SourceVersion: semver, ImportedAt: row.ImportedAt.Time.UTC()}
+		result.Publication = courses.PublicationProvenance{Origin: courses.PublicationOriginImported, Imported: &imported}
+	default:
+		return courses.ImmutableCourseVersion{}, courses.ErrInvalidImmutableCourseVersion
 	}
 	bindingRows, err := q.ListCourseVersionAssetBindings(ctx, versionID)
 	if err != nil {

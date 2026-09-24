@@ -105,7 +105,7 @@ func (r *Repository) CreateImportedAvailableAsset(ctx context.Context, input ass
 	if err != nil {
 		return assets.Asset{}, assets.ErrInvalidAsset
 	}
-	row, err := r.q.CreateImportedAvailableAsset(ctx, sqlc.CreateImportedAvailableAssetParams{ImportID: importID, OriginalFilename: input.OriginalFilename, MediaType: input.MediaType, ByteSize: pgtype.Int8{Int64: input.ByteSize, Valid: true}, Sha256Digest: pgtype.Text{String: string(input.SHA256Digest), Valid: true}, StorageObjectID: storageID})
+	row, err := r.q.CreateImportedAvailableAsset(ctx, sqlc.CreateImportedAvailableAssetParams{ImportID: importID, PackageAssetKey: pgtype.Text{String: input.PackageAssetKey, Valid: true}, OriginalFilename: input.OriginalFilename, MediaType: input.MediaType, ByteSize: pgtype.Int8{Int64: input.ByteSize, Valid: true}, Sha256Digest: pgtype.Text{String: string(input.SHA256Digest), Valid: true}, StorageObjectID: storageID})
 	if err != nil {
 		return assets.Asset{}, storageError(err)
 	}
@@ -147,7 +147,7 @@ func mapAsset(row sqlc.AssetsAsset) (assets.Asset, error) {
 	}
 	asset := assets.Asset{
 		ID: assets.AssetID(row.ID.String()), OwnerDraftID: row.OwnerDraftID.String(), OriginalFilename: row.OriginalFilename,
-		Origin: origin, ImportID: row.ImportID.String(), MediaType: row.MediaType, Lifecycle: lifecycle, CreatedByUserID: row.CreatedByUserID.String(), CreatedAt: row.CreatedAt.Time.UTC(),
+		Origin: origin, ImportID: row.ImportID.String(), PackageAssetKey: row.PackageAssetKey.String, MediaType: row.MediaType, Lifecycle: lifecycle, CreatedByUserID: row.CreatedByUserID.String(), CreatedAt: row.CreatedAt.Time.UTC(),
 	}
 	if row.ByteSize.Valid {
 		asset.ByteSize = row.ByteSize.Int64

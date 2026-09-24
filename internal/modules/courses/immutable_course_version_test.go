@@ -38,7 +38,7 @@ func validImmutableCourseVersion(t *testing.T) ImmutableCourseVersion {
 		t.Fatal(err)
 	}
 	approvedAt := time.Date(2026, time.September, 11, 12, 0, 0, 0, time.UTC)
-	return ImmutableCourseVersion{
+	result := ImmutableCourseVersion{
 		CourseVersion: CourseVersionInput{
 			CourseID: "10000000-0000-4000-8000-000000000001", Version: version, Status: CourseVersionPublished,
 			Title: "Immutable version", Description: "A complete immutable version.", LearningObjectives: []string{"Explain persistence"},
@@ -56,6 +56,8 @@ func validImmutableCourseVersion(t *testing.T) ImmutableCourseVersion {
 		},
 		Modules: []ImmutableCourseVersionModule{},
 	}
+	result.Publication = PublicationProvenance{Origin: PublicationOriginNative, Native: &result.Provenance}
+	return result
 }
 
 func TestCourseVersionStoreValidatesBeforeRepositoryWrite(t *testing.T) {

@@ -22,11 +22,15 @@ CREATE TABLE courses.course_version_import_provenance (
 );
 ALTER TABLE assets.asset ADD COLUMN origin text NOT NULL DEFAULT 'AUTHORING_DRAFT' CHECK (origin IN ('AUTHORING_DRAFT','PACKAGE_IMPORT'));
 ALTER TABLE assets.asset ADD COLUMN import_id uuid REFERENCES portability.import_record(id) ON DELETE RESTRICT;
+ALTER TABLE assets.asset ADD COLUMN package_asset_key text;
 ALTER TABLE assets.asset ALTER COLUMN owner_draft_id DROP NOT NULL;
 ALTER TABLE assets.asset ALTER COLUMN created_by_user_id DROP NOT NULL;
-ALTER TABLE assets.asset ADD CONSTRAINT asset_origin_provenance CHECK ((origin='AUTHORING_DRAFT' AND owner_draft_id IS NOT NULL AND created_by_user_id IS NOT NULL AND import_id IS NULL) OR (origin='PACKAGE_IMPORT' AND owner_draft_id IS NULL AND created_by_user_id IS NULL AND import_id IS NOT NULL));
+ALTER TABLE assets.asset ADD CONSTRAINT asset_origin_provenance CHECK ((origin='AUTHORING_DRAFT' AND owner_draft_id IS NOT NULL AND created_by_user_id IS NOT NULL AND import_id IS NULL AND package_asset_key IS NULL) OR (origin='PACKAGE_IMPORT' AND owner_draft_id IS NULL AND created_by_user_id IS NULL AND import_id IS NOT NULL AND package_asset_key IS NOT NULL AND package_asset_key <> ''));
+
+
 -- +goose Down
 ALTER TABLE assets.asset DROP CONSTRAINT asset_origin_provenance;
+ALTER TABLE assets.asset DROP COLUMN package_asset_key;
 ALTER TABLE assets.asset DROP COLUMN import_id;
 ALTER TABLE assets.asset DROP COLUMN origin;
 ALTER TABLE assets.asset ALTER COLUMN owner_draft_id SET NOT NULL;

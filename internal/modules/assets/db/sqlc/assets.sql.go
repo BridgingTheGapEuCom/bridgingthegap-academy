@@ -14,7 +14,7 @@ import (
 const countAvailableAssetsForDraft = `-- name: CountAvailableAssetsForDraft :one
 SELECT count(*)
 FROM assets.asset
-WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE'
+WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE' AND origin = 'AUTHORING_DRAFT'
 `
 
 func (q *Queries) CountAvailableAssetsForDraft(ctx context.Context, ownerDraftID pgtype.UUID) (int64, error) {
@@ -26,11 +26,11 @@ func (q *Queries) CountAvailableAssetsForDraft(ctx context.Context, ownerDraftID
 
 const createAsset = `-- name: CreateAsset :one
 INSERT INTO assets.asset (
-    owner_draft_id, original_filename, media_type, byte_size, sha256_digest,
+    origin, owner_draft_id, original_filename, media_type, byte_size, sha256_digest,
     storage_object_id, lifecycle, created_by_user_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
+VALUES ('AUTHORING_DRAFT', $1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id, package_asset_key
 `
 
 type CreateAssetParams struct {
@@ -69,21 +69,23 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 		&i.CreatedAt,
 		&i.Origin,
 		&i.ImportID,
+		&i.PackageAssetKey,
 	)
 	return i, err
 }
 
 const createImportedAvailableAsset = `-- name: CreateImportedAvailableAsset :one
 INSERT INTO assets.asset (
-    origin, import_id, original_filename, media_type, byte_size, sha256_digest,
+    origin, import_id, package_asset_key, original_filename, media_type, byte_size, sha256_digest,
     storage_object_id, lifecycle
 )
-VALUES ('PACKAGE_IMPORT', $1, $2, $3, $4, $5, $6, 'AVAILABLE')
-RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
+VALUES ('PACKAGE_IMPORT', $1, $2, $3, $4, $5, $6, $7, 'AVAILABLE')
+RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id, package_asset_key
 `
 
 type CreateImportedAvailableAssetParams struct {
 	ImportID         pgtype.UUID
+	PackageAssetKey  pgtype.Text
 	OriginalFilename string
 	MediaType        string
 	ByteSize         pgtype.Int8
@@ -94,6 +96,7 @@ type CreateImportedAvailableAssetParams struct {
 func (q *Queries) CreateImportedAvailableAsset(ctx context.Context, arg CreateImportedAvailableAssetParams) (AssetsAsset, error) {
 	row := q.db.QueryRow(ctx, createImportedAvailableAsset,
 		arg.ImportID,
+		arg.PackageAssetKey,
 		arg.OriginalFilename,
 		arg.MediaType,
 		arg.ByteSize,
@@ -114,6 +117,7 @@ func (q *Queries) CreateImportedAvailableAsset(ctx context.Context, arg CreateIm
 		&i.CreatedAt,
 		&i.Origin,
 		&i.ImportID,
+		&i.PackageAssetKey,
 	)
 	return i, err
 }
@@ -132,7 +136,7 @@ func (q *Queries) DiscardPendingAsset(ctx context.Context, id pgtype.UUID) (int6
 }
 
 const getAsset = `-- name: GetAsset :one
-SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
+SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id, package_asset_key
 FROM assets.asset
 WHERE id = $1
 `
@@ -153,14 +157,15 @@ func (q *Queries) GetAsset(ctx context.Context, id pgtype.UUID) (AssetsAsset, er
 		&i.CreatedAt,
 		&i.Origin,
 		&i.ImportID,
+		&i.PackageAssetKey,
 	)
 	return i, err
 }
 
 const listAvailableAssetsForDraft = `-- name: ListAvailableAssetsForDraft :many
-SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
+SELECT id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id, package_asset_key
 FROM assets.asset
-WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE'
+WHERE owner_draft_id = $1 AND lifecycle = 'AVAILABLE' AND origin = 'AUTHORING_DRAFT'
 ORDER BY created_at DESC, id DESC
 LIMIT $3 OFFSET $2
 `
@@ -193,6 +198,7 @@ func (q *Queries) ListAvailableAssetsForDraft(ctx context.Context, arg ListAvail
 			&i.CreatedAt,
 			&i.Origin,
 			&i.ImportID,
+			&i.PackageAssetKey,
 		); err != nil {
 			return nil, err
 		}
@@ -208,7 +214,7 @@ const markAssetAvailable = `-- name: MarkAssetAvailable :one
 UPDATE assets.asset
 SET lifecycle = 'AVAILABLE', byte_size = $2, sha256_digest = $3, storage_object_id = $4
 WHERE id = $1 AND lifecycle = 'PENDING'
-RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id
+RETURNING id, owner_draft_id, original_filename, media_type, byte_size, sha256_digest, storage_object_id, lifecycle, created_by_user_id, created_at, origin, import_id, package_asset_key
 `
 
 type MarkAssetAvailableParams struct {
@@ -239,6 +245,7 @@ func (q *Queries) MarkAssetAvailable(ctx context.Context, arg MarkAssetAvailable
 		&i.CreatedAt,
 		&i.Origin,
 		&i.ImportID,
+		&i.PackageAssetKey,
 	)
 	return i, err
 }

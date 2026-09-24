@@ -41,7 +41,8 @@ type Asset struct {
 	ID AssetID
 	// Origin defaults to AUTHORING_DRAFT for legacy/native reconstructions.
 	Origin           Origin
-	ImportID         string `json:"-"`
+	ImportID         string
+	PackageAssetKey  string `json:"-"`
 	OwnerDraftID     string `json:"-"`
 	OriginalFilename string
 	MediaType        string

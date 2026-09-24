@@ -329,6 +329,56 @@ func (r *Repository) CreateCourseVersion(ctx context.Context, input courses.Cour
 	return mapCourseVersion(row)
 }
 
+func (r *Repository) CreateImportedCourseVersion(ctx context.Context, input courses.CourseVersionInput) (courses.CourseVersion, error) {
+	if err := input.Validate(); err != nil {
+		return courses.CourseVersion{}, err
+	}
+	courseID, err := uuid(string(input.CourseID))
+	if err != nil {
+		return courses.CourseVersion{}, err
+	}
+	language, err := courses.NormalizeLanguageTag(string(input.SourceLanguage))
+	if err != nil {
+		return courses.CourseVersion{}, err
+	}
+	objectives, err := json.Marshal(input.LearningObjectives)
+	if err != nil {
+		return courses.CourseVersion{}, errors.New("encode learning objectives")
+	}
+	attribution, err := json.Marshal(input.Attribution)
+	if err != nil {
+		return courses.CourseVersion{}, errors.New("encode contributor attribution")
+	}
+	params := sqlc.CreateImportedCourseVersionParams{
+		CourseID:           courseID,
+		Version:            input.Version.String(),
+		Status:             string(input.Status),
+		Title:              input.Title,
+		Description:        input.Description,
+		LearningObjectives: objectives,
+		SourceLanguage:     string(language),
+		Changelog:          input.Changelog,
+		LicenseKind:        string(input.License.Kind),
+		LicenseDisplayName: input.License.DisplayName,
+		Attribution:        attribution,
+		PublishedAt:        pgtype.Timestamptz{Time: input.PublishedAt, Valid: true},
+	}
+	if input.License.Identifier != "" {
+		params.LicenseIdentifier = pgtype.Text{String: input.License.Identifier, Valid: true}
+	}
+	if input.License.URL != "" {
+		params.LicenseUrl = pgtype.Text{String: input.License.URL, Valid: true}
+	}
+	if input.License.CustomText != "" {
+		params.LicenseCustomText = pgtype.Text{String: input.License.CustomText, Valid: true}
+	}
+	row, err := r.q.CreateImportedCourseVersion(ctx, params)
+	if err != nil {
+		return courses.CourseVersion{}, storageError(err)
+	}
+	return mapCourseVersion(row)
+}
+
 func (r *Repository) GetCourseVersion(ctx context.Context, id courses.CourseVersionID) (courses.CourseVersion, error) {
 	key, err := uuid(string(id))
 	if err != nil {
