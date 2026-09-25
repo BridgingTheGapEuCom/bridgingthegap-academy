@@ -62,6 +62,7 @@ func (h *dashboardWidgetAPI) list(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"widgets": values})
 }
 func (h *dashboardWidgetAPI) create(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	var in dashboardCreateRequest
 	if decodeAuthoringBody(w, r, maxDashboardWidgetBody, &in) != nil {
 		problem(w, r, 400, "Invalid request")
@@ -76,6 +77,7 @@ func (h *dashboardWidgetAPI) create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, value)
 }
 func (h *dashboardWidgetAPI) update(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	var in dashboardUpdateRequest
 	if decodeAuthoringBody(w, r, maxDashboardWidgetBody, &in) != nil {
 		problem(w, r, 400, "Invalid request")
@@ -103,6 +105,7 @@ func (h *dashboardWidgetAPI) update(w http.ResponseWriter, r *http.Request) {
 	problem(w, r, 404, "Not found")
 }
 func (h *dashboardWidgetAPI) move(w http.ResponseWriter, r *http.Request, delta int) {
+	w.Header().Set("Cache-Control", "no-store")
 	var in dashboardMoveRequest
 	if decodeAuthoringBody(w, r, maxDashboardWidgetBody, &in) != nil {
 		problem(w, r, 400, "Invalid request")
@@ -139,6 +142,7 @@ func (h *dashboardWidgetAPI) move(w http.ResponseWriter, r *http.Request, delta 
 	writeJSON(w, 200, map[string]any{"widgets": out})
 }
 func (h *dashboardWidgetAPI) delete(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	var in dashboardDeleteRequest
 	if decodeAuthoringBody(w, r, maxDashboardWidgetBody, &in) != nil {
 		problem(w, r, 400, "Invalid request")

@@ -87,7 +87,7 @@ func (r *Repository) ReorderDashboardPlacements(ctx context.Context, ids []strin
 	if err != nil {
 		return nil, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx, `SELECT placement_id::text, revision FROM plugins.dashboard_widget_placement ORDER BY position FOR UPDATE`)
 	if err != nil {
 		return nil, storageError(err)
