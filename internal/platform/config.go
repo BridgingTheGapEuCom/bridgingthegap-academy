@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/signing"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
 )
 
 const defaultAssetMaxBytes int64 = 100 * 1024 * 1024
@@ -30,6 +32,10 @@ type Config struct {
 	OpenBadgesKeyID          string
 	OpenBadgesSeedFile       string
 	openBadgesSeed           secretSeed
+	PluginRuntimeOrigin      string
+	PluginRuntimeKeyID       string
+	PluginRuntimeSeedFile    string
+	pluginRuntimeSeed        secretSeed
 }
 
 // String keeps credentials out of accidental structured configuration logs.
@@ -65,6 +71,14 @@ func LoadConfig() (Config, error) {
 			ID: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_ID"), Name: os.Getenv("BTG_LMS_CERTIFICATE_ISSUER_NAME"),
 		},
 	}
+	runtimeSeed, runtimeSeedFile, err := pluginRuntimeSigningSeed()
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.PluginRuntimeOrigin = os.Getenv("BTG_LMS_PLUGIN_RUNTIME_ORIGIN")
+	cfg.PluginRuntimeKeyID = os.Getenv("BTG_LMS_PLUGIN_RUNTIME_KEY_ID")
+	cfg.PluginRuntimeSeedFile = runtimeSeedFile
+	cfg.pluginRuntimeSeed = runtimeSeed
 	switch envOr("BTG_LMS_MODE", "production") {
 	case "production":
 	case "development":
@@ -110,12 +124,48 @@ func LoadConfig() (Config, error) {
 			return Config{}, errors.New("invalid signed Open Badges key material")
 		}
 	}
+	if cfg.pluginRuntimeSeed != "" || cfg.PluginRuntimeKeyID != "" || cfg.PluginRuntimeOrigin != "" {
+		if cfg.pluginRuntimeSeed == "" || cfg.PluginRuntimeKeyID == "" || cfg.PluginRuntimeOrigin == "" || cfg.PublicOrigin == "" {
+			return Config{}, errors.New("widget runtime requires a distinct origin, key ID, Ed25519 seed, and public origin")
+		}
+		runtimeOrigin, runtimeErr := parseOrigin(cfg.PluginRuntimeOrigin)
+		publicOrigin, publicErr := parseOrigin(cfg.PublicOrigin)
+		if runtimeErr != nil || publicErr != nil || runtimeOrigin == publicOrigin || runtimeOrigin.host == publicOrigin.host {
+			return Config{}, errors.New("widget runtime origin must use a distinct host")
+		}
+		if !cfg.DevelopmentHTTP && (runtimeOrigin.scheme != "https" || publicOrigin.scheme != "https") {
+			return Config{}, errors.New("production widget runtime origins must use HTTPS")
+		}
+		if _, _, err := cfg.widgetRuntimeTokenService(); err != nil {
+			return Config{}, err
+		}
+	}
 	for name, address := range map[string]string{"BTG_LMS_HTTP_ADDR": cfg.HTTPAddr, "BTG_LMS_METRICS_ADDR": cfg.MetricsAddr} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
 			return Config{}, fmt.Errorf("%s: %w", name, err)
 		}
 	}
 	return cfg, nil
+}
+
+func pluginRuntimeSigningSeed() (secretSeed, string, error) {
+	inline := os.Getenv("BTG_LMS_PLUGIN_RUNTIME_ED25519_SEED_B64URL")
+	file := os.Getenv("BTG_LMS_PLUGIN_RUNTIME_ED25519_SEED_FILE")
+	if inline != "" && file != "" {
+		return "", "", errors.New("configure only one widget runtime Ed25519 seed source")
+	}
+	if file == "" {
+		return secretSeed(inline), "", nil
+	}
+	info, err := os.Stat(file)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+		return "", "", errors.New("widget runtime Ed25519 seed file must be a regular owner-only file")
+	}
+	value, err := os.ReadFile(file)
+	if err != nil || strings.TrimSpace(string(value)) == "" {
+		return "", "", errors.New("widget runtime Ed25519 seed file is unavailable")
+	}
+	return secretSeed(strings.TrimSpace(string(value))), file, nil
 }
 
 // openBadgesSigningSeed supports exactly one production secret source: a
@@ -164,6 +214,21 @@ func (cfg Config) signedOpenBadgesKey() (signing.KeyProvider, bool, error) {
 		return nil, true, errors.New("invalid signed Open Badges key material")
 	}
 	return key, true, nil
+}
+
+func (cfg Config) widgetRuntimeTokenService() (*plugins.RuntimeTokenService, bool, error) {
+	if cfg.pluginRuntimeSeed == "" {
+		return nil, false, nil
+	}
+	seed, err := base64.RawURLEncoding.DecodeString(string(cfg.pluginRuntimeSeed))
+	if err != nil {
+		return nil, true, errors.New("invalid widget runtime Ed25519 seed")
+	}
+	service, err := plugins.NewRuntimeTokenService(cfg.PluginRuntimeKeyID, seed, plugins.DefaultTokenLifetime)
+	if err != nil {
+		return nil, true, errors.New("invalid widget runtime signing configuration")
+	}
+	return service, true, nil
 }
 
 func envPositiveInt64(key string, fallback int64) (int64, error) {

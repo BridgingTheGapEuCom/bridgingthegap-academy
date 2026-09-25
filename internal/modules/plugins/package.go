@@ -390,7 +390,8 @@ func (m Manifest) Validate() error {
 		last = v.Path
 	}
 	for _, e := range m.Entrypoints {
-		if !widgetIDPattern.MatchString(e.ID) || widgets[e.ID] || !types[e.Type] || strings.TrimSpace(e.Name) == "" || resources[e.Resource].Path == "" {
+		extension := strings.ToLower(path.Ext(e.Resource))
+		if !widgetIDPattern.MatchString(e.ID) || widgets[e.ID] || !types[e.Type] || strings.TrimSpace(e.Name) == "" || resources[e.Resource].Path == "" || extension != ".js" && extension != ".mjs" {
 			return errors.New("entrypoints")
 		}
 		widgets[e.ID] = true

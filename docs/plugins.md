@@ -1,9 +1,9 @@
 # Plugin trust and registry foundation
 
-The Plugins module establishes static package identity, integrity, trust, and
-local installation state. It does not execute plugin resources. Plugin code is
-not loaded into the Go process, imported as JavaScript, run as WebAssembly, or
-contacted over the network during package validation or registration.
+The Plugins module establishes package identity, integrity, trust, local
+installation state, and an isolated browser runtime. Plugin code is never
+loaded into the Go process or Academy's main JavaScript context and is never
+executed during validation or registration.
 
 ## Package and manifest v1
 
@@ -108,12 +108,72 @@ Future administrative operations require the installation-scoped
 `plugins.manage` capability. No HTTP management API is part of this slice.
 Individual widget placement authorization is also deferred.
 
-## Runtime boundary and future work
+## Widget runtime boundary
 
-The long-term invariant is that a plugin receives only explicitly granted
-runtime capabilities. It must never inherit server filesystem, database,
-environment, user tokens, or unrestricted network authority. A later widget
-runtime will map validated course widget references through a controlled block
-and sandbox boundary; this foundation does not modify canonical LessonContent.
-Dashboard rendering, sandboxing, marketplace discovery, downloads, updates,
-signing services, and runtime unloading after trust changes remain deferred.
+Widget JavaScript runs only in an iframe on the separately configured
+`BTG_LMS_PLUGIN_RUNTIME_ORIGIN`. Production requires HTTPS and a host different
+from `BTG_LMS_PUBLIC_ORIGIN`; development also requires a distinct host (for
+example `plugins.localhost`). There is no same-origin production fallback. The
+Academy session cookie is host-only, is not sent to the runtime host, and is
+never accepted by runtime APIs.
+
+The iframe sandbox is exactly `allow-scripts allow-same-origin`. Combining
+those flags is safe here because the runtime origin is required to be distinct
+from the Academy origin. It lets both sides enforce an exact `postMessage`
+origin instead of using `targetOrigin: "*"`. Top navigation, popups, forms,
+modals, downloads, and opener control remain unavailable.
+
+Runtime pages use a restrictive CSP beginning with `default-src 'none'`.
+Scripts, styles, images, media, and capability API connections are limited to
+the plugin runtime origin; forms, objects, frames, workers, fonts, manifests,
+and base URLs are disabled. `frame-ancestors` names only the Academy host.
+There is no CDN or arbitrary external network access. `connect-src 'self'`
+permits only the capability-token runtime endpoints on the isolated origin.
+
+Validated resource bytes and their path, size, and SHA-256 identity are stored
+in the plugin-owned registry transaction. Resource URLs include plugin ID,
+version, and artifact digest. Lookups use exact inventory identity rather than
+filesystem path concatenation, and bytes are rechecked against their digest
+before launch or serving. Declared immutable resources may remain cacheable
+after disablement; possession of bytes grants no runtime authority.
+
+## Runtime credentials and protocol
+
+Every launch receives a fresh opaque UUID runtime instance and a five-minute
+Ed25519 capability token. Claims bind the dedicated `widget-runtime` audience,
+runtime instance, plugin ID and version, artifact digest, widget ID and type,
+explicit grants, issue time, and expiry. The signing seed and key ID come from
+the widget-runtime configuration and are separate from sessions, Open Badges,
+and plugin package/approval keys. Tokens are held in memory and delivered by
+the host handshake, never in a URL or cookie.
+
+The initial grants are only `widget.runtime.bootstrap` and
+`widget.runtime.context.read`. Manifest permission is a request declaration;
+it never becomes a runtime grant automatically. Runtime endpoints accept one
+Bearer token and never fall back to the Academy session cookie.
+
+Host and iframe exchange strict envelopes with protocol
+`btg-widget-runtime`, version `1`, message type, runtime instance ID, and
+payload. Startup is `WIDGET_READY`, `RUNTIME_INIT`, then
+`RUNTIME_INITIALIZED`. Both sides check the exact other origin; the host also
+checks `event.source` against its iframe. Unknown messages, sources, origins,
+instances, and protocol versions are ignored. `BTG_RUNTIME_DISABLED` is an
+optional advisory shutdown message and is not the security boundary.
+
+Every launch and refresh re-evaluates enabled state, current keys, approvals,
+local unknown-plugin policy, widget declaration, and entrypoint integrity.
+Disablement, approval revocation, or key disablement therefore blocks new
+launches and refresh immediately. An already issued token remains usable until
+its short expiry; after that runtime API access ends, and a reload cannot
+relaunch. This avoids a durable per-render revocation table.
+
+Course and Dashboard placement, placement authorization, widget authoring,
+plugin management UI, outbound networking, marketplace discovery, updates,
+and forced termination of already-rendered frames remain deferred.
+
+Security invariants:
+
+- plugin code never executes in the Academy main JavaScript context;
+- a plugin never receives Academy session credentials;
+- a plugin receives only short-lived, explicitly granted runtime capabilities;
+- trust and enablement are checked before every launch and token refresh.

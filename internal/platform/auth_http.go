@@ -106,6 +106,7 @@ type authHTTP struct {
 	portabilityReader   portabilityPackageReader
 	portabilityCourses  portabilityCourseReader
 	portabilityPreviews *portabilityPreviewStore
+	pluginRuntime       *pluginRuntimeHTTP
 	cookieSecure        bool
 	now                 func() time.Time
 }

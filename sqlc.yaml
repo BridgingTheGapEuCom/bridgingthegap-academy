@@ -73,6 +73,7 @@ sql:
   - engine: postgresql
     schema:
       - internal/modules/infrastructure/postgres/db/migrations/00031_plugins.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00032_plugin_runtime_resources.sql
     queries: internal/modules/plugins/db/query
     gen:
       go:

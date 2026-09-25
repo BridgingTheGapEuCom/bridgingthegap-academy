@@ -38,5 +38,6 @@
   "portability.source_course_mapping": "courses",
   "plugins.verification_key": "plugins",
   "plugins.installed_release": "plugins",
+  "plugins.installed_resource": "plugins",
   "plugins.release_approval": "plugins"
 }

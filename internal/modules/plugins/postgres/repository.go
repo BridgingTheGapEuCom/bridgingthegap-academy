@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"time"
@@ -12,13 +14,17 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins/db/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository struct{ q *sqlc.Queries }
+type Repository struct {
+	pool *pgxpool.Pool
+	q    *sqlc.Queries
+}
 
 var _ plugins.Repository = (*Repository)(nil)
 
-func New(db sqlc.DBTX) *Repository { return &Repository{q: sqlc.New(db)} }
+func New(db *pgxpool.Pool) *Repository { return &Repository{pool: db, q: sqlc.New(db)} }
 
 func (r *Repository) RegisterKey(ctx context.Context, k plugins.VerificationKey) error {
 	if err := k.Validate(); err != nil {
@@ -63,7 +69,7 @@ func (r *Repository) SetKeyEnabled(ctx context.Context, id string, enabled bool)
 	}
 	return nil
 }
-func (r *Repository) RegisterRelease(ctx context.Context, in plugins.InstalledRelease) (plugins.InstalledRelease, bool, error) {
+func (r *Repository) RegisterRelease(ctx context.Context, in plugins.InstalledRelease, resources []plugins.InstalledResource) (plugins.InstalledRelease, bool, error) {
 	if in.Release.Validate() != nil {
 		return plugins.InstalledRelease{}, false, plugins.ErrInvalidRelease
 	}
@@ -82,22 +88,52 @@ func (r *Repository) RegisterRelease(ctx context.Context, in plugins.InstalledRe
 		value = pgtype.Text{String: in.Signature.Value, Valid: true}
 		payload = append([]byte(nil), in.Signature.SigningPayload...)
 	}
-	row, err := r.q.RegisterInstalledRelease(ctx, sqlc.RegisterInstalledReleaseParams{InstallationID: id, PluginID: string(in.Release.PluginID), Version: in.Release.Version, ArtifactDigest: in.Release.ArtifactDigest, Manifest: manifest, SignatureKeyID: key, SignatureValue: value, SigningPayload: payload, RegisteredTrust: string(in.RegisteredTrust), InstalledAt: pgtype.Timestamptz{Time: in.InstalledAt, Valid: true}})
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return plugins.InstalledRelease{}, false, plugins.ErrStorage
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := r.q.WithTx(tx)
+	row, err := q.RegisterInstalledRelease(ctx, sqlc.RegisterInstalledReleaseParams{InstallationID: id, PluginID: string(in.Release.PluginID), Version: in.Release.Version, ArtifactDigest: in.Release.ArtifactDigest, Manifest: manifest, SignatureKeyID: key, SignatureValue: value, SigningPayload: payload, RegisteredTrust: string(in.RegisteredTrust), InstalledAt: pgtype.Timestamptz{Time: in.InstalledAt, Valid: true}})
+	created := true
 	if errors.Is(err, pgx.ErrNoRows) {
-		existing, getErr := r.GetRelease(ctx, in.Release.PluginID, in.Release.Version)
+		row, err = q.GetInstalledRelease(ctx, sqlc.GetInstalledReleaseParams{PluginID: string(in.Release.PluginID), Version: in.Release.Version})
+		if err != nil {
+			return plugins.InstalledRelease{}, false, storageError(err)
+		}
+		existing, getErr := mapRelease(row)
 		if getErr != nil {
 			return plugins.InstalledRelease{}, false, getErr
 		}
 		if existing.Release.ArtifactDigest != in.Release.ArtifactDigest {
 			return plugins.InstalledRelease{}, false, plugins.ErrReleaseConflict
 		}
-		return existing, false, nil
+		id, err = uuid(existing.InstallationID)
+		if err != nil {
+			return plugins.InstalledRelease{}, false, plugins.ErrStorage
+		}
+		created = false
 	}
 	if err != nil {
 		return plugins.InstalledRelease{}, false, storageError(err)
 	}
+	for _, resource := range resources {
+		if int64(len(resource.Content)) != resource.Size || digest(resource.Content) != resource.SHA256 {
+			return plugins.InstalledRelease{}, false, plugins.ErrResourceInvalid
+		}
+		if err := q.RegisterInstalledResource(ctx, sqlc.RegisterInstalledResourceParams{InstallationID: id, ResourcePath: resource.Path, Sha256Digest: resource.SHA256, ByteSize: resource.Size, Content: append([]byte(nil), resource.Content...)}); err != nil {
+			return plugins.InstalledRelease{}, false, storageError(err)
+		}
+		stored, err := q.GetInstalledResource(ctx, sqlc.GetInstalledResourceParams{PluginID: string(in.Release.PluginID), Version: in.Release.Version, ArtifactDigest: in.Release.ArtifactDigest, ResourcePath: resource.Path})
+		if err != nil || stored.Sha256Digest != resource.SHA256 || stored.ByteSize != resource.Size || !bytes.Equal(stored.Content, resource.Content) {
+			return plugins.InstalledRelease{}, false, plugins.ErrResourceInvalid
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return plugins.InstalledRelease{}, false, plugins.ErrStorage
+	}
 	mapped, err := mapRelease(row)
-	return mapped, mapped.InstallationID == in.InstallationID, err
+	return mapped, created, err
 }
 func (r *Repository) GetRelease(ctx context.Context, id plugins.PluginID, version string) (plugins.InstalledRelease, error) {
 	row, err := r.q.GetInstalledRelease(ctx, sqlc.GetInstalledReleaseParams{PluginID: string(id), Version: version})
@@ -105,6 +141,18 @@ func (r *Repository) GetRelease(ctx context.Context, id plugins.PluginID, versio
 		return plugins.InstalledRelease{}, storageError(err)
 	}
 	return mapRelease(row)
+}
+
+func (r *Repository) GetResource(ctx context.Context, release plugins.ReleaseIdentity, resourcePath string) (plugins.InstalledResource, error) {
+	row, err := r.q.GetInstalledResource(ctx, sqlc.GetInstalledResourceParams{PluginID: string(release.PluginID), Version: release.Version, ArtifactDigest: release.ArtifactDigest, ResourcePath: resourcePath})
+	if err != nil {
+		return plugins.InstalledResource{}, storageError(err)
+	}
+	out := plugins.InstalledResource{InstallationID: row.InstallationID.String(), Path: row.ResourcePath, SHA256: row.Sha256Digest, Size: row.ByteSize, Content: append([]byte(nil), row.Content...)}
+	if int64(len(out.Content)) != out.Size || digest(out.Content) != out.SHA256 {
+		return plugins.InstalledResource{}, plugins.ErrResourceInvalid
+	}
+	return out, nil
 }
 func (r *Repository) SetReleaseEnabled(ctx context.Context, id string, enabled bool) (plugins.InstalledRelease, error) {
 	key, err := uuid(id)
@@ -215,4 +263,9 @@ func sameKeyIdentity(a, b plugins.VerificationKey) bool {
 		}
 	}
 	return true
+}
+
+func digest(value []byte) string {
+	sum := sha256.Sum256(value)
+	return hex.EncodeToString(sum[:])
 }

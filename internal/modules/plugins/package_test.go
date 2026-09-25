@@ -352,10 +352,11 @@ type memoryRepository struct {
 	keys      map[string]VerificationKey
 	releases  map[string]InstalledRelease
 	approvals map[string]Approval
+	resources map[string]InstalledResource
 }
 
 func newMemoryRepository() *memoryRepository {
-	return &memoryRepository{map[string]VerificationKey{}, map[string]InstalledRelease{}, map[string]Approval{}}
+	return &memoryRepository{map[string]VerificationKey{}, map[string]InstalledRelease{}, map[string]Approval{}, map[string]InstalledResource{}}
 }
 func (r *memoryRepository) RegisterKey(_ context.Context, k VerificationKey) error {
 	if old, ok := r.keys[k.ID]; ok && !bytes.Equal(old.PublicKey, k.PublicKey) {
@@ -381,15 +382,24 @@ func (r *memoryRepository) SetKeyEnabled(_ context.Context, id string, e bool) e
 	return nil
 }
 func releaseKey(id PluginID, v string) string { return string(id) + "@" + v }
-func (r *memoryRepository) RegisterRelease(_ context.Context, v InstalledRelease) (InstalledRelease, bool, error) {
+func (r *memoryRepository) RegisterRelease(_ context.Context, v InstalledRelease, resources []InstalledResource) (InstalledRelease, bool, error) {
 	k := releaseKey(v.Release.PluginID, v.Release.Version)
 	if old, ok := r.releases[k]; ok {
 		if old.Release.ArtifactDigest != v.Release.ArtifactDigest {
 			return InstalledRelease{}, false, ErrReleaseConflict
 		}
+		for _, resource := range resources {
+			resource.InstallationID = old.InstallationID
+			resource.Content = append([]byte(nil), resource.Content...)
+			r.resources[k+":"+resource.Path] = resource
+		}
 		return old, false, nil
 	}
 	r.releases[k] = v
+	for _, resource := range resources {
+		resource.Content = append([]byte(nil), resource.Content...)
+		r.resources[k+":"+resource.Path] = resource
+	}
 	return v, true, nil
 }
 func (r *memoryRepository) GetRelease(_ context.Context, id PluginID, v string) (InstalledRelease, error) {
@@ -398,6 +408,27 @@ func (r *memoryRepository) GetRelease(_ context.Context, id PluginID, v string) 
 		return InstalledRelease{}, ErrNotFound
 	}
 	return x, nil
+}
+func (r *memoryRepository) GetResource(_ context.Context, id ReleaseIdentity, path string) (InstalledResource, error) {
+	v, ok := r.resources[releaseKey(id.PluginID, id.Version)+":"+path]
+	if !ok || v.SHA256 != idResourceDigest(r, id, path) {
+		return InstalledResource{}, ErrNotFound
+	}
+	v.Content = append([]byte(nil), v.Content...)
+	return v, nil
+}
+
+func idResourceDigest(r *memoryRepository, id ReleaseIdentity, path string) string {
+	v, ok := r.releases[releaseKey(id.PluginID, id.Version)]
+	if !ok || v.Release.ArtifactDigest != id.ArtifactDigest {
+		return ""
+	}
+	for _, resource := range v.Manifest.Resources {
+		if resource.Path == path {
+			return resource.SHA256
+		}
+	}
+	return ""
 }
 func (r *memoryRepository) SetReleaseEnabled(_ context.Context, id string, e bool) (InstalledRelease, error) {
 	for k, v := range r.releases {

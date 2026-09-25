@@ -31,6 +31,8 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
+	pluginspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/portability"
 	progresspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
@@ -150,6 +152,17 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	var pluginRuntime *pluginRuntimeHTTP
+	if tokenService, enabled, tokenErr := cfg.widgetRuntimeTokenService(); tokenErr != nil {
+		return tokenErr
+	} else if enabled {
+		pluginRegistry := plugins.NewRegistryService(pluginspostgres.New(pool), plugins.Policy{})
+		runtimeService, runtimeErr := plugins.NewRuntimeService(pluginRegistry, tokenService, cfg.PluginRuntimeOrigin, cfg.PublicOrigin)
+		if runtimeErr != nil {
+			return runtimeErr
+		}
+		pluginRuntime = &pluginRuntimeHTTP{service: runtimeService}
+	}
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
 		sessions:                    identity.NewSessionService(identitypostgres.New(pool), nil, nil),
@@ -195,6 +208,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		portabilityReader:           portability.NewReader(portability.DefaultLimits()),
 		portabilityCourses:          coursesRepository,
 		portabilityPreviews:         newPortabilityPreviewStore(time.Now),
+		pluginRuntime:               pluginRuntime,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -245,6 +259,16 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
+	if auth != nil && auth.pluginRuntime != nil {
+		r.Group(func(runtime chi.Router) {
+			runtime.Use(auth.pluginRuntime.requireRuntimeHost)
+			runtime.Get("/plugins/runtime/bridge-v1.js", auth.pluginRuntime.handleBridge)
+			runtime.Get("/plugins/runtime/{pluginId}/{version}/{digest}/widgets/{widgetId}", auth.pluginRuntime.handlePage)
+			runtime.Get("/plugins/runtime/{pluginId}/{version}/{digest}/resources/*", auth.pluginRuntime.handleResource)
+			runtime.Get("/api/plugin-runtime/context", auth.pluginRuntime.handleContext)
+			runtime.Post("/api/plugin-runtime/token/refresh", auth.pluginRuntime.handleRefresh)
+		})
+	}
 	if auth != nil {
 		r.Route("/api", func(api chi.Router) {
 			api.Use(auth.noStore)
@@ -406,7 +430,13 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 			web.Serve(w, req)
 		})
 	}
-	r.Get("/*", web.Serve)
+	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
+		if auth != nil && auth.pluginRuntime != nil && auth.pluginRuntime.servesHost(req.Host) {
+			http.NotFound(w, req)
+			return
+		}
+		web.Serve(w, req)
+	})
 	return r
 }
 

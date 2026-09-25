@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
@@ -41,6 +42,11 @@ func testPluginRegistry(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	if err != nil || !created || registered.CurrentTrust != plugins.TrustBTGOwned {
 		t.Fatalf("registered=%#v created=%v err=%v", registered, created, err)
 	}
+	// M10.1a releases predate persisted runtime bytes. Exact package replay is
+	// the safe, digest-bound backfill path after migration 00032.
+	if _, err := pool.Exec(ctx, "DELETE FROM plugins.installed_resource WHERE installation_id = $1", registered.InstallationID); err != nil {
+		t.Fatal(err)
+	}
 	replayed, created, err := service.Register(ctx, pkg)
 	if err != nil || created || replayed.InstallationID != registered.InstallationID {
 		t.Fatalf("replay=%#v created=%v err=%v", replayed, created, err)
@@ -48,6 +54,22 @@ func testPluginRegistry(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	enabled, err := service.Enable(ctx, manifest.ID, manifest.Version)
 	if err != nil || !enabled.Enabled || enabled.State != plugins.StateInstalled {
 		t.Fatalf("enabled=%#v err=%v", enabled, err)
+	}
+	resource, err := repo.GetResource(ctx, enabled.Release, "resources/diagram.js")
+	if err != nil || string(resource.Content) != "export default {}" {
+		t.Fatalf("persisted resource=%#v err=%v", resource, err)
+	}
+	tokens, err := plugins.NewRuntimeTokenService("integration-runtime-key", bytes.Repeat([]byte{14}, ed25519.SeedSize), plugins.DefaultTokenLifetime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := plugins.NewRuntimeService(service, tokens, "https://plugins.academy.example", "https://academy.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	launch, err := runtime.PrepareWidgetRuntime(ctx, manifest.ID, manifest.Version, "diagram", plugins.TypeCourseWidget)
+	if err != nil || !strings.Contains(launch.RuntimeURL, registered.Release.ArtifactDigest) {
+		t.Fatalf("runtime launch=%#v err=%v", launch, err)
 	}
 	changed, _ := plugins.BuildPackageForTesting(manifest, map[string][]byte{"resources/diagram.js": []byte("changed")}, key.ID, private)
 	changedPkg, _ := plugins.NewPackageReader(plugins.Limits{}).Read(ctx, bytes.NewReader(changed))

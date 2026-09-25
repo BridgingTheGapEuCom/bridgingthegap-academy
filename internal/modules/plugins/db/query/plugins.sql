@@ -21,6 +21,19 @@ RETURNING *;
 -- name: GetInstalledRelease :one
 SELECT * FROM plugins.installed_release WHERE plugin_id = $1 AND version = $2;
 
+-- name: RegisterInstalledResource :exec
+INSERT INTO plugins.installed_resource (
+  installation_id, resource_path, sha256_digest, byte_size, content
+) VALUES ($1,$2,$3,$4,$5)
+ON CONFLICT (installation_id, resource_path) DO NOTHING;
+
+-- name: GetInstalledResource :one
+SELECT r.*
+FROM plugins.installed_resource r
+JOIN plugins.installed_release p ON p.installation_id = r.installation_id
+WHERE p.plugin_id = $1 AND p.version = $2 AND p.artifact_digest = $3
+  AND r.resource_path = $4;
+
 -- name: SetInstalledReleaseEnabled :one
 UPDATE plugins.installed_release
 SET enabled = $2, state = CASE WHEN $2 THEN 'INSTALLED' ELSE 'DISABLED' END

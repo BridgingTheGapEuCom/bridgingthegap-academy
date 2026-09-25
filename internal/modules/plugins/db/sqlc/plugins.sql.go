@@ -105,6 +105,39 @@ func (q *Queries) GetInstalledRelease(ctx context.Context, arg GetInstalledRelea
 	return i, err
 }
 
+const getInstalledResource = `-- name: GetInstalledResource :one
+SELECT r.installation_id, r.resource_path, r.sha256_digest, r.byte_size, r.content
+FROM plugins.installed_resource r
+JOIN plugins.installed_release p ON p.installation_id = r.installation_id
+WHERE p.plugin_id = $1 AND p.version = $2 AND p.artifact_digest = $3
+  AND r.resource_path = $4
+`
+
+type GetInstalledResourceParams struct {
+	PluginID       string
+	Version        string
+	ArtifactDigest string
+	ResourcePath   string
+}
+
+func (q *Queries) GetInstalledResource(ctx context.Context, arg GetInstalledResourceParams) (PluginsInstalledResource, error) {
+	row := q.db.QueryRow(ctx, getInstalledResource,
+		arg.PluginID,
+		arg.Version,
+		arg.ArtifactDigest,
+		arg.ResourcePath,
+	)
+	var i PluginsInstalledResource
+	err := row.Scan(
+		&i.InstallationID,
+		&i.ResourcePath,
+		&i.Sha256Digest,
+		&i.ByteSize,
+		&i.Content,
+	)
+	return i, err
+}
+
 const getVerificationKey = `-- name: GetVerificationKey :one
 SELECT key_id, public_key, purpose, allowed_plugin_ids, enabled, created_at FROM plugins.verification_key WHERE key_id = $1
 `
@@ -174,6 +207,32 @@ func (q *Queries) RegisterInstalledRelease(ctx context.Context, arg RegisterInst
 		&i.InstalledAt,
 	)
 	return i, err
+}
+
+const registerInstalledResource = `-- name: RegisterInstalledResource :exec
+INSERT INTO plugins.installed_resource (
+  installation_id, resource_path, sha256_digest, byte_size, content
+) VALUES ($1,$2,$3,$4,$5)
+ON CONFLICT (installation_id, resource_path) DO NOTHING
+`
+
+type RegisterInstalledResourceParams struct {
+	InstallationID pgtype.UUID
+	ResourcePath   string
+	Sha256Digest   string
+	ByteSize       int64
+	Content        []byte
+}
+
+func (q *Queries) RegisterInstalledResource(ctx context.Context, arg RegisterInstalledResourceParams) error {
+	_, err := q.db.Exec(ctx, registerInstalledResource,
+		arg.InstallationID,
+		arg.ResourcePath,
+		arg.Sha256Digest,
+		arg.ByteSize,
+		arg.Content,
+	)
+	return err
 }
 
 const registerVerificationKey = `-- name: RegisterVerificationKey :one

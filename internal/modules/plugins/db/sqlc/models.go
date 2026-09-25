@@ -23,6 +23,14 @@ type PluginsInstalledRelease struct {
 	InstalledAt     pgtype.Timestamptz
 }
 
+type PluginsInstalledResource struct {
+	InstallationID pgtype.UUID
+	ResourcePath   string
+	Sha256Digest   string
+	ByteSize       int64
+	Content        []byte
+}
+
 type PluginsReleaseApproval struct {
 	ApprovalID     pgtype.UUID
 	PluginID       string

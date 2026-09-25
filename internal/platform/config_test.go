@@ -208,6 +208,38 @@ func TestOpenBadgesSubjectSecretIsOptionalUntilExportIsEnabledButNeverWeak(t *te
 	}
 }
 
+func TestWidgetRuntimeConfigurationRequiresDistinctOriginAndDedicatedKey(t *testing.T) {
+	setValidCertificateIssuer(t)
+	t.Setenv("BTG_LMS_MODE", "production")
+	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")
+	t.Setenv("BTG_LMS_ASSET_STORAGE_PATH", t.TempDir())
+	t.Setenv("BTG_LMS_PUBLIC_ORIGIN", "https://academy.example")
+	t.Setenv("BTG_LMS_PLUGIN_RUNTIME_ORIGIN", "https://plugins.academy.example")
+	t.Setenv("BTG_LMS_PLUGIN_RUNTIME_KEY_ID", "widget-runtime-2026")
+	t.Setenv("BTG_LMS_PLUGIN_RUNTIME_ED25519_SEED_B64URL", base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{8}, ed25519.SeedSize)))
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if service, enabled, err := cfg.widgetRuntimeTokenService(); err != nil || !enabled || service == nil {
+		t.Fatalf("runtime token service = %#v, %t, %v", service, enabled, err)
+	}
+
+	t.Setenv("BTG_LMS_PLUGIN_RUNTIME_ORIGIN", "https://academy.example")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("accepted Academy origin for plugin execution")
+	}
+	t.Setenv("BTG_LMS_PLUGIN_RUNTIME_ORIGIN", "http://plugins.academy.example")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("accepted production HTTP plugin origin")
+	}
+	t.Setenv("BTG_LMS_PLUGIN_RUNTIME_ORIGIN", "https://plugins.academy.example")
+	t.Setenv("BTG_LMS_PLUGIN_RUNTIME_ED25519_SEED_B64URL", "invalid")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("accepted invalid runtime signing key")
+	}
+}
+
 func TestSignedOpenBadgesConfigurationRequiresStableIssuerAndKey(t *testing.T) {
 	t.Setenv("BTG_LMS_MODE", "production")
 	t.Setenv("BTG_LMS_DATABASE_URL", "postgres://localhost/btg")

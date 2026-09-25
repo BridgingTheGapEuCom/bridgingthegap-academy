@@ -122,6 +122,17 @@ type InstalledRelease struct {
 	InstalledAt     time.Time
 }
 
+// InstalledResource is an immutable member of a validated release inventory.
+// Content is copied at repository boundaries so callers cannot mutate a
+// registered artifact in memory.
+type InstalledResource struct {
+	InstallationID string
+	Path           string
+	SHA256         string
+	Size           int64
+	Content        []byte
+}
+
 type Policy struct {
 	AllowUnknown                    bool
 	RequireManualApprovalForUnknown bool
@@ -135,6 +146,8 @@ var (
 	ErrInvalidApproval = errors.New("invalid plugin approval")
 	ErrNotFound        = errors.New("plugin release not found")
 	ErrEnableDenied    = errors.New("plugin enablement denied")
+	ErrLaunchDenied    = errors.New("plugin runtime launch denied")
+	ErrResourceInvalid = errors.New("plugin resource integrity failure")
 	ErrStorage         = errors.New("plugin registry unavailable")
 )
 
@@ -142,8 +155,9 @@ type Repository interface {
 	RegisterKey(context.Context, VerificationKey) error
 	GetKey(context.Context, string) (VerificationKey, error)
 	SetKeyEnabled(context.Context, string, bool) error
-	RegisterRelease(context.Context, InstalledRelease) (InstalledRelease, bool, error)
+	RegisterRelease(context.Context, InstalledRelease, []InstalledResource) (InstalledRelease, bool, error)
 	GetRelease(context.Context, PluginID, string) (InstalledRelease, error)
+	GetResource(context.Context, ReleaseIdentity, string) (InstalledResource, error)
 	SetReleaseEnabled(context.Context, string, bool) (InstalledRelease, error)
 	CreateApproval(context.Context, Approval) error
 	RevokeApproval(context.Context, string, time.Time) error
@@ -240,12 +254,50 @@ func (s *RegistryService) Register(ctx context.Context, p *ValidatedPluginPackag
 		evidence = &SignatureEvidence{KeyID: sig.KeyID, Value: sig.Value, SigningPayload: p.SigningPayload()}
 	}
 	release := InstalledRelease{InstallationID: uuid.NewString(), Release: ReleaseIdentity{p.manifest.ID, p.manifest.Version, p.artifactDigest}, Manifest: p.Manifest(), Signature: evidence, RegisteredTrust: trust, CurrentTrust: trust, State: StateDisabled, InstalledAt: s.now()}
-	stored, created, err := s.repository.RegisterRelease(ctx, release)
+	resources := make([]InstalledResource, 0, len(p.manifest.Resources))
+	for _, declared := range p.manifest.Resources {
+		resources = append(resources, InstalledResource{InstallationID: release.InstallationID, Path: declared.Path, SHA256: declared.SHA256, Size: declared.Size, Content: append([]byte(nil), p.resources[declared.Path]...)})
+	}
+	stored, created, err := s.repository.RegisterRelease(ctx, release, resources)
 	if err != nil {
 		return InstalledRelease{}, false, err
 	}
 	stored.CurrentTrust, err = s.trust.EvaluateRelease(ctx, stored)
 	return stored, created, err
+}
+
+// RuntimeRelease re-evaluates trust and local policy for every launch or token
+// refresh. Enabled is necessary but never sufficient on its own.
+func (s *RegistryService) RuntimeRelease(ctx context.Context, id PluginID, version string) (InstalledRelease, error) {
+	r, err := s.Get(ctx, id, version)
+	if err != nil {
+		return InstalledRelease{}, err
+	}
+	if !r.Enabled || !s.executionAllowed(ctx, r) {
+		return InstalledRelease{}, ErrLaunchDenied
+	}
+	return r, nil
+}
+
+func (s *RegistryService) Resource(ctx context.Context, release ReleaseIdentity, resourcePath string) (InstalledResource, error) {
+	if release.Validate() != nil {
+		return InstalledResource{}, ErrInvalidRelease
+	}
+	return s.repository.GetResource(ctx, release, resourcePath)
+}
+
+func (s *RegistryService) executionAllowed(ctx context.Context, r InstalledRelease) bool {
+	if r.CurrentTrust == TrustBTGOwned || r.CurrentTrust == TrustBTGApproved {
+		return true
+	}
+	if r.CurrentTrust != TrustUnknown || !s.policy.AllowUnknown {
+		return false
+	}
+	if !s.policy.RequireManualApprovalForUnknown {
+		return true
+	}
+	_, err := s.repository.FindActiveApproval(ctx, r.Release, ApprovalLocalUnknown, "")
+	return err == nil
 }
 func (s *RegistryService) Get(ctx context.Context, id PluginID, version string) (InstalledRelease, error) {
 	r, err := s.repository.GetRelease(ctx, id, version)
