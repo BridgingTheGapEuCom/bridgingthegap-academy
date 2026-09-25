@@ -99,6 +99,8 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		return err
 	}
 	coursesRepository := coursespostgres.New(pool)
+	pluginRegistry := plugins.NewRegistryService(pluginspostgres.New(pool), plugins.Policy{})
+	pluginContentValidator := plugins.NewCourseWidgetContentValidator(pluginRegistry)
 	certificateRepository := credentialspostgres.New(pool)
 	var badgePublication *publication.Service
 	if key, enabled, keyErr := cfg.signedOpenBadgesKey(); keyErr != nil {
@@ -139,7 +141,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	publicationService := authoring.NewPublicationServiceWithAssets(authoringRepository, publicationAssetResolver, courses.NewCourseVersionStore(coursesRepository), authoringRepository)
+	publicationService := authoring.NewPublicationServiceWithAssetsAndWidgets(authoringRepository, publicationAssetResolver, courses.NewCourseVersionStore(coursesRepository), authoringRepository, pluginContentValidator)
 	packageExporter, err := portability.NewExporter(coursesRepository, translationService, assetStorage, time.Now)
 	if err != nil {
 		return err
@@ -148,20 +150,21 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	packageImporter, err := portability.NewImporter(packageImportRepository, time.Now)
+	packageImporter, err := portability.NewImporterWithCourseWidgets(packageImportRepository, pluginRegistry, time.Now)
 	if err != nil {
 		return err
 	}
 	var pluginRuntime *pluginRuntimeHTTP
+	var courseWidgetRuntime courseWidgetLaunch
 	if tokenService, enabled, tokenErr := cfg.widgetRuntimeTokenService(); tokenErr != nil {
 		return tokenErr
 	} else if enabled {
-		pluginRegistry := plugins.NewRegistryService(pluginspostgres.New(pool), plugins.Policy{})
 		runtimeService, runtimeErr := plugins.NewRuntimeService(pluginRegistry, tokenService, cfg.PluginRuntimeOrigin, cfg.PublicOrigin)
 		if runtimeErr != nil {
 			return runtimeErr
 		}
 		pluginRuntime = &pluginRuntimeHTTP{service: runtimeService}
+		courseWidgetRuntime = plugins.NewCourseWidgetLaunchService(coursesRepository, runtimeService)
 	}
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
@@ -183,7 +186,8 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
 		authoringLessonMutations:    authoring.NewLessonMutationService(authoringRepository, authoringAuthorizer),
-		authoringLessonContent:      authoring.NewLessonContentMutationService(authoringRepository, authoringAuthorizer),
+		authoringLessonContent:      authoring.NewLessonContentMutationServiceWithValidator(authoringRepository, authoringAuthorizer, pluginContentValidator),
+		authoringCourseWidgets:      authoring.NewCourseWidgetDiscoveryService(courseWidgetDiscoveryAdapter{registry: pluginRegistry}, authoringAuthorizer),
 		authoringMemberships:        authoring.NewMembershipMutationService(authoringRepository, authoringAuthorizer),
 		authoringReviews:            newAuthoringReviewApplicationService(cfg, authoringRepository, authoringAuthorizer),
 		authoringPublicationStatus:  authoring.NewReviewPublicationStatusServiceWithAssets(authoringRepository, authoringAuthorizer, publicationAssetResolver),
@@ -205,6 +209,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		assetMaxBytes:               cfg.AssetMaxBytes,
 		portabilityExporter:         packageExporter,
 		portabilityImporter:         packageImporter,
+		courseWidgetRuntime:         courseWidgetRuntime,
 		portabilityReader:           portability.NewReader(portability.DefaultLimits()),
 		portabilityCourses:          coursesRepository,
 		portabilityPreviews:         newPortabilityPreviewStore(time.Now),
@@ -282,6 +287,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				api.Get("/courses/{slug}", auth.handleCourseCurrent)
 				api.Get("/courses/{slug}/versions/{version}", auth.handleCourseVersion)
 				api.Get("/courses/{slug}/versions/{version}/lessons/{lessonKey}", auth.handleLesson)
+			}
+			if auth.courseWidgetRuntime != nil {
+				api.Post("/courses/by-id/{courseId}/versions/{version}/lessons/{lessonKey}/blocks/{blockKey}/widget-runtime", auth.handleCourseWidgetRuntimeLaunch)
 			}
 			if auth.translatedCourses != nil {
 				api.Get("/courses/by-id/{courseId}/versions/{version}/translations/{language}", auth.handleLearnerTranslatedCourse)
@@ -386,6 +394,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				}
 				if auth.authoringLessonContent != nil {
 					protected.Put("/authoring/drafts/{draftId}/lessons/{lessonId}/content", auth.handleAuthoringLessonContent)
+				}
+				if auth.authoringCourseWidgets != nil {
+					protected.Get("/authoring/drafts/{draftId}/plugins/course-widgets", auth.handleAuthoringCourseWidgets)
 				}
 				if auth.authoringMemberships != nil {
 					protected.Post("/authoring/drafts/{draftId}/members", auth.handleAuthoringMemberAdd)

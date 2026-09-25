@@ -13,6 +13,7 @@ describe('canonical content editor helpers', () => {
     expect(second.key).not.toBe(first.key)
     const error = contentEditorError({ schemaVersion: 1, blocks: [first, second] })
     if (type === 'IMAGE' || type === 'VIDEO' || type === 'AUDIO' || type === 'DOWNLOAD') expect(error).toContain('Upload an asset')
+    else if (type === 'PLUGIN_WIDGET') expect(error).toContain('Choose a Course widget')
     else expect(error).toBeUndefined()
   })
 

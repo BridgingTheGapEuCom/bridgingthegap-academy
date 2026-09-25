@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 )
 
 func runtimeFixture(t *testing.T, policy Policy) (*RegistryService, *RuntimeService, *RuntimeTokenService, InstalledRelease) {
@@ -66,6 +68,32 @@ func TestRuntimeLaunchUsesFreshIdentityAndExplicitCapabilities(t *testing.T) {
 	}
 	if _, err := runtime.PrepareWidgetRuntime(context.Background(), release.Release.PluginID, release.Release.Version, "timeline", TypeDashboardWidget); !errors.Is(err, ErrLaunchDenied) {
 		t.Fatalf("widget type mismatch = %v", err)
+	}
+}
+
+func TestCourseWidgetRuntimePinsPlacementContextAndGrant(t *testing.T) {
+	_, runtime, tokens, release := runtimeFixture(t, Policy{})
+	placement := CourseWidgetRuntimePlacement{
+		Placement: courses.PluginWidgetBlockPayload{PluginID: string(release.Release.PluginID), PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: "timeline", WidgetType: string(TypeCourseWidget), Configuration: json.RawMessage(`{"theme":"light"}`)},
+		Context:   CourseWidgetRuntimeContext{CourseID: "11111111-1111-4111-8111-111111111111", CourseVersionID: "22222222-2222-4222-8222-222222222222", CourseVersion: "1.0.0", LessonKey: "lesson-one", PlacementKey: "timeline-widget", PresentationLanguage: "en", Configuration: json.RawMessage(`{"theme":"light"}`)},
+	}
+	launch, err := runtime.PrepareCourseWidgetRuntime(context.Background(), placement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if launch.CourseContext == nil || launch.CourseContext.CourseID != placement.Context.CourseID || !hasCapability(launch.Capabilities, CapabilityCourseContextRead) {
+		t.Fatalf("course launch omitted pinned context/grant: %#v", launch)
+	}
+	if _, err := tokens.Verify(launch.Token, RuntimeTokenExpectation{Capability: CapabilityCourseContextRead}); err != nil {
+		t.Fatalf("course capability missing: %v", err)
+	}
+	placementContext, err := runtime.CourseContext(launch.Token)
+	if err != nil || string(placementContext.Configuration) != `{"theme":"light"}` {
+		t.Fatalf("context = %#v, %v", placementContext, err)
+	}
+	generic, _ := runtime.PrepareWidgetRuntime(context.Background(), release.Release.PluginID, release.Release.Version, "timeline", TypeCourseWidget)
+	if _, err := runtime.CourseContext(generic.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
+		t.Fatalf("generic launch received Course context: %v", err)
 	}
 }
 

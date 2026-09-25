@@ -12,19 +12,22 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/google/uuid"
 )
 
 const (
-	RuntimeIssuer          = "btg-academy"
-	RuntimeAudience        = "btg-widget-runtime"
-	RuntimeProtocol        = "btg-widget-runtime"
-	RuntimeProtocolVersion = 1
-	CapabilityBootstrap    = "widget.runtime.bootstrap"
-	CapabilityContextRead  = "widget.runtime.context.read"
-	DefaultTokenLifetime   = 5 * time.Minute
+	RuntimeIssuer               = "btg-academy"
+	RuntimeAudience             = "btg-widget-runtime"
+	RuntimeProtocol             = "btg-widget-runtime"
+	RuntimeProtocolVersion      = 1
+	CapabilityBootstrap         = "widget.runtime.bootstrap"
+	CapabilityContextRead       = "widget.runtime.context.read"
+	CapabilityCourseContextRead = "widget.course.context.read"
+	DefaultTokenLifetime        = 5 * time.Minute
 )
 
 var (
@@ -44,13 +47,14 @@ type RuntimeContext struct {
 }
 
 type RuntimeLaunch struct {
-	Context       RuntimeContext `json:"context"`
-	WidgetName    string         `json:"widgetName"`
-	RuntimeURL    string         `json:"runtimeUrl"`
-	RuntimeOrigin string         `json:"runtimeOrigin"`
-	Token         string         `json:"token"`
-	ExpiresAt     time.Time      `json:"expiresAt"`
-	Capabilities  []string       `json:"capabilities"`
+	Context       RuntimeContext              `json:"context"`
+	WidgetName    string                      `json:"widgetName"`
+	RuntimeURL    string                      `json:"runtimeUrl"`
+	RuntimeOrigin string                      `json:"runtimeOrigin"`
+	Token         string                      `json:"token"`
+	ExpiresAt     time.Time                   `json:"expiresAt"`
+	Capabilities  []string                    `json:"capabilities"`
+	CourseContext *CourseWidgetRuntimeContext `json:"courseContext,omitempty"`
 }
 
 type RuntimeClaims struct {
@@ -155,6 +159,8 @@ type RuntimeService struct {
 	tokens        *RuntimeTokenService
 	runtimeOrigin string
 	hostOrigin    string
+	contexts      map[string]CourseWidgetRuntimeContext
+	contextsMu    sync.RWMutex
 }
 
 func NewRuntimeService(registry *RegistryService, tokens *RuntimeTokenService, runtimeOrigin, hostOrigin string) (*RuntimeService, error) {
@@ -163,7 +169,7 @@ func NewRuntimeService(registry *RegistryService, tokens *RuntimeTokenService, r
 	if registry == nil || tokens == nil || runtimeErr != nil || hostErr != nil || strings.EqualFold(runtimeURL, hostURL) {
 		return nil, ErrInvalidRuntimeConfiguration
 	}
-	return &RuntimeService{registry: registry, tokens: tokens, runtimeOrigin: runtimeURL, hostOrigin: hostURL}, nil
+	return &RuntimeService{registry: registry, tokens: tokens, runtimeOrigin: runtimeURL, hostOrigin: hostURL, contexts: map[string]CourseWidgetRuntimeContext{}}, nil
 }
 
 func (s *RuntimeService) PrepareWidgetRuntime(ctx context.Context, id PluginID, version, widgetID string, widgetType PluginType) (RuntimeLaunch, error) {
@@ -172,7 +178,45 @@ func (s *RuntimeService) PrepareWidgetRuntime(ctx context.Context, id PluginID, 
 		return RuntimeLaunch{}, err
 	}
 	runtime := RuntimeContext{RuntimeInstanceID: uuid.NewString(), PluginID: id, PluginVersion: version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: entry.ID, WidgetType: entry.Type}
-	return s.issue(runtime, entry.Name)
+	return s.issue(runtime, entry.Name, []string{CapabilityBootstrap, CapabilityContextRead})
+}
+
+// CourseWidgetRuntimeContext is immutable placement data served only after a
+// token proves the narrow Course-context capability. It contains no learner
+// identity, progress, assessment answers, or session state.
+type CourseWidgetRuntimeContext struct {
+	CourseID             courses.CourseID        `json:"courseId"`
+	CourseVersionID      courses.CourseVersionID `json:"courseVersionId"`
+	CourseVersion        string                  `json:"courseVersion"`
+	LessonKey            string                  `json:"lessonKey"`
+	PlacementKey         string                  `json:"placementKey"`
+	PresentationLanguage courses.LanguageTag     `json:"presentationLanguage"`
+	Configuration        json.RawMessage         `json:"configuration"`
+}
+
+type CourseWidgetRuntimePlacement struct {
+	Context   CourseWidgetRuntimeContext
+	Placement courses.PluginWidgetBlockPayload
+}
+
+func (s *RuntimeService) PrepareCourseWidgetRuntime(ctx context.Context, placement CourseWidgetRuntimePlacement) (RuntimeLaunch, error) {
+	if s == nil || placement.Placement.Validate() != nil || validateCourseWidgetContext(placement.Context) != nil {
+		return RuntimeLaunch{}, ErrLaunchDenied
+	}
+	release, entry, err := s.resolve(ctx, PluginID(placement.Placement.PluginID), placement.Placement.PluginVersion, placement.Placement.WidgetID, TypeCourseWidget)
+	if err != nil || release.Release.ArtifactDigest != placement.Placement.ArtifactDigest {
+		return RuntimeLaunch{}, ErrLaunchDenied
+	}
+	runtime := RuntimeContext{RuntimeInstanceID: uuid.NewString(), PluginID: release.Release.PluginID, PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: entry.ID, WidgetType: TypeCourseWidget}
+	launch, err := s.issue(runtime, entry.Name, []string{CapabilityBootstrap, CapabilityContextRead, CapabilityCourseContextRead})
+	if err != nil {
+		return RuntimeLaunch{}, err
+	}
+	s.contextsMu.Lock()
+	s.contexts[runtime.RuntimeInstanceID] = cloneCourseWidgetContext(placement.Context)
+	s.contextsMu.Unlock()
+	launch.CourseContext = pointerCourseWidgetContext(placement.Context)
+	return launch, nil
 }
 
 func (s *RuntimeService) Refresh(ctx context.Context, token string) (RuntimeLaunch, error) {
@@ -187,11 +231,44 @@ func (s *RuntimeService) Refresh(ctx context.Context, token string) (RuntimeLaun
 	if release.Release.ArtifactDigest != claims.Context.ArtifactDigest {
 		return RuntimeLaunch{}, ErrInvalidRuntimeToken
 	}
-	return s.issue(claims.Context, entry.Name)
+	capabilities := []string{CapabilityBootstrap, CapabilityContextRead}
+	s.contextsMu.RLock()
+	_, coursePlacement := s.contexts[claims.Context.RuntimeInstanceID]
+	s.contextsMu.RUnlock()
+	if coursePlacement {
+		capabilities = append(capabilities, CapabilityCourseContextRead)
+	} else if hasCapability(claims.Capabilities, CapabilityCourseContextRead) {
+		return RuntimeLaunch{}, ErrInvalidRuntimeToken
+	}
+	launch, err := s.issue(claims.Context, entry.Name, capabilities)
+	if err != nil {
+		return RuntimeLaunch{}, err
+	}
+	if coursePlacement {
+		s.contextsMu.RLock()
+		context := s.contexts[claims.Context.RuntimeInstanceID]
+		s.contextsMu.RUnlock()
+		launch.CourseContext = pointerCourseWidgetContext(context)
+	}
+	return launch, nil
 }
 
 func (s *RuntimeService) VerifyContextToken(token string) (RuntimeClaims, error) {
 	return s.tokens.Verify(token, RuntimeTokenExpectation{Capability: CapabilityContextRead})
+}
+
+func (s *RuntimeService) CourseContext(token string) (CourseWidgetRuntimeContext, error) {
+	claims, err := s.tokens.Verify(token, RuntimeTokenExpectation{Capability: CapabilityCourseContextRead})
+	if err != nil {
+		return CourseWidgetRuntimeContext{}, err
+	}
+	s.contextsMu.RLock()
+	context, ok := s.contexts[claims.Context.RuntimeInstanceID]
+	s.contextsMu.RUnlock()
+	if !ok {
+		return CourseWidgetRuntimeContext{}, ErrInvalidRuntimeToken
+	}
+	return cloneCourseWidgetContext(context), nil
 }
 
 func (s *RuntimeService) Resource(ctx context.Context, release ReleaseIdentity, resourcePath string) (InstalledResource, error) {
@@ -226,11 +303,10 @@ func (s *RuntimeService) resolve(ctx context.Context, id PluginID, version, widg
 	return InstalledRelease{}, Entrypoint{}, ErrLaunchDenied
 }
 
-func (s *RuntimeService) issue(runtime RuntimeContext, widgetName string) (RuntimeLaunch, error) {
+func (s *RuntimeService) issue(runtime RuntimeContext, widgetName string, capabilities []string) (RuntimeLaunch, error) {
 	if strings.TrimSpace(widgetName) == "" {
 		return RuntimeLaunch{}, ErrLaunchDenied
 	}
-	capabilities := []string{CapabilityBootstrap, CapabilityContextRead}
 	token, expires, err := s.tokens.Issue(runtime, capabilities)
 	if err != nil {
 		return RuntimeLaunch{}, err
@@ -269,17 +345,55 @@ func validateRuntimeContext(value RuntimeContext) error {
 }
 
 func validCapabilities(values []string) bool {
-	if len(values) == 0 || len(values) > 2 {
+	if len(values) == 0 || len(values) > 3 {
 		return false
 	}
 	seen := map[string]bool{}
 	for _, value := range values {
-		if value != CapabilityBootstrap && value != CapabilityContextRead || seen[value] {
+		if value != CapabilityBootstrap && value != CapabilityContextRead && value != CapabilityCourseContextRead || seen[value] {
 			return false
 		}
 		seen[value] = true
 	}
 	return true
+}
+
+func hasCapability(values []string, required string) bool {
+	for _, value := range values {
+		if value == required {
+			return true
+		}
+	}
+	return false
+}
+
+func validateCourseWidgetContext(value CourseWidgetRuntimeContext) error {
+	if value.CourseID == "" || value.CourseVersionID == "" || value.LessonKey == "" || value.PlacementKey == "" || value.PresentationLanguage == "" {
+		return ErrLaunchDenied
+	}
+	if _, err := courses.ParseVersion(value.CourseVersion); err != nil {
+		return ErrLaunchDenied
+	}
+	lesson, lessonErr := courses.NormalizeStructureKey(value.LessonKey)
+	block, blockErr := courses.NormalizeStructureKey(value.PlacementKey)
+	if lessonErr != nil || blockErr != nil || lesson != value.LessonKey || block != value.PlacementKey || len(value.Configuration) == 0 || len(value.Configuration) > courses.MaxPluginWidgetConfigBytes {
+		return ErrLaunchDenied
+	}
+	var object map[string]json.RawMessage
+	if strictDecode(value.Configuration, &object) != nil || object == nil {
+		return ErrLaunchDenied
+	}
+	return nil
+}
+
+func cloneCourseWidgetContext(value CourseWidgetRuntimeContext) CourseWidgetRuntimeContext {
+	value.Configuration = append(json.RawMessage(nil), value.Configuration...)
+	return value
+}
+
+func pointerCourseWidgetContext(value CourseWidgetRuntimeContext) *CourseWidgetRuntimeContext {
+	copy := cloneCourseWidgetContext(value)
+	return &copy
 }
 
 func exactOrigin(value string) (string, error) {

@@ -157,6 +157,7 @@ type Repository interface {
 	SetKeyEnabled(context.Context, string, bool) error
 	RegisterRelease(context.Context, InstalledRelease, []InstalledResource) (InstalledRelease, bool, error)
 	GetRelease(context.Context, PluginID, string) (InstalledRelease, error)
+	ListReleases(context.Context) ([]InstalledRelease, error)
 	GetResource(context.Context, ReleaseIdentity, string) (InstalledResource, error)
 	SetReleaseEnabled(context.Context, string, bool) (InstalledRelease, error)
 	CreateApproval(context.Context, Approval) error
@@ -306,6 +307,36 @@ func (s *RegistryService) Get(ctx context.Context, id PluginID, version string) 
 	}
 	r.CurrentTrust, err = s.trust.EvaluateRelease(ctx, r)
 	return r, err
+}
+
+// CourseWidgets returns only releases currently permitted for Course
+// composition. It deliberately re-evaluates trust instead of returning a
+// registry-time classification.
+func (s *RegistryService) CourseWidgets(ctx context.Context) ([]InstalledRelease, error) {
+	if s == nil || s.repository == nil {
+		return nil, ErrStorage
+	}
+	releases, err := s.repository.ListReleases(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]InstalledRelease, 0, len(releases))
+	for _, release := range releases {
+		current, err := s.Get(ctx, release.Release.PluginID, release.Release.Version)
+		if err != nil {
+			return nil, err
+		}
+		if !current.Enabled || !s.executionAllowed(ctx, current) {
+			continue
+		}
+		for _, entry := range current.Manifest.Entrypoints {
+			if entry.Type == TypeCourseWidget {
+				result = append(result, current)
+				break
+			}
+		}
+	}
+	return result, nil
 }
 func (s *RegistryService) Enable(ctx context.Context, id PluginID, version string) (InstalledRelease, error) {
 	r, err := s.Get(ctx, id, version)

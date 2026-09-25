@@ -45,6 +45,8 @@ export type AuthoringReviewSnapshotLesson = components['schemas']['AuthoringRevi
 export type AuthoringPublicationRequest = components['schemas']['AuthoringPublicationRequest']
 export type AuthoringPublication = components['schemas']['AuthoringPublication']
 export type PublicationValidationIssue = components['schemas']['PublicationValidationIssue']
+export type AuthoringCourseWidget = components['schemas']['AuthoringCourseWidget']
+export type AuthoringCourseWidgetList = components['schemas']['AuthoringCourseWidgetList']
 
 export type AuthoringModuleCreate = components['schemas']['AuthoringModuleCreateRequest']
 export type AuthoringModuleUpdate = { expectedModuleRevision: number; title?: string; description?: string }
@@ -320,6 +322,11 @@ export async function replaceAuthoringLessonPrerequisites(draftID: string, lesso
 export async function replaceAuthoringLessonContent(draftID: string, lessonID: string, input: components['schemas']['AuthoringLessonContentUpdateRequest'], client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringLessonContentMutation> {
   assertAuthoringID(draftID); assertAuthoringID(lessonID)
   return client.request<AuthoringLessonContentMutation>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}/content`, jsonRequest('PUT', input))
+}
+
+export async function listAuthoringCourseWidgets(draftID: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringCourseWidgetList> {
+  assertAuthoringID(draftID)
+  return client.request<AuthoringCourseWidgetList>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/plugins/course-widgets`, { cache: 'no-store' })
 }
 
 // The server owns asset identity, ownership, MIME detection, integrity, and

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { CanonicalBlock } from '../authoring/contentEditor'
+import type { AuthoringCourseWidget } from '../authoring/authoring'
 import BtgFormField from './BtgFormField.vue'
 import AuthoringRichTextEditor from './AuthoringRichTextEditor.vue'
 import AuthoringInlineTextEditor from './AuthoringInlineTextEditor.vue'
 import AuthoringAssetAttachment from './AuthoringAssetAttachment.vue'
 import AuthoringAssessmentAttachment from './AuthoringAssessmentAttachment.vue'
-const props = defineProps<{ block: CanonicalBlock; position: number; draftId: string; lessonId: string }>()
+const props = defineProps<{ block: CanonicalBlock; position: number; draftId: string; lessonId: string; courseWidgets?: AuthoringCourseWidget[] }>()
 const emit = defineEmits<{ update: [block: CanonicalBlock]; unavailable: [] }>()
 function field(name: 'code' | 'language' | 'title' | 'text' | 'attribution' | 'sourceUrl' | 'altText' | 'caption' | 'label' | 'description' | 'transcript', event: Event) {
   const value = (event.target as HTMLInputElement).value
@@ -41,6 +42,20 @@ function attach(field: 'asset' | 'captionsAsset', assetKey: string) {
 }
 function attachAssessment(assessmentKey: string) {
   if (props.block.type === 'KNOWLEDGE_CHECK') emit('update', { ...props.block, payload: { assessmentKey } })
+}
+function chooseWidget(event: Event) {
+  if (props.block.type !== 'PLUGIN_WIDGET') return
+  const selected = props.courseWidgets?.find((widget) => `${widget.pluginId}:${widget.pluginVersion}:${widget.artifactDigest}:${widget.widgetId}` === (event.target as HTMLSelectElement).value)
+  if (!selected) return
+  emit('update', { ...props.block, payload: { pluginId: selected.pluginId, pluginVersion: selected.pluginVersion, artifactDigest: selected.artifactDigest, widgetId: selected.widgetId, widgetType: 'COURSE_WIDGET', configuration: props.block.payload.configuration } })
+}
+function widgetConfiguration(event: Event) {
+  if (props.block.type !== 'PLUGIN_WIDGET') return
+  try {
+    const configuration: unknown = JSON.parse((event.target as HTMLTextAreaElement).value)
+    if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration)) return
+    emit('update', { ...props.block, payload: { ...props.block.payload, configuration: configuration as Record<string, unknown> } })
+  } catch { /* keep the last valid configuration; inline error remains visible */ }
 }
 </script>
 
@@ -91,6 +106,15 @@ function attachAssessment(assessmentKey: string) {
   </template>
   <template v-else-if="block.type === 'KNOWLEDGE_CHECK'">
     <AuthoringAssessmentAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" :current-assessment-key="block.payload.assessmentKey" @attached="attachAssessment" @unavailable="emit('unavailable')" />
+  </template>
+  <template v-else-if="block.type === 'PLUGIN_WIDGET'">
+    <BtgFormField label="Course widget" :error="!courseWidgets?.length ? 'No Course widgets are currently available.' : undefined" v-slot="{ controlId, describedBy, invalid }">
+      <select :id="controlId" :value="`${block.payload.pluginId}:${block.payload.pluginVersion}:${block.payload.artifactDigest}:${block.payload.widgetId}`" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" @change="chooseWidget">
+        <option v-for="widget in courseWidgets" :key="`${widget.pluginId}:${widget.pluginVersion}:${widget.artifactDigest}:${widget.widgetId}`" :value="`${widget.pluginId}:${widget.pluginVersion}:${widget.artifactDigest}:${widget.widgetId}`">{{ widget.widgetName }} · {{ widget.pluginName }} {{ widget.pluginVersion }}</option>
+      </select>
+    </BtgFormField>
+    <BtgFormField label="Widget configuration (JSON)" v-slot="{ controlId }"><textarea :id="controlId" :value="JSON.stringify(block.payload.configuration, null, 2)" maxlength="16384" spellcheck="false" @change="widgetConfiguration" /></BtgFormField>
+    <p class="authoring-section__intro">Widget configuration is data only. This release is pinned when the Course is published.</p>
   </template>
   <p v-else-if="block.type === 'DIVIDER'" class="authoring-section__intro">A semantic divider. No configuration is needed.</p>
   <template v-else>

@@ -20,7 +20,7 @@
       <p v-else-if="content.kind === 'invalid-content'" role="note">This lesson content cannot be displayed safely.</p>
       <p v-else-if="!content.blocks.length">This lesson has no published content yet.</p>
       <div v-else v-for="block in content.blocks" :key="block.key" class="published-course-reader-lesson__block">
-        <LessonBlockRenderer :block="block" :published-asset-context="assetContext" :published-assessment="assessmentFor(block)" :attempt-session="attemptSessionFor(block)" />
+        <LessonBlockRenderer :block="block" :published-asset-context="assetContext" :published-assessment="assessmentFor(block)" :attempt-session="attemptSessionFor(block)" :course-id="courseId" :course-version="version" :lesson-key="lesson.stableKey" />
       </div>
     </section>
   </article>

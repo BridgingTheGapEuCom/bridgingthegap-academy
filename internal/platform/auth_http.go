@@ -80,6 +80,7 @@ type authHTTP struct {
 	authoringStructureMutations *authoring.ModuleMutationService
 	authoringLessonMutations    *authoring.LessonMutationService
 	authoringLessonContent      *authoring.LessonContentMutationService
+	authoringCourseWidgets      *authoring.CourseWidgetDiscoveryService
 	authoringMemberships        *authoring.MembershipMutationService
 	authoringReviews            *authoring.ReviewApplicationService
 	authoringPublicationStatus  *authoring.ReviewPublicationStatusService
@@ -103,6 +104,7 @@ type authHTTP struct {
 	assetMaxBytes       int64
 	portabilityExporter portabilityExport
 	portabilityImporter portabilityImport
+	courseWidgetRuntime courseWidgetLaunch
 	portabilityReader   portabilityPackageReader
 	portabilityCourses  portabilityCourseReader
 	portabilityPreviews *portabilityPreviewStore

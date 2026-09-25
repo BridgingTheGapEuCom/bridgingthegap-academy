@@ -3,12 +3,12 @@ import { decodeLessonContent, safePublishedURL } from '../lesson/content'
 import type { AuthoringLessonContent } from './authoring'
 
 export type CanonicalBlock = components['schemas']['LessonBlock']
-export type EditableBlockType = 'TEXT' | 'HEADING' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'CODE' | 'QUOTE' | 'CALLOUT' | 'DOWNLOAD' | 'KNOWLEDGE_CHECK' | 'DIVIDER'
+export type EditableBlockType = 'TEXT' | 'HEADING' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'CODE' | 'QUOTE' | 'CALLOUT' | 'DOWNLOAD' | 'KNOWLEDGE_CHECK' | 'PLUGIN_WIDGET' | 'DIVIDER'
 export const editableBlockTypes: { type: EditableBlockType; label: string }[] = [
   { type: 'TEXT', label: 'Text' }, { type: 'HEADING', label: 'Heading' },
   { type: 'IMAGE', label: 'Image' }, { type: 'VIDEO', label: 'Video' }, { type: 'AUDIO', label: 'Audio' },
   { type: 'CODE', label: 'Code' }, { type: 'QUOTE', label: 'Quote' },
-  { type: 'CALLOUT', label: 'Callout' }, { type: 'DOWNLOAD', label: 'Download' }, { type: 'KNOWLEDGE_CHECK', label: 'Knowledge check' }, { type: 'DIVIDER', label: 'Divider' },
+  { type: 'CALLOUT', label: 'Callout' }, { type: 'DOWNLOAD', label: 'Download' }, { type: 'KNOWLEDGE_CHECK', label: 'Knowledge check' }, { type: 'PLUGIN_WIDGET', label: 'Course widget' }, { type: 'DIVIDER', label: 'Divider' },
 ]
 // Mirrors the canonical Go content limits; no editor-only fields enter this document.
 export const contentEditorLimits = { blocks: 200, bytes: 1 << 20, text: 50_000, codeBytes: 100_000 }
@@ -44,6 +44,7 @@ export function createContentBlock(type: EditableBlockType, existingKeys: string
     // A non-empty placeholder preserves the established migration-compatible
     // canonical shape until an author chooses a real Draft Assessment.
     case 'KNOWLEDGE_CHECK': return { key, type, payload: { assessmentKey: 'assessment-placeholder' } }
+    case 'PLUGIN_WIDGET': return { key, type, payload: { pluginId: 'com.example.placeholder.widget', pluginVersion: '0.0.0', artifactDigest: '0'.repeat(64), widgetId: 'widget-placeholder', widgetType: 'COURSE_WIDGET', configuration: {} } }
     case 'DIVIDER': return { key, type, payload: {} }
   }
 }
@@ -61,6 +62,8 @@ export function contentEditorError(content: AuthoringLessonContent): string | un
     return 'This content document cannot be edited safely. Check block keys and payloads.'
   }
   for (const block of content.blocks) {
+	if (block.type === 'PLUGIN_WIDGET' && block.payload.pluginId === 'com.example.placeholder.widget') return 'Choose a Course widget before saving.'
+	if (block.type === 'PLUGIN_WIDGET' && new TextEncoder().encode(JSON.stringify(block.payload.configuration)).length > 16 * 1024) return 'Widget configuration must fit within 16 KiB.'
     if (block.type === 'CODE' && (!block.payload.code || new TextEncoder().encode(block.payload.code).length > contentEditorLimits.codeBytes)) return 'Code must contain text and fit within 100,000 bytes.'
     if (block.type === 'QUOTE' && (!block.payload.text.trim() || new TextEncoder().encode(block.payload.text).length > contentEditorLimits.text)) return 'Enter quote text within the 50,000-byte limit.'
     if (block.type === 'QUOTE' && block.payload.sourceUrl && !safePublishedURL(block.payload.sourceUrl)) return 'Use a safe HTTPS or internal source URL.'

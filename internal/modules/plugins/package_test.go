@@ -409,6 +409,13 @@ func (r *memoryRepository) GetRelease(_ context.Context, id PluginID, v string) 
 	}
 	return x, nil
 }
+func (r *memoryRepository) ListReleases(_ context.Context) ([]InstalledRelease, error) {
+	result := make([]InstalledRelease, 0, len(r.releases))
+	for _, release := range r.releases {
+		result = append(result, release)
+	}
+	return result, nil
+}
 func (r *memoryRepository) GetResource(_ context.Context, id ReleaseIdentity, path string) (InstalledResource, error) {
 	v, ok := r.resources[releaseKey(id.PluginID, id.Version)+":"+path]
 	if !ok || v.SHA256 != idResourceDigest(r, id, path) {

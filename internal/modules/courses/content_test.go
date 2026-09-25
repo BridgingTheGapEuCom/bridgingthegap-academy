@@ -69,6 +69,7 @@ func TestBuiltInBlockPayloadValidation(t *testing.T) {
 		{Key: "table", Type: BlockTable, Payload: TableBlockPayload{Headers: []string{"Name"}, Rows: [][]string{{"Value"}}}},
 		{Key: "download", Type: BlockDownload, Payload: DownloadBlockPayload{Asset: asset, Label: "Download"}},
 		{Key: "knowledge-check", Type: BlockKnowledgeCheck, Payload: KnowledgeCheckBlockPayload{AssessmentKey: "sync-basics-check"}},
+		{Key: "timeline-widget", Type: BlockPluginWidget, Payload: PluginWidgetBlockPayload{PluginID: "com.example.academy.timeline", PluginVersion: "1.0.0", ArtifactDigest: strings.Repeat("a", 64), WidgetID: "timeline", WidgetType: "COURSE_WIDGET", Configuration: json.RawMessage(`{"theme":"light"}`)}},
 		{Key: "divider", Type: BlockDivider, Payload: DividerBlockPayload{}},
 	}
 	for _, block := range blocks {
@@ -102,6 +103,9 @@ func TestBuiltInBlockPayloadValidation(t *testing.T) {
 	}
 	if err := (CodeBlockPayload{Code: strings.Repeat("x", MaxCodeCharacters+1)}).Validate(); err == nil {
 		t.Fatal("oversized code accepted")
+	}
+	if err := (PluginWidgetBlockPayload{PluginID: "com.example.academy.timeline", PluginVersion: "1.0.0", ArtifactDigest: strings.Repeat("a", 64), WidgetID: "timeline", WidgetType: "COURSE_WIDGET", Configuration: json.RawMessage(`{"onclick":"x"}`)}).Validate(); err == nil {
+		t.Fatal("event-handler configuration accepted")
 	}
 	if err := (TableBlockPayload{Headers: make([]string, MaxTableColumns+1), Rows: [][]string{{}}}).Validate(); err == nil {
 		t.Fatal("oversized table accepted")

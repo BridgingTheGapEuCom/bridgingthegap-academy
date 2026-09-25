@@ -5,10 +5,11 @@ import { publishedAssetURL, type PublishedAssetDeliveryContext } from '../lesson
 import LessonRichText from './LessonRichText.vue'
 import LessonRichTextInlines from './LessonRichTextInlines.vue'
 import LearnerKnowledgeCheck from './LearnerKnowledgeCheck.vue'
+import CourseWidgetBlock from './CourseWidgetBlock.vue'
 import type { PublishedAssessmentLearnerView } from '../courses/courses'
 import type { LearnerAttemptSession } from '../courses/attempts'
 
-const props = defineProps<{ block: RenderableBlock; publishedAssetContext?: PublishedAssetDeliveryContext; publishedAssessment?: PublishedAssessmentLearnerView; attemptSession?: LearnerAttemptSession }>()
+const props = defineProps<{ block: RenderableBlock; publishedAssetContext?: PublishedAssetDeliveryContext; publishedAssessment?: PublishedAssessmentLearnerView; attemptSession?: LearnerAttemptSession; courseId?: string; courseVersion?: string; lessonKey?: string }>()
 
 const headingTag = computed(() => props.block.type === 'HEADING' ? `h${props.block.payload.level}` : 'h2')
 const calloutLabel = computed(() => props.block.type === 'CALLOUT' ? ({ INFO: 'Information', NOTE: 'Note', WARNING: 'Warning', TIP: 'Tip' }[props.block.payload.kind]) : '')
@@ -104,6 +105,8 @@ function assetURL(asset: { assetKey: string }, download = false): string | undef
     <p class="lesson-block__label">Knowledge check</p>
     <p>Interactive knowledge checks will be available when assessments are enabled.</p>
   </div>
+
+  <CourseWidgetBlock v-else-if="block.type === 'PLUGIN_WIDGET'" :block="block" :course-id="courseId" :version="courseVersion" :lesson-key="lessonKey" />
 
   <hr v-else-if="block.type === 'DIVIDER'" class="lesson-block lesson-block--divider" />
 

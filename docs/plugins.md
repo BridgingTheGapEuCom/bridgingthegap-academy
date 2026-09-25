@@ -170,9 +170,44 @@ launches and refresh immediately. An already issued token remains usable until
 its short expiry; after that runtime API access ends, and a reload cannot
 relaunch. This avoids a durable per-render revocation table.
 
-Course and Dashboard placement, placement authorization, widget authoring,
-plugin management UI, outbound networking, marketplace discovery, updates,
-and forced termination of already-rendered frames remain deferred.
+## Course widget placement
+
+Courses use one canonical `PLUGIN_WIDGET` LessonContent block. Its existing
+block key is the placement key and the immutable payload pins plugin ID,
+SemVer, artifact digest, Course-widget entrypoint ID, and bounded JSON
+configuration. Configuration is data only: it is never evaluated as HTML or
+JavaScript. Course authors use their existing Lesson-content capability and
+revision CAS; `plugins.manage` remains installation administration only.
+
+Only enabled releases that currently satisfy trust policy appear in Course
+authoring discovery. Draft replacement, Review submission, and publication
+all validate the exact pinned release. A disabled or revoked release blocks a
+new publication instead of stripping the block. Review and published Course
+snapshots retain their exact release coordinates forever; an upgrade never
+rewrites an existing CourseVersion.
+
+Learners receive a safe block projection and launch by Course ID, exact
+version, Lesson key, and placement key. The server resolves the immutable
+CourseVersion and derives the release and configuration itself. A Course
+launch receives the additional narrow `widget.course.context.read` grant.
+Its server-authored placement context contains only Course/version IDs,
+Lesson/placement keys, presentation language, and configuration—never learner
+identity, progress, assessment answers, Community data, or session material.
+The launch descriptor conveys that context in the existing handshake because
+the runtime CSP deliberately has `connect-src 'none'`; the protected context
+endpoint remains available to a future host-mediated boundary.
+
+If a pinned release is later disabled or loses trust, the CourseVersion remains
+unchanged and the rest of the Course reads normally. The widget renders a calm
+unavailable state and cannot obtain a fresh launch or refreshed token.
+Portability preserves widget placement metadata but never bundles plugin code:
+an import succeeds only when the target installation already has the exact
+enabled, trusted ID/version/digest/widget release. It never downloads,
+substitutes, or removes a widget.
+
+Dashboard placement, plugin management UI, marketplace discovery, updates,
+outbound networking, and forced termination of already-rendered frames remain
+deferred.
 
 Security invariants:
 

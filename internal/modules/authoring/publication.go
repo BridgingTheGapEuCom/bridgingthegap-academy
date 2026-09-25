@@ -70,6 +70,14 @@ type PublicationService struct {
 	assets       PublicationAssetResolver
 	versions     PublicationCourseVersionStore
 	publications PublicationRecordRepository
+	widgets      PublicationWidgetValidator
+}
+
+// PublicationWidgetValidator is an optional infrastructure check over a
+// frozen Review snapshot. It prevents publication of a currently unavailable
+// pinned release without giving Authoring a Plugins dependency.
+type PublicationWidgetValidator interface {
+	ValidateReviewSnapshot(context.Context, []courses.LessonContent) error
 }
 
 func NewPublicationService(reviews ReviewRepository, versions PublicationCourseVersionStore, publications PublicationRecordRepository) *PublicationService {
@@ -78,6 +86,10 @@ func NewPublicationService(reviews ReviewRepository, versions PublicationCourseV
 
 func NewPublicationServiceWithAssets(reviews ReviewRepository, resolver PublicationAssetResolver, versions PublicationCourseVersionStore, publications PublicationRecordRepository) *PublicationService {
 	return &PublicationService{reviews: reviews, converter: NewPublicationConverter(), assets: resolver, versions: versions, publications: publications}
+}
+
+func NewPublicationServiceWithAssetsAndWidgets(reviews ReviewRepository, resolver PublicationAssetResolver, versions PublicationCourseVersionStore, publications PublicationRecordRepository, widgets PublicationWidgetValidator) *PublicationService {
+	return &PublicationService{reviews: reviews, converter: NewPublicationConverter(), assets: resolver, versions: versions, publications: publications, widgets: widgets}
 }
 
 func (s *PublicationService) Publish(ctx context.Context, command PublishReviewCommand) (PublicationResult, error) {
@@ -94,6 +106,17 @@ func (s *PublicationService) Publish(ctx context.Context, command PublishReviewC
 	}
 	if cycle.Status != ReviewApproved {
 		return PublicationResult{}, ErrReviewInvalidState
+	}
+	if s.widgets != nil {
+		contents := make([]courses.LessonContent, 0)
+		for _, module := range snapshot.Modules {
+			for _, lesson := range module.Lessons {
+				contents = append(contents, lesson.Content)
+			}
+		}
+		if err := s.widgets.ValidateReviewSnapshot(ctx, contents); err != nil {
+			return PublicationResult{}, &PublicationValidationFailure{Result: PublicationValidationResult{Issues: []PublicationValidationIssue{{Code: PublicationIssuePluginWidgetUnavailable, Path: "modules", Message: "A pinned Course widget release is unavailable for publication."}}}}
+		}
 	}
 	if validation := validatePublicationBeforeAssetResolution(s.converter.validator, cycle, &snapshot); !validation.Publishable {
 		return PublicationResult{}, &PublicationValidationFailure{Result: validation}

@@ -38,6 +38,14 @@ type LessonMutationService struct {
 type LessonContentMutationService struct {
 	repository LessonContentMutationRepository
 	authorizer Authorizer
+	validator  LessonContentValidator
+}
+
+// LessonContentValidator is an optional infrastructure adapter. It keeps
+// Authoring independent of the Plugins module while ensuring canonical block
+// references can be attested before a Draft write succeeds.
+type LessonContentValidator interface {
+	ValidateLessonContent(context.Context, courses.LessonContent) error
 }
 
 func NewLessonMutationService(repository LessonMutationRepository, authorizer Authorizer) *LessonMutationService {
@@ -46,6 +54,10 @@ func NewLessonMutationService(repository LessonMutationRepository, authorizer Au
 
 func NewLessonContentMutationService(repository LessonContentMutationRepository, authorizer Authorizer) *LessonContentMutationService {
 	return &LessonContentMutationService{repository: repository, authorizer: authorizer}
+}
+
+func NewLessonContentMutationServiceWithValidator(repository LessonContentMutationRepository, authorizer Authorizer, validator LessonContentValidator) *LessonContentMutationService {
+	return &LessonContentMutationService{repository: repository, authorizer: authorizer, validator: validator}
 }
 
 func (s *LessonContentMutationService) ReplaceContent(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, lessonID LessonID, expectedLessonRevision int64, content courses.LessonContent) (LessonMutationResult, error) {
@@ -61,6 +73,11 @@ func (s *LessonContentMutationService) ReplaceContent(ctx context.Context, actor
 	}
 	if err != nil {
 		return LessonMutationResult{}, err
+	}
+	if s.validator != nil {
+		if err := s.validator.ValidateLessonContent(ctx, content); err != nil {
+			return LessonMutationResult{}, ErrInvalidStructure
+		}
 	}
 	lesson, draft, err := s.repository.ReplaceLessonContentForDraft(ctx, draftID, lessonID, expectedLessonRevision, content)
 	return LessonMutationResult{Lesson: lesson, Draft: draft}, err

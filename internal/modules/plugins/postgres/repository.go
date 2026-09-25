@@ -143,6 +143,22 @@ func (r *Repository) GetRelease(ctx context.Context, id plugins.PluginID, versio
 	return mapRelease(row)
 }
 
+func (r *Repository) ListReleases(ctx context.Context) ([]plugins.InstalledRelease, error) {
+	rows, err := r.q.ListInstalledReleases(ctx)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	result := make([]plugins.InstalledRelease, 0, len(rows))
+	for _, row := range rows {
+		release, err := mapRelease(row)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, release)
+	}
+	return result, nil
+}
+
 func (r *Repository) GetResource(ctx context.Context, release plugins.ReleaseIdentity, resourcePath string) (plugins.InstalledResource, error) {
 	row, err := r.q.GetInstalledResource(ctx, sqlc.GetInstalledResourceParams{PluginID: string(release.PluginID), Version: release.Version, ArtifactDigest: release.ArtifactDigest, ResourcePath: resourcePath})
 	if err != nil {

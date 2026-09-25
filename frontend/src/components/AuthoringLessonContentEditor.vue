@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { APIProblemError } from '../api/client'
 import { preserveFocusAfterRemoval } from '../authoring/focus'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
-import { getAuthoringLesson, replaceAuthoringLessonContent, type AuthoringLessonContent, type AuthoringLessonContentMutation, type AuthoringLessonDetail } from '../authoring/authoring'
+import { getAuthoringLesson, listAuthoringCourseWidgets, replaceAuthoringLessonContent, type AuthoringCourseWidget, type AuthoringLessonContent, type AuthoringLessonContentMutation, type AuthoringLessonDetail } from '../authoring/authoring'
 import { contentEditorError, contentEditorLimits, contentFingerprint, copyContent, createContentBlock, editableBlockTypes, type CanonicalBlock, type EditableBlockType } from '../authoring/contentEditor'
 import { decodeLessonContent } from '../lesson/content'
 import AuthoringContentBlock from './AuthoringContentBlock.vue'
@@ -21,10 +21,21 @@ const reloading = ref(false)
 const conflict = ref(false)
 const formError = ref<string>()
 const message = ref<string>()
+const courseWidgets = ref<AuthoringCourseWidget[]>([])
 const dirty = computed(() => contentFingerprint(document.value) !== baseline.value)
 let loadedLessonID = ''
 let requestVersion = 0
 let active = true
+
+async function loadCourseWidgets() {
+  const generation = requestVersion
+  try {
+    const result = await listAuthoringCourseWidgets(props.draftId)
+    if (active && generation === requestVersion) courseWidgets.value = result.widgets
+  } catch {
+    if (active && generation === requestVersion) courseWidgets.value = []
+  }
+}
 
 
 function initialize(content: AuthoringLessonContent) {
@@ -45,6 +56,7 @@ watch(() => [props.lesson.id, contentFingerprint(props.lesson.content)], () => {
     saving.value = false
     reloading.value = false
     initialize(props.lesson.content)
+		void loadCourseWidgets()
   } else if (contentFingerprint(props.lesson.content) !== baseline.value) {
     if (dirty.value) conflict.value = true
     else initialize(props.lesson.content)
@@ -157,7 +169,7 @@ async function reloadLatest() {
             <fieldset class="authoring-content__block">
               <legend>Block {{ index + 1 }} · {{ label(block.type) }}</legend>
               <p class="authoring-content__key">Stable key: <code>{{ block.key }}</code></p>
-              <AuthoringContentBlock :block="block" :position="index + 1" :draft-id="draftId" :lesson-id="lesson.id" @update="updateBlock(block.key, $event)" @unavailable="emit('unavailable')" />
+              <AuthoringContentBlock :block="block" :position="index + 1" :draft-id="draftId" :lesson-id="lesson.id" :course-widgets="courseWidgets" @update="updateBlock(block.key, $event)" @unavailable="emit('unavailable')" />
               <div class="authoring-content__actions">
                 <BtgButton variant="secondary" :disabled="index === 0" :aria-label="`Move block ${index + 1} ${label(block.type)} up`" @click="move(index, -1)">Move up</BtgButton>
                 <BtgButton variant="secondary" :disabled="index === document.blocks.length - 1" :aria-label="`Move block ${index + 1} ${label(block.type)} down`" @click="move(index, 1)">Move down</BtgButton>

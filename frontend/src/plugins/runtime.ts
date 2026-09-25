@@ -18,6 +18,15 @@ export type WidgetRuntimeLaunch = {
   token: string
   expiresAt: string
   capabilities: string[]
+  courseContext?: {
+    courseId: string
+    courseVersionId: string
+    courseVersion: string
+    lessonKey: string
+    placementKey: string
+    presentationLanguage: string
+    configuration: Record<string, unknown>
+  }
 }
 
 export type WidgetRuntimeMessage = {

@@ -10,7 +10,7 @@ paths:
       description: Returns the minimal identity bound to a short-lived widget-runtime capability token. Academy session cookies are not accepted.
       security: [{ WidgetRuntimeBearer: [] }]
       responses:
-        '200': { description: Minimal widget runtime identity, content: { application/json: { schema: { $ref: '#/components/schemas/WidgetRuntimeContext' } } } }
+        '200': { description: Minimal widget runtime context, content: { application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/WidgetRuntimeContext' }, { $ref: '#/components/schemas/CourseWidgetRuntimeContext' }] } } } }
         '401': { $ref: '#/components/responses/Problem' }
   /api/plugin-runtime/token/refresh:
     post:
@@ -507,6 +507,27 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/plugins/course-widgets:
+    get:
+      operationId: listAuthoringCourseWidgets
+      description: Lists enabled, policy-allowed Course widget releases for an author with Lesson content edit capability on the requested Draft. This discovery state is private and never immutable-cached.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringDraftID' }]
+      responses:
+        '200': { description: Eligible Course widgets, content: { application/json: { schema: { $ref: '#/components/schemas/AuthoringCourseWidgetList' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/versions/{version}/lessons/{lessonKey}/blocks/{blockKey}/widget-runtime:
+    post:
+      operationId: launchCourseWidgetRuntime
+      description: Derives one Course-widget runtime launch from the exact immutable published placement. It accepts no plugin identity or configuration from the client.
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }, { $ref: '#/components/parameters/LessonKey' }, { name: blockKey, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Short-lived runtime launch descriptor, content: { application/json: { schema: { $ref: '#/components/schemas/WidgetRuntimeLaunch' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}/structure:
     get:
       operationId: getAuthoringDraftStructure
@@ -1116,7 +1137,20 @@ components:
         runtimeOrigin: { type: string, format: uri }
         token: { type: string, writeOnly: true }
         expiresAt: { type: string, format: date-time }
-        capabilities: { type: array, items: { type: string, enum: [widget.runtime.bootstrap, widget.runtime.context.read] } }
+        capabilities: { type: array, items: { type: string, enum: [widget.runtime.bootstrap, widget.runtime.context.read, widget.course.context.read] } }
+        courseContext: { $ref: '#/components/schemas/CourseWidgetRuntimeContext' }
+    CourseWidgetRuntimeContext:
+      type: object
+      additionalProperties: false
+      required: [courseId, courseVersionId, courseVersion, lessonKey, placementKey, presentationLanguage, configuration]
+      properties:
+        courseId: { type: string, format: uuid }
+        courseVersionId: { type: string, format: uuid }
+        courseVersion: { type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$' }
+        lessonKey: { type: string }
+        placementKey: { type: string }
+        presentationLanguage: { type: string }
+        configuration: { type: object, additionalProperties: true }
     TranslatedCourse: { type: object, required: [course, translation, sourceLag], properties: { course: { $ref: '#/components/schemas/PublishedCourseVersionDetail' }, translation: { $ref: '#/components/schemas/TranslationReadMetadata' }, sourceLag: { $ref: '#/components/schemas/TranslationSourceLag' } } }
     TranslationReadMetadata: { type: object, required: [language, sourceLanguage, sourceVersion, publicationId, publishedAt], properties: { language: { type: string }, sourceLanguage: { type: string }, sourceVersion: { type: string }, publicationId: { type: string, format: uuid }, publishedAt: { type: string, format: date-time } } }
     TranslationSourceLag: { type: object, required: [translatedSourceVersion], properties: { translatedSourceVersion: { type: string }, latestSourceVersion: { type: [string, 'null'] }, isLatest: { type: [boolean, 'null'] } } }
@@ -1749,7 +1783,7 @@ components:
     PublishedCourseCatalogPage: { type: object, additionalProperties: false, required: [items, limit, offset, total], properties: { items: { type: array, items: { $ref: '#/components/schemas/PublishedCourseCatalogItem' } }, limit: { type: integer, minimum: 1, maximum: 100 }, offset: { type: integer, minimum: 0 }, total: { type: integer, minimum: 0 } } }
     PublishedCourseCatalogItem: { type: object, additionalProperties: false, required: [courseId, version, title, description, sourceLanguage, license, contributors, publishedAt], properties: { courseId: { type: string, format: uuid }, version: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }, title: { type: string }, description: { type: string }, sourceLanguage: { type: string }, license: { $ref: '#/components/schemas/PublishedContentLicense' }, contributors: { type: array, items: { $ref: '#/components/schemas/PublishedContributor' } }, publishedAt: { type: string, format: date-time } } }
     CourseSummary: { type: object, required: [slug, version], properties: { slug: { type: string }, version: { $ref: '#/components/schemas/CourseVersionSummary' } } }
-    CourseIdentity: { type: object, required: [slug], properties: { slug: { type: string } } }
+    CourseIdentity: { type: object, required: [slug], properties: { slug: { type: string }, courseId: { type: string, format: uuid } } }
     CourseDetail: { type: object, required: [course, version, modules], properties: { course: { $ref: '#/components/schemas/CourseIdentity' }, version: { $ref: '#/components/schemas/CourseVersionSummary' }, modules: { type: array, items: { $ref: '#/components/schemas/ModuleStructure' } } } }
     PublishedCourseVersionDetail:
       type: object
@@ -1925,6 +1959,7 @@ components:
         - $ref: '#/components/schemas/DownloadBlock'
         - $ref: '#/components/schemas/KnowledgeCheckBlock'
         - $ref: '#/components/schemas/DividerBlock'
+        - $ref: '#/components/schemas/PluginWidgetBlock'
       discriminator:
         propertyName: type
         mapping:
@@ -1940,6 +1975,7 @@ components:
           DOWNLOAD: '#/components/schemas/DownloadBlock'
           KNOWLEDGE_CHECK: '#/components/schemas/KnowledgeCheckBlock'
           DIVIDER: '#/components/schemas/DividerBlock'
+          PLUGIN_WIDGET: '#/components/schemas/PluginWidgetBlock'
     BlockEnvelope: { type: object, required: [key, type, payload], properties: { key: { type: string }, type: { type: string } } }
     TextBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, required: [payload], properties: { type: { const: TEXT }, payload: { type: object, required: [content], properties: { content: { $ref: '#/components/schemas/RichText' } } } } }] }
     HeadingBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, required: [payload], properties: { type: { const: HEADING }, payload: { type: object, required: [level, content], properties: { level: { type: integer, minimum: 2, maximum: 4 }, content: { type: array, items: { $ref: '#/components/schemas/RichTextInline' } } } } } }] }
@@ -1954,6 +1990,9 @@ components:
     DownloadBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, required: [payload], properties: { type: { const: DOWNLOAD }, payload: { type: object, required: [asset, label], properties: { asset: { $ref: '#/components/schemas/AssetReference' }, label: { type: string }, description: { type: string } } } } }] }
     KnowledgeCheckBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, required: [payload], properties: { type: { const: KNOWLEDGE_CHECK }, payload: { type: object, required: [assessmentKey], properties: { assessmentKey: { type: string } } } } }] }
     DividerBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, required: [payload], properties: { type: { const: DIVIDER }, payload: { type: object } } }] }
+    PluginWidgetBlock: { allOf: [{ $ref: '#/components/schemas/BlockEnvelope' }, { type: object, required: [payload], properties: { type: { const: PLUGIN_WIDGET }, payload: { type: object, additionalProperties: false, required: [pluginId, pluginVersion, artifactDigest, widgetId, widgetType, configuration], properties: { pluginId: { type: string }, pluginVersion: { type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$' }, artifactDigest: { type: string, pattern: '^[0-9a-f]{64}$' }, widgetId: { type: string }, widgetType: { const: COURSE_WIDGET }, configuration: { type: object, maxProperties: 100, additionalProperties: true } } } } }] }
+    AuthoringCourseWidget: { type: object, additionalProperties: false, required: [pluginId, pluginName, pluginVersion, artifactDigest, widgetId, widgetName, description, trust], properties: { pluginId: { type: string }, pluginName: { type: string }, pluginVersion: { type: string }, artifactDigest: { type: string, pattern: '^[0-9a-f]{64}$' }, widgetId: { type: string }, widgetName: { type: string }, description: { type: string }, trust: { type: string, enum: [BTG_OWNED, BTG_APPROVED, UNKNOWN] } } }
+    AuthoringCourseWidgetList: { type: object, additionalProperties: false, required: [widgets], properties: { widgets: { type: array, items: { $ref: '#/components/schemas/AuthoringCourseWidget' } } } }
     RichText: { type: object, description: Constrained semantic rich text. It is not HTML or editor state., required: [nodes], properties: { nodes: { type: array, items: { $ref: '#/components/schemas/RichTextNode' } } } }
     RichTextNode: { type: object, properties: { type: { type: string, enum: [paragraph, bullet_list, ordered_list] }, content: { type: array, items: { $ref: '#/components/schemas/RichTextInline' } }, items: { type: array, items: { type: array, items: { $ref: '#/components/schemas/RichTextInline' } } } } }
     RichTextInline: { type: object, properties: { type: { type: string, enum: [text, hard_break] }, text: { type: string }, marks: { type: array, items: { $ref: '#/components/schemas/RichTextMark' } } } }

@@ -23,6 +23,7 @@ export type RenderableBlock =
   | { key: string; type: 'TABLE'; payload: { caption?: string; headers: string[]; rows: string[][] } }
   | { key: string; type: 'DOWNLOAD'; payload: { asset: AssetReference; label: string; description?: string } }
   | { key: string; type: 'KNOWLEDGE_CHECK'; payload: { assessmentKey: string } }
+  | { key: string; type: 'PLUGIN_WIDGET'; payload: { pluginId: string; pluginVersion: string; artifactDigest: string; widgetId: string; widgetType: 'COURSE_WIDGET'; configuration: Record<string, unknown> } }
   | { key: string; type: 'DIVIDER'; payload: Record<string, never> }
   | { key: string; type: 'UNSUPPORTED' }
 
@@ -140,6 +141,17 @@ function decodeBlock(block: Record<string, unknown>): RenderableBlock {
       const assessmentKey = optionalString(payload.assessmentKey)
       return assessmentKey ? { key, type: 'KNOWLEDGE_CHECK', payload: { assessmentKey } } : unsupported(key)
     }
+    case 'PLUGIN_WIDGET': {
+      const pluginId = optionalString(payload.pluginId)
+      const pluginVersion = optionalString(payload.pluginVersion)
+      const artifactDigest = optionalString(payload.artifactDigest)
+      const widgetId = optionalString(payload.widgetId)
+      const configuration = safeWidgetConfiguration(payload.configuration)
+      if (!pluginId || !pluginVersion || !artifactDigest || !widgetId || payload.widgetType !== 'COURSE_WIDGET' || !configuration
+        || !/^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?){2,}$/i.test(pluginId)
+        || !/^\d+\.\d+\.\d+$/.test(pluginVersion) || !/^[0-9a-f]{64}$/.test(artifactDigest) || !isStableKey(widgetId)) return unsupported(key)
+      return { key, type: 'PLUGIN_WIDGET', payload: { pluginId, pluginVersion, artifactDigest, widgetId, widgetType: 'COURSE_WIDGET', configuration } }
+    }
     case 'DIVIDER': return { key, type: 'DIVIDER', payload: {} }
     default: return unsupported(key)
   }
@@ -204,4 +216,13 @@ function optionalString(value: unknown): string | undefined { return isString(va
 function isString(value: unknown): value is string { return typeof value === 'string' }
 function isStableKey(value: unknown): value is string { return isString(value) && value.length >= 3 && value.length <= 96 && stableKeyPattern.test(value) }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+function safeWidgetConfiguration(value: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(value) || new TextEncoder().encode(JSON.stringify(value)).length > 16 * 1024) return undefined
+  for (const [key, nested] of Object.entries(value)) {
+    if (key === '__proto__' || key === 'prototype' || key === 'constructor' || /^on/i.test(key)) return undefined
+    if (isRecord(nested) && !safeWidgetConfiguration(nested)) return undefined
+    if (Array.isArray(nested) && nested.some((item) => isRecord(item) && !safeWidgetConfiguration(item))) return undefined
+  }
+  return value
+}
 function unsupported(key: string): RenderableBlock { return { key, type: 'UNSUPPORTED' } }

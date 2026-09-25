@@ -21,6 +21,9 @@ RETURNING *;
 -- name: GetInstalledRelease :one
 SELECT * FROM plugins.installed_release WHERE plugin_id = $1 AND version = $2;
 
+-- name: ListInstalledReleases :many
+SELECT * FROM plugins.installed_release ORDER BY plugin_id, version;
+
 -- name: RegisterInstalledResource :exec
 INSERT INTO plugins.installed_resource (
   installation_id, resource_path, sha256_digest, byte_size, content

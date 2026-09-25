@@ -45,6 +45,7 @@ const (
 	PublicationIssueTableInvalid               PublicationValidationCode = "invalid_table"
 	PublicationIssueAssetUnresolved            PublicationValidationCode = "unresolved_asset_reference"
 	PublicationIssueAssessmentUnresolved       PublicationValidationCode = "unresolved_assessment_reference"
+	PublicationIssuePluginWidgetUnavailable    PublicationValidationCode = "plugin_widget_unavailable"
 )
 
 // PublicationValidationIssue always blocks publication in this milestone.

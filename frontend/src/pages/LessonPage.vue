@@ -59,7 +59,7 @@
 
       <section v-else-if="mode === 'continuous'" class="lesson-content" aria-label="Lesson content">
         <div v-for="block in state.content.blocks" :id="`lesson-block-${block.key}`" :key="block.key" class="lesson-content__block">
-          <LessonBlockRenderer :block="block" />
+          <LessonBlockRenderer :block="block" :course-id="state.lesson.course.courseId" :course-version="state.lesson.version.version" :lesson-key="state.lesson.lesson.key" />
         </div>
       </section>
 
@@ -67,7 +67,7 @@
         <h2 id="focus-title">Focus mode</h2>
         <p class="lesson-focus__position" aria-live="polite">Block {{ focusIndex + 1 }} of {{ state.content.blocks.length }}</p>
         <div class="lesson-focus__block" tabindex="-1">
-          <LessonBlockRenderer :block="state.content.blocks[focusIndex]" />
+          <LessonBlockRenderer :block="state.content.blocks[focusIndex]" :course-id="state.lesson.course.courseId" :course-version="state.lesson.version.version" :lesson-key="state.lesson.lesson.key" />
         </div>
         <div class="lesson-focus__actions">
           <BtgButton variant="secondary" :disabled="focusIndex === 0" @click="previousBlock">Previous block</BtgButton>

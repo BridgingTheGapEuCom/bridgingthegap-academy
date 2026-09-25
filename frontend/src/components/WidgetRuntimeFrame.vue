@@ -71,6 +71,7 @@ function receive(event: MessageEvent) {
         payload: {
           token: props.launch.token,
           context: props.launch.context,
+          courseContext: props.launch.courseContext,
           capabilities: props.launch.capabilities,
           expiresAt: props.launch.expiresAt,
         },

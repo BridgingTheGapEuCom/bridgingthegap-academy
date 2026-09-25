@@ -156,6 +156,43 @@ func (q *Queries) GetVerificationKey(ctx context.Context, keyID string) (Plugins
 	return i, err
 }
 
+const listInstalledReleases = `-- name: ListInstalledReleases :many
+SELECT installation_id, plugin_id, version, artifact_digest, manifest, signature_key_id, signature_value, signing_payload, registered_trust, state, enabled, installed_at FROM plugins.installed_release ORDER BY plugin_id, version
+`
+
+func (q *Queries) ListInstalledReleases(ctx context.Context) ([]PluginsInstalledRelease, error) {
+	rows, err := q.db.Query(ctx, listInstalledReleases)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PluginsInstalledRelease
+	for rows.Next() {
+		var i PluginsInstalledRelease
+		if err := rows.Scan(
+			&i.InstallationID,
+			&i.PluginID,
+			&i.Version,
+			&i.ArtifactDigest,
+			&i.Manifest,
+			&i.SignatureKeyID,
+			&i.SignatureValue,
+			&i.SigningPayload,
+			&i.RegisteredTrust,
+			&i.State,
+			&i.Enabled,
+			&i.InstalledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const registerInstalledRelease = `-- name: RegisterInstalledRelease :one
 INSERT INTO plugins.installed_release (
   installation_id, plugin_id, version, artifact_digest, manifest,

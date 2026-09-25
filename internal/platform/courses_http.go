@@ -72,7 +72,7 @@ func (a *authHTTP) handleLesson(w http.ResponseWriter, r *http.Request) {
 	for _, q := range p {
 		keys = append(keys, q.PrerequisiteStableKey)
 	}
-	writeJSON(w, 200, map[string]any{"course": map[string]any{"slug": x.Course.Slug}, "version": version(x.Version), "module": module(m), "lesson": lessonDetail(l, keys)})
+	writeJSON(w, 200, map[string]any{"course": map[string]any{"slug": x.Course.Slug, "courseId": x.Course.ID}, "version": version(x.Version), "module": module(m), "lesson": lessonDetail(l, keys)})
 }
 func courseSlug(w http.ResponseWriter, r *http.Request) (string, bool) {
 	slug := chi.URLParam(r, "slug")

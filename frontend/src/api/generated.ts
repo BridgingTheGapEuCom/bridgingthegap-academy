@@ -447,6 +447,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/plugins/course-widgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists enabled, policy-allowed Course widget releases for an author with Lesson content edit capability on the requested Draft. This discovery state is private and never immutable-cached. */
+        get: operations["listAuthoringCourseWidgets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/lessons/{lessonKey}/blocks/{blockKey}/widget-runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Derives one Course-widget runtime launch from the exact immutable published placement. It accepts no plugin identity or configuration from the client. */
+        post: operations["launchCourseWidgetRuntime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}/structure": {
         parameters: {
             query?: never;
@@ -1123,7 +1157,21 @@ export interface components {
             token: string;
             /** Format: date-time */
             expiresAt: string;
-            capabilities: ("widget.runtime.bootstrap" | "widget.runtime.context.read")[];
+            capabilities: ("widget.runtime.bootstrap" | "widget.runtime.context.read" | "widget.course.context.read")[];
+            courseContext?: components["schemas"]["CourseWidgetRuntimeContext"];
+        };
+        CourseWidgetRuntimeContext: {
+            /** Format: uuid */
+            courseId: string;
+            /** Format: uuid */
+            courseVersionId: string;
+            courseVersion: string;
+            lessonKey: string;
+            placementKey: string;
+            presentationLanguage: string;
+            configuration: {
+                [key: string]: unknown;
+            };
         };
         TranslatedCourse: {
             course: components["schemas"]["PublishedCourseVersionDetail"];
@@ -1743,6 +1791,8 @@ export interface components {
         };
         CourseIdentity: {
             slug: string;
+            /** Format: uuid */
+            courseId?: string;
         };
         CourseDetail: {
             course: components["schemas"]["CourseIdentity"];
@@ -2130,7 +2180,7 @@ export interface components {
             schemaVersion: 1;
             blocks: components["schemas"]["LessonBlock"][];
         };
-        LessonBlock: components["schemas"]["TextBlock"] | components["schemas"]["HeadingBlock"] | components["schemas"]["ImageBlock"] | components["schemas"]["VideoBlock"] | components["schemas"]["AudioBlock"] | components["schemas"]["CodeBlock"] | components["schemas"]["QuoteBlock"] | components["schemas"]["CalloutBlock"] | components["schemas"]["TableBlock"] | components["schemas"]["DownloadBlock"] | components["schemas"]["KnowledgeCheckBlock"] | components["schemas"]["DividerBlock"];
+        LessonBlock: components["schemas"]["TextBlock"] | components["schemas"]["HeadingBlock"] | components["schemas"]["ImageBlock"] | components["schemas"]["VideoBlock"] | components["schemas"]["AudioBlock"] | components["schemas"]["CodeBlock"] | components["schemas"]["QuoteBlock"] | components["schemas"]["CalloutBlock"] | components["schemas"]["TableBlock"] | components["schemas"]["DownloadBlock"] | components["schemas"]["KnowledgeCheckBlock"] | components["schemas"]["DividerBlock"] | components["schemas"]["PluginWidgetBlock"];
         BlockEnvelope: {
             key: string;
             type: string;
@@ -2315,6 +2365,41 @@ export interface components {
              */
             type: "DIVIDER";
         };
+        PluginWidgetBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "PLUGIN_WIDGET";
+            payload: {
+                pluginId: string;
+                pluginVersion: string;
+                artifactDigest: string;
+                widgetId: string;
+                /** @constant */
+                widgetType: "COURSE_WIDGET";
+                configuration: {
+                    [key: string]: unknown;
+                };
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "PLUGIN_WIDGET";
+        };
+        AuthoringCourseWidget: {
+            pluginId: string;
+            pluginName: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            widgetName: string;
+            description: string;
+            /** @enum {string} */
+            trust: "BTG_OWNED" | "BTG_APPROVED" | "UNKNOWN";
+        };
+        AuthoringCourseWidgetList: {
+            widgets: components["schemas"]["AuthoringCourseWidget"][];
+        };
         /** @description Constrained semantic rich text. It is not HTML or editor state. */
         RichText: {
             nodes: components["schemas"]["RichTextNode"][];
@@ -2462,13 +2547,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Minimal widget runtime identity */
+            /** @description Minimal widget runtime context */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WidgetRuntimeContext"];
+                    "application/json": components["schemas"]["WidgetRuntimeContext"] | components["schemas"]["CourseWidgetRuntimeContext"];
                 };
             };
             401: components["responses"]["Problem"];
@@ -3673,6 +3758,59 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringCourseWidgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligible Course widgets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringCourseWidgetList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    launchCourseWidgetRuntime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                lessonKey: components["parameters"]["LessonKey"];
+                blockKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Short-lived runtime launch descriptor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetRuntimeLaunch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getAuthoringDraftStructure: {
