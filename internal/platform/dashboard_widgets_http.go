@@ -14,6 +14,25 @@ type dashboardWidgetAPI struct {
 	placements *plugins.DashboardPlacementService
 	registry   *plugins.RegistryService
 }
+
+func (h *dashboardWidgetAPI) available(w http.ResponseWriter, r *http.Request) {
+	releases, err := h.registry.DashboardWidgets(r.Context())
+	if err != nil {
+		dashboardProblem(w, r, err)
+		return
+	}
+	items := make([]map[string]any, 0)
+	for _, release := range releases {
+		for _, entry := range release.Manifest.Entrypoints {
+			if entry.Type == plugins.TypeDashboardWidget {
+				items = append(items, map[string]any{"pluginId": release.Release.PluginID, "pluginName": release.Manifest.Name, "pluginVersion": release.Release.Version, "artifactDigest": release.Release.ArtifactDigest, "widgetId": entry.ID, "widgetName": entry.Name, "description": release.Manifest.Description})
+			}
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, map[string]any{"widgets": items})
+}
+
 type dashboardCreateRequest struct {
 	PluginID       string          `json:"pluginId"`
 	PluginVersion  string          `json:"pluginVersion"`

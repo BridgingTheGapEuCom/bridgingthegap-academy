@@ -4,6 +4,54 @@
  */
 
 export interface paths {
+    "/api/dashboard/widgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDashboardWidgets"];
+        put?: never;
+        post: operations["createDashboardWidget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAvailableDashboardWidgets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets/{placementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteDashboardWidget"];
+        options?: never;
+        head?: never;
+        patch: operations["updateDashboardWidget"];
+        trace?: never;
+    };
     "/api/plugin-runtime/context": {
         parameters: {
             query?: never;
@@ -1136,6 +1184,54 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        DashboardWidgetPlacement: {
+            /** Format: uuid */
+            placementId: string;
+            pluginId: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            configuration: {
+                [key: string]: unknown;
+            };
+            position: number;
+            enabled: boolean;
+            revision: number;
+        };
+        DashboardWidgetPlacementList: {
+            widgets: components["schemas"]["DashboardWidgetPlacement"][];
+        };
+        DashboardWidgetPlacementCreateRequest: {
+            pluginId: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            configuration: {
+                [key: string]: unknown;
+            };
+        };
+        DashboardWidgetPlacementUpdateRequest: {
+            expectedRevision: number;
+            configuration: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+        };
+        DashboardWidgetPlacementDeleteRequest: {
+            expectedRevision: number;
+        };
+        AvailableDashboardWidget: {
+            pluginId: string;
+            pluginName: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            widgetName: string;
+            description: string;
+        };
+        AvailableDashboardWidgetList: {
+            widgets: components["schemas"]["AvailableDashboardWidget"][];
+        };
         WidgetRuntimeContext: {
             /** Format: uuid */
             runtimeInstanceId: string;
@@ -2538,6 +2634,123 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listDashboardWidgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered Dashboard placement configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacementList"];
+                };
+            };
+        };
+    };
+    createDashboardWidget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created placement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacement"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    listAvailableDashboardWidgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligible Dashboard widget entrypoints */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableDashboardWidgetList"];
+                };
+            };
+        };
+    };
+    deleteDashboardWidget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateDashboardWidget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated placement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacement"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
     getWidgetRuntimeContext: {
         parameters: {
             query?: never;

@@ -4,6 +4,34 @@ info:
   version: 0.1.0
   description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads and mutations. Authoring responses are no-store. Every Authoring mutation requires a trusted Origin and the authenticated session-bound CSRF token; unauthorized resources are hidden as 404.
 paths:
+  /api/dashboard/widgets:
+    get:
+      operationId: listDashboardWidgets
+      security: [{ SessionCookie: [] }]
+      responses: { '200': { description: Ordered Dashboard placement configuration, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementList' } } } } }
+    post:
+      operationId: createDashboardWidget
+      security: [{ SessionCookie: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementCreateRequest' } } } }
+      responses: { '201': { description: Created placement, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacement' } } } }, '409': { $ref: '#/components/responses/Problem' } }
+  /api/dashboard/widgets/available:
+    get:
+      operationId: listAvailableDashboardWidgets
+      security: [{ SessionCookie: [] }]
+      responses: { '200': { description: Eligible Dashboard widget entrypoints, content: { application/json: { schema: { $ref: '#/components/schemas/AvailableDashboardWidgetList' } } } } }
+  /api/dashboard/widgets/{placementId}:
+    patch:
+      operationId: updateDashboardWidget
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: placementId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementUpdateRequest' } } } }
+      responses: { '200': { description: Updated placement, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacement' } } } }, '409': { $ref: '#/components/responses/Problem' } }
+    delete:
+      operationId: deleteDashboardWidget
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: placementId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementDeleteRequest' } } } }
+      responses: { '204': { description: Deleted }, '409': { $ref: '#/components/responses/Problem' } }
   /api/plugin-runtime/context:
     get:
       operationId: getWidgetRuntimeContext
@@ -1115,6 +1143,26 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    DashboardWidgetPlacement:
+      type: object
+      additionalProperties: false
+      required: [placementId, pluginId, pluginVersion, artifactDigest, widgetId, configuration, position, enabled, revision]
+      properties:
+        placementId: { type: string, format: uuid }
+        pluginId: { type: string }
+        pluginVersion: { type: string }
+        artifactDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        widgetId: { type: string }
+        configuration: { type: object, additionalProperties: true }
+        position: { type: integer, minimum: 0 }
+        enabled: { type: boolean }
+        revision: { type: integer, minimum: 1 }
+    DashboardWidgetPlacementList: { type: object, additionalProperties: false, required: [widgets], properties: { widgets: { type: array, items: { $ref: '#/components/schemas/DashboardWidgetPlacement' } } } }
+    DashboardWidgetPlacementCreateRequest: { type: object, additionalProperties: false, required: [pluginId, pluginVersion, artifactDigest, widgetId, configuration], properties: { pluginId: { type: string }, pluginVersion: { type: string }, artifactDigest: { type: string }, widgetId: { type: string }, configuration: { type: object, additionalProperties: true } } }
+    DashboardWidgetPlacementUpdateRequest: { type: object, additionalProperties: false, required: [expectedRevision, configuration, enabled], properties: { expectedRevision: { type: integer, minimum: 1 }, configuration: { type: object, additionalProperties: true }, enabled: { type: boolean } } }
+    DashboardWidgetPlacementDeleteRequest: { type: object, additionalProperties: false, required: [expectedRevision], properties: { expectedRevision: { type: integer, minimum: 1 } } }
+    AvailableDashboardWidget: { type: object, additionalProperties: false, required: [pluginId, pluginName, pluginVersion, artifactDigest, widgetId, widgetName, description], properties: { pluginId: { type: string }, pluginName: { type: string }, pluginVersion: { type: string }, artifactDigest: { type: string }, widgetId: { type: string }, widgetName: { type: string }, description: { type: string } } }
+    AvailableDashboardWidgetList: { type: object, additionalProperties: false, required: [widgets], properties: { widgets: { type: array, items: { $ref: '#/components/schemas/AvailableDashboardWidget' } } } }
     WidgetRuntimeContext:
       type: object
       additionalProperties: false

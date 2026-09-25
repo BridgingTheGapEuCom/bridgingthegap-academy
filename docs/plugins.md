@@ -228,8 +228,11 @@ overwriting a newer layout.
 `dashboard.widgets.manage` controls this installation configuration. It is
 separate from `plugins.manage`, which concerns plugin registry administration.
 Discovery returns only enabled, currently eligible `DASHBOARD_WIDGET`
-entrypoints. Placements are installation-local and never appear in Course
-portability packages. Runtime launch/rendering is M10.2b2; frontend
+entrypoints and does not expose signing or approval internals. A placement is
+not rewritten or deleted if its release later becomes unavailable; availability
+handling is deliberately deferred with runtime launch/rendering in M10.2b2.
+Placements are installation-local and never appear in Course portability
+packages. Runtime launch/rendering is M10.2b2; frontend
 configuration/rendering is M10.2b3.
 
 Security invariants:
