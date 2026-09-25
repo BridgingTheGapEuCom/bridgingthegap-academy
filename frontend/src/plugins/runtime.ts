@@ -12,6 +12,7 @@ export type WidgetRuntimeContext = {
 
 export type WidgetRuntimeLaunch = {
   context: WidgetRuntimeContext
+  widgetName: string
   runtimeUrl: string
   runtimeOrigin: string
   token: string
@@ -36,6 +37,7 @@ export function isSafeRuntimeLaunch(value: WidgetRuntimeLaunch): boolean {
       runtimeUrl.origin === runtimeOrigin.origin &&
       runtimeOrigin.origin !== window.location.origin &&
       value.context.runtimeInstanceId.length > 0 &&
+      value.widgetName.trim().length > 0 &&
       value.token.length > 0 &&
       ['COURSE_WIDGET', 'DASHBOARD_WIDGET'].includes(value.context.widgetType)
     )
@@ -57,9 +59,11 @@ export function runtimeMessageFrom(
     message.protocol !== widgetRuntimeProtocol ||
     message.version !== widgetRuntimeProtocolVersion ||
     message.runtimeInstanceId !== launch.context.runtimeInstanceId ||
+    typeof message.type !== 'string' ||
     !['WIDGET_READY', 'RUNTIME_INITIALIZED', 'RUNTIME_ERROR', 'BTG_RUNTIME_DISABLED'].includes(
-      String(message.type),
-    )
+      message.type,
+    ) ||
+    !('payload' in message)
   ) return
   return message as WidgetRuntimeMessage
 }

@@ -23,13 +23,22 @@ func (f *runtimeHTTPFake) EntrypointResource(_ context.Context, _ plugins.Releas
 	if widget != "timeline" {
 		return plugins.Entrypoint{}, plugins.ErrNotFound
 	}
-	return plugins.Entrypoint{ID: widget, Type: plugins.TypeCourseWidget, Resource: "resources/timeline.js"}, nil
+	return plugins.Entrypoint{ID: widget, Type: plugins.TypeCourseWidget, Name: "Timeline", Resource: "resources/timeline.js"}, nil
 }
 func (f *runtimeHTTPFake) Resource(_ context.Context, _ plugins.ReleaseIdentity, path string) (plugins.InstalledResource, error) {
-	if path != "resources/timeline.js" {
+	resources := map[string]struct {
+		digest  string
+		content []byte
+	}{
+		"resources/timeline.js": {strings.Repeat("a", 64), []byte("export default {}")},
+		"resources/widget.css":  {strings.Repeat("b", 64), []byte("body { color: red }")},
+		"resources/icon.png":    {strings.Repeat("c", 64), []byte("not-a-real-png")},
+	}
+	resource, ok := resources[path]
+	if !ok {
 		return plugins.InstalledResource{}, plugins.ErrNotFound
 	}
-	return plugins.InstalledResource{Path: path, SHA256: strings.Repeat("a", 64), Size: 17, Content: []byte("export default {}")}, nil
+	return plugins.InstalledResource{Path: path, SHA256: resource.digest, Size: int64(len(resource.content)), Content: resource.content}, nil
 }
 func (f *runtimeHTTPFake) VerifyContextToken(token string) (plugins.RuntimeClaims, error) {
 	if token != "runtime-token" {
@@ -69,13 +78,16 @@ func TestPluginRuntimePageAndDeclaredResourceHeaders(t *testing.T) {
 		t.Fatalf("page status = %d", page.Code)
 	}
 	csp := page.Header().Get("Content-Security-Policy")
-	for _, directive := range []string{"default-src 'none'", "connect-src 'self'", "object-src 'none'", "frame-ancestors https://academy.example"} {
+	for _, directive := range []string{"default-src 'none'", "connect-src 'none'", "script-src 'self'", "img-src 'self' data:", "object-src 'none'", "frame-ancestors https://academy.example"} {
 		if !strings.Contains(csp, directive) {
 			t.Fatalf("CSP %q misses %q", csp, directive)
 		}
 	}
 	if strings.Contains(csp, "*") || page.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("unsafe page headers: %q", csp)
+	}
+	if !strings.Contains(page.Body.String(), "<title>Timeline</title>") {
+		t.Fatalf("runtime title was not sourced from trusted entry metadata: %s", page.Body.String())
 	}
 
 	resource := runtimeRequest(router, http.MethodGet, "/plugins/runtime/com.example.academy.timeline/1.0.0/"+digest+"/resources/timeline.js")
@@ -84,6 +96,15 @@ func TestPluginRuntimePageAndDeclaredResourceHeaders(t *testing.T) {
 	}
 	if !strings.Contains(resource.Header().Get("Content-Security-Policy"), "connect-src 'none'") {
 		t.Fatalf("resource CSP = %q", resource.Header().Get("Content-Security-Policy"))
+	}
+	for path, expected := range map[string]string{
+		"resources/widget.css": "text/css; charset=utf-8",
+		"resources/icon.png":   "image/png",
+	} {
+		response := runtimeRequest(router, http.MethodGet, "/plugins/runtime/com.example.academy.timeline/1.0.0/"+digest+"/"+path)
+		if response.Code != http.StatusOK || response.Header().Get("Content-Type") != expected || response.Header().Get("X-Content-Type-Options") != "nosniff" {
+			t.Fatalf("%s response = %d %#v", path, response.Code, response.Header())
+		}
 	}
 	undeclared := runtimeRequest(router, http.MethodGet, "/plugins/runtime/com.example.academy.timeline/1.0.0/"+digest+"/resources/../secret")
 	if undeclared.Code != http.StatusNotFound {

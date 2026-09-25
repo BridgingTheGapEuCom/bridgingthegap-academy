@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	RuntimeAudience        = "widget-runtime"
+	RuntimeIssuer          = "btg-academy"
+	RuntimeAudience        = "btg-widget-runtime"
 	RuntimeProtocol        = "btg-widget-runtime"
 	RuntimeProtocolVersion = 1
 	CapabilityBootstrap    = "widget.runtime.bootstrap"
@@ -44,6 +45,7 @@ type RuntimeContext struct {
 
 type RuntimeLaunch struct {
 	Context       RuntimeContext `json:"context"`
+	WidgetName    string         `json:"widgetName"`
 	RuntimeURL    string         `json:"runtimeUrl"`
 	RuntimeOrigin string         `json:"runtimeOrigin"`
 	Token         string         `json:"token"`
@@ -52,6 +54,7 @@ type RuntimeLaunch struct {
 }
 
 type RuntimeClaims struct {
+	Issuer       string         `json:"iss"`
 	Audience     string         `json:"aud"`
 	IssuedAt     int64          `json:"iat"`
 	ExpiresAt    int64          `json:"exp"`
@@ -89,7 +92,7 @@ func (s *RuntimeTokenService) Issue(context RuntimeContext, capabilities []strin
 		KeyID     string `json:"kid"`
 		Type      string `json:"typ"`
 	}{"EdDSA", s.keyID, "BTG-WIDGET-RUNTIME"})
-	claims, _ := json.Marshal(RuntimeClaims{Audience: RuntimeAudience, IssuedAt: now.Unix(), ExpiresAt: expires.Unix(), Context: context, Capabilities: append([]string(nil), capabilities...)})
+	claims, _ := json.Marshal(RuntimeClaims{Issuer: RuntimeIssuer, Audience: RuntimeAudience, IssuedAt: now.Unix(), ExpiresAt: expires.Unix(), Context: context, Capabilities: append([]string(nil), capabilities...)})
 	unsigned := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims)
 	signature := ed25519.Sign(s.private, []byte(unsigned))
 	return unsigned + "." + base64.RawURLEncoding.EncodeToString(signature), expires, nil
@@ -99,7 +102,9 @@ type RuntimeTokenExpectation struct {
 	RuntimeInstanceID string
 	PluginID          PluginID
 	PluginVersion     string
+	ArtifactDigest    string
 	WidgetID          string
+	WidgetType        PluginType
 	Capability        string
 }
 
@@ -129,14 +134,14 @@ func (s *RuntimeTokenService) Verify(token string, expected RuntimeTokenExpectat
 	}
 	claimBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
 	var claims RuntimeClaims
-	if err != nil || strictDecode(claimBytes, &claims) != nil || claims.Audience != RuntimeAudience || validateRuntimeContext(claims.Context) != nil || !validCapabilities(claims.Capabilities) || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt {
+	if err != nil || strictDecode(claimBytes, &claims) != nil || claims.Issuer != RuntimeIssuer || claims.Audience != RuntimeAudience || validateRuntimeContext(claims.Context) != nil || !validCapabilities(claims.Capabilities) || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt {
 		return RuntimeClaims{}, ErrInvalidRuntimeToken
 	}
 	now := s.now().UTC().Unix()
 	if now < claims.IssuedAt-30 || now >= claims.ExpiresAt {
 		return RuntimeClaims{}, ErrRuntimeTokenExpired
 	}
-	if expected.RuntimeInstanceID != "" && claims.Context.RuntimeInstanceID != expected.RuntimeInstanceID || expected.PluginID != "" && claims.Context.PluginID != expected.PluginID || expected.PluginVersion != "" && claims.Context.PluginVersion != expected.PluginVersion || expected.WidgetID != "" && claims.Context.WidgetID != expected.WidgetID {
+	if expected.RuntimeInstanceID != "" && claims.Context.RuntimeInstanceID != expected.RuntimeInstanceID || expected.PluginID != "" && claims.Context.PluginID != expected.PluginID || expected.PluginVersion != "" && claims.Context.PluginVersion != expected.PluginVersion || expected.ArtifactDigest != "" && claims.Context.ArtifactDigest != expected.ArtifactDigest || expected.WidgetID != "" && claims.Context.WidgetID != expected.WidgetID || expected.WidgetType != "" && claims.Context.WidgetType != expected.WidgetType {
 		return RuntimeClaims{}, ErrInvalidRuntimeToken
 	}
 	if expected.Capability != "" && !slices.Contains(claims.Capabilities, expected.Capability) {
@@ -167,7 +172,7 @@ func (s *RuntimeService) PrepareWidgetRuntime(ctx context.Context, id PluginID, 
 		return RuntimeLaunch{}, err
 	}
 	runtime := RuntimeContext{RuntimeInstanceID: uuid.NewString(), PluginID: id, PluginVersion: version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: entry.ID, WidgetType: entry.Type}
-	return s.issue(runtime)
+	return s.issue(runtime, entry.Name)
 }
 
 func (s *RuntimeService) Refresh(ctx context.Context, token string) (RuntimeLaunch, error) {
@@ -175,14 +180,14 @@ func (s *RuntimeService) Refresh(ctx context.Context, token string) (RuntimeLaun
 	if err != nil {
 		return RuntimeLaunch{}, err
 	}
-	release, _, err := s.resolve(ctx, claims.Context.PluginID, claims.Context.PluginVersion, claims.Context.WidgetID, claims.Context.WidgetType)
+	release, entry, err := s.resolve(ctx, claims.Context.PluginID, claims.Context.PluginVersion, claims.Context.WidgetID, claims.Context.WidgetType)
 	if err != nil {
 		return RuntimeLaunch{}, err
 	}
 	if release.Release.ArtifactDigest != claims.Context.ArtifactDigest {
 		return RuntimeLaunch{}, ErrInvalidRuntimeToken
 	}
-	return s.issue(claims.Context)
+	return s.issue(claims.Context, entry.Name)
 }
 
 func (s *RuntimeService) VerifyContextToken(token string) (RuntimeClaims, error) {
@@ -221,14 +226,17 @@ func (s *RuntimeService) resolve(ctx context.Context, id PluginID, version, widg
 	return InstalledRelease{}, Entrypoint{}, ErrLaunchDenied
 }
 
-func (s *RuntimeService) issue(runtime RuntimeContext) (RuntimeLaunch, error) {
+func (s *RuntimeService) issue(runtime RuntimeContext, widgetName string) (RuntimeLaunch, error) {
+	if strings.TrimSpace(widgetName) == "" {
+		return RuntimeLaunch{}, ErrLaunchDenied
+	}
 	capabilities := []string{CapabilityBootstrap, CapabilityContextRead}
 	token, expires, err := s.tokens.Issue(runtime, capabilities)
 	if err != nil {
 		return RuntimeLaunch{}, err
 	}
 	path := "/plugins/runtime/" + url.PathEscape(string(runtime.PluginID)) + "/" + url.PathEscape(runtime.PluginVersion) + "/" + runtime.ArtifactDigest + "/widgets/" + url.PathEscape(runtime.WidgetID) + "#runtime=" + url.QueryEscape(runtime.RuntimeInstanceID)
-	return RuntimeLaunch{Context: runtime, RuntimeURL: s.runtimeOrigin + path, RuntimeOrigin: s.runtimeOrigin, Token: token, ExpiresAt: expires, Capabilities: capabilities}, nil
+	return RuntimeLaunch{Context: runtime, WidgetName: widgetName, RuntimeURL: s.runtimeOrigin + path, RuntimeOrigin: s.runtimeOrigin, Token: token, ExpiresAt: expires, Capabilities: capabilities}, nil
 }
 
 func (s *RuntimeService) RuntimeOrigin() string { return s.runtimeOrigin }

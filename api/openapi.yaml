@@ -1085,7 +1085,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: BTG widget runtime Ed25519 token
-      description: Five-minute capability token with the dedicated widget-runtime audience. It is not an Academy session token.
+      description: Five-minute capability token with the dedicated btg-widget-runtime audience. It is not an Academy session token.
   responses:
     Problem:
       description: RFC 9457 Problem Details with request correlation ID
@@ -1108,9 +1108,10 @@ components:
     WidgetRuntimeLaunch:
       type: object
       additionalProperties: false
-      required: [context, runtimeUrl, runtimeOrigin, token, expiresAt, capabilities]
+      required: [context, widgetName, runtimeUrl, runtimeOrigin, token, expiresAt, capabilities]
       properties:
         context: { $ref: '#/components/schemas/WidgetRuntimeContext' }
+        widgetName: { type: string, minLength: 1, description: Trusted manifest display name for the iframe accessible title. }
         runtimeUrl: { type: string, format: uri }
         runtimeOrigin: { type: string, format: uri }
         token: { type: string, writeOnly: true }

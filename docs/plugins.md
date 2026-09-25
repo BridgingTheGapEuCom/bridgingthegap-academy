@@ -124,11 +124,13 @@ origin instead of using `targetOrigin: "*"`. Top navigation, popups, forms,
 modals, downloads, and opener control remain unavailable.
 
 Runtime pages use a restrictive CSP beginning with `default-src 'none'`.
-Scripts, styles, images, media, and capability API connections are limited to
-the plugin runtime origin; forms, objects, frames, workers, fonts, manifests,
-and base URLs are disabled. `frame-ancestors` names only the Academy host.
-There is no CDN or arbitrary external network access. `connect-src 'self'`
-permits only the capability-token runtime endpoints on the isolated origin.
+Scripts, styles, images, and media are limited to the plugin runtime origin;
+forms, objects, frames, workers, fonts, manifests, and base URLs are disabled.
+`frame-ancestors` names only the Academy host. There is no CDN or arbitrary
+external network access, and `connect-src 'none'` prevents plugin code from
+calling even the runtime origin. The context and refresh APIs establish the
+host-mediated capability boundary for future placement work; widget code does
+not call them directly in v1.
 
 Validated resource bytes and their path, size, and SHA-256 identity are stored
 in the plugin-owned registry transaction. Resource URLs include plugin ID,
@@ -140,7 +142,8 @@ after disablement; possession of bytes grants no runtime authority.
 ## Runtime credentials and protocol
 
 Every launch receives a fresh opaque UUID runtime instance and a five-minute
-Ed25519 capability token. Claims bind the dedicated `widget-runtime` audience,
+Ed25519 capability token. Claims bind issuer `btg-academy`, the dedicated
+`btg-widget-runtime` audience,
 runtime instance, plugin ID and version, artifact digest, widget ID and type,
 explicit grants, issue time, and expiry. The signing seed and key ID come from
 the widget-runtime configuration and are separate from sessions, Open Badges,
@@ -176,4 +179,5 @@ Security invariants:
 - plugin code never executes in the Academy main JavaScript context;
 - a plugin never receives Academy session credentials;
 - a plugin receives only short-lived, explicitly granted runtime capabilities;
+- manifest permissions do not grant runtime authority;
 - trust and enablement are checked before every launch and token refresh.

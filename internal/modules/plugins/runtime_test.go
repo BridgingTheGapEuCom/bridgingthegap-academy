@@ -58,6 +58,9 @@ func TestRuntimeLaunchUsesFreshIdentityAndExplicitCapabilities(t *testing.T) {
 	if first.Context.RuntimeInstanceID == second.Context.RuntimeInstanceID || first.RuntimeOrigin != "https://plugins.academy.example" || !strings.Contains(first.RuntimeURL, release.Release.ArtifactDigest) {
 		t.Fatalf("invalid launch descriptors: %#v %#v", first, second)
 	}
+	if first.WidgetName != "Timeline" {
+		t.Fatalf("trusted widget name = %q", first.WidgetName)
+	}
 	if len(first.Capabilities) != 2 || first.Capabilities[0] != CapabilityBootstrap || first.Capabilities[1] != CapabilityContextRead {
 		t.Fatalf("unexpected grants: %v", first.Capabilities)
 	}
@@ -69,7 +72,7 @@ func TestRuntimeLaunchUsesFreshIdentityAndExplicitCapabilities(t *testing.T) {
 func TestRuntimeTokenStrictVerification(t *testing.T) {
 	_, runtime, tokens, release := runtimeFixture(t, Policy{})
 	launch, _ := runtime.PrepareWidgetRuntime(context.Background(), release.Release.PluginID, release.Release.Version, "timeline", TypeCourseWidget)
-	base := RuntimeTokenExpectation{RuntimeInstanceID: launch.Context.RuntimeInstanceID, PluginID: release.Release.PluginID, PluginVersion: release.Release.Version, WidgetID: "timeline", Capability: CapabilityContextRead}
+	base := RuntimeTokenExpectation{RuntimeInstanceID: launch.Context.RuntimeInstanceID, PluginID: release.Release.PluginID, PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: "timeline", WidgetType: TypeCourseWidget, Capability: CapabilityContextRead}
 	if _, err := tokens.Verify(launch.Token, base); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +80,9 @@ func TestRuntimeTokenStrictVerification(t *testing.T) {
 		"runtime": func(v *RuntimeTokenExpectation) { v.RuntimeInstanceID = "22222222-2222-4222-8222-222222222222" },
 		"plugin":  func(v *RuntimeTokenExpectation) { v.PluginID = "com.example.other.widget" },
 		"version": func(v *RuntimeTokenExpectation) { v.PluginVersion = "2.0.0" },
+		"digest":  func(v *RuntimeTokenExpectation) { v.ArtifactDigest = strings.Repeat("b", 64) },
 		"widget":  func(v *RuntimeTokenExpectation) { v.WidgetID = "other" },
+		"type":    func(v *RuntimeTokenExpectation) { v.WidgetType = TypeDashboardWidget },
 	} {
 		t.Run(name, func(t *testing.T) {
 			expected := base
@@ -109,6 +114,14 @@ func TestRuntimeTokenStrictVerification(t *testing.T) {
 	wrongAudienceToken := unsigned + "." + base64.RawURLEncoding.EncodeToString(ed25519.Sign(tokens.private, []byte(unsigned)))
 	if _, err := tokens.Verify(wrongAudienceToken, RuntimeTokenExpectation{}); !errors.Is(err, ErrInvalidRuntimeToken) {
 		t.Fatalf("wrong audience token = %v", err)
+	}
+	wrongAudience.Issuer = "other-academy"
+	wrongAudience.Audience = RuntimeAudience
+	claimBytes, _ = json.Marshal(wrongAudience)
+	unsigned = parts[0] + "." + base64.RawURLEncoding.EncodeToString(claimBytes)
+	wrongIssuerToken := unsigned + "." + base64.RawURLEncoding.EncodeToString(ed25519.Sign(tokens.private, []byte(unsigned)))
+	if _, err := tokens.Verify(wrongIssuerToken, RuntimeTokenExpectation{}); !errors.Is(err, ErrInvalidRuntimeToken) {
+		t.Fatalf("wrong issuer token = %v", err)
 	}
 }
 

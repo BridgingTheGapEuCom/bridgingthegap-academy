@@ -1114,6 +1114,8 @@ export interface components {
         };
         WidgetRuntimeLaunch: {
             context: components["schemas"]["WidgetRuntimeContext"];
+            /** @description Trusted manifest display name for the iframe accessible title. */
+            widgetName: string;
             /** Format: uri */
             runtimeUrl: string;
             /** Format: uri */

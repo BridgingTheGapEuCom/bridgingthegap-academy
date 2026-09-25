@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
-	"mime"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
@@ -77,11 +75,11 @@ func (h *pluginRuntimeHTTP) handlePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resourceURL := "/plugins/runtime/" + url.PathEscape(string(release.PluginID)) + "/" + url.PathEscape(release.Version) + "/" + release.ArtifactDigest + "/resources/" + strings.TrimPrefix(entry.Resource, "resources/")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; connect-src 'self'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; frame-ancestors "+h.service.HostOrigin())
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; frame-ancestors "+h.service.HostOrigin())
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	data := struct{ HostOrigin, Entry string }{h.service.HostOrigin(), resourceURL}
-	const page = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="btg-host-origin" content="{{.HostOrigin}}"><meta name="btg-widget-entry" content="{{.Entry}}"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="widget-root"></div><script type="module" src="/plugins/runtime/bridge-v1.js"></script></body></html>`
+	data := struct{ HostOrigin, Entry, WidgetName string }{h.service.HostOrigin(), resourceURL, entry.Name}
+	const page = `<!doctype html><html><head><meta charset="utf-8"><title>{{.WidgetName}}</title><meta name="referrer" content="no-referrer"><meta name="btg-host-origin" content="{{.HostOrigin}}"><meta name="btg-widget-entry" content="{{.Entry}}"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="widget-root"></div><script type="module" src="/plugins/runtime/bridge-v1.js"></script></body></html>`
 	_ = template.Must(template.New("runtime").Parse(page)).Execute(w, data)
 }
 
@@ -102,15 +100,48 @@ func (h *pluginRuntimeHTTP) handleResource(w http.ResponseWriter, r *http.Reques
 		http.NotFound(w, r)
 		return
 	}
-	contentType := mime.TypeByExtension(filepath.Ext(resource.Path))
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
+	contentType := controlledPluginMediaType(resource.Path)
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Header().Set("ETag", `"sha256-`+resource.SHA256+`"`)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(resource.Content)
+}
+
+func controlledPluginMediaType(resourcePath string) string {
+	lower := strings.ToLower(resourcePath)
+	switch {
+	case strings.HasSuffix(lower, ".js"), strings.HasSuffix(lower, ".mjs"):
+		return "text/javascript; charset=utf-8"
+	case strings.HasSuffix(lower, ".css"):
+		return "text/css; charset=utf-8"
+	case strings.HasSuffix(lower, ".json"):
+		return "application/json"
+	case strings.HasSuffix(lower, ".png"):
+		return "image/png"
+	case strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"):
+		return "image/jpeg"
+	case strings.HasSuffix(lower, ".gif"):
+		return "image/gif"
+	case strings.HasSuffix(lower, ".webp"):
+		return "image/webp"
+	case strings.HasSuffix(lower, ".avif"):
+		return "image/avif"
+	case strings.HasSuffix(lower, ".svg"):
+		return "image/svg+xml"
+	case strings.HasSuffix(lower, ".mp3"):
+		return "audio/mpeg"
+	case strings.HasSuffix(lower, ".ogg"):
+		return "audio/ogg"
+	case strings.HasSuffix(lower, ".wav"):
+		return "audio/wav"
+	case strings.HasSuffix(lower, ".mp4"):
+		return "video/mp4"
+	case strings.HasSuffix(lower, ".webm"):
+		return "video/webm"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 func bearerToken(r *http.Request) (string, bool) {
