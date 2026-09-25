@@ -11,6 +11,55 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createDashboardWidgetPlacement = `-- name: CreateDashboardWidgetPlacement :one
+INSERT INTO plugins.dashboard_widget_placement (placement_id, plugin_id, plugin_version, artifact_digest, widget_id, configuration, position, enabled, revision, created_at, updated_at)
+VALUES ($1,$2,$3,$4,$5,$6,(SELECT COALESCE(MAX(position)+1,0) FROM plugins.dashboard_widget_placement),$7,$8,$9,$10)
+RETURNING placement_id, plugin_id, plugin_version, artifact_digest, widget_id, configuration, position, enabled, revision, created_at, updated_at
+`
+
+type CreateDashboardWidgetPlacementParams struct {
+	PlacementID    pgtype.UUID
+	PluginID       string
+	PluginVersion  string
+	ArtifactDigest string
+	WidgetID       string
+	Configuration  []byte
+	Enabled        bool
+	Revision       int64
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) CreateDashboardWidgetPlacement(ctx context.Context, arg CreateDashboardWidgetPlacementParams) (PluginsDashboardWidgetPlacement, error) {
+	row := q.db.QueryRow(ctx, createDashboardWidgetPlacement,
+		arg.PlacementID,
+		arg.PluginID,
+		arg.PluginVersion,
+		arg.ArtifactDigest,
+		arg.WidgetID,
+		arg.Configuration,
+		arg.Enabled,
+		arg.Revision,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i PluginsDashboardWidgetPlacement
+	err := row.Scan(
+		&i.PlacementID,
+		&i.PluginID,
+		&i.PluginVersion,
+		&i.ArtifactDigest,
+		&i.WidgetID,
+		&i.Configuration,
+		&i.Position,
+		&i.Enabled,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createReleaseApproval = `-- name: CreateReleaseApproval :exec
 INSERT INTO plugins.release_approval (
   approval_id, plugin_id, version, artifact_digest, kind, authority_key_id, approved_at
@@ -38,6 +87,23 @@ func (q *Queries) CreateReleaseApproval(ctx context.Context, arg CreateReleaseAp
 		arg.ApprovedAt,
 	)
 	return err
+}
+
+const deleteDashboardWidgetPlacement = `-- name: DeleteDashboardWidgetPlacement :execrows
+DELETE FROM plugins.dashboard_widget_placement WHERE placement_id=$1 AND revision=$2
+`
+
+type DeleteDashboardWidgetPlacementParams struct {
+	PlacementID pgtype.UUID
+	Revision    int64
+}
+
+func (q *Queries) DeleteDashboardWidgetPlacement(ctx context.Context, arg DeleteDashboardWidgetPlacementParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDashboardWidgetPlacement, arg.PlacementID, arg.Revision)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const findActiveReleaseApproval = `-- name: FindActiveReleaseApproval :one
@@ -154,6 +220,42 @@ func (q *Queries) GetVerificationKey(ctx context.Context, keyID string) (Plugins
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listDashboardWidgetPlacements = `-- name: ListDashboardWidgetPlacements :many
+SELECT placement_id, plugin_id, plugin_version, artifact_digest, widget_id, configuration, position, enabled, revision, created_at, updated_at FROM plugins.dashboard_widget_placement ORDER BY position, placement_id
+`
+
+func (q *Queries) ListDashboardWidgetPlacements(ctx context.Context) ([]PluginsDashboardWidgetPlacement, error) {
+	rows, err := q.db.Query(ctx, listDashboardWidgetPlacements)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PluginsDashboardWidgetPlacement
+	for rows.Next() {
+		var i PluginsDashboardWidgetPlacement
+		if err := rows.Scan(
+			&i.PlacementID,
+			&i.PluginID,
+			&i.PluginVersion,
+			&i.ArtifactDigest,
+			&i.WidgetID,
+			&i.Configuration,
+			&i.Position,
+			&i.Enabled,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listInstalledReleases = `-- name: ListInstalledReleases :many
@@ -372,4 +474,42 @@ func (q *Queries) SetVerificationKeyEnabled(ctx context.Context, arg SetVerifica
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updateDashboardWidgetPlacement = `-- name: UpdateDashboardWidgetPlacement :one
+UPDATE plugins.dashboard_widget_placement SET configuration=$2, enabled=$3, revision=revision+1, updated_at=$4
+WHERE placement_id=$1 AND revision=$5 RETURNING placement_id, plugin_id, plugin_version, artifact_digest, widget_id, configuration, position, enabled, revision, created_at, updated_at
+`
+
+type UpdateDashboardWidgetPlacementParams struct {
+	PlacementID   pgtype.UUID
+	Configuration []byte
+	Enabled       bool
+	UpdatedAt     pgtype.Timestamptz
+	Revision      int64
+}
+
+func (q *Queries) UpdateDashboardWidgetPlacement(ctx context.Context, arg UpdateDashboardWidgetPlacementParams) (PluginsDashboardWidgetPlacement, error) {
+	row := q.db.QueryRow(ctx, updateDashboardWidgetPlacement,
+		arg.PlacementID,
+		arg.Configuration,
+		arg.Enabled,
+		arg.UpdatedAt,
+		arg.Revision,
+	)
+	var i PluginsDashboardWidgetPlacement
+	err := row.Scan(
+		&i.PlacementID,
+		&i.PluginID,
+		&i.PluginVersion,
+		&i.ArtifactDigest,
+		&i.WidgetID,
+		&i.Configuration,
+		&i.Position,
+		&i.Enabled,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

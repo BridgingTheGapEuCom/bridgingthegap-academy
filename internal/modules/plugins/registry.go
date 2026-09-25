@@ -338,6 +338,35 @@ func (s *RegistryService) CourseWidgets(ctx context.Context) ([]InstalledRelease
 	}
 	return result, nil
 }
+
+// DashboardWidgets returns currently enabled, policy-permitted releases that
+// expose Dashboard entrypoints. It is discovery data, not placement authority.
+func (s *RegistryService) DashboardWidgets(ctx context.Context) ([]InstalledRelease, error) {
+	if s == nil || s.repository == nil {
+		return nil, ErrStorage
+	}
+	releases, err := s.repository.ListReleases(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]InstalledRelease, 0)
+	for _, release := range releases {
+		current, err := s.Get(ctx, release.Release.PluginID, release.Release.Version)
+		if err != nil {
+			return nil, err
+		}
+		if !current.Enabled || !s.executionAllowed(ctx, current) {
+			continue
+		}
+		for _, entry := range current.Manifest.Entrypoints {
+			if entry.Type == TypeDashboardWidget {
+				result = append(result, current)
+				break
+			}
+		}
+	}
+	return result, nil
+}
 func (s *RegistryService) Enable(ctx context.Context, id PluginID, version string) (InstalledRelease, error) {
 	r, err := s.Get(ctx, id, version)
 	if err != nil {

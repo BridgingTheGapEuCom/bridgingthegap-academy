@@ -12,6 +12,7 @@ import (
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins/db/sqlc"
+	guuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,8 +24,112 @@ type Repository struct {
 }
 
 var _ plugins.Repository = (*Repository)(nil)
+var _ plugins.DashboardPlacementRepository = (*Repository)(nil)
 
 func New(db *pgxpool.Pool) *Repository { return &Repository{pool: db, q: sqlc.New(db)} }
+
+func (r *Repository) ListDashboardPlacements(ctx context.Context) ([]plugins.DashboardPlacement, error) {
+	rows, err := r.q.ListDashboardWidgetPlacements(ctx)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	result := make([]plugins.DashboardPlacement, 0, len(rows))
+	for _, row := range rows {
+		value, err := dashboardPlacement(row)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, value)
+	}
+	return result, nil
+}
+func (r *Repository) CreateDashboardPlacement(ctx context.Context, value plugins.DashboardPlacement) (plugins.DashboardPlacement, error) {
+	id, err := uuid(value.ID)
+	if err != nil {
+		return plugins.DashboardPlacement{}, plugins.ErrStorage
+	}
+	row, err := r.q.CreateDashboardWidgetPlacement(ctx, sqlc.CreateDashboardWidgetPlacementParams{PlacementID: id, PluginID: string(value.PluginID), PluginVersion: value.PluginVersion, ArtifactDigest: value.ArtifactDigest, WidgetID: value.WidgetID, Configuration: value.Configuration, Enabled: value.Enabled, Revision: value.Revision, CreatedAt: pgtype.Timestamptz{Time: value.CreatedAt, Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: value.UpdatedAt, Valid: true}})
+	if err != nil {
+		return plugins.DashboardPlacement{}, storageError(err)
+	}
+	return dashboardPlacement(row)
+}
+func (r *Repository) UpdateDashboardPlacement(ctx context.Context, value plugins.DashboardPlacement, expected int64) (plugins.DashboardPlacement, error) {
+	id, err := uuid(value.ID)
+	if err != nil {
+		return plugins.DashboardPlacement{}, plugins.ErrDashboardPlacementNotFound
+	}
+	row, err := r.q.UpdateDashboardWidgetPlacement(ctx, sqlc.UpdateDashboardWidgetPlacementParams{PlacementID: id, Configuration: value.Configuration, Enabled: value.Enabled, UpdatedAt: pgtype.Timestamptz{Time: value.UpdatedAt, Valid: true}, Revision: expected})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plugins.DashboardPlacement{}, plugins.ErrDashboardPlacementConflict
+	}
+	if err != nil {
+		return plugins.DashboardPlacement{}, storageError(err)
+	}
+	return dashboardPlacement(row)
+}
+func (r *Repository) DeleteDashboardPlacement(ctx context.Context, id string, expected int64) error {
+	value, err := uuid(id)
+	if err != nil {
+		return plugins.ErrDashboardPlacementNotFound
+	}
+	n, err := r.q.DeleteDashboardWidgetPlacement(ctx, sqlc.DeleteDashboardWidgetPlacementParams{PlacementID: value, Revision: expected})
+	if err != nil {
+		return storageError(err)
+	}
+	if n == 0 {
+		return plugins.ErrDashboardPlacementConflict
+	}
+	return nil
+}
+func (r *Repository) ReorderDashboardPlacements(ctx context.Context, ids []string, revisions map[string]int64, updated time.Time) ([]plugins.DashboardPlacement, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `SELECT placement_id::text, revision FROM plugins.dashboard_widget_placement ORDER BY position FOR UPDATE`)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	defer rows.Close()
+	existing := map[string]int64{}
+	for rows.Next() {
+		var id string
+		var revision int64
+		if err := rows.Scan(&id, &revision); err != nil {
+			return nil, storageError(err)
+		}
+		existing[id] = revision
+	}
+	if rows.Err() != nil || len(existing) != len(ids) {
+		return nil, plugins.ErrDashboardPlacementConflict
+	}
+	for _, id := range ids {
+		if existing[id] != revisions[id] {
+			return nil, plugins.ErrDashboardPlacementConflict
+		}
+	}
+	if _, err = tx.Exec(ctx, `UPDATE plugins.dashboard_widget_placement SET position = position + 1000000`); err != nil {
+		return nil, storageError(err)
+	}
+	for position, id := range ids {
+		if _, err = tx.Exec(ctx, `UPDATE plugins.dashboard_widget_placement SET position=$1, revision=revision+1, updated_at=$2 WHERE placement_id=$3`, position, updated, id); err != nil {
+			return nil, storageError(err)
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, storageError(err)
+	}
+	return r.ListDashboardPlacements(ctx)
+}
+func dashboardPlacement(row sqlc.PluginsDashboardWidgetPlacement) (plugins.DashboardPlacement, error) {
+	if !row.PlacementID.Valid || !row.CreatedAt.Valid || !row.UpdatedAt.Valid {
+		return plugins.DashboardPlacement{}, plugins.ErrStorage
+	}
+	id := guuid.UUID(row.PlacementID.Bytes).String()
+	return plugins.DashboardPlacement{ID: id, PluginID: plugins.PluginID(row.PluginID), PluginVersion: row.PluginVersion, ArtifactDigest: row.ArtifactDigest, WidgetID: row.WidgetID, Configuration: append(json.RawMessage(nil), row.Configuration...), Position: int(row.Position), Enabled: row.Enabled, Revision: row.Revision, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time}, nil
+}
 
 func (r *Repository) RegisterKey(ctx context.Context, k plugins.VerificationKey) error {
 	if err := k.Validate(); err != nil {

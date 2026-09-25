@@ -56,3 +56,18 @@ WHERE approval_id = $1 AND revoked_at IS NULL;
 SELECT * FROM plugins.release_approval
 WHERE plugin_id = $1 AND version = $2 AND artifact_digest = $3 AND kind = $4
   AND COALESCE(authority_key_id, '') = $5 AND revoked_at IS NULL;
+
+-- name: ListDashboardWidgetPlacements :many
+SELECT * FROM plugins.dashboard_widget_placement ORDER BY position, placement_id;
+
+-- name: CreateDashboardWidgetPlacement :one
+INSERT INTO plugins.dashboard_widget_placement (placement_id, plugin_id, plugin_version, artifact_digest, widget_id, configuration, position, enabled, revision, created_at, updated_at)
+VALUES ($1,$2,$3,$4,$5,$6,(SELECT COALESCE(MAX(position)+1,0) FROM plugins.dashboard_widget_placement),$7,$8,$9,$10)
+RETURNING *;
+
+-- name: UpdateDashboardWidgetPlacement :one
+UPDATE plugins.dashboard_widget_placement SET configuration=$2, enabled=$3, revision=revision+1, updated_at=$4
+WHERE placement_id=$1 AND revision=$5 RETURNING *;
+
+-- name: DeleteDashboardWidgetPlacement :execrows
+DELETE FROM plugins.dashboard_widget_placement WHERE placement_id=$1 AND revision=$2;

@@ -74,6 +74,7 @@ sql:
     schema:
       - internal/modules/infrastructure/postgres/db/migrations/00031_plugins.sql
       - internal/modules/infrastructure/postgres/db/migrations/00032_plugin_runtime_resources.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00033_dashboard_widget_placements.sql
     queries: internal/modules/plugins/db/query
     gen:
       go:

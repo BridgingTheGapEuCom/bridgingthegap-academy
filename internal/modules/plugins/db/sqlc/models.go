@@ -8,6 +8,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type PluginsDashboardWidgetPlacement struct {
+	PlacementID    pgtype.UUID
+	PluginID       string
+	PluginVersion  string
+	ArtifactDigest string
+	WidgetID       string
+	Configuration  []byte
+	Position       int32
+	Enabled        bool
+	Revision       int64
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type PluginsInstalledRelease struct {
 	InstallationID  pgtype.UUID
 	PluginID        string

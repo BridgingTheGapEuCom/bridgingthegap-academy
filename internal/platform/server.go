@@ -100,6 +100,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	}
 	coursesRepository := coursespostgres.New(pool)
 	pluginRegistry := plugins.NewRegistryService(pluginspostgres.New(pool), plugins.Policy{})
+	dashboardWidgets := &dashboardWidgetAPI{placements: plugins.NewDashboardPlacementService(pluginRegistry, pluginspostgres.New(pool), time.Now), registry: pluginRegistry}
 	pluginContentValidator := plugins.NewCourseWidgetContentValidator(pluginRegistry)
 	certificateRepository := credentialspostgres.New(pool)
 	var badgePublication *publication.Service
@@ -210,6 +211,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		portabilityExporter:         packageExporter,
 		portabilityImporter:         packageImporter,
 		courseWidgetRuntime:         courseWidgetRuntime,
+		dashboardWidgets:            dashboardWidgets,
 		portabilityReader:           portability.NewReader(portability.DefaultLimits()),
 		portabilityCourses:          coursesRepository,
 		portabilityPreviews:         newPortabilityPreviewStore(time.Now),
@@ -356,6 +358,15 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/posts/{postId}/{action:hide|unhide}", auth.handleCommunityModeratePost)
 				}
 				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
+				if auth.dashboardWidgets != nil {
+					dashboard := protected.With(auth.requireCapability(identity.CapabilityDashboardWidgetsManage, identity.InstanceResource()))
+					dashboard.Get("/dashboard/widgets", auth.dashboardWidgets.list)
+					dashboard.Post("/dashboard/widgets", auth.dashboardWidgets.create)
+					dashboard.Patch("/dashboard/widgets/{placementId}", auth.dashboardWidgets.update)
+					dashboard.Post("/dashboard/widgets/{placementId}/move-up", func(w http.ResponseWriter, r *http.Request) { auth.dashboardWidgets.move(w, r, -1) })
+					dashboard.Post("/dashboard/widgets/{placementId}/move-down", func(w http.ResponseWriter, r *http.Request) { auth.dashboardWidgets.move(w, r, 1) })
+					dashboard.Delete("/dashboard/widgets/{placementId}", auth.dashboardWidgets.delete)
+				}
 				if auth.authoring != nil {
 					protected.Get("/authoring/drafts", auth.handleAuthoringDraftList)
 					protected.Get("/authoring/drafts/{draftId}", auth.handleAuthoringDraft)

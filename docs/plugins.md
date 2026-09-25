@@ -209,6 +209,29 @@ Dashboard placement, plugin management UI, marketplace discovery, updates,
 outbound networking, and forced termination of already-rendered frames remain
 deferred.
 
+## Dashboard placement management
+
+The Academy has no Dashboard aggregate, user preference store, or per-user
+Dashboard model. Dashboard widget placement is therefore installation-wide
+configuration, not user-owned state. Each placement pins an exact plugin ID,
+version, artifact digest, and Dashboard entrypoint; plugin upgrades never
+rewrite it. Placement configuration is bounded JSON data only.
+
+Placements form one deterministic vertical ordered list. Creation appends to
+the list. Move operations submit the full observed placement-revision map and
+are committed in one PostgreSQL transaction: rows are locked, every revision
+is checked, temporary positions avoid uniqueness collisions, and contiguous
+positions plus new revisions are written atomically. Configuration, enabled
+state, deletion, and moves all use CAS and report a conflict instead of
+overwriting a newer layout.
+
+`dashboard.widgets.manage` controls this installation configuration. It is
+separate from `plugins.manage`, which concerns plugin registry administration.
+Discovery returns only enabled, currently eligible `DASHBOARD_WIDGET`
+entrypoints. Placements are installation-local and never appear in Course
+portability packages. Runtime launch/rendering is M10.2b2; frontend
+configuration/rendering is M10.2b3.
+
 Security invariants:
 
 - plugin code never executes in the Academy main JavaScript context;

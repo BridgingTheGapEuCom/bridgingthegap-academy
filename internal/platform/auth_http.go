@@ -105,6 +105,7 @@ type authHTTP struct {
 	portabilityExporter portabilityExport
 	portabilityImporter portabilityImport
 	courseWidgetRuntime courseWidgetLaunch
+	dashboardWidgets    *dashboardWidgetAPI
 	portabilityReader   portabilityPackageReader
 	portabilityCourses  portabilityCourseReader
 	portabilityPreviews *portabilityPreviewStore
