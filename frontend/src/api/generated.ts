@@ -52,6 +52,55 @@ export interface paths {
         patch: operations["updateDashboardWidget"];
         trace?: never;
     };
+    "/api/dashboard/widgets/{placementId}/move-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["moveDashboardWidgetUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets/{placementId}/move-down": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["moveDashboardWidgetDown"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets/{placementId}/widget-runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Derives one Dashboard-widget runtime launch from the persisted installation placement. The client supplies only the opaque placement ID; plugin identity, configuration, and grants are server-derived. */
+        post: operations["launchDashboardWidgetRuntime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugin-runtime/context": {
         parameters: {
             query?: never;
@@ -1220,6 +1269,11 @@ export interface components {
         DashboardWidgetPlacementDeleteRequest: {
             expectedRevision: number;
         };
+        DashboardWidgetPlacementReorderRequest: {
+            expectedRevisions: {
+                [key: string]: number;
+            };
+        };
         AvailableDashboardWidget: {
             pluginId: string;
             pluginName: string;
@@ -1253,8 +1307,9 @@ export interface components {
             token: string;
             /** Format: date-time */
             expiresAt: string;
-            capabilities: ("widget.runtime.bootstrap" | "widget.runtime.context.read" | "widget.course.context.read")[];
+            capabilities: ("widget.runtime.bootstrap" | "widget.runtime.context.read" | "widget.course.context.read" | "widget.dashboard.context.read")[];
             courseContext?: components["schemas"]["CourseWidgetRuntimeContext"];
+            dashboardContext?: components["schemas"]["DashboardWidgetRuntimeContext"];
         };
         CourseWidgetRuntimeContext: {
             /** Format: uuid */
@@ -1265,6 +1320,13 @@ export interface components {
             lessonKey: string;
             placementKey: string;
             presentationLanguage: string;
+            configuration: {
+                [key: string]: unknown;
+            };
+        };
+        DashboardWidgetRuntimeContext: {
+            /** Format: uuid */
+            placementId: string;
             configuration: {
                 [key: string]: unknown;
             };
@@ -2751,6 +2813,92 @@ export interface operations {
             409: components["responses"]["Problem"];
         };
     };
+    moveDashboardWidgetUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Authoritative ordered Dashboard placements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacementList"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    moveDashboardWidgetDown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Authoritative ordered Dashboard placements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacementList"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    launchDashboardWidgetRuntime: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Short-lived Dashboard runtime launch descriptor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetRuntimeLaunch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     getWidgetRuntimeContext: {
         parameters: {
             query?: never;
@@ -2766,7 +2914,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WidgetRuntimeContext"] | components["schemas"]["CourseWidgetRuntimeContext"];
+                    "application/json": components["schemas"]["WidgetRuntimeContext"] | components["schemas"]["CourseWidgetRuntimeContext"] | components["schemas"]["DashboardWidgetRuntimeContext"];
                 };
             };
             401: components["responses"]["Problem"];

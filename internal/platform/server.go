@@ -99,8 +99,9 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		return err
 	}
 	coursesRepository := coursespostgres.New(pool)
-	pluginRegistry := plugins.NewRegistryService(pluginspostgres.New(pool), plugins.Policy{})
-	dashboardWidgets := &dashboardWidgetAPI{placements: plugins.NewDashboardPlacementService(pluginRegistry, pluginspostgres.New(pool), time.Now), registry: pluginRegistry}
+	pluginRepository := pluginspostgres.New(pool)
+	pluginRegistry := plugins.NewRegistryService(pluginRepository, plugins.Policy{})
+	dashboardWidgets := &dashboardWidgetAPI{placements: plugins.NewDashboardPlacementService(pluginRegistry, pluginRepository, time.Now), registry: pluginRegistry}
 	pluginContentValidator := plugins.NewCourseWidgetContentValidator(pluginRegistry)
 	certificateRepository := credentialspostgres.New(pool)
 	var badgePublication *publication.Service
@@ -157,6 +158,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	}
 	var pluginRuntime *pluginRuntimeHTTP
 	var courseWidgetRuntime courseWidgetLaunch
+	var dashboardWidgetRuntime dashboardWidgetLaunch
 	if tokenService, enabled, tokenErr := cfg.widgetRuntimeTokenService(); tokenErr != nil {
 		return tokenErr
 	} else if enabled {
@@ -166,6 +168,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		}
 		pluginRuntime = &pluginRuntimeHTTP{service: runtimeService}
 		courseWidgetRuntime = plugins.NewCourseWidgetLaunchService(coursesRepository, runtimeService)
+		dashboardWidgetRuntime = plugins.NewDashboardWidgetLaunchService(pluginRepository, runtimeService)
 	}
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
@@ -211,6 +214,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		portabilityExporter:         packageExporter,
 		portabilityImporter:         packageImporter,
 		courseWidgetRuntime:         courseWidgetRuntime,
+		dashboardWidgetRuntime:      dashboardWidgetRuntime,
 		dashboardWidgets:            dashboardWidgets,
 		portabilityReader:           portability.NewReader(portability.DefaultLimits()),
 		portabilityCourses:          coursesRepository,
@@ -367,6 +371,11 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					dashboard.Post("/dashboard/widgets/{placementId}/move-up", func(w http.ResponseWriter, r *http.Request) { auth.dashboardWidgets.move(w, r, -1) })
 					dashboard.Post("/dashboard/widgets/{placementId}/move-down", func(w http.ResponseWriter, r *http.Request) { auth.dashboardWidgets.move(w, r, 1) })
 					dashboard.Delete("/dashboard/widgets/{placementId}", auth.dashboardWidgets.delete)
+				}
+				if auth.dashboardWidgets != nil && auth.dashboardWidgetRuntime != nil {
+					protected.Post("/dashboard/widgets/{placementId}/widget-runtime", func(w http.ResponseWriter, r *http.Request) {
+						auth.dashboardWidgets.launch(w, r, auth.dashboardWidgetRuntime)
+					})
 				}
 				if auth.authoring != nil {
 					protected.Get("/authoring/drafts", auth.handleAuthoringDraftList)

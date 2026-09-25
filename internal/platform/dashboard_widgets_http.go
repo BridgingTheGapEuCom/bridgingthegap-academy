@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
@@ -13,6 +14,28 @@ const maxDashboardWidgetBody = 24 << 10
 type dashboardWidgetAPI struct {
 	placements *plugins.DashboardPlacementService
 	registry   *plugins.RegistryService
+}
+
+type dashboardWidgetLaunch interface {
+	Prepare(context.Context, string) (plugins.RuntimeLaunch, error)
+}
+
+func (h *dashboardWidgetAPI) launch(w http.ResponseWriter, r *http.Request, service dashboardWidgetLaunch) {
+	if service == nil || r.ContentLength != 0 {
+		problem(w, r, http.StatusBadRequest, "Invalid request")
+		return
+	}
+	launch, err := service.Prepare(r.Context(), chi.URLParam(r, "placementId"))
+	if err != nil {
+		if plugins.IsDashboardWidgetLaunchUnavailable(err) {
+			problem(w, r, http.StatusNotFound, "Widget unavailable")
+			return
+		}
+		problem(w, r, http.StatusServiceUnavailable, "Widget unavailable")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, launch)
 }
 
 func (h *dashboardWidgetAPI) available(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +75,28 @@ type dashboardDeleteRequest struct {
 	ExpectedRevision int64 `json:"expectedRevision"`
 }
 
+// dashboardPlacementResponse deliberately excludes persistence timestamps. The
+// Dashboard manager needs its mutable placement state, not database metadata.
+type dashboardPlacementResponse struct {
+	ID             string           `json:"placementId"`
+	PluginID       plugins.PluginID `json:"pluginId"`
+	PluginVersion  string           `json:"pluginVersion"`
+	ArtifactDigest string           `json:"artifactDigest"`
+	WidgetID       string           `json:"widgetId"`
+	Configuration  json.RawMessage  `json:"configuration"`
+	Position       int              `json:"position"`
+	Enabled        bool             `json:"enabled"`
+	Revision       int64            `json:"revision"`
+}
+
+func dashboardPlacementResponses(values []plugins.DashboardPlacement) []dashboardPlacementResponse {
+	result := make([]dashboardPlacementResponse, 0, len(values))
+	for _, value := range values {
+		result = append(result, dashboardPlacementResponse{ID: value.ID, PluginID: value.PluginID, PluginVersion: value.PluginVersion, ArtifactDigest: value.ArtifactDigest, WidgetID: value.WidgetID, Configuration: value.Configuration, Position: value.Position, Enabled: value.Enabled, Revision: value.Revision})
+	}
+	return result
+}
+
 func (h *dashboardWidgetAPI) list(w http.ResponseWriter, r *http.Request) {
 	values, e := h.placements.List(r.Context())
 	if e != nil {
@@ -59,7 +104,7 @@ func (h *dashboardWidgetAPI) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]any{"widgets": values})
+	writeJSON(w, 200, map[string]any{"widgets": dashboardPlacementResponses(values)})
 }
 func (h *dashboardWidgetAPI) create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -74,7 +119,7 @@ func (h *dashboardWidgetAPI) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 201, value)
+	writeJSON(w, 201, dashboardPlacementResponses([]plugins.DashboardPlacement{value})[0])
 }
 func (h *dashboardWidgetAPI) update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -98,7 +143,7 @@ func (h *dashboardWidgetAPI) update(w http.ResponseWriter, r *http.Request) {
 				dashboardProblem(w, r, e)
 				return
 			}
-			writeJSON(w, 200, out)
+			writeJSON(w, 200, dashboardPlacementResponses([]plugins.DashboardPlacement{out})[0])
 			return
 		}
 	}
@@ -139,7 +184,7 @@ func (h *dashboardWidgetAPI) move(w http.ResponseWriter, r *http.Request, delta 
 		dashboardProblem(w, r, e)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"widgets": out})
+	writeJSON(w, 200, map[string]any{"widgets": dashboardPlacementResponses(out)})
 }
 func (h *dashboardWidgetAPI) delete(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")

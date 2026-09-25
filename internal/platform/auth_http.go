@@ -101,17 +101,18 @@ type authHTTP struct {
 	achievementVersions         interface {
 		GetImmutableCourseVersion(context.Context, courses.CourseVersionID) (courses.ImmutableCourseVersion, error)
 	}
-	assetMaxBytes       int64
-	portabilityExporter portabilityExport
-	portabilityImporter portabilityImport
-	courseWidgetRuntime courseWidgetLaunch
-	dashboardWidgets    *dashboardWidgetAPI
-	portabilityReader   portabilityPackageReader
-	portabilityCourses  portabilityCourseReader
-	portabilityPreviews *portabilityPreviewStore
-	pluginRuntime       *pluginRuntimeHTTP
-	cookieSecure        bool
-	now                 func() time.Time
+	assetMaxBytes          int64
+	portabilityExporter    portabilityExport
+	portabilityImporter    portabilityImport
+	courseWidgetRuntime    courseWidgetLaunch
+	dashboardWidgetRuntime dashboardWidgetLaunch
+	dashboardWidgets       *dashboardWidgetAPI
+	portabilityReader      portabilityPackageReader
+	portabilityCourses     portabilityCourseReader
+	portabilityPreviews    *portabilityPreviewStore
+	pluginRuntime          *pluginRuntimeHTTP
+	cookieSecure           bool
+	now                    func() time.Time
 }
 
 type resolvedSessionKey struct{}

@@ -30,7 +30,12 @@ type DashboardPlacement struct {
 	UpdatedAt      time.Time       `json:"updatedAt"`
 }
 
+type DashboardPlacementReader interface {
+	GetDashboardPlacement(context.Context, string) (DashboardPlacement, error)
+}
+
 type DashboardPlacementRepository interface {
+	DashboardPlacementReader
 	ListDashboardPlacements(context.Context) ([]DashboardPlacement, error)
 	CreateDashboardPlacement(context.Context, DashboardPlacement) (DashboardPlacement, error)
 	UpdateDashboardPlacement(context.Context, DashboardPlacement, int64) (DashboardPlacement, error)
@@ -90,6 +95,9 @@ func (s *DashboardPlacementService) Delete(ctx context.Context, id string, expec
 func (s *DashboardPlacementService) Reorder(ctx context.Context, ids []string, revisions map[string]int64) ([]DashboardPlacement, error) {
 	if s == nil || s.repository == nil {
 		return nil, ErrLaunchDenied
+	}
+	if len(revisions) != len(ids) {
+		return nil, ErrDashboardPlacementConflict
 	}
 	seen := map[string]bool{}
 	for _, id := range ids {

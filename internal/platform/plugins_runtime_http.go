@@ -45,6 +45,10 @@ type courseRuntimeContextService interface {
 	CourseContext(string) (plugins.CourseWidgetRuntimeContext, error)
 }
 
+type dashboardRuntimeContextService interface {
+	DashboardContext(string) (plugins.DashboardWidgetRuntimeContext, error)
+}
+
 type pluginRuntimeHTTP struct{ service pluginRuntimeService }
 
 func (h *pluginRuntimeHTTP) requireRuntimeHost(next http.Handler) http.Handler {
@@ -167,6 +171,17 @@ func (h *pluginRuntimeHTTP) handleContext(w http.ResponseWriter, r *http.Request
 	}
 	if course, ok := h.service.(courseRuntimeContextService); ok {
 		context, err := course.CourseContext(token)
+		if err == nil {
+			writeJSON(w, http.StatusOK, context)
+			return
+		}
+		if !errors.Is(err, plugins.ErrRuntimeCapabilityDenied) {
+			problem(w, r, http.StatusUnauthorized, "Unauthenticated")
+			return
+		}
+	}
+	if dashboard, ok := h.service.(dashboardRuntimeContextService); ok {
+		context, err := dashboard.DashboardContext(token)
 		if err == nil {
 			writeJSON(w, http.StatusOK, context)
 			return

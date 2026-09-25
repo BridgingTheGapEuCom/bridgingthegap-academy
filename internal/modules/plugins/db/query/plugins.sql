@@ -60,6 +60,9 @@ WHERE plugin_id = $1 AND version = $2 AND artifact_digest = $3 AND kind = $4
 -- name: ListDashboardWidgetPlacements :many
 SELECT * FROM plugins.dashboard_widget_placement ORDER BY position, placement_id;
 
+-- name: GetDashboardWidgetPlacement :one
+SELECT * FROM plugins.dashboard_widget_placement WHERE placement_id = $1;
+
 -- name: CreateDashboardWidgetPlacement :one
 INSERT INTO plugins.dashboard_widget_placement (placement_id, plugin_id, plugin_version, artifact_digest, widget_id, configuration, position, enabled, revision, created_at, updated_at)
 VALUES ($1,$2,$3,$4,$5,$6,(SELECT COALESCE(MAX(position)+1,0) FROM plugins.dashboard_widget_placement),$7,$8,$9,$10)

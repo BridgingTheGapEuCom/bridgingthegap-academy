@@ -39,5 +39,6 @@
   "plugins.verification_key": "plugins",
   "plugins.installed_release": "plugins",
   "plugins.installed_resource": "plugins",
+  "plugins.dashboard_widget_placement": "plugins",
   "plugins.release_approval": "plugins"
 }

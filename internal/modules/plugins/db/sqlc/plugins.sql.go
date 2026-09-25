@@ -142,6 +142,29 @@ func (q *Queries) FindActiveReleaseApproval(ctx context.Context, arg FindActiveR
 	return i, err
 }
 
+const getDashboardWidgetPlacement = `-- name: GetDashboardWidgetPlacement :one
+SELECT placement_id, plugin_id, plugin_version, artifact_digest, widget_id, configuration, position, enabled, revision, created_at, updated_at FROM plugins.dashboard_widget_placement WHERE placement_id = $1
+`
+
+func (q *Queries) GetDashboardWidgetPlacement(ctx context.Context, placementID pgtype.UUID) (PluginsDashboardWidgetPlacement, error) {
+	row := q.db.QueryRow(ctx, getDashboardWidgetPlacement, placementID)
+	var i PluginsDashboardWidgetPlacement
+	err := row.Scan(
+		&i.PlacementID,
+		&i.PluginID,
+		&i.PluginVersion,
+		&i.ArtifactDigest,
+		&i.WidgetID,
+		&i.Configuration,
+		&i.Position,
+		&i.Enabled,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getInstalledRelease = `-- name: GetInstalledRelease :one
 SELECT installation_id, plugin_id, version, artifact_digest, manifest, signature_key_id, signature_value, signing_payload, registered_trust, state, enabled, installed_at FROM plugins.installed_release WHERE plugin_id = $1 AND version = $2
 `

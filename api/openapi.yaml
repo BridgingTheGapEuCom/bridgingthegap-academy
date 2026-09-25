@@ -32,13 +32,40 @@ paths:
       parameters: [{ name: placementId, in: path, required: true, schema: { type: string, format: uuid } }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementDeleteRequest' } } } }
       responses: { '204': { description: Deleted }, '409': { $ref: '#/components/responses/Problem' } }
+  /api/dashboard/widgets/{placementId}/move-up:
+    post:
+      operationId: moveDashboardWidgetUp
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: placementId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementReorderRequest' } } } }
+      responses: { '200': { description: Authoritative ordered Dashboard placements, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementList' } } } }, '409': { $ref: '#/components/responses/Problem' } }
+  /api/dashboard/widgets/{placementId}/move-down:
+    post:
+      operationId: moveDashboardWidgetDown
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: placementId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementReorderRequest' } } } }
+      responses: { '200': { description: Authoritative ordered Dashboard placements, content: { application/json: { schema: { $ref: '#/components/schemas/DashboardWidgetPlacementList' } } } }, '409': { $ref: '#/components/responses/Problem' } }
+  /api/dashboard/widgets/{placementId}/widget-runtime:
+    post:
+      operationId: launchDashboardWidgetRuntime
+      description: Derives one Dashboard-widget runtime launch from the persisted installation placement. The client supplies only the opaque placement ID; plugin identity, configuration, and grants are server-derived.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: placementId, in: path, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses:
+        '200': { description: Short-lived Dashboard runtime launch descriptor, content: { application/json: { schema: { $ref: '#/components/schemas/WidgetRuntimeLaunch' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/plugin-runtime/context:
     get:
       operationId: getWidgetRuntimeContext
       description: Returns the minimal identity bound to a short-lived widget-runtime capability token. Academy session cookies are not accepted.
       security: [{ WidgetRuntimeBearer: [] }]
       responses:
-        '200': { description: Minimal widget runtime context, content: { application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/WidgetRuntimeContext' }, { $ref: '#/components/schemas/CourseWidgetRuntimeContext' }] } } } }
+        '200': { description: Minimal widget runtime context, content: { application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/WidgetRuntimeContext' }, { $ref: '#/components/schemas/CourseWidgetRuntimeContext' }, { $ref: '#/components/schemas/DashboardWidgetRuntimeContext' }] } } } }
         '401': { $ref: '#/components/responses/Problem' }
   /api/plugin-runtime/token/refresh:
     post:
@@ -1161,6 +1188,7 @@ components:
     DashboardWidgetPlacementCreateRequest: { type: object, additionalProperties: false, required: [pluginId, pluginVersion, artifactDigest, widgetId, configuration], properties: { pluginId: { type: string }, pluginVersion: { type: string }, artifactDigest: { type: string }, widgetId: { type: string }, configuration: { type: object, additionalProperties: true } } }
     DashboardWidgetPlacementUpdateRequest: { type: object, additionalProperties: false, required: [expectedRevision, configuration, enabled], properties: { expectedRevision: { type: integer, minimum: 1 }, configuration: { type: object, additionalProperties: true }, enabled: { type: boolean } } }
     DashboardWidgetPlacementDeleteRequest: { type: object, additionalProperties: false, required: [expectedRevision], properties: { expectedRevision: { type: integer, minimum: 1 } } }
+    DashboardWidgetPlacementReorderRequest: { type: object, additionalProperties: false, required: [expectedRevisions], properties: { expectedRevisions: { type: object, additionalProperties: { type: integer, minimum: 1 } } } }
     AvailableDashboardWidget: { type: object, additionalProperties: false, required: [pluginId, pluginName, pluginVersion, artifactDigest, widgetId, widgetName, description], properties: { pluginId: { type: string }, pluginName: { type: string }, pluginVersion: { type: string }, artifactDigest: { type: string }, widgetId: { type: string }, widgetName: { type: string }, description: { type: string } } }
     AvailableDashboardWidgetList: { type: object, additionalProperties: false, required: [widgets], properties: { widgets: { type: array, items: { $ref: '#/components/schemas/AvailableDashboardWidget' } } } }
     WidgetRuntimeContext:
@@ -1185,8 +1213,9 @@ components:
         runtimeOrigin: { type: string, format: uri }
         token: { type: string, writeOnly: true }
         expiresAt: { type: string, format: date-time }
-        capabilities: { type: array, items: { type: string, enum: [widget.runtime.bootstrap, widget.runtime.context.read, widget.course.context.read] } }
+        capabilities: { type: array, items: { type: string, enum: [widget.runtime.bootstrap, widget.runtime.context.read, widget.course.context.read, widget.dashboard.context.read] } }
         courseContext: { $ref: '#/components/schemas/CourseWidgetRuntimeContext' }
+        dashboardContext: { $ref: '#/components/schemas/DashboardWidgetRuntimeContext' }
     CourseWidgetRuntimeContext:
       type: object
       additionalProperties: false
@@ -1198,6 +1227,13 @@ components:
         lessonKey: { type: string }
         placementKey: { type: string }
         presentationLanguage: { type: string }
+        configuration: { type: object, additionalProperties: true }
+    DashboardWidgetRuntimeContext:
+      type: object
+      additionalProperties: false
+      required: [placementId, configuration]
+      properties:
+        placementId: { type: string, format: uuid }
         configuration: { type: object, additionalProperties: true }
     TranslatedCourse: { type: object, required: [course, translation, sourceLag], properties: { course: { $ref: '#/components/schemas/PublishedCourseVersionDetail' }, translation: { $ref: '#/components/schemas/TranslationReadMetadata' }, sourceLag: { $ref: '#/components/schemas/TranslationSourceLag' } } }
     TranslationReadMetadata: { type: object, required: [language, sourceLanguage, sourceVersion, publicationId, publishedAt], properties: { language: { type: string }, sourceLanguage: { type: string }, sourceVersion: { type: string }, publicationId: { type: string, format: uuid }, publishedAt: { type: string, format: date-time } } }

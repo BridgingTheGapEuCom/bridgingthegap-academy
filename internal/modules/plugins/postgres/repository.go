@@ -43,6 +43,20 @@ func (r *Repository) ListDashboardPlacements(ctx context.Context) ([]plugins.Das
 	}
 	return result, nil
 }
+func (r *Repository) GetDashboardPlacement(ctx context.Context, id string) (plugins.DashboardPlacement, error) {
+	value, err := uuid(id)
+	if err != nil {
+		return plugins.DashboardPlacement{}, plugins.ErrDashboardPlacementNotFound
+	}
+	row, err := r.q.GetDashboardWidgetPlacement(ctx, value)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plugins.DashboardPlacement{}, plugins.ErrDashboardPlacementNotFound
+	}
+	if err != nil {
+		return plugins.DashboardPlacement{}, storageError(err)
+	}
+	return dashboardPlacement(row)
+}
 func (r *Repository) CreateDashboardPlacement(ctx context.Context, value plugins.DashboardPlacement) (plugins.DashboardPlacement, error) {
 	id, err := uuid(value.ID)
 	if err != nil {

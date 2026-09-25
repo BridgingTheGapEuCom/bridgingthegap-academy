@@ -56,10 +56,19 @@ func (f *runtimeHTTPFake) Refresh(_ context.Context, token string) (plugins.Runt
 	return plugins.RuntimeLaunch{Token: "refreshed"}, nil
 }
 
-func runtimeTestRouter(fake *runtimeHTTPFake) http.Handler {
+func runtimeTestRouter(fake pluginRuntimeService) http.Handler {
 	requests := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "runtime_test_requests_total"}, []string{"route", "method", "status_class"})
 	latency := prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "runtime_test_duration_seconds"}, []string{"route", "method"})
 	return newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), requests, latency, &authHTTP{pluginRuntime: &pluginRuntimeHTTP{service: fake}})
+}
+
+type dashboardRuntimeHTTPFake struct{ *runtimeHTTPFake }
+
+func (f *dashboardRuntimeHTTPFake) DashboardContext(token string) (plugins.DashboardWidgetRuntimeContext, error) {
+	if token != "dashboard-runtime-token" {
+		return plugins.DashboardWidgetRuntimeContext{}, plugins.ErrRuntimeCapabilityDenied
+	}
+	return plugins.DashboardWidgetRuntimeContext{PlacementID: "22222222-2222-4222-8222-222222222222", Configuration: []byte(`{"density":"compact"}`)}, nil
 }
 
 func runtimeRequest(router http.Handler, method, path string) *httptest.ResponseRecorder {
@@ -150,5 +159,31 @@ func TestRuntimeRefreshReflectsDisablement(t *testing.T) {
 	handler.handleRefresh(response, req)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("disabled refresh status = %d", response.Code)
+	}
+}
+
+func TestDashboardRuntimeContextIsBearerOnlyAndPrivacyBounded(t *testing.T) {
+	router := runtimeTestRouter(&dashboardRuntimeHTTPFake{runtimeHTTPFake: &runtimeHTTPFake{}})
+	req := httptest.NewRequest(http.MethodGet, "/api/plugin-runtime/context", nil)
+	req.Host = "plugins.academy.example"
+	req.Header.Set("Authorization", "Bearer dashboard-runtime-token")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, req)
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || response.Body.String() != "{\"placementId\":\"22222222-2222-4222-8222-222222222222\",\"configuration\":{\"density\":\"compact\"}}\n" {
+		t.Fatalf("dashboard context=%d %s", response.Code, response.Body.String())
+	}
+	for _, forbidden := range []string{"user", "email", "role", "session", "course", "progress", "assessment", "capabilities", "token"} {
+		if strings.Contains(strings.ToLower(response.Body.String()), forbidden) {
+			t.Fatalf("dashboard context leaked %q: %s", forbidden, response.Body.String())
+		}
+	}
+
+	sessionOnly := httptest.NewRequest(http.MethodGet, "/api/plugin-runtime/context", nil)
+	sessionOnly.Host = "plugins.academy.example"
+	sessionOnly.AddCookie(&http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()})
+	sessionResponse := httptest.NewRecorder()
+	router.ServeHTTP(sessionResponse, sessionOnly)
+	if sessionResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("Academy session substituted for Dashboard runtime token: %d", sessionResponse.Code)
 	}
 }

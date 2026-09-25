@@ -205,9 +205,9 @@ an import succeeds only when the target installation already has the exact
 enabled, trusted ID/version/digest/widget release. It never downloads,
 substitutes, or removes a widget.
 
-Dashboard placement, plugin management UI, marketplace discovery, updates,
-outbound networking, and forced termination of already-rendered frames remain
-deferred.
+Dashboard frontend rendering, plugin management UI, marketplace discovery,
+updates, outbound networking, and forced termination of already-rendered
+frames remain deferred.
 
 ## Dashboard placement management
 
@@ -229,11 +229,31 @@ overwriting a newer layout.
 separate from `plugins.manage`, which concerns plugin registry administration.
 Discovery returns only enabled, currently eligible `DASHBOARD_WIDGET`
 entrypoints and does not expose signing or approval internals. A placement is
-not rewritten or deleted if its release later becomes unavailable; availability
-handling is deliberately deferred with runtime launch/rendering in M10.2b2.
+not rewritten or deleted if its release later becomes unavailable.
 Placements are installation-local and never appear in Course portability
-packages. Runtime launch/rendering is M10.2b2; frontend
-configuration/rendering is M10.2b3.
+packages.
+
+Dashboard runtime launch uses the same generic sandbox, runtime origin,
+Ed25519 token issuer, and refresh endpoint as Course widgets. The Academy-host
+request supplies only the opaque placement ID. The server loads that placement
+and derives its exact plugin ID, version, artifact digest, Dashboard entrypoint,
+and configuration; clients cannot select or replace those values. Launches get
+only the additional `widget.dashboard.context.read` grant. The Dashboard
+context contains exactly the placement ID and bounded configuration, with no
+user identity, session, role, Course, progress, Assessment, certificate, or
+Community data.
+
+Like the existing Course runtime, Dashboard configuration is snapshotted for
+one runtime UUID at launch. An edit affects subsequent launches; it does not
+silently change a running widget. Refresh still reloads the placement and
+rechecks that it exists, is enabled, retains the exact pinned release/widget,
+and that the release remains enabled, trusted, approved where required, and
+integrity-valid. Disabling or deleting the placement, or disabling/revoking its
+plugin, blocks new launches and refresh while an already-issued token and its
+snapshot retain only their normal short lifetime. Placement UUIDs are never
+reused, so a deleted placement cannot be rebound to another runtime context.
+
+Dashboard frontend configuration and rendering remain M10.2b3.
 
 Security invariants:
 
