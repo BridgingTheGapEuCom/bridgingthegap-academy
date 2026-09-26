@@ -14,6 +14,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins/db/sqlc"
 	guuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -178,6 +179,25 @@ func (r *Repository) GetKey(ctx context.Context, id string) (plugins.Verificatio
 	}
 	return k, nil
 }
+func (r *Repository) ListKeys(ctx context.Context) ([]plugins.VerificationKey, error) {
+	rows, err := r.q.ListVerificationKeys(ctx)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	keys := make([]plugins.VerificationKey, 0, len(rows))
+	for _, row := range rows {
+		allowed := make([]plugins.PluginID, len(row.AllowedPluginIds))
+		for i, value := range row.AllowedPluginIds {
+			allowed[i] = plugins.PluginID(value)
+		}
+		key := plugins.VerificationKey{ID: row.KeyID, PublicKey: ed25519.PublicKey(append([]byte(nil), row.PublicKey...)), Purpose: plugins.KeyPurpose(row.Purpose), AllowedPluginIDs: allowed, Enabled: row.Enabled}
+		if key.Validate() != nil {
+			return nil, plugins.ErrStorage
+		}
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
 func (r *Repository) SetKeyEnabled(ctx context.Context, id string, enabled bool) error {
 	n, err := r.q.SetVerificationKeyEnabled(ctx, sqlc.SetVerificationKeyEnabledParams{KeyID: id, Enabled: enabled})
 	if err != nil {
@@ -313,6 +333,10 @@ func (r *Repository) CreateApproval(ctx context.Context, a plugins.Approval) err
 		authority = pgtype.Text{String: a.AuthorityKeyID, Valid: true}
 	}
 	err = r.q.CreateReleaseApproval(ctx, sqlc.CreateReleaseApprovalParams{ApprovalID: id, PluginID: string(a.Release.PluginID), Version: a.Release.Version, ArtifactDigest: a.Release.ArtifactDigest, Kind: string(a.Kind), AuthorityKeyID: authority, ApprovedAt: pgtype.Timestamptz{Time: a.ApprovedAt, Valid: true}})
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return plugins.ErrApprovalConflict
+	}
 	return storageError(err)
 }
 func (r *Repository) RevokeApproval(ctx context.Context, id string, at time.Time) error {
@@ -343,6 +367,25 @@ func (r *Repository) FindActiveApproval(ctx context.Context, id plugins.ReleaseI
 		return plugins.Approval{}, plugins.ErrStorage
 	}
 	return approval, nil
+}
+func (r *Repository) ListApprovals(ctx context.Context, id plugins.ReleaseIdentity) ([]plugins.Approval, error) {
+	rows, err := r.q.ListReleaseApprovals(ctx, sqlc.ListReleaseApprovalsParams{PluginID: string(id.PluginID), Version: id.Version, ArtifactDigest: id.ArtifactDigest})
+	if err != nil {
+		return nil, storageError(err)
+	}
+	approvals := make([]plugins.Approval, 0, len(rows))
+	for _, row := range rows {
+		approval := plugins.Approval{ID: row.ApprovalID.String(), Release: id, Kind: plugins.ApprovalKind(row.Kind), AuthorityKeyID: row.AuthorityKeyID.String, ApprovedAt: row.ApprovedAt.Time.UTC()}
+		if row.RevokedAt.Valid {
+			at := row.RevokedAt.Time.UTC()
+			approval.RevokedAt = &at
+		}
+		if approval.Validate() != nil {
+			return nil, plugins.ErrStorage
+		}
+		approvals = append(approvals, approval)
+	}
+	return approvals, nil
 }
 
 func mapRelease(row sqlc.PluginsInstalledRelease) (plugins.InstalledRelease, error) {

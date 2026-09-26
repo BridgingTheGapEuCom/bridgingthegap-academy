@@ -72,6 +72,7 @@ function receive(event: MessageEvent) {
           token: props.launch.token,
           context: props.launch.context,
           courseContext: props.launch.courseContext,
+          dashboardContext: props.launch.dashboardContext,
           capabilities: props.launch.capabilities,
           expiresAt: props.launch.expiresAt,
         },

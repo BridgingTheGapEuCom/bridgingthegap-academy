@@ -107,6 +107,7 @@ type authHTTP struct {
 	courseWidgetRuntime    courseWidgetLaunch
 	dashboardWidgetRuntime dashboardWidgetLaunch
 	dashboardWidgets       *dashboardWidgetAPI
+	pluginManagement       *pluginManagementAPI
 	portabilityReader      portabilityPackageReader
 	portabilityCourses     portabilityCourseReader
 	portabilityPreviews    *portabilityPreviewStore

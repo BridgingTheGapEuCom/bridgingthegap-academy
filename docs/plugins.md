@@ -209,6 +209,104 @@ Dashboard frontend rendering, plugin management UI, marketplace discovery,
 updates, outbound networking, and forced termination of already-rendered
 frames remain deferred.
 
+## Plugin management read API
+
+`GET /api/plugins` and `GET /api/plugins/{pluginId}/{version}` are
+installation-management reads protected by `plugins.manage`. They use
+authenticated Academy sessions and `Cache-Control: no-store`; Dashboard
+placement authority, Course authoring authority, and widget-runtime tokens do
+not authorize them. The list is intentionally unpaginated because the local
+installed-release registry is expected to remain small. It is deterministically
+ordered by plugin ID ascending and SemVer descending.
+
+The read projection exposes immutable release coordinates, safe manifest display
+metadata, widget entrypoint IDs/types/names, installed time, current derived
+trust, approval state, stored enablement, and current execution-policy
+eligibility. Those values deliberately remain separate: an approved release is
+not automatically enabled, an enabled release may no longer be execution
+eligible after trust changes, and neither state says whether a release is placed
+or running anywhere.
+
+Approval is projected as `NONE`, `ACTIVE`, or `REVOKED` for the exact
+ID/version/digest release. It neither transfers to a later version nor exposes
+approval history or authority-key material. `UNKNOWN` is a valid current trust
+classification for a structurally valid installed package; it never means that
+a failed recognized signature was accepted. Releases are strictly validated at
+registration, but the registry does not retain a separate full historical
+archive-validation log. A currently recognized signature that no longer
+verifies is reported as `SIGNATURE_INVALID` with no `currentTrust`, rather than
+being relabeled `UNKNOWN`.
+
+The management projection excludes private key material, raw signatures,
+resource bytes or storage paths, internal installation IDs, runtime bearer
+tokens, and Academy session data. It executes no plugin code. Approval,
+revocation, enablement, key administration, and a plugin-management UI remain
+future M10.3 work.
+
+`POST /api/plugins` registers one `application/zip` plugin package and also
+requires `plugins.manage`, a trusted Origin, and the session-bound CSRF token.
+The request is bounded by the canonical package reader's compressed archive
+limit; that reader performs the hostile-ZIP, strict JSON, manifest, inventory,
+checksum, and signature validation before `RegistryService` persists anything.
+Package installation is data processing only: it does not import a module, run
+a script, invoke a build hook, or contact a network service.
+
+The archive itself supplies the immutable ID/version/digest identity. An exact
+same-digest replay is idempotent and returns the existing management projection;
+the same ID/version with different content/digest conflicts without replacing
+the registered release or resources. Release and resource rows are committed in
+one PostgreSQL transaction, so a failed resource validation or persistence step
+rolls the whole registration back. Trust is then derived from local keys and
+approval records. Registration neither enables a release nor creates an
+administrative approval, places a widget, or issues runtime credentials. A
+recognized invalid signature fails registration; it is never treated as an
+`UNKNOWN` package.
+
+## Plugin trust lifecycle management
+
+All lifecycle routes use an authenticated Academy session, `plugins.manage`, a
+trusted Origin, and the session-bound CSRF token. Exact releases support
+`POST .../approval`, `DELETE .../approval`, `POST .../enable`, and
+`POST .../disable`. Mutation responses reuse the management release projection,
+so current trust, approval history state, stored enablement, and execution
+eligibility remain visibly separate.
+
+Administrative approval applies only to the installed ID/version/digest and is
+available only when that release is already signed by an active
+`BTG_APPROVAL_SIGNING` key. The administrator action activates that existing
+cryptographic approval chain; it cannot turn an unsigned or independently
+signed package into `BTG_APPROVED`. Repeating an active approval is idempotent.
+Revocation marks the record inactive without deleting history, is idempotent
+once matching revoked history exists, and immediately changes derived trust and
+runtime launch/refresh eligibility. It never transfers to another release or
+plugin.
+
+Enablement re-evaluates current trust and policy. `UNKNOWN` remains denied by
+the strict instance policy, even to a plugin administrator. Disablement retains
+the immutable release, resources, CourseVersion blocks, and Dashboard
+placements. Trust or key revocation does not silently rewrite a stored enabled
+flag; the management projection instead reports that stored state separately
+from current execution eligibility. New launches and refreshes fail while
+existing runtime tokens retain only their normal short lifetime.
+
+Verification-key administration is exposed through `GET/POST /api/plugins/keys`
+and the key `.../enable` and `.../disable` actions. The only supported purposes
+are the existing `BTG_OWNED_SIGNING` and `BTG_APPROVAL_SIGNING` values. Owned
+keys require an explicit plugin-ID allow-list; approval keys require an empty
+allow-list. The create request accepts exactly 32 Ed25519 public-key bytes as
+unpadded base64url. Responses expose a SHA-256 public-key fingerprint rather
+than key bytes. Expanded 64-byte private keys are rejected. A raw 32-byte
+Ed25519 seed is mathematically indistinguishable from arbitrary 32-byte public
+material, so operators must supply the public key; this API never stores or
+returns private signing material. Key deletion, remote discovery, automatic
+rotation, and private-key signing services are not supported.
+
+The existing audit store is intentionally constrained to identity/session
+events and UUID identity resources. Plugin lifecycle mutations therefore do not
+write a separate non-transactional audit stream in this slice; extending the
+shared audit schema and transaction boundary is deferred rather than inventing
+an isolated plugin log.
+
 ## Dashboard placement management
 
 The Academy has no Dashboard aggregate, user preference store, or per-user
@@ -253,7 +351,24 @@ plugin, blocks new launches and refresh while an already-issued token and its
 snapshot retain only their normal short lifetime. Placement UUIDs are never
 reused, so a deleted placement cannot be rebound to another runtime context.
 
-Dashboard frontend configuration and rendering remain M10.2b3.
+## Dashboard frontend
+
+The authenticated Dashboard route loads the installation-wide ordered placement
+list from the server and treats its response as authoritative after every
+mutation. It renders each enabled placement with the same generic
+`WidgetRuntimeFrame` used by Course widgets. A frame launch sends only the
+opaque placement ID; a failing or unavailable frame is contained in that
+widget's own region and never prevents the rest of the Dashboard from working.
+
+Users with the server-confirmed `dashboard.widgets.manage` capability can add
+from Dashboard-widget discovery, edit bounded JSON configuration, move a
+widget up or down, enable or disable a placement, and remove a placement. The
+controls use native buttons and forms; reordering is keyboard-accessible and
+sends the complete current revision map. Conflicts reload the authoritative
+list rather than attempting a browser-side merge. Configuration or enabled
+state changes remount a fresh runtime, so a new launch receives its own
+configuration snapshot. There is no per-user layout, drag-and-drop, grid, or
+browser persistence in v1.
 
 Security invariants:
 
@@ -262,3 +377,35 @@ Security invariants:
 - a plugin receives only short-lived, explicitly granted runtime capabilities;
 - manifest permissions do not grant runtime authority;
 - trust and enablement are checked before every launch and token refresh.
+
+## Plugin management frontend
+
+`/admin/plugins` is the administrator-facing surface for the existing
+`plugins.manage` APIs. It lists installed releases in the server's deterministic
+order and keeps registration validation, derived trust, approval state, stored
+enablement, and current execution eligibility as separate fields. In particular,
+`UNKNOWN` means a valid installed release without current BTG ownership or
+approval; it is not an invalid package. A recognized signature failure is shown
+as `SIGNATURE_INVALID`, never as `UNKNOWN`.
+
+Administrators select a ZIP package with the native file input and explicitly
+install it as `application/zip`. The browser does not parse package identity or
+trust evidence. The server's canonical result determines the release shown, and
+the UI distinguishes a new `201` registration from an idempotent `200` replay.
+No package bytes, runtime credentials, or management state are stored in browser
+storage.
+
+The page also exposes exact-release approval/revocation and enable/disable
+controls. These actions reload authoritative release state; revocation or
+disablement does not delete CourseVersions or Dashboard placements, but can make
+future widget launches unavailable. Verification-key administration is limited
+to adding and enabling/disabling public verification keys. Owned signing keys
+need an explicit plugin allow-list, approval keys do not. The UI warns that raw
+32-byte Ed25519 seed bytes cannot be distinguished from public bytes by length,
+so administrators must never paste private seed or signing material.
+
+The interface uses responsive cards, semantic regions, labelled native controls,
+live status and error announcements, keyboard-accessible lifecycle actions, and
+wrapping identifiers/fingerprints for narrow screens. It has no uninstall,
+marketplace, automatic update, key deletion, private-key management, or browser
+signing capability.

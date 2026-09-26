@@ -27,6 +27,10 @@ export type WidgetRuntimeLaunch = {
     presentationLanguage: string
     configuration: Record<string, unknown>
   }
+  dashboardContext?: {
+    placementId: string
+    configuration: Record<string, unknown>
+  }
 }
 
 export type WidgetRuntimeMessage = {

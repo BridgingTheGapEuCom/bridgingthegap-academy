@@ -31,6 +31,7 @@ export interface AuthService {
   login(email: LoginRequest['email'], password: LoginRequest['password']): Promise<LoginOutcome>
   logout(): Promise<LogoutOutcome>
   request<T>(path: string, options?: APIRequestOptions): Promise<T>
+  requestWithStatus<T>(path: string, options?: APIRequestOptions): Promise<{ data: T; status: number }>
 }
 
 export interface AuthServiceOptions {
@@ -145,6 +146,22 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
       const authenticated = state.value.status === 'authenticated'
       try {
         return await transport.request<T>(path, { ...requestOptions, invalidateOnUnauthorized: false })
+      } catch (error) {
+        if (authenticated && state.value.status === 'authenticated' && sessionAtDispatch === sessionVersion
+          && (version === operationVersion || logoutInFlight > 0)
+          && requestOptions?.invalidateOnUnauthorized !== false && isStatus(error, 401)) {
+          transitionToUnauthenticated()
+        }
+        throw error
+      }
+    },
+
+    async requestWithStatus<T>(path: string, requestOptions?: APIRequestOptions): Promise<{ data: T; status: number }> {
+      const version = operationVersion
+      const sessionAtDispatch = sessionVersion
+      const authenticated = state.value.status === 'authenticated'
+      try {
+        return await transport.requestWithStatus!<T>(path, { ...requestOptions, invalidateOnUnauthorized: false })
       } catch (error) {
         if (authenticated && state.value.status === 'authenticated' && sessionAtDispatch === sessionVersion
           && (version === operationVersion || logoutInFlight > 0)

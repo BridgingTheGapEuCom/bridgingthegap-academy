@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sort"
 	"testing"
 	"time"
 )
@@ -307,6 +308,162 @@ func TestUnknownEnablementRequiresExplicitLocalApproval(t *testing.T) {
 	}
 }
 
+func TestManagementReleasesKeepValidationTrustApprovalAndEnablementSeparate(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryRepository()
+	service := NewRegistryService(repo, Policy{})
+	ownedPublic, ownedPrivate, _ := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{31}, 64)))
+	approvalPublic, approvalPrivate, _ := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{32}, 64)))
+	if err := repo.RegisterKey(ctx, VerificationKey{ID: "management-owned-2026", PublicKey: ownedPublic, Purpose: KeyPurposeOwned, AllowedPluginIDs: []PluginID{"com.example.academy.alpha"}, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RegisterKey(ctx, VerificationKey{ID: "management-approval-2026", PublicKey: approvalPublic, Purpose: KeyPurposeApproval, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	register := func(id PluginID, version, keyID string, key ed25519.PrivateKey) InstalledRelease {
+		manifest := testManifest(version)
+		manifest.ID = id
+		archive, err := BuildPackageForTesting(manifest, map[string][]byte{"resources/timeline.js": []byte(version)}, keyID, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		release, _, err := service.Register(ctx, readTestPackage(t, archive))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return release
+	}
+	owned := register("com.example.academy.alpha", "1.0.0", "management-owned-2026", ownedPrivate)
+	approved := register("com.example.academy.alpha", "2.0.0", "management-approval-2026", approvalPrivate)
+	unknown := register("com.example.academy.beta", "1.0.0", "", nil)
+	approval, err := service.Approve(ctx, approved.Release, ApprovalBTGRelease, "management-approval-2026")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Enable(ctx, owned.Release.PluginID, owned.Release.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Enable(ctx, approved.Release.PluginID, approved.Release.Version); err != nil {
+		t.Fatal(err)
+	}
+
+	values, err := service.ManagementReleases(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(values) != 3 || values[0].Release.Release.Version != "2.0.0" || values[1].Release.Release.Version != "1.0.0" || values[2].Release.Release.PluginID != unknown.Release.PluginID {
+		t.Fatalf("management ordering=%#v", values)
+	}
+	if values[0].Release.CurrentTrust != TrustBTGApproved || !values[0].Release.Enabled || len(values[0].Approvals) != 1 || !values[0].Approvals[0].Active() {
+		t.Fatalf("approved projection=%#v", values[0])
+	}
+	if values[1].Release.CurrentTrust != TrustBTGOwned || !values[1].Release.Enabled || len(values[1].Approvals) != 0 {
+		t.Fatalf("owned projection=%#v", values[1])
+	}
+	if values[2].Release.CurrentTrust != TrustUnknown || values[2].Release.Enabled || values[2].ValidationStatus != ValidationStatusValidatedAtRegistration {
+		t.Fatalf("unknown projection=%#v", values[2])
+	}
+	if err := service.RevokeApproval(ctx, approval.ID); err != nil {
+		t.Fatal(err)
+	}
+	values, err = service.ManagementReleases(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if values[0].Release.CurrentTrust != TrustUnknown || len(values[0].Approvals) != 1 || values[0].Approvals[0].Active() {
+		t.Fatalf("revoked approval projection=%#v", values[0])
+	}
+
+	stored := repo.releases[releaseKey(owned.Release.PluginID, owned.Release.Version)]
+	stored.Signature = &SignatureEvidence{KeyID: stored.Signature.KeyID, Value: "invalid", SigningPayload: stored.Signature.SigningPayload}
+	repo.releases[releaseKey(owned.Release.PluginID, owned.Release.Version)] = stored
+	values, err = service.ManagementReleases(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if values[1].ValidationStatus != ValidationStatusSignatureInvalid || values[1].Release.CurrentTrust != "" {
+		t.Fatalf("invalid signature was treated as trust=%#v", values[1])
+	}
+}
+
+func TestExactReleaseApprovalLifecycleIsIdempotentAndVersionScoped(t *testing.T) {
+	ctx := context.Background()
+	repository := newMemoryRepository()
+	registry := NewRegistryService(repository, Policy{})
+	publicKey, privateKey, _ := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{33}, 64)))
+	key, err := registry.AddKey(ctx, VerificationKey{ID: "lifecycle-approval-2026", PublicKey: publicKey, Purpose: KeyPurposeApproval, Enabled: true})
+	if err != nil || key.ID != "lifecycle-approval-2026" {
+		t.Fatalf("add key=%#v err=%v", key, err)
+	}
+	register := func(version string) InstalledRelease {
+		archive, err := BuildPackageForTesting(testManifest(version), map[string][]byte{"resources/timeline.js": []byte(version)}, key.ID, privateKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		release, _, err := registry.Register(ctx, readTestPackage(t, archive))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return release
+	}
+	v1 := register("6.0.0")
+	v2 := register("6.1.0")
+	first, err := registry.ApproveRelease(ctx, v1.Release.PluginID, v1.Release.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, err := registry.ApproveRelease(ctx, v1.Release.PluginID, v1.Release.Version)
+	if err != nil || replay.ID != first.ID {
+		t.Fatalf("approval replay=%#v err=%v", replay, err)
+	}
+	if current, err := registry.Get(ctx, v1.Release.PluginID, v1.Release.Version); err != nil || current.CurrentTrust != TrustBTGApproved {
+		t.Fatalf("approved release=%#v err=%v", current, err)
+	}
+	if current, err := registry.Get(ctx, v2.Release.PluginID, v2.Release.Version); err != nil || current.CurrentTrust != TrustUnknown {
+		t.Fatalf("approval floated to new version=%#v err=%v", current, err)
+	}
+	if err := registry.RevokeReleaseApproval(ctx, v1.Release.PluginID, v1.Release.Version); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.RevokeReleaseApproval(ctx, v1.Release.PluginID, v1.Release.Version); err != nil {
+		t.Fatalf("revocation replay=%v", err)
+	}
+	if current, err := registry.Get(ctx, v1.Release.PluginID, v1.Release.Version); err != nil || current.CurrentTrust != TrustUnknown {
+		t.Fatalf("revoked release=%#v err=%v", current, err)
+	}
+	views, err := registry.ManagementReleases(ctx)
+	if err != nil || len(views) != 2 || len(views[1].Approvals) != 1 || views[1].Approvals[0].Active() {
+		t.Fatalf("revoked history=%#v err=%v", views, err)
+	}
+	keys, err := registry.Keys(ctx)
+	if err != nil || len(keys) != 1 || keys[0].ID != key.ID {
+		t.Fatalf("keys=%#v err=%v", keys, err)
+	}
+}
+
+func TestOwnedKeyAllowListDoesNotTrustAnotherPlugin(t *testing.T) {
+	ctx := context.Background()
+	repository := newMemoryRepository()
+	registry := NewRegistryService(repository, Policy{})
+	publicKey, privateKey, _ := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{34}, 64)))
+	if _, err := registry.AddKey(ctx, VerificationKey{ID: "owned-allow-list-2026", PublicKey: publicKey, Purpose: KeyPurposeOwned, AllowedPluginIDs: []PluginID{"com.example.academy.allowed"}, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	manifest := testManifest("7.0.0")
+	manifest.ID = "com.example.academy.not-allowed"
+	archive, err := BuildPackageForTesting(manifest, map[string][]byte{"resources/timeline.js": []byte("not owned")}, "owned-allow-list-2026", privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, _, err := registry.Register(ctx, readTestPackage(t, archive))
+	if err != nil || release.CurrentTrust != TrustUnknown {
+		t.Fatalf("allow-list bypass release=%#v err=%v", release, err)
+	}
+	if _, err := registry.Enable(ctx, release.Release.PluginID, release.Release.Version); !errors.Is(err, ErrEnableDenied) {
+		t.Fatalf("allow-list bypass enabled release: %v", err)
+	}
+}
+
 func mustSignature(t *testing.T, v string) []byte {
 	t.Helper()
 	b, err := decodeSignature(v)
@@ -371,6 +528,14 @@ func (r *memoryRepository) GetKey(_ context.Context, id string) (VerificationKey
 		return VerificationKey{}, ErrNotFound
 	}
 	return v, nil
+}
+func (r *memoryRepository) ListKeys(_ context.Context) ([]VerificationKey, error) {
+	values := make([]VerificationKey, 0, len(r.keys))
+	for _, key := range r.keys {
+		values = append(values, key)
+	}
+	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })
+	return values, nil
 }
 func (r *memoryRepository) SetKeyEnabled(_ context.Context, id string, e bool) error {
 	v, ok := r.keys[id]
@@ -472,4 +637,19 @@ func (r *memoryRepository) FindActiveApproval(_ context.Context, id ReleaseIdent
 		}
 	}
 	return Approval{}, ErrNotFound
+}
+func (r *memoryRepository) ListApprovals(_ context.Context, id ReleaseIdentity) ([]Approval, error) {
+	values := make([]Approval, 0)
+	for _, approval := range r.approvals {
+		if approval.Release == id {
+			values = append(values, approval)
+		}
+	}
+	sort.Slice(values, func(i, j int) bool {
+		if values[i].ApprovedAt.Equal(values[j].ApprovedAt) {
+			return values[i].ID < values[j].ID
+		}
+		return values[i].ApprovedAt.Before(values[j].ApprovedAt)
+	})
+	return values, nil
 }

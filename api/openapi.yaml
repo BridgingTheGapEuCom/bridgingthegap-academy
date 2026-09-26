@@ -4,6 +4,101 @@ info:
   version: 0.1.0
   description: Same-origin session transport API, public immutable published-course read API, and authenticated private Authoring reads and mutations. Authoring responses are no-store. Every Authoring mutation requires a trusted Origin and the authenticated session-bound CSRF token; unauthorized resources are hidden as 404.
 paths:
+  /api/plugins:
+    get:
+      operationId: listInstalledPluginReleases
+      description: Lists installation-registered immutable plugin releases in plugin ID ascending and SemVer descending order. This installation-management read requires plugins.manage.
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200': { description: Installed plugin releases, content: { application/json: { schema: { $ref: '#/components/schemas/PluginManagementReleaseList' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: registerPluginPackage
+      description: Validates and registers one bounded plugin ZIP package. The package reader derives identity, manifest, resources, signature evidence, and trust from the archive and local policy; no plugin code executes. Identical immutable-release replays return 200, and a same ID/version with a different digest returns 409.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody:
+        required: true
+        content:
+          application/zip:
+            schema: { type: string, format: binary }
+      responses:
+        '200': { description: Idempotent registration replay, content: { application/json: { schema: { $ref: '#/components/schemas/PluginManagementRelease' } } } }
+        '201': { description: Registered immutable release, content: { application/json: { schema: { $ref: '#/components/schemas/PluginManagementRelease' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/plugins/{pluginId}/{version}:
+    get:
+      operationId: getInstalledPluginRelease
+      description: Reads one exact immutable installed plugin release. Current trust, approval, enablement, and execution eligibility remain separate states.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: pluginId, in: path, required: true, schema: { type: string } }
+        - { name: version, in: path, required: true, schema: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$' } }
+      responses:
+        '200': { description: Installed plugin release, content: { application/json: { schema: { $ref: '#/components/schemas/PluginManagementRelease' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/plugins/{pluginId}/{version}/approval:
+    post:
+      operationId: approveInstalledPluginRelease
+      description: Creates or replays an exact ID/version/digest approval only when the release carries a valid signature from its active BTG approval key. Administrative action does not bypass cryptographic approval requirements.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: pluginId, in: path, required: true, schema: { type: string } }, { name: version, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses: { '200': { description: Current exact-release management state, content: { application/json: { schema: { $ref: '#/components/schemas/PluginManagementRelease' } } } }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '403': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '409': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+    delete:
+      operationId: revokeInstalledPluginReleaseApproval
+      description: Revokes the active exact-release cryptographic approval while preserving approval history. Repeating a completed revocation is idempotent.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: pluginId, in: path, required: true, schema: { type: string } }, { name: version, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses: { '200': { description: Current exact-release management state, content: { application/json: { schema: { $ref: '#/components/schemas/PluginManagementRelease' } } } }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '403': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+  /api/plugins/{pluginId}/{version}/enable:
+    post:
+      operationId: enableInstalledPluginRelease
+      description: Enables one exact installed release only when its current derived trust and instance policy permit execution.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: pluginId, in: path, required: true, schema: { type: string } }, { name: version, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses: { '200': { description: Current exact-release management state, content: { application/json: { schema: { $ref: '#/components/schemas/PluginManagementRelease' } } } }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '403': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '409': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+  /api/plugins/{pluginId}/{version}/disable:
+    post:
+      operationId: disableInstalledPluginRelease
+      description: Disables one exact installed release without deleting resources, placements, or published Course content.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: pluginId, in: path, required: true, schema: { type: string } }, { name: version, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses: { '200': { description: Current exact-release management state, content: { application/json: { schema: { $ref: '#/components/schemas/PluginManagementRelease' } } } }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '403': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+  /api/plugins/keys:
+    get:
+      operationId: listPluginVerificationKeys
+      description: Lists safe metadata and fingerprints for locally registered plugin verification keys. Private material and raw public-key bytes are not returned.
+      security: [{ SessionCookie: [] }]
+      responses: { '200': { description: Verification key metadata, content: { application/json: { schema: { $ref: '#/components/schemas/PluginVerificationKeyList' } } } }, '401': { $ref: '#/components/responses/Problem' }, '403': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+    post:
+      operationId: addPluginVerificationKey
+      description: Registers an Ed25519 public verification key. The API accepts exactly 32 public-key bytes encoded as unpadded base64url; private expanded keys are rejected by size.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PluginVerificationKeyCreateRequest' } } } }
+      responses: { '200': { description: Registered or idempotently replayed verification key, content: { application/json: { schema: { $ref: '#/components/schemas/PluginVerificationKey' } } } }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '403': { $ref: '#/components/responses/Problem' }, '409': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+  /api/plugins/keys/{keyId}/enable:
+    post:
+      operationId: enablePluginVerificationKey
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: keyId, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses: { '200': { description: Enabled key metadata, content: { application/json: { schema: { $ref: '#/components/schemas/PluginVerificationKey' } } } }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '403': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+  /api/plugins/keys/{keyId}/disable:
+    post:
+      operationId: disablePluginVerificationKey
+      security: [{ SessionCookie: [] }]
+      parameters: [{ name: keyId, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/AuthoringOrigin' }, { $ref: '#/components/parameters/AuthoringCSRFToken' }]
+      responses: { '200': { description: Disabled key metadata, content: { application/json: { schema: { $ref: '#/components/schemas/PluginVerificationKey' } } } }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '403': { $ref: '#/components/responses/Problem' }, '404': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
   /api/dashboard/widgets:
     get:
       operationId: listDashboardWidgets
@@ -1170,6 +1265,59 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    PluginTrustClassification: { type: string, enum: [BTG_OWNED, BTG_APPROVED, UNKNOWN] }
+    PluginValidationStatus: { type: string, enum: [VALIDATED_AT_REGISTRATION, SIGNATURE_INVALID] }
+    PluginSignatureStatus: { type: string, enum: [UNSIGNED, VALID, INVALID] }
+    PluginApprovalState: { type: string, enum: [NONE, ACTIVE, REVOKED] }
+    PluginManagementEntrypoint:
+      type: object
+      additionalProperties: false
+      required: [id, type, name]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [COURSE_WIDGET, DASHBOARD_WIDGET] }
+        name: { type: string }
+    PluginManagementRelease:
+      type: object
+      additionalProperties: false
+      required: [pluginId, version, artifactDigest, name, description, publisherName, entrypoints, validationStatus, signatureStatus, approvalState, enabled, executionPermitted, installedAt]
+      properties:
+        pluginId: { type: string }
+        version: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$' }
+        artifactDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        name: { type: string }
+        description: { type: string }
+        publisherName: { type: string }
+        homepage: { type: string, format: uri }
+        entrypoints: { type: array, items: { $ref: '#/components/schemas/PluginManagementEntrypoint' } }
+        currentTrust: { $ref: '#/components/schemas/PluginTrustClassification', description: Omitted when a currently recognized signature fails verification; that state is represented by SIGNATURE_INVALID, never UNKNOWN. }
+        validationStatus: { $ref: '#/components/schemas/PluginValidationStatus' }
+        signatureStatus: { $ref: '#/components/schemas/PluginSignatureStatus' }
+        approvalState: { $ref: '#/components/schemas/PluginApprovalState' }
+        enabled: { type: boolean }
+        executionPermitted: { type: boolean, description: Current trust-policy eligibility. It is independent of the stored enabled state. }
+        installedAt: { type: string, format: date-time }
+    PluginManagementReleaseList: { type: object, additionalProperties: false, required: [plugins], properties: { plugins: { type: array, items: { $ref: '#/components/schemas/PluginManagementRelease' } } } }
+    PluginVerificationKey:
+      type: object
+      additionalProperties: false
+      required: [keyId, purpose, allowedPluginIds, enabled, fingerprint]
+      properties:
+        keyId: { type: string }
+        purpose: { type: string, enum: [BTG_OWNED_SIGNING, BTG_APPROVAL_SIGNING] }
+        allowedPluginIds: { type: array, items: { type: string } }
+        enabled: { type: boolean }
+        fingerprint: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    PluginVerificationKeyList: { type: object, additionalProperties: false, required: [keys], properties: { keys: { type: array, items: { $ref: '#/components/schemas/PluginVerificationKey' } } } }
+    PluginVerificationKeyCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [keyId, publicKey, purpose, allowedPluginIds]
+      properties:
+        keyId: { type: string }
+        publicKey: { type: string, description: Exactly 32 Ed25519 public-key bytes encoded as unpadded base64url. }
+        purpose: { type: string, enum: [BTG_OWNED_SIGNING, BTG_APPROVAL_SIGNING] }
+        allowedPluginIds: { type: array, items: { type: string } }
     DashboardWidgetPlacement:
       type: object
       additionalProperties: false

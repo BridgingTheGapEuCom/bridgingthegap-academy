@@ -4,6 +4,143 @@
  */
 
 export interface paths {
+    "/api/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists installation-registered immutable plugin releases in plugin ID ascending and SemVer descending order. This installation-management read requires plugins.manage. */
+        get: operations["listInstalledPluginReleases"];
+        put?: never;
+        /** @description Validates and registers one bounded plugin ZIP package. The package reader derives identity, manifest, resources, signature evidence, and trust from the archive and local policy; no plugin code executes. Identical immutable-release replays return 200, and a same ID/version with a different digest returns 409. */
+        post: operations["registerPluginPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{pluginId}/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Reads one exact immutable installed plugin release. Current trust, approval, enablement, and execution eligibility remain separate states. */
+        get: operations["getInstalledPluginRelease"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{pluginId}/{version}/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates or replays an exact ID/version/digest approval only when the release carries a valid signature from its active BTG approval key. Administrative action does not bypass cryptographic approval requirements. */
+        post: operations["approveInstalledPluginRelease"];
+        /** @description Revokes the active exact-release cryptographic approval while preserving approval history. Repeating a completed revocation is idempotent. */
+        delete: operations["revokeInstalledPluginReleaseApproval"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{pluginId}/{version}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Enables one exact installed release only when its current derived trust and instance policy permit execution. */
+        post: operations["enableInstalledPluginRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{pluginId}/{version}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Disables one exact installed release without deleting resources, placements, or published Course content. */
+        post: operations["disableInstalledPluginRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists safe metadata and fingerprints for locally registered plugin verification keys. Private material and raw public-key bytes are not returned. */
+        get: operations["listPluginVerificationKeys"];
+        put?: never;
+        /** @description Registers an Ed25519 public verification key. The API accepts exactly 32 public-key bytes encoded as unpadded base64url; private expanded keys are rejected by size. */
+        post: operations["addPluginVerificationKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/keys/{keyId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enablePluginVerificationKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/keys/{keyId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disablePluginVerificationKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dashboard/widgets": {
         parameters: {
             query?: never;
@@ -1233,6 +1370,63 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        PluginTrustClassification: "BTG_OWNED" | "BTG_APPROVED" | "UNKNOWN";
+        /** @enum {string} */
+        PluginValidationStatus: "VALIDATED_AT_REGISTRATION" | "SIGNATURE_INVALID";
+        /** @enum {string} */
+        PluginSignatureStatus: "UNSIGNED" | "VALID" | "INVALID";
+        /** @enum {string} */
+        PluginApprovalState: "NONE" | "ACTIVE" | "REVOKED";
+        PluginManagementEntrypoint: {
+            id: string;
+            /** @enum {string} */
+            type: "COURSE_WIDGET" | "DASHBOARD_WIDGET";
+            name: string;
+        };
+        PluginManagementRelease: {
+            pluginId: string;
+            version: string;
+            artifactDigest: string;
+            name: string;
+            description: string;
+            publisherName: string;
+            /** Format: uri */
+            homepage?: string;
+            entrypoints: components["schemas"]["PluginManagementEntrypoint"][];
+            /** @description Omitted when a currently recognized signature fails verification; that state is represented by SIGNATURE_INVALID */
+            currentTrust?: components["schemas"]["PluginTrustClassification"];
+            validationStatus: components["schemas"]["PluginValidationStatus"];
+            signatureStatus: components["schemas"]["PluginSignatureStatus"];
+            approvalState: components["schemas"]["PluginApprovalState"];
+            enabled: boolean;
+            /** @description Current trust-policy eligibility. It is independent of the stored enabled state. */
+            executionPermitted: boolean;
+            /** Format: date-time */
+            installedAt: string;
+        };
+        PluginManagementReleaseList: {
+            plugins: components["schemas"]["PluginManagementRelease"][];
+        };
+        PluginVerificationKey: {
+            keyId: string;
+            /** @enum {string} */
+            purpose: "BTG_OWNED_SIGNING" | "BTG_APPROVAL_SIGNING";
+            allowedPluginIds: string[];
+            enabled: boolean;
+            fingerprint: string;
+        };
+        PluginVerificationKeyList: {
+            keys: components["schemas"]["PluginVerificationKey"][];
+        };
+        PluginVerificationKeyCreateRequest: {
+            keyId: string;
+            /** @description Exactly 32 Ed25519 public-key bytes encoded as unpadded base64url. */
+            publicKey: string;
+            /** @enum {string} */
+            purpose: "BTG_OWNED_SIGNING" | "BTG_APPROVAL_SIGNING";
+            allowedPluginIds: string[];
+        };
         DashboardWidgetPlacement: {
             /** Format: uuid */
             placementId: string;
@@ -2696,6 +2890,355 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listInstalledPluginReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed plugin releases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementReleaseList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    registerPluginPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": string;
+            };
+        };
+        responses: {
+            /** @description Idempotent registration replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            /** @description Registered immutable release */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getInstalledPluginRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed plugin release */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    approveInstalledPluginRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current exact-release management state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    revokeInstalledPluginReleaseApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current exact-release management state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    enableInstalledPluginRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current exact-release management state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    disableInstalledPluginRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current exact-release management state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPluginVerificationKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verification key metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginVerificationKeyList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    addPluginVerificationKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginVerificationKeyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Registered or idempotently replayed verification key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginVerificationKey"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    enablePluginVerificationKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enabled key metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginVerificationKey"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    disablePluginVerificationKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disabled key metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginVerificationKey"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     listDashboardWidgets: {
         parameters: {
             query?: never;

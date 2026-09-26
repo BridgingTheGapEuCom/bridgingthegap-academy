@@ -7,6 +7,9 @@ RETURNING *;
 -- name: GetVerificationKey :one
 SELECT * FROM plugins.verification_key WHERE key_id = $1;
 
+-- name: ListVerificationKeys :many
+SELECT * FROM plugins.verification_key ORDER BY key_id;
+
 -- name: SetVerificationKeyEnabled :execrows
 UPDATE plugins.verification_key SET enabled = $2 WHERE key_id = $1;
 
@@ -56,6 +59,11 @@ WHERE approval_id = $1 AND revoked_at IS NULL;
 SELECT * FROM plugins.release_approval
 WHERE plugin_id = $1 AND version = $2 AND artifact_digest = $3 AND kind = $4
   AND COALESCE(authority_key_id, '') = $5 AND revoked_at IS NULL;
+
+-- name: ListReleaseApprovals :many
+SELECT * FROM plugins.release_approval
+WHERE plugin_id = $1 AND version = $2 AND artifact_digest = $3
+ORDER BY approved_at, approval_id;
 
 -- name: ListDashboardWidgetPlacements :many
 SELECT * FROM plugins.dashboard_widget_placement ORDER BY position, placement_id;

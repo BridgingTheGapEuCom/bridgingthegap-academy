@@ -8,6 +8,7 @@
       </RouterLink>
       <nav class="site-navigation" aria-label="Main navigation">
         <RouterLink to="/">{{ t('home') }}</RouterLink>
+        <RouterLink v-if="auth.state.value.status === 'authenticated'" to="/dashboard">{{ t('dashboard') }}</RouterLink>
         <RouterLink to="/courses">{{ t('courses') }}</RouterLink>
         <RouterLink v-if="auth.state.value.status === 'authenticated'" to="/authoring">{{ t('authoring') }}</RouterLink>
       </nav>

@@ -29,6 +29,7 @@
       <p class="admin-page__status">System status: OK</p>
       <div class="admin-page__actions">
         <RouterLink to="/admin/course-import">Import course package</RouterLink>
+        <RouterLink to="/admin/plugins">Manage plugins</RouterLink>
         <BtgButton variant="secondary" @click="goHome">Return home</BtgButton>
       </div>
     </div>

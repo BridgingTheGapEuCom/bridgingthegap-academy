@@ -318,6 +318,78 @@ func (q *Queries) ListInstalledReleases(ctx context.Context) ([]PluginsInstalled
 	return items, nil
 }
 
+const listReleaseApprovals = `-- name: ListReleaseApprovals :many
+SELECT approval_id, plugin_id, version, artifact_digest, kind, authority_key_id, approved_at, revoked_at FROM plugins.release_approval
+WHERE plugin_id = $1 AND version = $2 AND artifact_digest = $3
+ORDER BY approved_at, approval_id
+`
+
+type ListReleaseApprovalsParams struct {
+	PluginID       string
+	Version        string
+	ArtifactDigest string
+}
+
+func (q *Queries) ListReleaseApprovals(ctx context.Context, arg ListReleaseApprovalsParams) ([]PluginsReleaseApproval, error) {
+	rows, err := q.db.Query(ctx, listReleaseApprovals, arg.PluginID, arg.Version, arg.ArtifactDigest)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PluginsReleaseApproval
+	for rows.Next() {
+		var i PluginsReleaseApproval
+		if err := rows.Scan(
+			&i.ApprovalID,
+			&i.PluginID,
+			&i.Version,
+			&i.ArtifactDigest,
+			&i.Kind,
+			&i.AuthorityKeyID,
+			&i.ApprovedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVerificationKeys = `-- name: ListVerificationKeys :many
+SELECT key_id, public_key, purpose, allowed_plugin_ids, enabled, created_at FROM plugins.verification_key ORDER BY key_id
+`
+
+func (q *Queries) ListVerificationKeys(ctx context.Context) ([]PluginsVerificationKey, error) {
+	rows, err := q.db.Query(ctx, listVerificationKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PluginsVerificationKey
+	for rows.Next() {
+		var i PluginsVerificationKey
+		if err := rows.Scan(
+			&i.KeyID,
+			&i.PublicKey,
+			&i.Purpose,
+			&i.AllowedPluginIds,
+			&i.Enabled,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const registerInstalledRelease = `-- name: RegisterInstalledRelease :one
 INSERT INTO plugins.installed_release (
   installation_id, plugin_id, version, artifact_digest, manifest,

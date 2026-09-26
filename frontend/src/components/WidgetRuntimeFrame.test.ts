@@ -18,6 +18,7 @@ const launch: WidgetRuntimeLaunch = {
   token: 'short-lived-token',
   expiresAt: '2026-09-25T12:05:00Z',
   capabilities: ['widget.runtime.bootstrap'],
+  dashboardContext: { placementId: '22222222-2222-4222-8222-222222222222', configuration: { heading: 'Overview' } },
 }
 
 describe('WidgetRuntimeFrame', () => {
@@ -49,7 +50,7 @@ describe('WidgetRuntimeFrame', () => {
 
     window.dispatchEvent(new MessageEvent('message', { data: ready, origin: launch.runtimeOrigin, source: frame.contentWindow }))
     expect(postMessage).toHaveBeenCalledOnce()
-    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'RUNTIME_INIT' }), launch.runtimeOrigin)
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'RUNTIME_INIT', payload: expect.objectContaining({ dashboardContext: launch.dashboardContext }) }), launch.runtimeOrigin)
     await fireEvent(frame, new Event('load'))
   })
 

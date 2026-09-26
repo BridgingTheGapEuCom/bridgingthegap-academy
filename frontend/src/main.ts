@@ -5,9 +5,11 @@ import App from './App.vue'
 import { auth } from './auth/auth'
 import { loginLocation, routeReturnPath } from './auth/navigation'
 import HomePage from './pages/HomePage.vue'
+import DashboardPage from './pages/DashboardPage.vue'
 import LoginPage from './pages/LoginPage.vue'
 import AdminPage from './pages/AdminPage.vue'
 import CourseImportPage from './pages/CourseImportPage.vue'
+import PluginManagementPage from './pages/PluginManagementPage.vue'
 import CourseListPage from './pages/CourseListPage.vue'
 import CourseOverviewPage from './pages/CourseOverviewPage.vue'
 import LessonPage from './pages/LessonPage.vue'
@@ -36,16 +38,18 @@ import './style.css'
 const i18n = createI18n({
   legacy: false,
   locale: 'en',
-  messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home', courses: 'Courses', authoring: 'Authoring' } },
+  messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home', dashboard: 'Dashboard', courses: 'Courses', authoring: 'Authoring' } },
 })
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: HomePage },
+    { path: '/dashboard', component: DashboardPage, meta: { requiresAuth: true } },
     { path: '/login', component: LoginPage },
     { path: '/admin', component: AdminPage, meta: { requiresAuth: true } },
     { path: '/admin/course-import', component: CourseImportPage, meta: { requiresAuth: true } },
+    { path: '/admin/plugins', component: PluginManagementPage, meta: { requiresAuth: true } },
     { path: '/courses', component: CourseListPage },
     { path: '/courses/by-id/:courseId/versions/:version', name: 'published-course-version', component: PublishedCourseReaderPage },
     { path: '/courses/by-id/:courseId', name: 'published-course-latest', component: PublishedCourseReaderPage },

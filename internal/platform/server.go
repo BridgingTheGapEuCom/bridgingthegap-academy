@@ -102,6 +102,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	pluginRepository := pluginspostgres.New(pool)
 	pluginRegistry := plugins.NewRegistryService(pluginRepository, plugins.Policy{})
 	dashboardWidgets := &dashboardWidgetAPI{placements: plugins.NewDashboardPlacementService(pluginRegistry, pluginRepository, time.Now), registry: pluginRegistry}
+	pluginManagement := &pluginManagementAPI{registry: pluginRegistry}
 	pluginContentValidator := plugins.NewCourseWidgetContentValidator(pluginRegistry)
 	certificateRepository := credentialspostgres.New(pool)
 	var badgePublication *publication.Service
@@ -216,6 +217,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		courseWidgetRuntime:         courseWidgetRuntime,
 		dashboardWidgetRuntime:      dashboardWidgetRuntime,
 		dashboardWidgets:            dashboardWidgets,
+		pluginManagement:            pluginManagement,
 		portabilityReader:           portability.NewReader(portability.DefaultLimits()),
 		portabilityCourses:          coursesRepository,
 		portabilityPreviews:         newPortabilityPreviewStore(time.Now),
@@ -362,6 +364,20 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/posts/{postId}/{action:hide|unhide}", auth.handleCommunityModeratePost)
 				}
 				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
+				if auth.pluginManagement != nil {
+					management := protected.With(auth.requireCapability(identity.CapabilityPluginsManage, identity.InstanceResource()))
+					management.Get("/plugins", auth.pluginManagement.list)
+					management.Post("/plugins", auth.pluginManagement.register)
+					management.Get("/plugins/keys", auth.pluginManagement.keys)
+					management.Post("/plugins/keys", auth.pluginManagement.addKey)
+					management.Post("/plugins/keys/{keyId}/enable", func(w http.ResponseWriter, r *http.Request) { auth.pluginManagement.setKeyState(w, r, true) })
+					management.Post("/plugins/keys/{keyId}/disable", func(w http.ResponseWriter, r *http.Request) { auth.pluginManagement.setKeyState(w, r, false) })
+					management.Get("/plugins/{pluginId}/{version}", auth.pluginManagement.detail)
+					management.Post("/plugins/{pluginId}/{version}/approval", auth.pluginManagement.approve)
+					management.Delete("/plugins/{pluginId}/{version}/approval", auth.pluginManagement.revokeApproval)
+					management.Post("/plugins/{pluginId}/{version}/enable", auth.pluginManagement.enable)
+					management.Post("/plugins/{pluginId}/{version}/disable", auth.pluginManagement.disable)
+				}
 				if auth.dashboardWidgets != nil {
 					dashboard := protected.With(auth.requireCapability(identity.CapabilityDashboardWidgetsManage, identity.InstanceResource()))
 					dashboard.Get("/dashboard/widgets", auth.dashboardWidgets.list)

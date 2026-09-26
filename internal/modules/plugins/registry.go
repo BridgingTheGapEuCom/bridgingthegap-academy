@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
@@ -139,21 +140,23 @@ type Policy struct {
 }
 
 var (
-	ErrInvalidKey      = errors.New("invalid plugin verification key")
-	ErrKeyIDConflict   = errors.New("plugin verification key ID conflict")
-	ErrInvalidRelease  = errors.New("invalid plugin release")
-	ErrReleaseConflict = errors.New("plugin release identity conflict")
-	ErrInvalidApproval = errors.New("invalid plugin approval")
-	ErrNotFound        = errors.New("plugin release not found")
-	ErrEnableDenied    = errors.New("plugin enablement denied")
-	ErrLaunchDenied    = errors.New("plugin runtime launch denied")
-	ErrResourceInvalid = errors.New("plugin resource integrity failure")
-	ErrStorage         = errors.New("plugin registry unavailable")
+	ErrInvalidKey       = errors.New("invalid plugin verification key")
+	ErrKeyIDConflict    = errors.New("plugin verification key ID conflict")
+	ErrInvalidRelease   = errors.New("invalid plugin release")
+	ErrReleaseConflict  = errors.New("plugin release identity conflict")
+	ErrInvalidApproval  = errors.New("invalid plugin approval")
+	ErrApprovalConflict = errors.New("plugin approval conflict")
+	ErrNotFound         = errors.New("plugin release not found")
+	ErrEnableDenied     = errors.New("plugin enablement denied")
+	ErrLaunchDenied     = errors.New("plugin runtime launch denied")
+	ErrResourceInvalid  = errors.New("plugin resource integrity failure")
+	ErrStorage          = errors.New("plugin registry unavailable")
 )
 
 type Repository interface {
 	RegisterKey(context.Context, VerificationKey) error
 	GetKey(context.Context, string) (VerificationKey, error)
+	ListKeys(context.Context) ([]VerificationKey, error)
 	SetKeyEnabled(context.Context, string, bool) error
 	RegisterRelease(context.Context, InstalledRelease, []InstalledResource) (InstalledRelease, bool, error)
 	GetRelease(context.Context, PluginID, string) (InstalledRelease, error)
@@ -163,7 +166,25 @@ type Repository interface {
 	CreateApproval(context.Context, Approval) error
 	RevokeApproval(context.Context, string, time.Time) error
 	FindActiveApproval(context.Context, ReleaseIdentity, ApprovalKind, string) (Approval, error)
+	ListApprovals(context.Context, ReleaseIdentity) ([]Approval, error)
 }
+
+// ManagementRelease is a read-only installation projection. ValidationStatus
+// remains separate from trust so a corrupt recognized signature is never
+// represented as UNKNOWN.
+type ManagementRelease struct {
+	Release          InstalledRelease
+	ValidationStatus string
+	Approvals        []Approval
+}
+
+const (
+	// ValidationStatusValidatedAtRegistration means the release completed the
+	// strict package validator before it was registered. The registry does not
+	// retain a separate historical audit of every archive validation step.
+	ValidationStatusValidatedAtRegistration = "VALIDATED_AT_REGISTRATION"
+	ValidationStatusSignatureInvalid        = "SIGNATURE_INVALID"
+)
 
 type TrustEvaluator struct{ repository Repository }
 
@@ -235,11 +256,36 @@ type RegistryService struct {
 func NewRegistryService(r Repository, p Policy) *RegistryService {
 	return &RegistryService{repository: r, trust: NewTrustEvaluator(r), policy: p, now: func() time.Time { return time.Now().UTC() }}
 }
+
+func (s *RegistryService) AddKey(ctx context.Context, key VerificationKey) (VerificationKey, error) {
+	if s == nil || s.repository == nil || key.Validate() != nil {
+		return VerificationKey{}, ErrInvalidKey
+	}
+	if err := s.repository.RegisterKey(ctx, key); err != nil {
+		return VerificationKey{}, err
+	}
+	return s.repository.GetKey(ctx, key.ID)
+}
+
+func (s *RegistryService) Keys(ctx context.Context) ([]VerificationKey, error) {
+	if s == nil || s.repository == nil {
+		return nil, ErrStorage
+	}
+	return s.repository.ListKeys(ctx)
+}
+
 func (s *RegistryService) SetKeyEnabled(ctx context.Context, id string, enabled bool) error {
 	if !keyIDPattern.MatchString(id) {
 		return ErrInvalidKey
 	}
 	return s.repository.SetKeyEnabled(ctx, id, enabled)
+}
+
+func (s *RegistryService) SetKeyState(ctx context.Context, id string, enabled bool) (VerificationKey, error) {
+	if err := s.SetKeyEnabled(ctx, id, enabled); err != nil {
+		return VerificationKey{}, err
+	}
+	return s.repository.GetKey(ctx, id)
 }
 func (s *RegistryService) Register(ctx context.Context, p *ValidatedPluginPackage) (InstalledRelease, bool, error) {
 	if s == nil || s.repository == nil || p == nil {
@@ -300,6 +346,17 @@ func (s *RegistryService) executionAllowed(ctx context.Context, r InstalledRelea
 	_, err := s.repository.FindActiveApproval(ctx, r.Release, ApprovalLocalUnknown, "")
 	return err == nil
 }
+
+// ExecutionPermitted reports whether the current derived trust and local policy
+// permit an already enabled release to execute. It is a management/read helper;
+// callers must still keep enablement distinct from this policy result.
+func (s *RegistryService) ExecutionPermitted(ctx context.Context, r InstalledRelease) bool {
+	if s == nil || s.repository == nil {
+		return false
+	}
+	return s.executionAllowed(ctx, r)
+}
+
 func (s *RegistryService) Get(ctx context.Context, id PluginID, version string) (InstalledRelease, error) {
 	r, err := s.repository.GetRelease(ctx, id, version)
 	if err != nil {
@@ -307,6 +364,48 @@ func (s *RegistryService) Get(ctx context.Context, id PluginID, version string) 
 	}
 	r.CurrentTrust, err = s.trust.EvaluateRelease(ctx, r)
 	return r, err
+}
+
+// ManagementReleases returns all installed immutable releases in plugin-ID
+// ascending, SemVer descending order. It never treats a current signature
+// failure as UNKNOWN; the safe validation status records that distinction.
+func (s *RegistryService) ManagementReleases(ctx context.Context) ([]ManagementRelease, error) {
+	if s == nil || s.repository == nil {
+		return nil, ErrStorage
+	}
+	stored, err := s.repository.ListReleases(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ManagementRelease, 0, len(stored))
+	for _, release := range stored {
+		view := ManagementRelease{Release: release, ValidationStatus: ValidationStatusValidatedAtRegistration}
+		trust, trustErr := s.trust.EvaluateRelease(ctx, release)
+		if trustErr != nil {
+			if !IsPackageError(trustErr, ErrInvalidSignature) {
+				return nil, trustErr
+			}
+			view.ValidationStatus = ValidationStatusSignatureInvalid
+			view.Release.CurrentTrust = ""
+		} else {
+			view.Release.CurrentTrust = trust
+		}
+		approvals, approvalErr := s.repository.ListApprovals(ctx, release.Release)
+		if approvalErr != nil {
+			return nil, approvalErr
+		}
+		view.Approvals = approvals
+		result = append(result, view)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Release.Release.PluginID != result[j].Release.Release.PluginID {
+			return result[i].Release.Release.PluginID < result[j].Release.Release.PluginID
+		}
+		left, _ := courses.ParseVersion(result[i].Release.Release.Version)
+		right, _ := courses.ParseVersion(result[j].Release.Release.Version)
+		return left.Compare(right) > 0
+	})
+	return result, nil
 }
 
 // CourseWidgets returns only releases currently permitted for Course
@@ -425,10 +524,70 @@ func (s *RegistryService) Approve(ctx context.Context, release ReleaseIdentity, 
 			return Approval{}, ErrInvalidApproval
 		}
 	}
+	active, activeErr := s.repository.FindActiveApproval(ctx, release, kind, authority)
+	if activeErr == nil {
+		return active, nil
+	}
+	if !errors.Is(activeErr, ErrNotFound) {
+		return Approval{}, activeErr
+	}
 	if err := s.repository.CreateApproval(ctx, a); err != nil {
+		if errors.Is(err, ErrApprovalConflict) {
+			return s.repository.FindActiveApproval(ctx, release, kind, authority)
+		}
 		return Approval{}, err
 	}
 	return a, nil
+}
+
+// ApproveRelease derives the exact artifact digest and approval authority from
+// the immutable installed release. Administrative approval cannot make an
+// unsigned or independently signed release BTG_APPROVED.
+func (s *RegistryService) ApproveRelease(ctx context.Context, id PluginID, version string) (Approval, error) {
+	release, err := s.repository.GetRelease(ctx, id, version)
+	if err != nil {
+		return Approval{}, err
+	}
+	if release.Signature == nil {
+		return Approval{}, ErrInvalidApproval
+	}
+	return s.Approve(ctx, release.Release, ApprovalBTGRelease, release.Signature.KeyID)
+}
+
+// RevokeReleaseApproval revokes the active cryptographic approval for one exact
+// immutable release. Repeating a revocation is idempotent when matching history
+// already exists.
+func (s *RegistryService) RevokeReleaseApproval(ctx context.Context, id PluginID, version string) error {
+	release, err := s.repository.GetRelease(ctx, id, version)
+	if err != nil {
+		return err
+	}
+	if release.Signature == nil {
+		return ErrInvalidApproval
+	}
+	approval, err := s.repository.FindActiveApproval(ctx, release.Release, ApprovalBTGRelease, release.Signature.KeyID)
+	if err == nil {
+		err = s.repository.RevokeApproval(ctx, approval.ID, s.now())
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return err
+		}
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	history, err := s.repository.ListApprovals(ctx, release.Release)
+	if err != nil {
+		return err
+	}
+	for _, historical := range history {
+		if historical.Kind == ApprovalBTGRelease && historical.AuthorityKeyID == release.Signature.KeyID && !historical.Active() {
+			return nil
+		}
+	}
+	return ErrNotFound
 }
 func (s *RegistryService) RevokeApproval(ctx context.Context, id string) error {
 	return s.repository.RevokeApproval(ctx, id, s.now())
