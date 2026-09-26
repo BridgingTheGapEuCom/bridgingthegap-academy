@@ -42,4 +42,24 @@ describe('PluginManagementPage', () => {
     await waitFor(() => expect(addKeyMock).toHaveBeenCalledWith(expect.objectContaining({ allowedPluginIds: ['com.example.valid'] })))
     expect(listPluginsMock.mock.calls.length).toBeGreaterThan(2)
   })
+
+  it('reloads authoritative state when a lifecycle operation is rejected', async () => {
+    approveMock.mockRejectedValue(new Error('stale state'))
+    render(PluginManagementPage); await screen.findByText('Installed releases')
+    const initialLoads = listPluginsMock.mock.calls.length
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Approve' })[0]!)
+    await waitFor(() => expect(listPluginsMock.mock.calls.length).toBeGreaterThan(initialLoads))
+    expect(screen.getByRole('alert').textContent).toContain('could not be completed')
+  })
+
+  it('reloads authoritative state when verification-key registration is rejected', async () => {
+    addKeyMock.mockRejectedValue(new Error('duplicate key'))
+    render(PluginManagementPage); await screen.findByText('Verification keys')
+    const initialLoads = listPluginsMock.mock.calls.length
+    await fireEvent.update(screen.getByLabelText(/Key ID/), 'owned-1'); await fireEvent.update(screen.getByLabelText(/Public key \(unpadded base64url\)/), 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'); await fireEvent.update(screen.getByLabelText(/Allowed plugin IDs/), 'com.example.valid')
+    await fireEvent.click(screen.getByRole('button', { name: 'Add verification key' }))
+    await waitFor(() => expect(listPluginsMock.mock.calls.length).toBeGreaterThan(initialLoads))
+    expect(screen.getByRole('alert').textContent).toContain('could not be added')
+    expect((screen.getByLabelText(/Public key \(unpadded base64url\)/) as HTMLTextAreaElement).value).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+  })
 })

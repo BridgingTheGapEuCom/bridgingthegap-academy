@@ -409,3 +409,44 @@ live status and error announcements, keyboard-accessible lifecycle actions, and
 wrapping identifiers/fingerprints for narrow screens. It has no uninstall,
 marketplace, automatic update, key deletion, private-key management, or browser
 signing capability.
+
+## M10 v1 lifecycle closure
+
+The v1 lifecycle keeps each security decision explicit. Registration records a
+strictly validated immutable package. Current trust is recomputed from its
+signature, active local verification keys, owned-signer allow-list, and exact
+release approval history. Stored enablement is an independent administrator
+choice. Execution is permitted only when current trust/policy and stored
+enablement both allow the exact release; Course and Dashboard placements remain
+separate immutable or installation-local references.
+
+| Package and installation state | Current trust | Stored enablement | Runtime result |
+| --- | --- | --- | --- |
+| Valid owned-signed release with active allowed owned key | `BTG_OWNED` | disabled | installed, not launchable |
+| Valid approval-signed release with active exact-release approval and key | `BTG_APPROVED` | enabled | launchable |
+| Valid unsigned, unrecognized, unapproved, or no-longer-recognized release | `UNKNOWN` | either | denied by the strict official policy |
+| Recognized signature fails verification or content integrity fails | no valid trust classification | either | invalid/ineligible; never downgraded to `UNKNOWN` |
+| Previously approved release after approval or authority revocation | normally `UNKNOWN` | may remain enabled | new launch and refresh denied; historical approval and placements retained |
+
+Approval, key disablement, and release disablement never rewrite a published
+CourseVersion or a Dashboard placement and never substitute a newer plugin
+version. Existing runtime tokens retain only their original short expiry;
+lifecycle mutations deny new launches and refreshes without adding a global token
+revocation system. Course tokens carry only Course context authority and
+Dashboard tokens carry only Dashboard context authority. Widget bearer tokens
+cannot authenticate management routes, and Academy sessions cannot substitute
+for runtime bearer credentials.
+
+The v1 package, trust, placement, runtime, and management implementation is now
+closed for M10. Deliberately deferred work includes plugin uninstall or release
+replacement, remote marketplaces, automatic updates or widget migrations,
+trusted-key deletion or automatic rotation, private signing-key management,
+browser-side signing, backend/authentication/database plugins, arbitrary network
+or filesystem/database access, cross-widget communication, per-user persistent
+widget state, complex Dashboard grids, and treating Course-portability packages
+as plugin trust/signature containers.
+
+Plugin lifecycle audit remains future cross-domain audit architecture work. The
+current `audit.events` model is designed for identity/session UUID resources;
+M10 does not add a plugin-specific, non-transactional audit log that could drift
+from the lifecycle transaction.

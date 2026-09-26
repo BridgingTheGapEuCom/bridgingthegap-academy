@@ -14,6 +14,17 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 )
 
+type courseRuntimeVersionFake struct {
+	value courses.ImmutableCourseVersion
+}
+
+func (f courseRuntimeVersionFake) GetPublishedImmutableCourseVersionByCourseAndVersion(_ context.Context, courseID courses.CourseID, version courses.Version) (courses.ImmutableCourseVersion, error) {
+	if f.value.CourseVersion.CourseID != courseID || f.value.CourseVersion.Version != version {
+		return courses.ImmutableCourseVersion{}, courses.ErrNotFound
+	}
+	return f.value, nil
+}
+
 func runtimeFixture(t *testing.T, policy Policy) (*RegistryService, *RuntimeService, *RuntimeTokenService, InstalledRelease) {
 	t.Helper()
 	ctx := context.Background()
@@ -87,6 +98,12 @@ func TestCourseWidgetRuntimePinsPlacementContextAndGrant(t *testing.T) {
 	if _, err := tokens.Verify(launch.Token, RuntimeTokenExpectation{Capability: CapabilityCourseContextRead}); err != nil {
 		t.Fatalf("course capability missing: %v", err)
 	}
+	if hasCapability(launch.Capabilities, CapabilityDashboardContextRead) {
+		t.Fatalf("course runtime received Dashboard context capability: %v", launch.Capabilities)
+	}
+	if _, err := runtime.DashboardContext(launch.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
+		t.Fatalf("course token read Dashboard context: %v", err)
+	}
 	placementContext, err := runtime.CourseContext(launch.Token)
 	if err != nil || string(placementContext.Configuration) != `{"theme":"light"}` {
 		t.Fatalf("context = %#v, %v", placementContext, err)
@@ -94,6 +111,57 @@ func TestCourseWidgetRuntimePinsPlacementContextAndGrant(t *testing.T) {
 	generic, _ := runtime.PrepareWidgetRuntime(context.Background(), release.Release.PluginID, release.Release.Version, "timeline", TypeCourseWidget)
 	if _, err := runtime.CourseContext(generic.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
 		t.Fatalf("generic launch received Course context: %v", err)
+	}
+}
+
+func TestPublishedCourseWidgetLifecycleKeepsPinnedCourseImmutable(t *testing.T) {
+	ctx := context.Background()
+	registry, runtime, _, release := runtimeFixture(t, Policy{})
+	version, err := courses.ParseVersion("1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	published := courses.ImmutableCourseVersion{
+		ID:            "22222222-2222-4222-8222-222222222222",
+		CourseVersion: courses.CourseVersionInput{CourseID: "11111111-1111-4111-8111-111111111111", Version: version, Status: courses.CourseVersionPublished, SourceLanguage: "en", Title: "Plugin course"},
+		Modules:       []courses.ImmutableCourseVersionModule{{StableKey: "module-one", Position: 0, Lessons: []courses.ImmutableCourseVersionLesson{{StableKey: "lesson-one", Position: 0, Content: courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{{Key: "timeline-widget", Type: courses.BlockPluginWidget, Payload: courses.PluginWidgetBlockPayload{PluginID: string(release.Release.PluginID), PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: "timeline", WidgetType: string(TypeCourseWidget), Configuration: json.RawMessage(`{"theme":"light"}`)}}}}}}}},
+	}
+	before, _ := json.Marshal(published)
+	launches := NewCourseWidgetLaunchService(courseRuntimeVersionFake{value: published}, runtime)
+	launch, err := launches.Prepare(ctx, published.CourseVersion.CourseID, version, "lesson-one", "timeline-widget")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.Disable(ctx, release.Release.PluginID, release.Release.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := launches.Prepare(ctx, published.CourseVersion.CourseID, version, "lesson-one", "timeline-widget"); !errors.Is(err, ErrLaunchDenied) {
+		t.Fatalf("disabled release launched from published CourseVersion: %v", err)
+	}
+	if _, err := runtime.Refresh(ctx, launch.Token); !errors.Is(err, ErrLaunchDenied) {
+		t.Fatalf("disabled Course runtime refreshed: %v", err)
+	}
+	if _, err := runtime.CourseContext(launch.Token); err != nil {
+		t.Fatalf("existing short-lived Course token stopped immediately: %v", err)
+	}
+	if _, err := registry.Enable(ctx, release.Release.PluginID, release.Release.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.SetKeyState(ctx, "owned-runtime-2026", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := launches.Prepare(ctx, published.CourseVersion.CourseID, version, "lesson-one", "timeline-widget"); !errors.Is(err, ErrLaunchDenied) {
+		t.Fatalf("untrusted release launched from published CourseVersion: %v", err)
+	}
+	if _, err := registry.SetKeyState(ctx, "owned-runtime-2026", true); err != nil {
+		t.Fatal(err)
+	}
+	if restored, err := launches.Prepare(ctx, published.CourseVersion.CourseID, version, "lesson-one", "timeline-widget"); err != nil || restored.Token == "" {
+		t.Fatalf("future Course launch did not recover: %#v %v", restored, err)
+	}
+	after, _ := json.Marshal(published)
+	if !bytes.Equal(before, after) || !strings.Contains(string(after), release.Release.ArtifactDigest) || !strings.Contains(string(after), `"timeline-widget"`) {
+		t.Fatalf("plugin lifecycle rewrote immutable CourseVersion: %s", after)
 	}
 }
 
@@ -239,6 +307,20 @@ func TestTrustedKeyDisableBlocksNewLaunchAndRefresh(t *testing.T) {
 	}
 	if _, err := runtime.Refresh(context.Background(), launch.Token); !errors.Is(err, ErrLaunchDenied) {
 		t.Fatalf("refresh after key disable = %v", err)
+	}
+	current, err := registry.Get(context.Background(), release.Release.PluginID, release.Release.Version)
+	if err != nil || current.CurrentTrust != TrustUnknown || !current.Enabled {
+		t.Fatalf("key disable collapsed trust and stored enablement: %#v %v", current, err)
+	}
+	if err := registry.SetKeyEnabled(context.Background(), "owned-runtime-2026", true); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := registry.Get(context.Background(), release.Release.PluginID, release.Release.Version)
+	if err != nil || restored.CurrentTrust != TrustBTGOwned || !restored.Enabled {
+		t.Fatalf("owned trust did not recompute after key re-enable: %#v %v", restored, err)
+	}
+	if _, err := runtime.PrepareWidgetRuntime(context.Background(), release.Release.PluginID, release.Release.Version, "timeline", TypeCourseWidget); err != nil {
+		t.Fatalf("new launch after key re-enable = %v", err)
 	}
 }
 

@@ -103,6 +103,9 @@ func TestDashboardRuntimeDerivesExactPlacementAndNarrowContext(t *testing.T) {
 			t.Fatalf("Dashboard context leaked %q: %s", forbidden, encoded)
 		}
 	}
+	if _, err := runtime.CourseContext(launch.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
+		t.Fatalf("Dashboard token read Course context: %v", err)
+	}
 
 	// Context is a launch-time snapshot, matching Course runtime semantics. A
 	// placement edit affects the next launch, while this runtime retains its
@@ -276,5 +279,15 @@ func TestDashboardRuntimeApprovalRevocationBlocksRefresh(t *testing.T) {
 	}
 	if _, err := runtime.DashboardContext(launch.Token); err != nil {
 		t.Fatalf("existing short-lived token stopped immediately: %v", err)
+	}
+	if _, err := registry.Approve(ctx, release.Release, ApprovalBTGRelease, key.ID); err != nil {
+		t.Fatalf("restore approval=%v", err)
+	}
+	if restored, err := launches.Prepare(ctx, id); err != nil || restored.Token == "" {
+		t.Fatalf("new launch after approval restoration=%#v %v", restored, err)
+	}
+	stored := placements.placements[id]
+	if stored.PluginID != pluginID || stored.PluginVersion != manifest.Version || stored.ArtifactDigest != release.Release.ArtifactDigest || stored.WidgetID != "approved" {
+		t.Fatalf("lifecycle rewrote Dashboard placement: %#v", stored)
 	}
 }

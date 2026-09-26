@@ -28,6 +28,7 @@ test('an administrator manages plugin releases and public verification keys acce
   await page.getByRole('button', { name: 'Add verification key' }).click()
   await expect(page.getByText('owned-1')).toBeVisible()
   await page.setViewportSize({ width: 320, height: 844 })
+  await page.locator('html').evaluate((element) => { element.style.fontSize = '200%' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

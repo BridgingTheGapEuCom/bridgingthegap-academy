@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -275,6 +276,13 @@ func testPluginPackageRegistrationHTTP(t *testing.T, ctx context.Context, pool *
 	if invalidSignatureResponse.Code != http.StatusBadRequest || !strings.Contains(invalidSignatureResponse.Body.String(), "invalid_signature") {
 		t.Fatalf("invalid signature=%d %s", invalidSignatureResponse.Code, invalidSignatureResponse.Body.String())
 	}
+	if _, err := registry.Get(ctx, invalidSignatureManifest.ID, invalidSignatureManifest.Version); !errors.Is(err, plugins.ErrNotFound) {
+		t.Fatalf("failed validation left an installed release: %v", err)
+	}
+	var invalidResourceCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM plugins.installed_resource r JOIN plugins.installed_release i ON i.installation_id = r.installation_id WHERE i.plugin_id = $1 AND i.version = $2`, invalidSignatureManifest.ID, invalidSignatureManifest.Version).Scan(&invalidResourceCount); err != nil || invalidResourceCount != 0 {
+		t.Fatalf("failed validation left resources: count=%d err=%v", invalidResourceCount, err)
+	}
 
 	overLimitRequest := httptest.NewRequest(http.MethodPost, "/api/plugins", bytes.NewReader([]byte("small")))
 	overLimitRequest.Header.Set("Content-Type", pluginPackageUploadMediaType)
@@ -353,12 +361,45 @@ func testPluginLifecycleHTTP(t *testing.T, ctx context.Context, pool *pgxpool.Po
 		t.Fatalf("approval-signed registration=%d %s", response.Code, response.Body.String())
 	}
 	basePath := "/api/plugins/" + string(pluginID) + "/" + manifest.Version
+	// Concurrent retries converge on the one active exact-release approval.
+	var concurrent sync.WaitGroup
+	concurrent.Add(2)
+	approvalIDs := make(chan string, 2)
+	approvalErrors := make(chan error, 2)
+	for range 2 {
+		go func() {
+			defer concurrent.Done()
+			approval, approveErr := registry.ApproveRelease(ctx, pluginID, manifest.Version)
+			if approveErr != nil {
+				approvalErrors <- approveErr
+				return
+			}
+			approvalIDs <- approval.ID
+		}()
+	}
+	concurrent.Wait()
+	close(approvalErrors)
+	close(approvalIDs)
+	for approveErr := range approvalErrors {
+		t.Fatalf("concurrent approval=%v", approveErr)
+	}
+	var convergedID string
+	for approvalID := range approvalIDs {
+		if convergedID == "" {
+			convergedID = approvalID
+		} else if approvalID != convergedID {
+			t.Fatalf("concurrent approval created distinct active records: %q and %q", convergedID, approvalID)
+		}
+	}
 	approved := authRequest(router, http.MethodPost, basePath+"/approval", "", cookie, csrf)
 	if approved.Code != http.StatusOK || !strings.Contains(approved.Body.String(), `"currentTrust":"BTG_APPROVED"`) || !strings.Contains(approved.Body.String(), `"approvalState":"ACTIVE"`) || !strings.Contains(approved.Body.String(), `"enabled":false`) {
 		t.Fatalf("approve=%d %s", approved.Code, approved.Body.String())
 	}
 	if replay := authRequest(router, http.MethodPost, basePath+"/approval", "", cookie, csrf); replay.Code != http.StatusOK || !strings.Contains(replay.Body.String(), `"approvalState":"ACTIVE"`) {
 		t.Fatalf("approval replay=%d %s", replay.Code, replay.Body.String())
+	}
+	if detail := authRequest(router, http.MethodGet, basePath, "", cookie); detail.Code != http.StatusOK || detail.Body.String() != approved.Body.String() {
+		t.Fatalf("approval mutation/detail projection mismatch: detail=%d %s mutation=%s", detail.Code, detail.Body.String(), approved.Body.String())
 	}
 	enabled := authRequest(router, http.MethodPost, basePath+"/enable", "", cookie, csrf)
 	if enabled.Code != http.StatusOK || !strings.Contains(enabled.Body.String(), `"enabled":true`) || !strings.Contains(enabled.Body.String(), `"executionPermitted":true`) {
@@ -483,5 +524,26 @@ func testPluginLifecycleHTTP(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 	if response := authRequest(router, http.MethodPost, basePath+"/disable", "", cookie); response.Code != http.StatusForbidden {
 		t.Fatalf("missing csrf lifecycle=%d", response.Code)
+	}
+	for _, operation := range []struct{ method, path, body string }{
+		{http.MethodGet, "/api/plugins", ""},
+		{http.MethodGet, basePath, ""},
+		{http.MethodGet, "/api/plugins/keys", ""},
+		{http.MethodPost, "/api/plugins/keys", keyBody},
+		{http.MethodPost, "/api/plugins/keys/lifecycle-http-approval-2026/disable", ""},
+		{http.MethodPost, basePath + "/approval", ""},
+		{http.MethodDelete, basePath + "/approval", ""},
+		{http.MethodPost, basePath + "/enable", ""},
+		{http.MethodPost, basePath + "/disable", ""},
+	} {
+		request := httptest.NewRequest(operation.method, operation.path, strings.NewReader(operation.body))
+		request.Header.Set("Authorization", "Bearer widget-runtime-token")
+		request.Header.Set("Origin", "https://academy.example.com")
+		request.Header.Set("X-CSRF-Token", csrf)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("runtime bearer authorized management %s %s: %d", operation.method, operation.path, response.Code)
+		}
 	}
 }
