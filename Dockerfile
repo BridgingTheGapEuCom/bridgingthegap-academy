@@ -19,7 +19,9 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-X main.version=${VERSION}" -o /b
 
 FROM alpine:3.22
 RUN addgroup -S btg && adduser -S -G btg btg
+RUN mkdir -p /var/lib/btg-lms/assets && chown -R btg:btg /var/lib/btg-lms
 COPY --from=backend /btg-lms /usr/local/bin/btg-lms
+ENV BTG_LMS_ASSET_STORAGE_PATH=/var/lib/btg-lms/assets
 USER btg
 EXPOSE 8080
 ENTRYPOINT ["btg-lms"]

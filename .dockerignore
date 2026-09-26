@@ -3,4 +3,5 @@ node_modules
 playwright-report
 test-results
 btg-lms
+/internal/web/dist/
 BTG_LMS_Architecture_Decision_Baseline_v5.docx

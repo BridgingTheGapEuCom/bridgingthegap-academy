@@ -31,8 +31,39 @@ sql:
   - engine: postgresql
     schema:
       - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00015_assets.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00029_imported_publication_provenance.sql
+    queries: internal/modules/assets/db/query
+    gen:
+      go:
+        package: sqlc
+        out: internal/modules/assets/db/sqlc
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00002_identity.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00017_assessments.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00018_course_version_assessment_binding.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00019_assessment_attempts.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00020_assessment_attempt_results.sql
+    queries: internal/modules/assessments/db/query
+    gen:
+      go:
+        package: sqlc
+        out: internal/modules/assessments/db/sqlc
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
       - internal/modules/infrastructure/postgres/db/migrations/00007_course_structure.sql
       - internal/modules/infrastructure/postgres/db/migrations/00008_lesson_content.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00012_course_version_publication.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00013_course_version_publication_actor.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00016_course_version_asset_binding.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00018_course_version_assessment_binding.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00015_assets.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00029_imported_publication_provenance.sql
     queries: internal/modules/courses/db/query
     gen:
       go:
@@ -41,8 +72,22 @@ sql:
         sql_package: pgx/v5
   - engine: postgresql
     schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00031_plugins.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00032_plugin_runtime_resources.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00033_dashboard_widget_placements.sql
+    queries: internal/modules/plugins/db/query
+    gen:
+      go:
+        package: sqlc
+        out: internal/modules/plugins/db/sqlc
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema:
       - internal/modules/infrastructure/postgres/db/migrations/00006_courses.sql
       - internal/modules/infrastructure/postgres/db/migrations/00009_authoring.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00010_authoring_content_integrity.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00011_authoring_review.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00014_authoring_publication.sql
     queries: internal/modules/authoring/db/query
     gen:
       go:

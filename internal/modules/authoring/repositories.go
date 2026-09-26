@@ -24,8 +24,6 @@ type Repository interface {
 	GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error)
 	UpdateDraftMetadata(context.Context, DraftID, int64, DraftMetadata) (CourseDraft, error)
 	AbandonDraft(context.Context, DraftID, int64) (CourseDraft, error)
-	AddMember(context.Context, WorkspaceID, string, MemberRole) (WorkspaceMember, error)
-	RevokeMember(context.Context, WorkspaceID, string) (WorkspaceMember, error)
 	ListMembers(context.Context, WorkspaceID) ([]WorkspaceMember, error)
 	ActiveMembershipForDraft(context.Context, DraftID, string) (MemberRole, bool, error)
 	CreateModule(context.Context, ModuleInput) (DraftModule, error)
@@ -37,6 +35,15 @@ type Repository interface {
 	CreateModuleAtPosition(context.Context, DraftID, int64, ModuleInput) (DraftModule, CourseDraft, error)
 	UpdateModuleMetadata(context.Context, DraftID, ModuleID, int64, DraftModulePatch) (DraftModule, CourseDraft, error)
 	DeleteEmptyModule(context.Context, DraftID, ModuleID, int64, int64) (CourseDraft, error)
+	CreateLessonAtPosition(context.Context, DraftID, ModuleID, int64, LessonInput) (DraftLesson, CourseDraft, error)
+	UpdateLessonMetadataForDraft(context.Context, DraftID, LessonID, int64, DraftLessonPatch) (DraftLesson, CourseDraft, error)
+	ReplaceLessonContentForDraft(context.Context, DraftID, LessonID, int64, courses.LessonContent) (DraftLesson, CourseDraft, error)
+	ReorderLessonsForDraft(context.Context, DraftID, int64, []ModuleLessonOrder) (CourseDraft, error)
+	ReplaceLessonPrerequisitesForDraft(context.Context, DraftID, LessonID, int64, []string) (DraftLesson, CourseDraft, error)
+	DeleteLessonForDraft(context.Context, DraftID, LessonID, int64, int64) (CourseDraft, error)
+	AddMemberForDraft(context.Context, DraftID, int64, string, MemberRole) (WorkspaceMember, CourseDraft, error)
+	ChangeMemberRoleForDraft(context.Context, DraftID, int64, string, MemberRole) (WorkspaceMember, CourseDraft, error)
+	RevokeMemberForDraft(context.Context, DraftID, int64, string) (WorkspaceMember, CourseDraft, error)
 	CreateLesson(context.Context, LessonInput) (DraftLesson, error)
 	GetLesson(context.Context, LessonID) (DraftLesson, error)
 	ListLessons(context.Context, ModuleID) ([]DraftLesson, error)
@@ -54,11 +61,12 @@ type Repository interface {
 // ReadRepository is the narrow Authoring-owned read contract used by private
 // draft serving. It deliberately contains no membership role interpretation;
 // resource-scoped decisions remain with Authorizer.
+// Snapshot reads keep outline and prerequisites consistent with the returned revisions.
 type ReadRepository interface {
+	ListAccessibleDrafts(context.Context, string) ([]DraftSummary, error)
 	GetDraft(context.Context, DraftID) (CourseDraft, error)
 	GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error)
-	ListModules(context.Context, DraftID) ([]DraftModule, error)
-	GetLesson(context.Context, LessonID) (DraftLesson, error)
-	ListLessonsForDraft(context.Context, DraftID) ([]DraftLesson, error)
-	ListPrerequisitesForDraft(context.Context, DraftID) ([]Prerequisite, error)
+	ActiveMembers(context.Context, DraftID) ([]WorkspaceMember, error)
+	ReadStructure(context.Context, DraftID) ([]ModuleStructure, error)
+	ReadLesson(context.Context, DraftID, LessonID) (DraftLesson, []Prerequisite, error)
 }

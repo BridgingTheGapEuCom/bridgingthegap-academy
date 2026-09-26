@@ -81,6 +81,14 @@ func check(root string, tableOwners map[string]string) error {
 					violations = append(violations, fmt.Sprintf("%s: authoring may import Identity domain actor only", path))
 					continue
 				}
+				if owner == "authoring" && target == "assets" && literal != modulePrefix+"assets" {
+					violations = append(violations, fmt.Sprintf("%s: authoring may import Assets domain values only", path))
+					continue
+				}
+				if owner == "authoring" && target == "assessments" && literal != modulePrefix+"assessments" {
+					violations = append(violations, fmt.Sprintf("%s: authoring may import Assessments domain values only", path))
+					continue
+				}
 				if forbidden(owner, target) {
 					violations = append(violations, fmt.Sprintf("%s: %s cannot import %s", path, owner, target))
 				}
@@ -123,9 +131,14 @@ func forbidden(owner, target string) bool {
 	if owner == "courses" {
 		return true
 	}
+	// Assessments owns neutral mutable definitions. Draft authorization belongs
+	// at the Authoring boundary, so the neutral module must not depend back on it.
+	if owner == "assessments" && target == "authoring" {
+		return true
+	}
 	// Authoring may reuse immutable Courses value objects, never another module's
 	// application or persistence adapters. The exact Courses path is checked above.
-	if owner == "authoring" && target != "courses" && target != "identity" {
+	if owner == "authoring" && target != "courses" && target != "identity" && target != "assets" && target != "assessments" {
 		return true
 	}
 	if owner != "administration" && (target == "notifications" || target == "search" || target == "audit") {

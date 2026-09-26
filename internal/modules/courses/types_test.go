@@ -44,6 +44,27 @@ func TestCourseVersionInputValidation(t *testing.T) {
 	}
 }
 
+func TestCourseVersionMetadataValidation(t *testing.T) {
+	version, _ := ParseVersion("1.2.3")
+	metadata := CourseVersionMetadata{
+		CourseID:           "11111111-1111-1111-1111-111111111111",
+		Version:            version,
+		Title:              "Event-driven architecture",
+		Description:        "A concise introduction to event-driven architecture.",
+		LearningObjectives: []string{"Explain asynchronous boundaries"},
+		SourceLanguage:     "en",
+		Changelog:          "Initial published version.",
+		License:            ContentLicense{Kind: ContentLicenseAllRightsReserved, DisplayName: "All Rights Reserved"},
+	}
+	if err := metadata.Validate(); err != nil {
+		t.Fatalf("valid metadata rejected: %v", err)
+	}
+	metadata.Title = ""
+	if err := metadata.Validate(); err == nil {
+		t.Fatal("empty metadata title accepted")
+	}
+}
+
 func TestVersionParsingAndOrdering(t *testing.T) {
 	for _, invalid := range []string{"1", "1.0", "01.0.0", "1.0.0-beta", "1.0.0.1", "1000000000.0.0"} {
 		if _, err := ParseVersion(invalid); err == nil {

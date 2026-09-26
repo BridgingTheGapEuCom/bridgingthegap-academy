@@ -4,6 +4,423 @@
  */
 
 export interface paths {
+    "/api/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists installation-registered immutable plugin releases in plugin ID ascending and SemVer descending order. This installation-management read requires plugins.manage. */
+        get: operations["listInstalledPluginReleases"];
+        put?: never;
+        /** @description Validates and registers one bounded plugin ZIP package. The package reader derives identity, manifest, resources, signature evidence, and trust from the archive and local policy; no plugin code executes. Identical immutable-release replays return 200, and a same ID/version with a different digest returns 409. */
+        post: operations["registerPluginPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{pluginId}/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Reads one exact immutable installed plugin release. Current trust, approval, enablement, and execution eligibility remain separate states. */
+        get: operations["getInstalledPluginRelease"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{pluginId}/{version}/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates or replays an exact ID/version/digest approval only when the release carries a valid signature from its active BTG approval key. Administrative action does not bypass cryptographic approval requirements. */
+        post: operations["approveInstalledPluginRelease"];
+        /** @description Revokes the active exact-release cryptographic approval while preserving approval history. Repeating a completed revocation is idempotent. */
+        delete: operations["revokeInstalledPluginReleaseApproval"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{pluginId}/{version}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Enables one exact installed release only when its current derived trust and instance policy permit execution. */
+        post: operations["enableInstalledPluginRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{pluginId}/{version}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Disables one exact installed release without deleting resources, placements, or published Course content. */
+        post: operations["disableInstalledPluginRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists safe metadata and fingerprints for locally registered plugin verification keys. Private material and raw public-key bytes are not returned. */
+        get: operations["listPluginVerificationKeys"];
+        put?: never;
+        /** @description Registers an Ed25519 public verification key. The API accepts exactly 32 public-key bytes encoded as unpadded base64url; private expanded keys are rejected by size. */
+        post: operations["addPluginVerificationKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/keys/{keyId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enablePluginVerificationKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/keys/{keyId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disablePluginVerificationKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDashboardWidgets"];
+        put?: never;
+        post: operations["createDashboardWidget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAvailableDashboardWidgets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets/{placementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteDashboardWidget"];
+        options?: never;
+        head?: never;
+        patch: operations["updateDashboardWidget"];
+        trace?: never;
+    };
+    "/api/dashboard/widgets/{placementId}/move-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["moveDashboardWidgetUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets/{placementId}/move-down": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["moveDashboardWidgetDown"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/widgets/{placementId}/widget-runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Derives one Dashboard-widget runtime launch from the persisted installation placement. The client supplies only the opaque placement ID; plugin identity, configuration, and grants are server-derived. */
+        post: operations["launchDashboardWidgetRuntime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugin-runtime/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the minimal identity bound to a short-lived widget-runtime capability token. Academy session cookies are not accepted. */
+        get: operations["getWidgetRuntimeContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugin-runtime/token/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Re-evaluates release enablement, trust, approval, widget identity, and entrypoint integrity before replacing a still-valid runtime token. */
+        post: operations["refreshWidgetRuntimeToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Downloads exactly the requested immutable CourseVersion package. The authenticated caller must be a frozen Course AUTHOR or MAINTAINER; unavailable and unauthorized versions are hidden. */
+        get: operations["exportCourseVersionPackage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portability/imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validates one bounded ZIP package and retains its opaque validated representation in a short-lived, user-bound server-side preview session. Requires the installation-level portability.import capability. */
+        post: operations["previewCoursePackageImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portability/imports/{previewToken}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Imports the exact validated package held by an owned, unexpired preview token. The token is removed after a successful import or replay. */
+        post: operations["executeCoursePackageImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/translations/{language}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLearnerTranslatedCourse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCourseVersionLanguages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/translations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTranslations"];
+        put?: never;
+        post: operations["createTranslation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/translations/{translationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTranslationWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["patchTranslation"];
+        trace?: never;
+    };
+    "/api/translations/{translationId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["publishTranslation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns minimal mutable Draft summaries for which the authenticated actor currently has an active Authoring membership. Revoked memberships are excluded. Responses are private and not cacheable. */
+        get: operations["listAuthoringDrafts"];
+        put?: never;
+        /** @description Creates a new editable Draft for the authenticated actor. The creator receives the initial active MAINTAINER membership atomically. The server creates the opaque Course identity; no Review or CourseVersion is created. */
+        post: operations["createAuthoringDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}": {
         parameters: {
             query?: never;
@@ -37,6 +454,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns a bounded, newest-first page of AVAILABLE Assets owned by the exact authorized Draft. It returns no binary URL or private provenance. */
+        get: operations["listAuthoringDraftAssets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns a bounded newest-first page of Assessment summaries for the exact authorized Draft. Only active AUTHOR and MAINTAINER members with authoring.assessment.edit may access it. Summaries never include answer keys or internal provenance. */
+        get: operations["listAuthoringDraftAssessments"];
+        put?: never;
+        /** @description Creates a mutable deterministic Assessment in the exact authorized Draft. The server derives Draft ownership and creator provenance. This Authoring-only response includes answer keys for editing and must not be used by learner APIs. */
+        post: operations["createAuthoringAssessment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/assessments/{assessmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns one exact Draft-owned Assessment for editing. This is an Authoring-only answer-bearing DTO, never a learner representation. */
+        get: operations["getAuthoringAssessment"];
+        /** @description Atomically replaces one Assessment definition when expectedRevision matches. Stale revisions return a safe conflict; no partial question updates are exposed. */
+        put: operations["replaceAuthoringAssessment"];
+        /** @description Streams exactly one file into the authorized Draft. Active AUTHOR and MAINTAINER members have authoring.asset.upload. The server derives Draft ownership and creator identity, detects media type from bytes, measures size and SHA-256, and returns only safe AVAILABLE Asset metadata. */
+        post: operations["uploadAuthoringAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}/modules": {
         parameters: {
             query?: never;
@@ -52,6 +523,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns current active AUTHOR and MAINTAINER memberships for one Draft. The authenticated actor must have authoring.read. Revoked membership history is not exposed. */
+        get: operations["listAuthoringActiveMembers"];
+        put?: never;
+        /** @description Adds an active AUTHOR or MAINTAINER membership using the Draft revision. The authenticated actor must have authoring.members.manage. */
+        post: operations["addAuthoringMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Revokes one active membership while preserving history. Revoking the final active MAINTAINER is rejected. */
+        delete: operations["revokeAuthoringMember"];
+        options?: never;
+        head?: never;
+        /** @description Replaces one active member role. Demoting the final active MAINTAINER is rejected. */
+        patch: operations["changeAuthoringMemberRole"];
         trace?: never;
     };
     "/api/authoring/drafts/{draftId}/modules/order": {
@@ -89,15 +596,32 @@ export interface paths {
         patch: operations["updateAuthoringModule"];
         trace?: never;
     };
-    "/api/authoring/drafts/{draftId}/structure": {
+    "/api/authoring/drafts/{draftId}/modules/{moduleId}/lessons": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getAuthoringDraftStructure"];
+        get?: never;
         put?: never;
+        post: operations["createAuthoringLesson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/lessons/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Atomically replaces the complete ordered Lesson structure for every Module in the Draft; this permits moves without changing Lesson identity or stable key. */
+        put: operations["reorderAuthoringLessons"];
         post?: never;
         delete?: never;
         options?: never;
@@ -115,6 +639,211 @@ export interface paths {
         get: operations["getAuthoringLesson"];
         put?: never;
         post?: never;
+        /** @description Deletes one draft Lesson and explicitly removes incoming advisory prerequisite relations, advancing affected source Lesson revisions. */
+        delete: operations["deleteAuthoringLesson"];
+        options?: never;
+        head?: never;
+        /** @description Updates Lesson metadata only. Stable key, Module, position, prerequisites, and content have separate boundaries. */
+        patch: operations["updateAuthoringLesson"];
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/lessons/{lessonId}/prerequisites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Replaces the complete ordered advisory prerequisite stable-key list for one Lesson. Cycles are not evaluated in this slice. */
+        put: operations["replaceAuthoringLessonPrerequisites"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/lessons/{lessonId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Atomically replaces the complete canonical semantic LessonContent document for one draft Lesson using its current revision. Editor state and partial block updates are not accepted. */
+        put: operations["replaceAuthoringLessonContent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/plugins/course-widgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists enabled, policy-allowed Course widget releases for an author with Lesson content edit capability on the requested Draft. This discovery state is private and never immutable-cached. */
+        get: operations["listAuthoringCourseWidgets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/lessons/{lessonKey}/blocks/{blockKey}/widget-runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Derives one Course-widget runtime launch from the exact immutable published placement. It accepts no plugin identity or configuration from the client. */
+        post: operations["launchCourseWidgetRuntime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/structure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAuthoringDraftStructure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns newest-first Review cycle metadata without historical snapshots. */
+        get: operations["listAuthoringDraftReviews"];
+        put?: never;
+        /** @description Atomically freezes the authoritative exact Draft revision. Requires trusted Origin and session CSRF token. */
+        post: operations["submitAuthoringDraftReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the current IN_REVIEW cycle metadata; 404 when no active cycle exists. */
+        get: operations["getActiveAuthoringDraftReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLatestAuthoringDraftReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/{reviewId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns immutable Review provenance and the exact stored canonical snapshot. */
+        get: operations["getAuthoringDraftReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/{reviewId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Terminally approves one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. A configured independent-review policy rejection returns 409 with Problem code independent_reviewer_required; stale and terminal Review conflicts also return 409 without that code. */
+        post: operations["approveAuthoringDraftReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/{reviewId}/request-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Terminally requests changes on one IN_REVIEW cycle using Review revision CAS. Requires trusted Origin and session CSRF token. A configured independent-review policy rejection returns 409 with Problem code independent_reviewer_required; stale and terminal Review conflicts also return 409 without that code. */
+        post: operations["requestAuthoringDraftReviewChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/reviews/{reviewId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Publishes the exact APPROVED Review revision through the Authoring publication orchestration boundary. Requires current authoring.publish authorization, trusted Origin, and the session CSRF token. Exact replay/reconciliation returns the same successful representation; stale Review state and a Course/SemVer owned by another Review return stable conflicts. */
+        post: operations["publishAuthoringDraftReview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -129,6 +858,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listPublishedCourses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns one lightweight summary for each Course with a complete immutable PUBLISHED CourseVersion. The selected summary is the highest constrained SemVer; no Authoring state or publication provenance is consulted or exposed. */
+        get: operations["listPublishedCourseCatalog"];
         put?: never;
         post?: never;
         delete?: never;
@@ -177,6 +923,342 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getPublishedLesson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns one complete immutable PUBLISHED CourseVersion by Courses-owned ID and constrained SemVer. The response never consults or exposes Authoring Review or Draft provenance. */
+        get: operations["getPublishedCourseVersionById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Streams one binary only when assetKey is bound to the requested exact immutable PUBLISHED CourseVersion. The storage object and Authoring provenance are never exposed. The response is immutable and supports ETag revalidation; byte ranges are not currently supported. */
+        get: operations["getPublishedCourseVersionAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** @description Returns the same immutable representation headers as GET without a response body. */
+        head: operations["headPublishedCourseVersionAsset"];
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates a private IN_PROGRESS Attempt for the authenticated learner and an Assessment bound to this exact immutable PUBLISHED CourseVersion. Learner ownership comes exclusively from the session. Responses are private and not cacheable. */
+        post: operations["createLearnerAssessmentAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/learner/assessment-attempts/{attemptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns one private Attempt only to its authenticated learner owner. It contains the learner's own responses and never authoritative answer keys. */
+        get: operations["getLearnerAssessmentAttempt"];
+        /** @description Atomically replaces the complete partial response set for an IN_PROGRESS Attempt when expectedRevision matches. Responses are validated against the exact immutable published Assessment binding. */
+        put: operations["replaceLearnerAssessmentAttemptResponses"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/learner/assessment-attempts/{attemptId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validates complete responses and deterministically grades once against the exact immutable Courses binding. The response exposes only aggregate score counts, never answer keys. */
+        post: operations["submitLearnerAssessmentAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/versions/{version}/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Issues or replays the authenticated learner's Certificate for this exact published CourseVersion. Eligibility is server-authoritative and no client certificate fields are accepted. */
+        post: operations["issueLearnerCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/learner/certificates/{certificateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLearnerCertificate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/certificates/{certificateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public registry verification of a recorded Certificate. It states registry ACTIVE or REVOKED status and makes no cryptographic or Open Badges claim. */
+        get: operations["verifyPublicCertificate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/open-badges/{certificateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public signed Open Badges 3.0 credential with a revocation status-list reference. The proof and current status must both be verified. */
+        get: operations["getSignedOpenBadge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/open-badges/issuer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public controller document retaining historical assertion verification methods. */
+        get: operations["getOpenBadgesIssuerController"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/open-badges/status/revocation/{listId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Current fully signed Bitstring Status List snapshot; unavailable when a fresh secured snapshot cannot be produced. */
+        get: operations["getSignedOpenBadgesStatusList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/achievements/course-versions/{versionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public exact published CourseVersion achievement; contains no learner identity. */
+        get: operations["getOpenBadgesAchievement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the authenticated participant view of a published Course's durable community mode. Community is Course-scoped, not CourseVersion-scoped. */
+        get: operations["getCourseCommunity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCourseCommunityThreads"];
+        put?: never;
+        /** @description Atomically creates a visible Thread and its opening plain-text Post for the authenticated participant. Server-owned identity and moderation fields cannot be supplied. */
+        post: operations["createCourseCommunityThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCourseCommunityThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/threads/{threadId}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createCourseCommunityPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/moderation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCourseCommunityModerationProbe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/moderation/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCourseCommunityModeratorThreads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/community/moderation/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCourseCommunityModeratorThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/by-id/{courseId}/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the complete immutable PUBLISHED CourseVersion with the highest constrained SemVer. Pre-release metadata is not part of the current SemVer model. */
+        get: operations["getLatestPublishedCourseVersionById"];
         put?: never;
         post?: never;
         delete?: never;
@@ -288,6 +1370,628 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        PluginTrustClassification: "BTG_OWNED" | "BTG_APPROVED" | "UNKNOWN";
+        /** @enum {string} */
+        PluginValidationStatus: "VALIDATED_AT_REGISTRATION" | "SIGNATURE_INVALID";
+        /** @enum {string} */
+        PluginSignatureStatus: "UNSIGNED" | "VALID" | "INVALID";
+        /** @enum {string} */
+        PluginApprovalState: "NONE" | "ACTIVE" | "REVOKED";
+        PluginManagementEntrypoint: {
+            id: string;
+            /** @enum {string} */
+            type: "COURSE_WIDGET" | "DASHBOARD_WIDGET";
+            name: string;
+        };
+        PluginManagementRelease: {
+            pluginId: string;
+            version: string;
+            artifactDigest: string;
+            name: string;
+            description: string;
+            publisherName: string;
+            /** Format: uri */
+            homepage?: string;
+            entrypoints: components["schemas"]["PluginManagementEntrypoint"][];
+            /** @description Omitted when a currently recognized signature fails verification; that state is represented by SIGNATURE_INVALID */
+            currentTrust?: components["schemas"]["PluginTrustClassification"];
+            validationStatus: components["schemas"]["PluginValidationStatus"];
+            signatureStatus: components["schemas"]["PluginSignatureStatus"];
+            approvalState: components["schemas"]["PluginApprovalState"];
+            enabled: boolean;
+            /** @description Current trust-policy eligibility. It is independent of the stored enabled state. */
+            executionPermitted: boolean;
+            /** Format: date-time */
+            installedAt: string;
+        };
+        PluginManagementReleaseList: {
+            plugins: components["schemas"]["PluginManagementRelease"][];
+        };
+        PluginVerificationKey: {
+            keyId: string;
+            /** @enum {string} */
+            purpose: "BTG_OWNED_SIGNING" | "BTG_APPROVAL_SIGNING";
+            allowedPluginIds: string[];
+            enabled: boolean;
+            fingerprint: string;
+        };
+        PluginVerificationKeyList: {
+            keys: components["schemas"]["PluginVerificationKey"][];
+        };
+        PluginVerificationKeyCreateRequest: {
+            keyId: string;
+            /** @description Exactly 32 Ed25519 public-key bytes encoded as unpadded base64url. */
+            publicKey: string;
+            /** @enum {string} */
+            purpose: "BTG_OWNED_SIGNING" | "BTG_APPROVAL_SIGNING";
+            allowedPluginIds: string[];
+        };
+        DashboardWidgetPlacement: {
+            /** Format: uuid */
+            placementId: string;
+            pluginId: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            configuration: {
+                [key: string]: unknown;
+            };
+            position: number;
+            enabled: boolean;
+            revision: number;
+        };
+        DashboardWidgetPlacementList: {
+            widgets: components["schemas"]["DashboardWidgetPlacement"][];
+        };
+        DashboardWidgetPlacementCreateRequest: {
+            pluginId: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            configuration: {
+                [key: string]: unknown;
+            };
+        };
+        DashboardWidgetPlacementUpdateRequest: {
+            expectedRevision: number;
+            configuration: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+        };
+        DashboardWidgetPlacementDeleteRequest: {
+            expectedRevision: number;
+        };
+        DashboardWidgetPlacementReorderRequest: {
+            expectedRevisions: {
+                [key: string]: number;
+            };
+        };
+        AvailableDashboardWidget: {
+            pluginId: string;
+            pluginName: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            widgetName: string;
+            description: string;
+        };
+        AvailableDashboardWidgetList: {
+            widgets: components["schemas"]["AvailableDashboardWidget"][];
+        };
+        WidgetRuntimeContext: {
+            /** Format: uuid */
+            runtimeInstanceId: string;
+            pluginId: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            /** @enum {string} */
+            widgetType: "COURSE_WIDGET" | "DASHBOARD_WIDGET";
+        };
+        WidgetRuntimeLaunch: {
+            context: components["schemas"]["WidgetRuntimeContext"];
+            /** @description Trusted manifest display name for the iframe accessible title. */
+            widgetName: string;
+            /** Format: uri */
+            runtimeUrl: string;
+            /** Format: uri */
+            runtimeOrigin: string;
+            token: string;
+            /** Format: date-time */
+            expiresAt: string;
+            capabilities: ("widget.runtime.bootstrap" | "widget.runtime.context.read" | "widget.course.context.read" | "widget.dashboard.context.read")[];
+            courseContext?: components["schemas"]["CourseWidgetRuntimeContext"];
+            dashboardContext?: components["schemas"]["DashboardWidgetRuntimeContext"];
+        };
+        CourseWidgetRuntimeContext: {
+            /** Format: uuid */
+            courseId: string;
+            /** Format: uuid */
+            courseVersionId: string;
+            courseVersion: string;
+            lessonKey: string;
+            placementKey: string;
+            presentationLanguage: string;
+            configuration: {
+                [key: string]: unknown;
+            };
+        };
+        DashboardWidgetRuntimeContext: {
+            /** Format: uuid */
+            placementId: string;
+            configuration: {
+                [key: string]: unknown;
+            };
+        };
+        TranslatedCourse: {
+            course: components["schemas"]["PublishedCourseVersionDetail"];
+            translation: components["schemas"]["TranslationReadMetadata"];
+            sourceLag: components["schemas"]["TranslationSourceLag"];
+        };
+        TranslationReadMetadata: {
+            language: string;
+            sourceLanguage: string;
+            sourceVersion: string;
+            /** Format: uuid */
+            publicationId: string;
+            /** Format: date-time */
+            publishedAt: string;
+        };
+        TranslationSourceLag: {
+            translatedSourceVersion: string;
+            latestSourceVersion?: string | null;
+            isLatest?: boolean | null;
+        };
+        CourseVersionLanguages: {
+            sourceLanguage: string;
+            languages: {
+                language: string;
+                /** @enum {string} */
+                kind: "SOURCE" | "TRANSLATION";
+                /** Format: uuid */
+                translationPublicationId?: string | null;
+            }[];
+        };
+        TranslationCreateRequest: {
+            targetLanguage: string;
+        };
+        TranslationSummary: {
+            /** Format: uuid */
+            translationId: string;
+            targetLanguage: string;
+            /** @enum {string} */
+            lifecycle: "DRAFT" | "PUBLISHED";
+            revision: number;
+            completeness: components["schemas"]["TranslationCompleteness"];
+        };
+        TranslationList: {
+            translations: components["schemas"]["TranslationSummary"][];
+        };
+        TranslationTextChange: {
+            /** @enum {string} */
+            target: "COURSE" | "MODULE" | "LESSON" | "BLOCK" | "ASSESSMENT_QUESTION" | "ASSESSMENT_OPTION" | "ASSESSMENT_LEFT_ITEM" | "ASSESSMENT_RIGHT_ITEM";
+            field: string;
+            moduleKey?: string;
+            lessonKey?: string;
+            blockKey?: string;
+            /** Format: uuid */
+            assessmentKey?: string;
+            questionKey?: string;
+            itemKey?: string;
+            objective?: number;
+            translated: string | null;
+        };
+        TranslationPatchRequest: {
+            expectedRevision: number;
+            changes: components["schemas"]["TranslationTextChange"][];
+        };
+        TranslationPublishRequest: {
+            expectedRevision: number;
+        };
+        TranslationCompleteness: {
+            totalTranslatableFields: number;
+            translatedFields: number;
+            untranslatedFields: number;
+            complete: boolean;
+        };
+        TranslationTextField: {
+            source: string;
+            translated: string | null;
+            /** @enum {string} */
+            state: "UNTRANSLATED" | "TRANSLATED";
+        };
+        /** @description Private source-plus-override authoring view. Assessment correctness is excluded. */
+        TranslationWorkspace: {
+            /** Format: uuid */
+            translationId: string;
+            revision: number;
+            /** @enum {string} */
+            lifecycle: "DRAFT" | "PUBLISHED";
+            source: Record<string, never>;
+            targetLanguage: string;
+            course: Record<string, never>;
+            modules: Record<string, never>[];
+            assessments: Record<string, never>[];
+            completeness: components["schemas"]["TranslationCompleteness"];
+        };
+        TranslationPublication: {
+            /** Format: uuid */
+            publicationId: string;
+            /** Format: uuid */
+            translationId: string;
+            revision: number;
+            targetLanguage: string;
+            /** Format: uuid */
+            sourceCourseId: string;
+            /** Format: uuid */
+            sourceCourseVersionId: string;
+            sourceVersion: string;
+            /** Format: date-time */
+            publishedAt: string;
+        };
+        AuthoringAsset: {
+            /**
+             * Format: uuid
+             * @description Stable opaque Asset ID used by canonical LessonContent assetKey fields.
+             */
+            assetKey: string;
+            filename: string;
+            /** @description Authoritative media type detected from the stored bytes. */
+            mediaType: string;
+            /** Format: int64 */
+            byteSize: number;
+            /** @constant */
+            status: "AVAILABLE";
+        };
+        AuthoringAssetSummary: {
+            /** Format: uuid */
+            assetKey: string;
+            filename: string;
+            mediaType: string;
+            /** Format: int64 */
+            byteSize: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AuthoringAssetList: {
+            items: components["schemas"]["AuthoringAssetSummary"][];
+            limit: number;
+            offset: number;
+            total: number;
+        };
+        AuthoringAssessmentOption: {
+            stableKey: string;
+            text: string;
+            position: number;
+        };
+        AuthoringAssessmentMatchingItem: {
+            stableKey: string;
+            text: string;
+            position: number;
+        };
+        AuthoringAssessmentMatchingPair: {
+            leftKey: string;
+            rightKey: string;
+        };
+        AuthoringAssessmentQuestion: {
+            stableKey: string;
+            /** @enum {string} */
+            type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "MATCHING";
+            prompt: string;
+            position: number;
+            options: components["schemas"]["AuthoringAssessmentOption"][];
+            correctOptionKeys: string[];
+            leftItems: components["schemas"]["AuthoringAssessmentMatchingItem"][];
+            rightItems: components["schemas"]["AuthoringAssessmentMatchingItem"][];
+            correctPairs: components["schemas"]["AuthoringAssessmentMatchingPair"][];
+        };
+        AuthoringAssessmentCreateRequest: {
+            title: string;
+            questions: components["schemas"]["AuthoringAssessmentQuestion"][];
+        };
+        AuthoringAssessmentUpdateRequest: {
+            expectedRevision: number;
+            title: string;
+            questions: components["schemas"]["AuthoringAssessmentQuestion"][];
+        };
+        /** @description Private Authoring-only aggregate. It intentionally includes correct answer definitions and must never be reused for learner delivery. */
+        AuthoringAssessmentDetail: {
+            /** Format: uuid */
+            assessmentKey: string;
+            title: string;
+            revision: number;
+            questions: components["schemas"]["AuthoringAssessmentQuestion"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AuthoringAssessmentSummary: {
+            /** Format: uuid */
+            assessmentKey: string;
+            title: string;
+            questionCount: number;
+            revision: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AuthoringAssessmentList: {
+            items: components["schemas"]["AuthoringAssessmentSummary"][];
+            limit: number;
+            offset: number;
+            total: number;
+        };
+        /** Format: uuid */
+        LearnerAttemptID: string;
+        LearnerAssessmentAttemptResponsePair: {
+            leftItemKey: string;
+            rightItemKey: string;
+        };
+        LearnerAssessmentAttemptResponse: {
+            questionKey: string;
+            /** @enum {string} */
+            type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "MATCHING";
+            selectedOptionKey: string;
+            selectedOptionKeys: string[];
+            pairs: components["schemas"]["LearnerAssessmentAttemptResponsePair"][];
+        };
+        LearnerAssessmentAttemptResult: {
+            correctCount: number;
+            totalCount: number;
+            percentage: number;
+        };
+        /** @description Private learner-owned Attempt. It includes only the learner's own responses and aggregate score, never authoritative answers or Authoring provenance. */
+        LearnerAssessmentAttempt: {
+            attemptId: components["schemas"]["LearnerAttemptID"];
+            /** Format: uuid */
+            assessmentKey: string;
+            /** @enum {string} */
+            state: "IN_PROGRESS" | "SUBMITTED";
+            revision: number;
+            responses: components["schemas"]["LearnerAssessmentAttemptResponse"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            result: components["schemas"]["LearnerAssessmentAttemptResult"] | null;
+        };
+        LearnerAssessmentAttemptUpdateRequest: {
+            expectedRevision: number;
+            responses: components["schemas"]["LearnerAssessmentAttemptResponse"][];
+        };
+        LearnerAssessmentAttemptSubmitRequest: {
+            expectedRevision: number;
+        };
+        AuthoringReviewSubmitRequest: {
+            expectedDraftRevision: number;
+        };
+        AuthoringReviewDecisionRequest: {
+            expectedReviewRevision: number;
+            message?: string;
+        };
+        AuthoringPublicationRequest: {
+            expectedReviewRevision: number;
+        };
+        AuthoringPublication: {
+            /** Format: uuid */
+            reviewId: string;
+            reviewRevision: number;
+            /** Format: uuid */
+            courseId: string;
+            courseVersion: string;
+            /** Format: uuid */
+            courseVersionId: string;
+            /** Format: date-time */
+            publishedAt: string;
+        };
+        PublicationValidationIssue: {
+            /** @description Stable publication-validation issue code. */
+            code: string;
+            /** @description Deterministic canonical Review snapshot location. */
+            path: string;
+            /** @description Safe human-readable issue detail. */
+            message: string;
+        };
+        PublicationValidationProblem: components["schemas"]["Problem"] & {
+            /** @constant */
+            code: "publication_validation_failed";
+            issues: components["schemas"]["PublicationValidationIssue"][];
+        };
+        PublicationConflictProblem: components["schemas"]["Problem"] & {
+            /** @enum {string} */
+            code: "review_revision_conflict" | "review_not_approved" | "course_version_already_exists" | "publication_conflict";
+        };
+        AuthoringReview: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            draftId: string;
+            draftRevision: number;
+            /** @constant */
+            snapshotSchemaVersion: 1;
+            /** @enum {string} */
+            status: "IN_REVIEW" | "APPROVED" | "CHANGES_REQUESTED";
+            reviewRevision: number;
+            /** Format: uuid */
+            submittedBy: string;
+            /** Format: date-time */
+            submittedAt: string;
+            /** Format: uuid */
+            decidedBy: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+        };
+        AuthoringReviewList: {
+            reviews: components["schemas"]["AuthoringReview"][];
+        };
+        AuthoringReviewDetail: {
+            review: components["schemas"]["AuthoringReview"];
+            snapshot: components["schemas"]["AuthoringReviewSnapshot"];
+            publication: components["schemas"]["AuthoringReviewPublicationStatus"];
+        };
+        AuthoringReviewSubmissionDetail: {
+            review: components["schemas"]["AuthoringReview"];
+            snapshot: components["schemas"]["AuthoringReviewSnapshot"];
+        };
+        /** @description Server-authoritative exact-Review publication readiness and safe publication state. canPublish represents the current actor's authoring.publish capability only; it does not replace endpoint authorization. */
+        AuthoringReviewPublicationStatus: {
+            canPublish: boolean;
+            publishable: boolean;
+            issues: components["schemas"]["PublicationValidationIssue"][];
+            published: {
+                /** Format: uuid */
+                courseId: string;
+                courseVersion: string;
+                /** Format: date-time */
+                publishedAt: string;
+            } | null;
+        };
+        AuthoringReviewSnapshot: {
+            /** @constant */
+            schemaVersion: 1;
+            draft: components["schemas"]["AuthoringReviewSnapshotDraft"];
+            modules: components["schemas"]["AuthoringReviewSnapshotModule"][];
+        };
+        AuthoringReviewSnapshotDraft: {
+            /** Format: uuid */
+            id: string;
+            revision: number;
+            /** Format: uuid */
+            courseId: string;
+            intendedVersion: string;
+            sourceLanguage: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            changelog: string;
+            license: {
+                /** @enum {string} */
+                Kind: "STANDARD" | "ALL_RIGHTS_RESERVED" | "CUSTOM";
+                Identifier: string;
+                DisplayName: string;
+                URL: string;
+                CustomText: string;
+            };
+        };
+        AuthoringReviewSnapshotModule: {
+            /** Format: uuid */
+            id: string;
+            stableKey: string;
+            title: string;
+            description: string;
+            position: number;
+            lessons: components["schemas"]["AuthoringReviewSnapshotLesson"][];
+        };
+        AuthoringReviewSnapshotLesson: {
+            /** Format: uuid */
+            id: string;
+            stableKey: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimatedDurationMinutes: number | null;
+            position: number;
+            prerequisiteStableKeys: string[];
+            content: components["schemas"]["LessonContent"];
+        };
+        AuthoringActiveMember: {
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+        };
+        AuthoringActiveMemberList: {
+            members: components["schemas"]["AuthoringActiveMember"][];
+        };
+        AuthoringMemberAddRequest: {
+            expectedDraftRevision: number;
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+        };
+        AuthoringMemberRoleRequest: {
+            expectedDraftRevision: number;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+        };
+        AuthoringMemberRevokeRequest: {
+            expectedDraftRevision: number;
+        };
+        AuthoringMemberMutationResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+            draftRevision: number;
+        };
+        AuthoringLessonCreateRequest: {
+            expectedDraftRevision: number;
+            stableKey: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimatedDurationMinutes?: number | null;
+            position: number;
+        };
+        AuthoringLessonUpdateRequest: {
+            expectedLessonRevision: number;
+            title?: string;
+            description?: string;
+            objectives?: string[];
+            estimatedDurationMinutes?: number | null;
+        } | unknown | unknown | unknown | unknown;
+        AuthoringLessonOrderModule: {
+            /** Format: uuid */
+            moduleId: string;
+            lessonIds: string[];
+        };
+        AuthoringLessonReorderRequest: {
+            expectedDraftRevision: number;
+            modules: components["schemas"]["AuthoringLessonOrderModule"][];
+        };
+        AuthoringLessonPrerequisitesRequest: {
+            expectedLessonRevision: number;
+            prerequisiteLessonKeys: string[];
+        };
+        AuthoringLessonDeleteRequest: {
+            expectedDraftRevision: number;
+            expectedLessonRevision: number;
+        };
+        AuthoringLessonContentUpdateRequest: {
+            expectedLessonRevision: number;
+            content: components["schemas"]["LessonContent"];
+        };
+        AuthoringLessonContentMutationResponse: {
+            lesson: components["schemas"]["AuthoringLessonMutationResponse"];
+            content: components["schemas"]["LessonContent"];
+        };
+        AuthoringLessonMutationResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            draft_id: string;
+            /** Format: uuid */
+            module_id: string;
+            stable_key: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimated_duration_minutes: number | null;
+            position: number;
+            revision: number;
+            draftRevision: number;
+        };
         AuthoringModuleCreateRequest: {
             expectedDraftRevision: number;
             stableKey: string;
@@ -299,7 +2003,7 @@ export interface components {
             expectedModuleRevision: number;
             title?: string;
             description?: string;
-        };
+        } | unknown | unknown;
         AuthoringModuleReorderRequest: {
             expectedDraftRevision: number;
             moduleIds: string[];
@@ -324,6 +2028,14 @@ export interface components {
             objectives?: string[];
             changelog?: string;
             license?: components["schemas"]["ContentLicense"];
+        } | unknown | unknown | unknown | unknown | unknown | unknown | unknown;
+        AuthoringDraftCreateRequest: {
+            title: string;
+            description: string;
+            objectives: string[];
+            changelog: string;
+            intendedVersion: string;
+            sourceLanguage: string;
         };
         AuthoringDraft: {
             /** Format: uuid */
@@ -344,6 +2056,19 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        AuthoringDraftSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            intendedVersion: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "ABANDONED";
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AuthoringDraftList: {
+            drafts: components["schemas"]["AuthoringDraftSummary"][];
         };
         AuthoringWorkspace: {
             /** Format: uuid */
@@ -394,17 +2119,360 @@ export interface components {
         CourseList: {
             courses: components["schemas"]["CourseSummary"][];
         };
+        PublishedCourseCatalogPage: {
+            items: components["schemas"]["PublishedCourseCatalogItem"][];
+            limit: number;
+            offset: number;
+            total: number;
+        };
+        PublishedCourseCatalogItem: {
+            /** Format: uuid */
+            courseId: string;
+            version: string;
+            title: string;
+            description: string;
+            sourceLanguage: string;
+            license: components["schemas"]["PublishedContentLicense"];
+            contributors: components["schemas"]["PublishedContributor"][];
+            /** Format: date-time */
+            publishedAt: string;
+        };
         CourseSummary: {
             slug: string;
             version: components["schemas"]["CourseVersionSummary"];
         };
         CourseIdentity: {
             slug: string;
+            /** Format: uuid */
+            courseId?: string;
         };
         CourseDetail: {
             course: components["schemas"]["CourseIdentity"];
             version: components["schemas"]["CourseVersionSummary"];
             modules: components["schemas"]["ModuleStructure"][];
+        };
+        PublishedCourseVersionDetail: {
+            /** Format: uuid */
+            courseId: string;
+            version: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            sourceLanguage: string;
+            changelog: string;
+            license: components["schemas"]["PublishedContentLicense"];
+            contributors: components["schemas"]["PublishedContributor"][];
+            /** Format: date-time */
+            publishedAt: string;
+            modules: components["schemas"]["PublishedCourseModule"][];
+            assessments: components["schemas"]["PublishedAssessmentLearnerView"][];
+        };
+        PublishedAssessmentLearnerView: {
+            /** Format: uuid */
+            assessmentKey: string;
+            questions: components["schemas"]["PublishedAssessmentLearnerQuestion"][];
+        };
+        PublishedAssessmentLearnerQuestion: {
+            stableKey: string;
+            /** @enum {string} */
+            type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "MATCHING";
+            prompt: string;
+            position: number;
+            options: components["schemas"]["PublishedAssessmentLearnerOption"][];
+            leftItems: components["schemas"]["PublishedAssessmentLearnerItem"][];
+            rightItems: components["schemas"]["PublishedAssessmentLearnerItem"][];
+        };
+        PublishedAssessmentLearnerOption: {
+            stableKey: string;
+            text: string;
+            position: number;
+        };
+        PublishedAssessmentLearnerItem: {
+            stableKey: string;
+            text: string;
+            position: number;
+        };
+        DataIntegrityProof: {
+            /** @constant */
+            type: "DataIntegrityProof";
+            /** @constant */
+            cryptosuite: "eddsa-rdfc-2022";
+            /** Format: date-time */
+            created: string;
+            /** Format: uri */
+            verificationMethod: string;
+            /** @constant */
+            proofPurpose: "assertionMethod";
+            proofValue: string;
+        };
+        OpenBadgesMultikey: {
+            /** Format: uri */
+            id: string;
+            /** @constant */
+            type: "Multikey";
+            /** Format: uri */
+            controller: string;
+            publicKeyMultibase: string;
+        };
+        OpenBadgesController: {
+            "@context": string[];
+            /** Format: uri */
+            id: string;
+            name?: string;
+            verificationMethod: components["schemas"]["OpenBadgesMultikey"][];
+            assertionMethod: string[];
+        };
+        OpenBadgesStatusReference: {
+            /** Format: uri */
+            id: string;
+            /** @constant */
+            type: "BitstringStatusListEntry";
+            /** @constant */
+            statusPurpose: "revocation";
+            statusListIndex: string;
+            /** Format: uri */
+            statusListCredential: string;
+        };
+        SignedOpenBadge: {
+            "@context": string[];
+            /** Format: uri */
+            id: string;
+            type: string[];
+            issuer: {
+                /** Format: uri */
+                id: string;
+                type: string[];
+                name: string;
+            };
+            /** Format: date-time */
+            validFrom: string;
+            credentialSubject: {
+                id: string;
+                type: string[];
+                achievement: Record<string, never>;
+            };
+            credentialStatus: components["schemas"]["OpenBadgesStatusReference"];
+            proof: components["schemas"]["DataIntegrityProof"];
+        };
+        SignedStatusListCredential: {
+            "@context": string[];
+            /** Format: uri */
+            id: string;
+            type: string[];
+            issuer: {
+                /** Format: uri */
+                id: string;
+                type: string[];
+                name: string;
+            };
+            /** Format: date-time */
+            validFrom: string;
+            credentialSubject: {
+                /** Format: uri */
+                id: string;
+                /** @constant */
+                type: "BitstringStatusList";
+                /** @constant */
+                statusPurpose: "revocation";
+                encodedList: string;
+            };
+            proof: components["schemas"]["DataIntegrityProof"];
+        };
+        OpenBadgesAchievement: {
+            "@context": string[];
+            /** Format: uri */
+            id: string;
+            /** @constant */
+            type: "Achievement";
+            name: string;
+            description: string;
+            version: string;
+            inLanguage: string;
+            criteria: {
+                narrative: string;
+            };
+            creator: {
+                /** Format: uri */
+                id: string;
+                type: string[];
+                name: string;
+            };
+        };
+        CertificateIssuer: {
+            id: string;
+            name: string;
+        };
+        CertificateAchievement: {
+            /** Format: uuid */
+            courseId: string;
+            title: string;
+            version: string;
+            language: string;
+            criteria: string;
+        };
+        LearnerCertificate: {
+            /** Format: uuid */
+            certificateId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+            achievement: components["schemas"]["CertificateAchievement"];
+            issuer: components["schemas"]["CertificateIssuer"];
+            verificationPath: string;
+            /** @description Present only when signed Open Badges publication is configured. */
+            openBadgePath?: string;
+        };
+        PublicCertificate: {
+            /** Format: uuid */
+            certificateId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+            achievement: components["schemas"]["CertificateAchievement"];
+            issuer: components["schemas"]["CertificateIssuer"];
+        };
+        CommunityModerationProbe: {
+            canModerate: boolean;
+        };
+        CommunityModeratorThreadSummary: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            author: components["schemas"]["CommunityAuthor"];
+            /** @enum {string} */
+            state: "VISIBLE" | "HIDDEN";
+            postCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunityModeratorThreadPage: {
+            threads: components["schemas"]["CommunityModeratorThreadSummary"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CommunityModeratorPost: {
+            /** Format: uuid */
+            postId: string;
+            author: components["schemas"]["CommunityAuthor"];
+            body: string;
+            /** @enum {string} */
+            state: "VISIBLE" | "HIDDEN";
+            isOpeningPost: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunityModeratorThread: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            author: components["schemas"]["CommunityAuthor"];
+            /** @enum {string} */
+            state: "VISIBLE" | "HIDDEN";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            posts: components["schemas"]["CommunityModeratorPost"][];
+            postTotal: number;
+        };
+        CourseCommunity: {
+            /** Format: uuid */
+            courseId: string;
+            /** @enum {string} */
+            mode: "ENABLED" | "DISABLED";
+        };
+        CommunityAuthor: {
+            /** Format: uuid */
+            userId: string;
+        };
+        CommunityThreadSummary: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            author: components["schemas"]["CommunityAuthor"];
+            postCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunityPost: {
+            /** Format: uuid */
+            postId: string;
+            author: components["schemas"]["CommunityAuthor"];
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CommunityThread: {
+            /** Format: uuid */
+            threadId: string;
+            title: string;
+            author: components["schemas"]["CommunityAuthor"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            posts: components["schemas"]["CommunityPost"][];
+            postTotal: number;
+        };
+        CommunityThreadPage: {
+            threads: components["schemas"]["CommunityThreadSummary"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CommunityCreateThreadRequest: {
+            title: string;
+            body: string;
+        };
+        CommunityCreatePostRequest: {
+            body: string;
+        };
+        PublishedContentLicense: {
+            /** @enum {string} */
+            kind: "STANDARD" | "ALL_RIGHTS_RESERVED" | "CUSTOM";
+            identifier: string;
+            displayName: string;
+            /** @description Empty when no public license URL is present. */
+            url: string;
+            customText: string;
+        };
+        PublishedContributor: {
+            displayName: string;
+            /** @enum {string} */
+            role: "AUTHOR" | "MAINTAINER";
+            order: number;
+        };
+        PublishedCourseModule: {
+            stableKey: string;
+            title: string;
+            description: string;
+            position: number;
+            lessons: components["schemas"]["PublishedCourseLesson"][];
+        };
+        PublishedCourseLesson: {
+            stableKey: string;
+            title: string;
+            description: string;
+            objectives: string[];
+            estimatedDurationMinutes: number | null;
+            position: number;
+            prerequisiteStableKeys: string[];
+            content: components["schemas"]["LessonContent"];
         };
         CourseVersionSummary: {
             version: string;
@@ -464,7 +2532,7 @@ export interface components {
             schemaVersion: 1;
             blocks: components["schemas"]["LessonBlock"][];
         };
-        LessonBlock: components["schemas"]["TextBlock"] | components["schemas"]["HeadingBlock"] | components["schemas"]["ImageBlock"] | components["schemas"]["VideoBlock"] | components["schemas"]["AudioBlock"] | components["schemas"]["CodeBlock"] | components["schemas"]["QuoteBlock"] | components["schemas"]["CalloutBlock"] | components["schemas"]["TableBlock"] | components["schemas"]["DownloadBlock"] | components["schemas"]["KnowledgeCheckBlock"] | components["schemas"]["DividerBlock"];
+        LessonBlock: components["schemas"]["TextBlock"] | components["schemas"]["HeadingBlock"] | components["schemas"]["ImageBlock"] | components["schemas"]["VideoBlock"] | components["schemas"]["AudioBlock"] | components["schemas"]["CodeBlock"] | components["schemas"]["QuoteBlock"] | components["schemas"]["CalloutBlock"] | components["schemas"]["TableBlock"] | components["schemas"]["DownloadBlock"] | components["schemas"]["KnowledgeCheckBlock"] | components["schemas"]["DividerBlock"] | components["schemas"]["PluginWidgetBlock"];
         BlockEnvelope: {
             key: string;
             type: string;
@@ -649,6 +2717,41 @@ export interface components {
              */
             type: "DIVIDER";
         };
+        PluginWidgetBlock: components["schemas"]["BlockEnvelope"] & {
+            /** @constant */
+            type?: "PLUGIN_WIDGET";
+            payload: {
+                pluginId: string;
+                pluginVersion: string;
+                artifactDigest: string;
+                widgetId: string;
+                /** @constant */
+                widgetType: "COURSE_WIDGET";
+                configuration: {
+                    [key: string]: unknown;
+                };
+            };
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "PLUGIN_WIDGET";
+        };
+        AuthoringCourseWidget: {
+            pluginId: string;
+            pluginName: string;
+            pluginVersion: string;
+            artifactDigest: string;
+            widgetId: string;
+            widgetName: string;
+            description: string;
+            /** @enum {string} */
+            trust: "BTG_OWNED" | "BTG_APPROVED" | "UNKNOWN";
+        };
+        AuthoringCourseWidgetList: {
+            widgets: components["schemas"]["AuthoringCourseWidget"][];
+        };
         /** @description Constrained semantic rich text. It is not HTML or editor state. */
         RichText: {
             nodes: components["schemas"]["RichTextNode"][];
@@ -690,6 +2793,50 @@ export interface components {
             /** @constant */
             status: "ok";
         };
+        CoursePackageLicense: {
+            kind: string;
+            identifier?: string;
+            displayName: string;
+            url?: string;
+            customText?: string;
+        };
+        CoursePackageAttribution: {
+            displayName: string;
+            role: string;
+            order: number;
+        };
+        CoursePackagePreview: {
+            format: string;
+            formatVersion: number;
+            title: string;
+            version: string;
+            language: string;
+            license: components["schemas"]["CoursePackageLicense"];
+            attribution: components["schemas"]["CoursePackageAttribution"][];
+            moduleCount: number;
+            lessonCount: number;
+            assessmentCount: number;
+            assetCount: number;
+            /** Format: int64 */
+            assetBytes: number;
+            translationLanguages: string[];
+        };
+        CoursePackagePreviewResponse: {
+            previewToken: string;
+            preview: components["schemas"]["CoursePackagePreview"];
+        };
+        CoursePackageImportResult: {
+            /** Format: uuid */
+            importId: string;
+            /** Format: uuid */
+            courseId: string;
+            /** Format: uuid */
+            courseVersionId: string;
+            semVer: string;
+            /** @enum {string} */
+            status: "IMPORTED" | "REPLAYED";
+            translationLanguages: string[];
+        };
         Health: {
             status: string;
         };
@@ -699,6 +2846,8 @@ export interface components {
             status: number;
             instance: string;
             request_id: string;
+            /** @description Stable machine-readable code for a public, specific problem condition when present. */
+            code?: string;
         };
     };
     responses: {
@@ -713,9 +2862,22 @@ export interface components {
         };
     };
     parameters: {
+        TranslationID: string;
+        /** @description Trusted application Origin required for browser mutations. */
+        AuthoringOrigin: string;
+        /** @description CSRF token bound to the authenticated session. */
+        AuthoringCSRFToken: string;
         AuthoringDraftID: string;
+        AuthoringAssessmentID: string;
+        LearnerAttemptID: string;
+        CertificateID: string;
+        LearnerAssessmentKey: string;
+        CommunityThreadID: string;
+        AuthoringUserID: string;
         AuthoringModuleID: string;
         AuthoringLessonID: string;
+        AuthoringReviewID: string;
+        CourseID: string;
         CourseSlug: string;
         CourseVersion: string;
         LessonKey: string;
@@ -728,6 +2890,949 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listInstalledPluginReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed plugin releases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementReleaseList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    registerPluginPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": string;
+            };
+        };
+        responses: {
+            /** @description Idempotent registration replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            /** @description Registered immutable release */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getInstalledPluginRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed plugin release */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    approveInstalledPluginRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current exact-release management state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    revokeInstalledPluginReleaseApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current exact-release management state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    enableInstalledPluginRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current exact-release management state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    disableInstalledPluginRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                pluginId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current exact-release management state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginManagementRelease"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPluginVerificationKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verification key metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginVerificationKeyList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    addPluginVerificationKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginVerificationKeyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Registered or idempotently replayed verification key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginVerificationKey"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    enablePluginVerificationKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enabled key metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginVerificationKey"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    disablePluginVerificationKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disabled key metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginVerificationKey"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listDashboardWidgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered Dashboard placement configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacementList"];
+                };
+            };
+        };
+    };
+    createDashboardWidget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created placement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacement"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    listAvailableDashboardWidgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligible Dashboard widget entrypoints */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableDashboardWidgetList"];
+                };
+            };
+        };
+    };
+    deleteDashboardWidget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateDashboardWidget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated placement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacement"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    moveDashboardWidgetUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Authoritative ordered Dashboard placements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacementList"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    moveDashboardWidgetDown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardWidgetPlacementReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Authoritative ordered Dashboard placements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardWidgetPlacementList"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    launchDashboardWidgetRuntime: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                placementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Short-lived Dashboard runtime launch descriptor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetRuntimeLaunch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getWidgetRuntimeContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Minimal widget runtime context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetRuntimeContext"] | components["schemas"]["CourseWidgetRuntimeContext"] | components["schemas"]["DashboardWidgetRuntimeContext"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    refreshWidgetRuntimeToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refreshed runtime descriptor for the same runtime instance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetRuntimeLaunch"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    exportCourseVersionPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private ZIP Course package */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    previewCoursePackageImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": string;
+            };
+        };
+        responses: {
+            /** @description Safe preview and opaque execution token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoursePackagePreviewResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    executeCoursePackageImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                previewToken: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Imported or replayed immutable CourseVersion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoursePackageImportResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getLearnerTranslatedCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                language: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Immutable translated CourseVersion with bounded-freshness lag metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslatedCourse"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCourseVersionLanguages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published language choices for exactly this source version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseVersionLanguages"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listTranslations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private exact-source Translation summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createTranslation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created Translation summary */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationSummary"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getTranslationWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                translationId: components["parameters"]["TranslationID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private translator workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationWorkspace"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    patchTranslation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                translationId: components["parameters"]["TranslationID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslationPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated Translation summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationSummary"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    publishTranslation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                translationId: components["parameters"]["TranslationID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslationPublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Immutable Translation publication */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslationPublication"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accessible Draft summaries ordered by most recently updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringDraftList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createAuthoringDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringDraftCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created editable Draft */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringDraft"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
     getAuthoringDraft: {
         parameters: {
             query?: never;
@@ -757,7 +3862,12 @@ export interface operations {
     updateAuthoringDraftMetadata: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
             };
@@ -812,10 +3922,214 @@ export interface operations {
             500: components["responses"]["Problem"];
         };
     };
-    createAuthoringModule: {
+    listAuthoringDraftAssets: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of safe Draft Asset summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssetList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringDraftAssessments: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of private Assessment summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssessmentList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createAuthoringAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringAssessmentCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created Authoring Assessment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssessmentDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringAssessment: {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                assessmentId: components["parameters"]["AuthoringAssessmentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authoring Assessment definition */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssessmentDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    replaceAuthoringAssessment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                assessmentId: components["parameters"]["AuthoringAssessmentID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringAssessmentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Authoring Assessment with incremented revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAssessmentDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    uploadAuthoringAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Authoritative AVAILABLE Asset metadata suitable for a canonical assetKey reference */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringAsset"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createAuthoringModule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
             };
@@ -844,10 +4158,154 @@ export interface operations {
             500: components["responses"]["Problem"];
         };
     };
-    reorderAuthoringModules: {
+    listAuthoringActiveMembers: {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active opaque Draft memberships ordered by user ID */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringActiveMemberList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    addAuthoringMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringMemberAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed membership and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringMemberMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    revokeAuthoringMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                userId: components["parameters"]["AuthoringUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringMemberRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description Revoked membership and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringMemberMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    changeAuthoringMemberRole: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                userId: components["parameters"]["AuthoringUserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringMemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed active membership and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringMemberMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    reorderAuthoringModules: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
             };
@@ -879,7 +4337,12 @@ export interface operations {
     deleteAuthoringModule: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 moduleId: components["parameters"]["AuthoringModuleID"];
@@ -912,7 +4375,12 @@ export interface operations {
     updateAuthoringModule: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
                 moduleId: components["parameters"]["AuthoringModuleID"];
@@ -942,29 +4410,78 @@ export interface operations {
             500: components["responses"]["Problem"];
         };
     };
-    getAuthoringDraftStructure: {
+    createAuthoringLesson: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
             path: {
                 draftId: components["parameters"]["AuthoringDraftID"];
+                moduleId: components["parameters"]["AuthoringModuleID"];
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonCreateRequest"];
+            };
+        };
         responses: {
-            /** @description Ordered modules and lesson summaries without full lesson content */
+            /** @description Committed Lesson metadata and current Draft revision */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthoringStructure"];
+                    "application/json": components["schemas"]["AuthoringLessonMutationResponse"];
                 };
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    reorderAuthoringLessons: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringModuleOrderResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };
@@ -995,6 +4512,510 @@ export interface operations {
             500: components["responses"]["Problem"];
         };
     };
+    deleteAuthoringLesson: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringModuleOrderResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    updateAuthoringLesson: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Lesson metadata and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringLessonMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    replaceAuthoringLessonPrerequisites: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonPrerequisitesRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed Lesson metadata and current Draft revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringLessonMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    replaceAuthoringLessonContent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringLessonContentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed canonical content and current Lesson and Draft revisions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringLessonContentMutationResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringCourseWidgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligible Course widgets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringCourseWidgetList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    launchCourseWidgetRuntime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                lessonKey: components["parameters"]["LessonKey"];
+                blockKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Short-lived runtime launch descriptor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetRuntimeLaunch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringDraftStructure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered modules and lesson summaries without full lesson content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringStructure"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listAuthoringDraftReviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReviewList"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    submitAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringReviewSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Frozen Review cycle */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReviewSubmissionDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getActiveAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active Review metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getLatestAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Most recently submitted Review metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                reviewId: components["parameters"]["AuthoringReviewID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review and frozen snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReviewDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    approveAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                reviewId: components["parameters"]["AuthoringReviewID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringReviewDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Approved Review metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    requestAuthoringDraftReviewChanges: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                reviewId: components["parameters"]["AuthoringReviewID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringReviewDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Change-requested Review metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringReview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    publishAuthoringDraftReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                reviewId: components["parameters"]["AuthoringReviewID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthoringPublicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Immutable CourseVersion publication result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthoringPublication"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description Stale Review revision, non-approved Review, publication provenance conflict, or foreign Course/SemVer conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["PublicationConflictProblem"];
+                };
+            };
+            /** @description Deterministic publication-readiness issues from the frozen Review snapshot */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["PublicationValidationProblem"];
+                };
+            };
+            500: components["responses"]["Problem"];
+        };
+    };
     listPublishedCourses: {
         parameters: {
             query?: never;
@@ -1013,6 +5034,33 @@ export interface operations {
                     "application/json": components["schemas"]["CourseList"];
                 };
             };
+            500: components["responses"]["Problem"];
+        };
+    };
+    listPublishedCourseCatalog: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Filters the selected latest version by its normalized source language. */
+                language?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of lightweight published-course summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedCourseCatalogPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
         };
     };
@@ -1089,6 +5137,674 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getPublishedCourseVersionById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete immutable published CourseVersion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedCourseVersionDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getPublishedCourseVersionAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                /** @description Stable canonical Asset ID from published LessonContent. */
+                assetKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Frozen published binary. Content-Type, Content-Length, Content-Disposition, ETag, and immutable cache headers come from the Courses-owned binding. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description The immutable binary matches If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    headPublishedCourseVersionAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                assetKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Frozen published binary headers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The immutable binary matches If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    createLearnerAssessmentAttempt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+                assessmentKey: components["parameters"]["LearnerAssessmentKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New private IN_PROGRESS Attempt */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerAssessmentAttempt"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getLearnerAssessmentAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attemptId: components["parameters"]["LearnerAttemptID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private learner Attempt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerAssessmentAttempt"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    replaceLearnerAssessmentAttemptResponses: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                attemptId: components["parameters"]["LearnerAttemptID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearnerAssessmentAttemptUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated private IN_PROGRESS Attempt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerAssessmentAttempt"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    submitLearnerAssessmentAttempt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                attemptId: components["parameters"]["LearnerAttemptID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearnerAssessmentAttemptSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Immutable submitted Attempt with aggregate result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerAssessmentAttempt"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    issueLearnerCertificate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                version: components["parameters"]["CourseVersion"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Existing Certificate replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerCertificate"];
+                };
+            };
+            /** @description Newly issued private Certificate */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerCertificate"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getLearnerCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificateId: components["parameters"]["CertificateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private Certificate belonging only to the authenticated learner */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerCertificate"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    verifyPublicCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificateId: components["parameters"]["CertificateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Privacy-preserving public Certificate verification */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCertificate"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getSignedOpenBadge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificateId: components["parameters"]["CertificateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed immutable credential */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vc": components["schemas"]["SignedOpenBadge"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getOpenBadgesIssuerController: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issuer controller document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBadgesController"];
+                };
+            };
+            503: components["responses"]["Problem"];
+        };
+    };
+    getSignedOpenBadgesStatusList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed status-list Verifiable Credential */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vc": components["schemas"]["SignedStatusListCredential"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getOpenBadgesAchievement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact-version Achievement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBadgesAchievement"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCourseCommunity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Safe Community metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseCommunity"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    listCourseCommunityThreads: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded visible thread summaries ordered by activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityThreadPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createCourseCommunityThread: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunityCreateThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Created Thread with opening Post */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityThread"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getCourseCommunityThread: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                threadId: components["parameters"]["CommunityThreadID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visible Thread and a bounded chronological page of visible Posts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityThread"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    createCourseCommunityPost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                threadId: components["parameters"]["CommunityThreadID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunityCreatePostRequest"];
+            };
+        };
+        responses: {
+            /** @description Created visible plain-text reply */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityPost"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getCourseCommunityModerationProbe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-authoritative exact-Course moderation capability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityModerationProbe"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listCourseCommunityModeratorThreads: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private moderator page including hidden Threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityModeratorThreadPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCourseCommunityModeratorThread: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+                threadId: components["parameters"]["CommunityThreadID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private moderator Thread including hidden Posts and state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityModeratorThread"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getLatestPublishedCourseVersionById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: components["parameters"]["CourseID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete latest immutable published CourseVersion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedCourseVersionDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
     loginWithPassword: {

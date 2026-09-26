@@ -115,6 +115,37 @@ func TestDraftModulePatchAndOrderValidation(t *testing.T) {
 	}
 }
 
+func TestDraftLessonPatchAndFullOrderValidation(t *testing.T) {
+	duration := 20
+	current := LessonInput{DraftID: "draft-id", ModuleID: "module-id", StableKey: "stable-lesson", Title: "Original", Description: "Description", LearningObjectives: []string{"Explain"}, EstimatedDurationMinutes: &duration, Position: 1, Content: courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{}}}
+	title := "Updated"
+	objectives := []string{"First", "Second"}
+	next, err := (DraftLessonPatch{Title: &title, LearningObjectives: &objectives, EstimatedDurationSet: true}).Apply(current)
+	if err != nil || next.Title != title || len(next.LearningObjectives) != 2 || next.EstimatedDurationMinutes != nil || next.StableKey != current.StableKey || next.ModuleID != current.ModuleID || next.Position != current.Position || !reflect.DeepEqual(next.Content, current.Content) {
+		t.Fatalf("lesson patch changed structural/content identity: %#v err=%v", next, err)
+	}
+	if _, err := (DraftLessonPatch{}).Apply(current); err == nil {
+		t.Fatal("empty lesson patch accepted")
+	}
+	invalidDuration := 0
+	if _, err := (DraftLessonPatch{EstimatedDurationSet: true, EstimatedDurationMinutes: &invalidDuration}).Apply(current); err == nil {
+		t.Fatal("invalid duration patch accepted")
+	}
+	valid := []ModuleLessonOrder{{ModuleID: "module-a", LessonIDs: []LessonID{"lesson-a", "lesson-b"}}, {ModuleID: "module-b", LessonIDs: []LessonID{}}}
+	if err := ValidateLessonOrder(valid); err != nil {
+		t.Fatal(err)
+	}
+	for _, order := range [][]ModuleLessonOrder{
+		{{ModuleID: "module-a"}, {ModuleID: "module-a"}},
+		{{ModuleID: "module-a", LessonIDs: []LessonID{"lesson-a", "lesson-a"}}},
+		{{ModuleID: "", LessonIDs: []LessonID{"lesson-a"}}},
+	} {
+		if ValidateLessonOrder(order) == nil {
+			t.Fatalf("invalid lesson order accepted: %#v", order)
+		}
+	}
+}
+
 func TestPrerequisiteKeys(t *testing.T) {
 	if err := ValidatePrerequisiteKeys("current-lesson", []string{"first-lesson", "second-lesson"}); err != nil {
 		t.Fatal(err)

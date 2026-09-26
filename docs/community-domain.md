@@ -1,0 +1,64 @@
+# Course community domain
+
+`community` owns Course-level discussions. Community follows durable Course ID,
+not a CourseVersion or Draft, so new publications retain the same discussion
+space. It stores only opaque authenticated user IDs for authorship.
+
+A Community is enabled or disabled. Threads have a plain-text title and one
+opening Post; the repository writes those two records in one PostgreSQL
+transaction. Replies are flat Posts. Thread and Post state is `VISIBLE` or
+`HIDDEN`; no physical deletion exists. Titles are limited to 240 characters and
+bodies to 20,000; leading/trailing whitespace is normalized while internal line
+breaks remain.
+
+## Participant API
+
+Authenticated users may read and participate in an enabled community attached
+to a Course that has published learner content. There is no enrollment model
+yet, so this is intentionally the complete participation policy; it grants no
+moderation capability and has no ADMIN bypass. All routes are scoped by durable
+Course ID, use private `no-store` responses, and inherit session, Origin, and
+CSRF protections.
+
+Normal reads return only `VISIBLE` Threads and Posts. Missing, foreign-Course,
+hidden, and disabled-community Threads are all represented as unavailable. A
+disabled Community metadata response remains explicit while its thread list is
+empty. Thread pages are ordered
+by activity (`updatedAt DESC`, then ID); Post pages are chronological
+(`createdAt ASC`, then ID). Creating a reply updates its Thread activity in the
+same database statement. Participant DTOs carry only opaque author IDs and
+plain text, never Identity account data or moderation state.
+
+## Learner experience
+
+Authenticated learners can open the durable Course Community routes, create a
+plain-text Thread, and append flat replies. The learner UI renders author data
+as the neutral label “Participant” because no public profile projection exists.
+It keeps unsent form text only in memory, renders Posts as plain text with line
+breaks, and shows the server’s ENABLED or DISABLED mode distinctly. Moderation
+controls, nested replies, editing, deletion, and browser draft persistence are
+deferred.
+
+## Moderation
+
+`community.moderate` is granted to a durable published-Course contributor whose
+recorded role is AUTHOR or MAINTAINER. It is separate from participation; global
+ADMIN has no implicit bypass. Moderators may hide or unhide Threads and reply
+Posts while Community is disabled. These idempotent state changes preserve
+content, authorship, creation times, and Thread activity ordering. An opening
+Post cannot be hidden alone: hide its Thread instead. Participant reads remain
+visible-only; audit events are deferred because no reusable Community audit
+stream exists yet.
+
+Moderators can ask the Course-scoped server probe whether `canModerate` is true
+without receiving attribution roles. Separate moderator list/detail reads keep
+hidden Threads rediscoverable and include hidden Posts with state; participant
+reads remain visible-only.
+
+## v1 boundary
+
+Community v1 deliberately excludes audit events and moderation reasons,
+reports or flags, bans or warnings, author profiles, nested replies, editing or
+deletion, reactions, notifications, search, attachments, rich text, and
+real-time updates. Moderation mutations are bodyless: their Course, resource,
+and target state come only from the route and the authenticated session.

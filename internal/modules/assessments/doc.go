@@ -1,4 +1,4 @@
-// Package assessments owns published deterministic assessment definitions and scoring.
-//
-// Domain contracts are intentionally deferred in the M0 skeleton.
+// Package assessments owns mutable deterministic assessment definitions and
+// private learner attempts bound to immutable Courses assessment bindings.
+// It has no Authoring, Courses, transport, attempt, or scoring dependency.
 package assessments

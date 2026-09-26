@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/db/sqlc"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
+	googleuuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,8 +18,9 @@ import (
 )
 
 type Repository struct {
-	pool *pgxpool.Pool
-	q    *sqlc.Queries
+	pool                *pgxpool.Pool
+	q                   *sqlc.Queries
+	assessmentSnapshots func(pgx.Tx) AssessmentSnapshotReader
 }
 
 var _ authoring.Repository = (*Repository)(nil)
@@ -197,7 +200,7 @@ func (r *Repository) CreateDraft(ctx context.Context, metadata authoring.DraftMe
 	if err != nil {
 		return authoring.CourseDraft{}, authoring.AuthoringWorkspace{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := r.q.WithTx(tx)
 	row, err := q.CreateDraft(ctx, args)
 	if err != nil {
@@ -217,6 +220,70 @@ func (r *Repository) CreateDraft(ctx context.Context, metadata authoring.DraftMe
 	return draft, mapWorkspace(w), err
 }
 
+// CreateDraftForCreator reserves an opaque Courses identity, then creates the
+// Draft, workspace, and creator's active MAINTAINER membership in one database
+// transaction. The Courses row is only the stable identity required by the
+// existing foreign key; it has no CourseVersion or learner-visible content.
+func (r *Repository) CreateDraftForCreator(ctx context.Context, input authoring.DraftCreationInput, createdBy string) (authoring.CourseDraft, error) {
+	if err := input.Validate(); err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidDraftCreation
+	}
+	userID, err := uuid(createdBy)
+	if err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidDraftCreation
+	}
+	courseID := googleuuid.New()
+	courseKey, err := uuid(courseID.String())
+	if err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidDraftCreation
+	}
+	metadata := authoring.DraftMetadata{
+		CourseID:           courses.CourseID(courseID.String()),
+		IntendedVersion:    input.IntendedVersion,
+		SourceLanguage:     input.SourceLanguage,
+		Title:              input.Title,
+		Description:        input.Description,
+		LearningObjectives: append([]string(nil), input.LearningObjectives...),
+		Changelog:          input.Changelog,
+		License:            courses.ContentLicense{Kind: courses.ContentLicenseAllRightsReserved, DisplayName: "All Rights Reserved"},
+	}
+	args, err := encodeMetadata(metadata)
+	if err != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidDraftCreation
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Course slugs are an existing storage requirement but are not part of the
+	// Draft creation contract. This generated opaque slug is never exposed by
+	// Authoring and cannot make an unpublished Draft discoverable.
+	if _, err := tx.Exec(ctx, "INSERT INTO courses.course (id, slug) VALUES ($1, $2)", courseKey, "draft-"+strings.ReplaceAll(courseID.String(), "-", "")); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	q := r.q.WithTx(tx)
+	row, err := q.CreateDraft(ctx, args)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	workspace, err := q.CreateWorkspace(ctx, sqlc.CreateWorkspaceParams{DraftID: row.ID, CreatedByUserID: userID})
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if _, err := q.AddMember(ctx, sqlc.AddMemberParams{WorkspaceID: workspace.ID, UserID: userID, Role: string(authoring.MemberMaintainer)}); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	draft, err := mapDraft(row)
+	if err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	return draft, nil
+}
+
 func (r *Repository) GetDraft(ctx context.Context, id authoring.DraftID) (authoring.CourseDraft, error) {
 	key, err := uuid(string(id))
 	if err != nil {
@@ -227,6 +294,31 @@ func (r *Repository) GetDraft(ctx context.Context, id authoring.DraftID) (author
 		return authoring.CourseDraft{}, storageError(err)
 	}
 	return mapDraft(row)
+}
+
+// ListAccessibleDrafts is actor-scoped discovery. The active-membership join
+// is the access boundary: no Identity lookup or role bypass is involved.
+func (r *Repository) ListAccessibleDrafts(ctx context.Context, user string) ([]authoring.DraftSummary, error) {
+	userID, err := uuid(user)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListAccessibleDrafts(ctx, userID)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	result := make([]authoring.DraftSummary, 0, len(rows))
+	for _, row := range rows {
+		draft, err := mapDraft(row)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, authoring.DraftSummary{
+			ID: draft.ID, Title: draft.Metadata.Title, IntendedVersion: draft.Metadata.IntendedVersion,
+			Status: draft.Status, UpdatedAt: draft.UpdatedAt,
+		})
+	}
+	return result, nil
 }
 
 func (r *Repository) GetWorkspace(ctx context.Context, id authoring.DraftID) (authoring.AuthoringWorkspace, error) {
@@ -261,7 +353,7 @@ func (r *Repository) UpdateDraftMetadata(ctx context.Context, id authoring.Draft
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := r.q.WithTx(tx)
 	row, err := q.UpdateDraftMetadata(ctx, sqlc.UpdateDraftMetadataParams{ID: key, Revision: expected, IntendedVersion: args.IntendedVersion, SourceLanguage: args.SourceLanguage, Title: args.Title, Description: args.Description, LearningObjectives: args.LearningObjectives, Changelog: args.Changelog, License: args.License})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -288,7 +380,7 @@ func (r *Repository) AbandonDraft(ctx context.Context, id authoring.DraftID, exp
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := r.q.WithTx(tx)
 	row, err := q.AbandonDraft(ctx, sqlc.AbandonDraftParams{ID: key, Revision: expected})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -306,41 +398,6 @@ func (r *Repository) AbandonDraft(ctx context.Context, id authoring.DraftID, exp
 	return mapDraft(row)
 }
 
-func (r *Repository) AddMember(ctx context.Context, workspace authoring.WorkspaceID, user string, role authoring.MemberRole) (authoring.WorkspaceMember, error) {
-	if !role.Valid() {
-		return authoring.WorkspaceMember{}, errors.New("invalid member role")
-	}
-	wid, err := uuid(string(workspace))
-	if err != nil {
-		return authoring.WorkspaceMember{}, err
-	}
-	uid, err := uuid(user)
-	if err != nil {
-		return authoring.WorkspaceMember{}, err
-	}
-	row, err := r.q.AddMember(ctx, sqlc.AddMemberParams{WorkspaceID: wid, UserID: uid, Role: string(role)})
-	if err != nil {
-		return authoring.WorkspaceMember{}, storageError(err)
-	}
-	return mapMember(row), nil
-}
-
-func (r *Repository) RevokeMember(ctx context.Context, workspace authoring.WorkspaceID, user string) (authoring.WorkspaceMember, error) {
-	wid, err := uuid(string(workspace))
-	if err != nil {
-		return authoring.WorkspaceMember{}, err
-	}
-	uid, err := uuid(user)
-	if err != nil {
-		return authoring.WorkspaceMember{}, err
-	}
-	row, err := r.q.RevokeMember(ctx, sqlc.RevokeMemberParams{WorkspaceID: wid, UserID: uid})
-	if err != nil {
-		return authoring.WorkspaceMember{}, storageError(err)
-	}
-	return mapMember(row), nil
-}
-
 func (r *Repository) ListMembers(ctx context.Context, workspace authoring.WorkspaceID) ([]authoring.WorkspaceMember, error) {
 	wid, err := uuid(string(workspace))
 	if err != nil {
@@ -355,6 +412,28 @@ func (r *Repository) ListMembers(ctx context.Context, workspace authoring.Worksp
 		out = append(out, mapMember(row))
 	}
 	return out, nil
+}
+
+// ActiveMembers is deliberately draft-scoped. The HTTP read service has
+// already authorized the draft and needs no workspace identifier from callers.
+func (r *Repository) ActiveMembers(ctx context.Context, draft authoring.DraftID) ([]authoring.WorkspaceMember, error) {
+	draftID, err := uuid(string(draft))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListActiveMembersForDraft(ctx, draftID)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	result := make([]authoring.WorkspaceMember, 0, len(rows))
+	for _, row := range rows {
+		member := mapMember(row)
+		if member.RevokedAt != nil {
+			return nil, errors.New("active authoring member query returned revoked row")
+		}
+		result = append(result, member)
+	}
+	return result, nil
 }
 
 func (r *Repository) ActiveMembershipForDraft(ctx context.Context, draft authoring.DraftID, user string) (authoring.MemberRole, bool, error) {
@@ -392,7 +471,7 @@ func (r *Repository) CreateModule(ctx context.Context, input authoring.ModuleInp
 	if err != nil {
 		return authoring.DraftModule{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, id); err != nil {
 		return authoring.DraftModule{}, err
 	}
@@ -463,7 +542,7 @@ func (r *Repository) UpdateModule(ctx context.Context, id authoring.ModuleID, ex
 	if err != nil {
 		return authoring.DraftModule{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftModule{}, err
 	}
@@ -511,7 +590,7 @@ func (r *Repository) CreateLesson(ctx context.Context, input authoring.LessonInp
 	if err != nil {
 		return authoring.DraftLesson{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftLesson{}, err
 	}
@@ -610,7 +689,7 @@ func (r *Repository) UpdateLessonMetadata(ctx context.Context, id authoring.Less
 	if err != nil {
 		return authoring.DraftLesson{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftLesson{}, err
 	}
@@ -655,7 +734,7 @@ func (r *Repository) UpdateLessonContent(ctx context.Context, id authoring.Lesso
 	if err != nil {
 		return authoring.DraftLesson{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftLesson{}, err
 	}

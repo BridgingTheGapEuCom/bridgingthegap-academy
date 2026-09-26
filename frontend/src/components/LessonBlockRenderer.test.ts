@@ -2,10 +2,16 @@ import { cleanup, render, screen } from '@testing-library/vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import LessonBlockRenderer from './LessonBlockRenderer.vue'
 import type { RenderableBlock } from '../lesson/content'
+import type { PublishedAssessmentLearnerView } from '../courses/courses'
 
 const richText = { nodes: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'A safe paragraph', marks: [{ type: 'strong' as const }, { type: 'emphasis' as const }] }] }] }
 
 function renderBlock(block: RenderableBlock) { return render(LessonBlockRenderer, { props: { block } }) }
+
+const learnerAssessment: PublishedAssessmentLearnerView = {
+  assessmentKey: '10000000-0000-4000-8000-000000000001',
+  questions: [{ stableKey: 'question', type: 'SINGLE_CHOICE', prompt: 'Choose safely', position: 0, options: [{ stableKey: 'one', text: 'One', position: 0 }, { stableKey: 'two', text: 'Two', position: 1 }], leftItems: [], rightItems: [] }],
+}
 
 describe('LessonBlockRenderer', () => {
   afterEach(cleanup)
@@ -45,11 +51,19 @@ describe('LessonBlockRenderer', () => {
     renderBlock({ key: 'table', type: 'TABLE', payload: { caption: 'Terms', headers: ['Term'], rows: [['Meaning']] } })
     expect(screen.getByRole('table')).toBeTruthy()
     expect(screen.getByRole('columnheader', { name: 'Term' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Scrollable table: Terms' }).getAttribute('tabindex')).toBe('0')
     cleanup()
     renderBlock({ key: 'divider', type: 'DIVIDER', payload: {} })
     expect(document.querySelector('hr')).toBeTruthy()
     cleanup()
     renderBlock({ key: 'bad', type: 'UNSUPPORTED' })
     expect(screen.getByRole('alert').textContent).toContain('cannot be displayed safely')
+  })
+
+  it('renders a supplied immutable learner projection without exposing answer data', () => {
+    render(LessonBlockRenderer, { props: { block: { key: 'check', type: 'KNOWLEDGE_CHECK', payload: { assessmentKey: learnerAssessment.assessmentKey } }, publishedAssessment: learnerAssessment } })
+    expect(screen.getByRole('radio', { name: 'One' })).toBeTruthy()
+    expect(screen.queryByText(/Interactive knowledge checks will be available/i)).toBeNull()
+    expect(document.body.innerHTML).not.toMatch(/correctOption|correctPairs|answerKey/i)
   })
 })

@@ -275,37 +275,68 @@ type CourseVersionInput struct {
 	PublishedAt        time.Time
 }
 
-func (in CourseVersionInput) Validate() error {
-	if in.CourseID == "" {
+// CourseVersionMetadata is the immutable content metadata shared by a
+// published CourseVersion and an Authoring Review snapshot. It deliberately
+// excludes lifecycle, attribution, and publication time, which belong to the
+// later publishing boundary.
+type CourseVersionMetadata struct {
+	CourseID           CourseID
+	Version            Version
+	Title              string
+	Description        string
+	LearningObjectives []string
+	SourceLanguage     LanguageTag
+	Changelog          string
+	License            ContentLicense
+}
+
+func (m CourseVersionMetadata) Validate() error {
+	if m.CourseID == "" {
 		return errors.New("course identifier is required")
 	}
-	if !in.Version.Valid() {
+	if !m.Version.Valid() {
 		return errors.New("invalid course version")
 	}
-	if _, err := ParseCourseVersionStatus(string(in.Status)); err != nil {
-		return err
-	}
-	if len(strings.TrimSpace(in.Title)) == 0 || len(in.Title) > 240 {
+	if len(strings.TrimSpace(m.Title)) == 0 || len(m.Title) > 240 {
 		return errors.New("invalid course version title")
 	}
-	if len(strings.TrimSpace(in.Description)) == 0 || len(in.Description) > 20000 {
+	if len(strings.TrimSpace(m.Description)) == 0 || len(m.Description) > 20000 {
 		return errors.New("invalid course version description")
 	}
-	if len(in.LearningObjectives) == 0 || len(in.LearningObjectives) > 100 {
+	if len(m.LearningObjectives) == 0 || len(m.LearningObjectives) > 100 {
 		return errors.New("course version requires learning objectives")
 	}
-	for _, objective := range in.LearningObjectives {
+	for _, objective := range m.LearningObjectives {
 		if len(strings.TrimSpace(objective)) == 0 || len(objective) > 1000 {
 			return errors.New("invalid learning objective")
 		}
 	}
-	if _, err := NormalizeLanguageTag(string(in.SourceLanguage)); err != nil || string(in.SourceLanguage) == "" {
+	if _, err := NormalizeLanguageTag(string(m.SourceLanguage)); err != nil || string(m.SourceLanguage) == "" {
 		return errors.New("invalid source language")
 	}
-	if len(strings.TrimSpace(in.Changelog)) == 0 || len(in.Changelog) > 20000 {
+	if len(strings.TrimSpace(m.Changelog)) == 0 || len(m.Changelog) > 20000 {
 		return errors.New("course version changelog is required")
 	}
-	if err := in.License.Validate(); err != nil {
+	if err := m.License.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (in CourseVersionInput) Validate() error {
+	if err := (CourseVersionMetadata{
+		CourseID:           in.CourseID,
+		Version:            in.Version,
+		Title:              in.Title,
+		Description:        in.Description,
+		LearningObjectives: in.LearningObjectives,
+		SourceLanguage:     in.SourceLanguage,
+		Changelog:          in.Changelog,
+		License:            in.License,
+	}).Validate(); err != nil {
+		return err
+	}
+	if _, err := ParseCourseVersionStatus(string(in.Status)); err != nil {
 		return err
 	}
 	if err := ValidateContributorSnapshots(in.Attribution); err != nil {

@@ -8,6 +8,9 @@ Short package names map to the baseline's capability names: `learning` is Learni
 
 - No other module imports Administration.
 - Courses imports neither Authoring nor Publishing.
+- Assessments owns neutral mutable definitions and does not import Authoring;
+  Authoring may use only its root domain package when it later provides Draft
+  authorization and transport orchestration.
 - Business modules do not synchronously import Notifications, Search, or Audit. Their future integration is through domain events.
 - Domain modules do not import Infrastructure adapters. Provider contracts will live with their consumers when their exact interfaces are designed.
 - SQL query files under an owner's `db/query` folder may write only tables assigned to it in `docs/table-owners.json`. Add each table to that manifest when its first migration lands.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -19,6 +20,7 @@ const (
 	MaxURLLength               = 2048
 	MaxTableColumns            = 20
 	MaxTableRows               = 200
+	MaxPluginWidgetConfigBytes = 16 << 10
 )
 
 type BlockType string
@@ -36,7 +38,10 @@ const (
 	BlockDownload       BlockType = "DOWNLOAD"
 	BlockKnowledgeCheck BlockType = "KNOWLEDGE_CHECK"
 	BlockDivider        BlockType = "DIVIDER"
+	BlockPluginWidget   BlockType = "PLUGIN_WIDGET"
 )
+
+var pluginPlacementIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?){2,}$`)
 
 type LessonContent struct {
 	SchemaVersion int     `json:"schemaVersion"`
@@ -123,6 +128,8 @@ func (b Block) Validate() error {
 		return expect[KnowledgeCheckBlockPayload](b.Payload)
 	case BlockDivider:
 		return expect[DividerBlockPayload](b.Payload)
+	case BlockPluginWidget:
+		return expect[PluginWidgetBlockPayload](b.Payload)
 	}
 	return errors.New("unsupported lesson block type")
 }
@@ -185,6 +192,8 @@ func blockPayload(t BlockType, b []byte) (BlockPayload, error) {
 		return decode[KnowledgeCheckBlockPayload](b)
 	case BlockDivider:
 		return decode[DividerBlockPayload](b)
+	case BlockPluginWidget:
+		return decode[PluginWidgetBlockPayload](b)
 	}
 	return nil, errors.New("unsupported lesson block type")
 }
@@ -490,7 +499,52 @@ type DividerBlockPayload struct{}
 
 func (DividerBlockPayload) blockPayload()   {}
 func (DividerBlockPayload) Validate() error { return nil }
-func title(s string) bool                   { return strings.TrimSpace(s) != "" && len(s) <= 240 }
+
+// PluginWidgetBlockPayload pins a Course placement to one immutable plugin
+// release. Configuration is opaque data, never executable content.
+type PluginWidgetBlockPayload struct {
+	PluginID       string          `json:"pluginId"`
+	PluginVersion  string          `json:"pluginVersion"`
+	ArtifactDigest string          `json:"artifactDigest"`
+	WidgetID       string          `json:"widgetId"`
+	WidgetType     string          `json:"widgetType"`
+	Configuration  json.RawMessage `json:"configuration"`
+}
+
+func (PluginWidgetBlockPayload) blockPayload() {}
+func (p PluginWidgetBlockPayload) Validate() error {
+	if !pluginPlacementIDPattern.MatchString(p.PluginID) || p.WidgetType != "COURSE_WIDGET" || len(p.ArtifactDigest) != 64 || !hexadecimal(p.ArtifactDigest) {
+		return errors.New("invalid plugin widget placement")
+	}
+	if _, err := ParseVersion(p.PluginVersion); err != nil || p.WidgetID == "" || len(p.WidgetID) > 96 {
+		return errors.New("invalid plugin widget placement")
+	}
+	widgetID, err := NormalizeStructureKey(p.WidgetID)
+	if err != nil || widgetID != p.WidgetID || len(p.Configuration) == 0 || len(p.Configuration) > MaxPluginWidgetConfigBytes {
+		return errors.New("invalid plugin widget placement")
+	}
+	var configuration map[string]json.RawMessage
+	if strict(p.Configuration, &configuration) != nil || configuration == nil {
+		return errors.New("invalid plugin widget configuration")
+	}
+	for key := range configuration {
+		if key == "__proto__" || key == "prototype" || key == "constructor" || strings.HasPrefix(strings.ToLower(key), "on") {
+			return errors.New("invalid plugin widget configuration")
+		}
+	}
+	return nil
+}
+
+func hexadecimal(value string) bool {
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func title(s string) bool { return strings.TrimSpace(s) != "" && len(s) <= 240 }
 func safeURL(s string) error {
 	if len(s) == 0 || len(s) > MaxURLLength || strings.IndexFunc(s, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
 		return errors.New("invalid content URL")

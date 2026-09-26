@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bridgingthegap.eu/schemas/course-package/manifest-v1.schema.json",
+  "title": "Bridging the Gap Course Package manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "exportedAt", "course", "contents", "assets", "translations", "checksumsPath"],
+  "properties": {
+    "format": {"const": "bridging-the-gap-course"},
+    "formatVersion": {"const": 1},
+    "exportedAt": {"type": "string", "format": "date-time"},
+    "course": {"type": "object"},
+    "contents": {"type": "array", "items": {"$ref": "#/$defs/content"}},
+    "assets": {"type": "array", "items": {"$ref": "#/$defs/asset"}},
+    "translations": {"type": "array", "items": {"type": "object"}},
+    "checksumsPath": {"const": "checksums.json"}
+  },
+  "$defs": {
+    "content": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"type": "string", "pattern": "^(course|assessments|translations|assets)/"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}},
+    "asset": {"type": "object", "additionalProperties": false, "required": ["assetKey", "originalFilename", "mediaType", "byteSize", "sha256", "path"], "properties": {"assetKey": {"type": "string"}, "originalFilename": {"type": "string"}, "mediaType": {"type": "string"}, "byteSize": {"type": "integer", "minimum": 1}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "path": {"type": "string", "pattern": "^assets/"}}}
+  }
+}

@@ -45,6 +45,15 @@ func TestUnimplementedAPIUsesProblemDetails(t *testing.T) {
 	}
 }
 
+func TestSignedOpenBadgesRoutesAreAbsentWhenFeatureIsDisabled(t *testing.T) {
+	r := newRouter(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_disabled_badge_requests_total"}, []string{"route", "method", "status_class"}), prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "test_disabled_badge_duration_seconds"}, []string{"route", "method"}), &authHTTP{})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/public/open-badges/11111111-1111-4111-8111-111111111111", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("disabled signed Open Badges route status=%d", w.Code)
+	}
+}
+
 func TestHTTPMetricsBoundClientSuppliedMethodLabels(t *testing.T) {
 	requests := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_bounded_requests_total"}, []string{"route", "method", "status_class"})
 	latency := prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "test_bounded_duration_seconds"}, []string{"route", "method"})

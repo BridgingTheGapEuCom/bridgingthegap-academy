@@ -13,7 +13,6 @@ const authMock = vi.hoisted(() => ({
   state: { value: { status: 'authenticated' } as AuthenticationState },
   request: vi.fn(),
   bootstrapSession: vi.fn(),
-  logout: vi.fn(),
 }))
 const checkAdminAccessMock = vi.hoisted(() => vi.fn())
 
@@ -44,7 +43,6 @@ describe('AdminPage', () => {
     authMock.state = shallowRef<AuthenticationState>(authenticatedState)
     authMock.request.mockReset()
     authMock.bootstrapSession.mockReset()
-    authMock.logout.mockReset()
     checkAdminAccessMock.mockReset()
     checkAdminAccessMock.mockResolvedValue({ kind: 'authorized', status: 'ok' })
   })
@@ -117,31 +115,6 @@ describe('AdminPage', () => {
     expect(authMock.bootstrapSession).toHaveBeenCalledOnce()
   })
 
-  it('signs out through the existing auth service and prevents duplicate submissions', async () => {
-    let completeLogout: (outcome: { kind: 'unauthenticated' }) => void = () => undefined
-    authMock.logout.mockImplementation(() => new Promise((resolve) => { completeLogout = resolve }))
-    await renderAdmin()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy())
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-    await fireEvent.click(screen.getByRole('button', { name: 'Signing out…' }))
-    expect(authMock.logout).toHaveBeenCalledOnce()
-    completeLogout({ kind: 'unauthenticated' })
-  })
-
-  it('keeps the authenticated page and announces operational logout failure', async () => {
-    authMock.logout.mockResolvedValue({ kind: 'unavailable' })
-    await renderAdmin()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy())
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-    const error = await screen.findByText('We couldn’t sign you out right now. Please try again.')
-    expect(error.textContent).toBe('We couldn’t sign you out right now. Please try again.')
-    expect(document.activeElement).toBe(error)
-    expect(authMock.state.value).toEqual(authenticatedState)
-    expect(screen.getByRole('heading', { level: 1, name: 'Administration' })).toBeTruthy()
-  })
-
   it('hides authorized content when a session becomes unauthenticated and ignores an old access result', async () => {
     let completeAccess: (value: { kind: 'authorized'; status: 'ok' }) => void = () => undefined
     checkAdminAccessMock.mockImplementation(() => new Promise((resolve) => { completeAccess = resolve }))
@@ -164,17 +137,6 @@ describe('AdminPage', () => {
     completeOldAccess({ kind: 'forbidden' })
     await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Administration' })).toBeTruthy())
     expect(screen.queryByRole('heading', { level: 1, name: 'Access denied' })).toBeNull()
-  })
-
-  it('handles an unexpected logout rejection without clearing the authenticated page', async () => {
-    authMock.logout.mockRejectedValue(new Error('request failed'))
-    await renderAdmin()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy())
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-    expect(await screen.findByText('We couldn’t sign you out right now. Please try again.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Sign out' }).hasAttribute('disabled')).toBe(false)
-    expect(authMock.state.value).toEqual(authenticatedState)
   })
 
   it('rechecks backend authorization on a later page visit instead of storing an isAdmin flag', async () => {

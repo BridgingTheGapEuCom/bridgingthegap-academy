@@ -10,12 +10,22 @@ import (
 )
 
 type readRepositoryFake struct {
+	summaries     []DraftSummary
 	draft         CourseDraft
 	workspace     AuthoringWorkspace
 	modules       []DraftModule
 	lessons       []DraftLesson
 	prerequisites []Prerequisite
+	members       []WorkspaceMember
 	err           error
+}
+
+func (r readRepositoryFake) ListAccessibleDrafts(context.Context, string) ([]DraftSummary, error) {
+	return append([]DraftSummary(nil), r.summaries...), r.err
+}
+
+func (r readRepositoryFake) ActiveMembers(context.Context, DraftID) ([]WorkspaceMember, error) {
+	return append([]WorkspaceMember(nil), r.members...), r.err
 }
 
 func (r readRepositoryFake) GetDraft(context.Context, DraftID) (CourseDraft, error) {
@@ -24,22 +34,33 @@ func (r readRepositoryFake) GetDraft(context.Context, DraftID) (CourseDraft, err
 func (r readRepositoryFake) GetWorkspace(context.Context, DraftID) (AuthoringWorkspace, error) {
 	return r.workspace, r.err
 }
-func (r readRepositoryFake) ListModules(context.Context, DraftID) ([]DraftModule, error) {
-	return r.modules, r.err
+func (r readRepositoryFake) ReadStructure(_ context.Context, _ DraftID) ([]ModuleStructure, error) {
+	result := make([]ModuleStructure, 0, len(r.modules))
+	for _, module := range r.modules {
+		item := ModuleStructure{Module: module}
+		for _, lesson := range r.lessons {
+			if lesson.ModuleID != module.ID {
+				continue
+			}
+			keys := []string{}
+			for _, p := range r.prerequisites {
+				if p.LessonID == lesson.ID {
+					keys = append(keys, p.TargetStableKey)
+				}
+			}
+			item.Lessons = append(item.Lessons, LessonStructure{Lesson: lesson, RecommendedPrerequisiteKeys: keys})
+		}
+		result = append(result, item)
+	}
+	return result, r.err
 }
-func (r readRepositoryFake) GetLesson(_ context.Context, id LessonID) (DraftLesson, error) {
+func (r readRepositoryFake) ReadLesson(_ context.Context, draftID DraftID, id LessonID) (DraftLesson, []Prerequisite, error) {
 	for _, lesson := range r.lessons {
-		if lesson.ID == id {
-			return lesson, r.err
+		if lesson.ID == id && lesson.DraftID == draftID {
+			return lesson, r.prerequisites, r.err
 		}
 	}
-	return DraftLesson{}, ErrNotFound
-}
-func (r readRepositoryFake) ListLessonsForDraft(context.Context, DraftID) ([]DraftLesson, error) {
-	return r.lessons, r.err
-}
-func (r readRepositoryFake) ListPrerequisitesForDraft(context.Context, DraftID) ([]Prerequisite, error) {
-	return r.prerequisites, r.err
+	return DraftLesson{}, nil, ErrNotFound
 }
 
 type readAuthorizerFake struct{ err error }
@@ -84,5 +105,22 @@ func TestReadServiceRejectsCrossDraftLessonAndPreservesFailures(t *testing.T) {
 	service = NewReadService(readRepositoryFake{}, readAuthorizerFake{err: unavailable})
 	if _, err := service.Draft(context.Background(), identity.AuthenticatedActor{}, draftA); !errors.Is(err, unavailable) {
 		t.Fatalf("authorization outage = %v, want propagated error", err)
+	}
+}
+
+func TestReadServiceReturnsOnlyRepositoryActiveMembershipProjectionAfterAuthorization(t *testing.T) {
+	draftID := DraftID("11111111-1111-4111-8111-111111111111")
+	members := []WorkspaceMember{
+		{UserID: "11111111-1111-4111-8111-111111111111", Role: MemberAuthor},
+		{UserID: "22222222-2222-4222-8222-222222222222", Role: MemberMaintainer},
+	}
+	service := NewReadService(readRepositoryFake{members: members}, readAuthorizerFake{})
+	got, err := service.Members(context.Background(), identity.AuthenticatedActor{}, draftID)
+	if err != nil || len(got) != 2 || got[0].UserID != members[0].UserID || got[1].Role != MemberMaintainer {
+		t.Fatalf("active member projection = %#v err=%v", got, err)
+	}
+	denied := NewReadService(readRepositoryFake{members: members}, readAuthorizerFake{err: ErrAuthorizationDenied})
+	if _, err := denied.Members(context.Background(), identity.AuthenticatedActor{}, draftID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("denied member read = %v, want hidden not found", err)
 	}
 }

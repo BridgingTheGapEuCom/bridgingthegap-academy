@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/db/sqlc"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -67,14 +69,10 @@ func (r *Repository) ReorderModules(ctx context.Context, draftID authoring.Draft
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := r.q.WithTx(tx)
-	row, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: id, Revision: expected})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return authoring.CourseDraft{}, r.draftMiss(ctx, id)
-	}
-	if err != nil {
-		return authoring.CourseDraft{}, storageError(err)
+	if err := r.lockActiveDraft(ctx, tx, id); err != nil {
+		return authoring.CourseDraft{}, err
 	}
 	modules, err := q.ListModules(ctx, id)
 	if err != nil {
@@ -84,8 +82,27 @@ func (r *Repository) ReorderModules(ctx context.Context, draftID authoring.Draft
 	for _, m := range modules {
 		got = append(got, authoring.ModuleID(m.ID.String()))
 	}
+	for _, requested := range order {
+		found := false
+		for _, actual := range got {
+			if actual == requested {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return authoring.CourseDraft{}, authoring.ErrNotFound
+		}
+	}
 	if !sameIDs(got, order) {
 		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, id, expected); err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	row, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: id, Revision: expected})
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
 	}
 	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_module_draft_position_unique DEFERRED"); err != nil {
 		return authoring.CourseDraft{}, storageError(err)
@@ -123,7 +140,7 @@ func (r *Repository) CreateModuleAtPosition(ctx context.Context, draftID authori
 	if err != nil {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraftRevision(ctx, tx, id, expected); err != nil {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, err
 	}
@@ -180,7 +197,7 @@ func (r *Repository) UpdateModuleMetadata(ctx context.Context, draftID authoring
 	if err != nil {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, err
 	}
@@ -245,8 +262,8 @@ func (r *Repository) DeleteEmptyModule(ctx context.Context, draftID authoring.Dr
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
-	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expectedDraft); err != nil {
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
 		return authoring.CourseDraft{}, err
 	}
 	q := r.q.WithTx(tx)
@@ -256,6 +273,9 @@ func (r *Repository) DeleteEmptyModule(ctx context.Context, draftID authoring.Dr
 	}
 	if err != nil {
 		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expectedDraft); err != nil {
+		return authoring.CourseDraft{}, err
 	}
 	lessons, err := q.CountLessonsForModule(ctx, moduleKey)
 	if err != nil {
@@ -288,6 +308,481 @@ func (r *Repository) DeleteEmptyModule(ctx context.Context, draftID authoring.Dr
 	return mapDraft(draftRow)
 }
 
+func (r *Repository) CreateLessonAtPosition(ctx context.Context, draftID authoring.DraftID, moduleID authoring.ModuleID, expected int64, input authoring.LessonInput) (authoring.DraftLesson, authoring.CourseDraft, error) {
+	if input.DraftID != draftID || input.ModuleID != moduleID || input.Validate() != nil || expected < 1 {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	moduleKey, err := uuid(string(moduleID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	objectives, err := json.Marshal(input.LearningObjectives)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	content, err := courses.MarshalLessonContent(input.Content)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	module, err := q.GetModule(ctx, moduleKey)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && module.DraftID != draftKey) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	count, err := q.CountLessonsForModule(ctx, moduleKey)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	total, err := q.CountLessonsForDraft(ctx, draftKey)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if total >= authoring.MaxLessonsPerDraft || input.Position > int(count) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_lesson_module_position_unique DEFERRED"); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.ShiftLessonsAtPosition(ctx, sqlc.ShiftLessonsAtPositionParams{ModuleID: moduleKey, Position: int32(input.Position)}); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	lessonRow, err := q.CreateLesson(ctx, sqlc.CreateLessonParams{ID: moduleKey, DraftID: draftKey, StableKey: input.StableKey, Title: input.Title, Description: input.Description, LearningObjectives: objectives, EstimatedDurationMinutes: duration(input.EstimatedDurationMinutes), Position: int32(input.Position), Content: content})
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if _, err := q.BumpModuleRevision(ctx, sqlc.BumpModuleRevisionParams{ID: moduleKey, Revision: module.Revision}); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: expected})
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	lesson, err := mapLesson(lessonRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	draft, err := mapDraft(draftRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	return lesson, draft, nil
+}
+
+func (r *Repository) UpdateLessonMetadataForDraft(ctx context.Context, draftID authoring.DraftID, lessonID authoring.LessonID, expected int64, patch authoring.DraftLessonPatch) (authoring.DraftLesson, authoring.CourseDraft, error) {
+	if expected < 1 || patch.Empty() {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	lessonKey, err := uuid(string(lessonID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	currentRow, err := q.GetLesson(ctx, lessonKey)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && currentRow.DraftID != draftKey) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	current, err := mapLesson(currentRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	next, err := patch.Apply(current.LessonInput)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	objectives, err := json.Marshal(next.LearningObjectives)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	lessonRow, err := q.UpdateLessonMetadata(ctx, sqlc.UpdateLessonMetadataParams{ID: lessonKey, Revision: expected, Title: next.Title, Description: next.Description, LearningObjectives: objectives, EstimatedDurationMinutes: duration(next.EstimatedDurationMinutes)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	var revision int64
+	if err := tx.QueryRow(ctx, "SELECT revision FROM authoring.course_draft WHERE id = $1", draftKey).Scan(&revision); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: revision})
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	lesson, err := mapLesson(lessonRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	draft, err := mapDraft(draftRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	return lesson, draft, nil
+}
+
+// ReplaceLessonContentForDraft atomically replaces the complete canonical
+// semantic document for one draft-scoped Lesson. The Lesson revision is the
+// compare-and-swap guard; the locked Draft receives one aggregate revision.
+func (r *Repository) ReplaceLessonContentForDraft(ctx context.Context, draftID authoring.DraftID, lessonID authoring.LessonID, expected int64, content courses.LessonContent) (authoring.DraftLesson, authoring.CourseDraft, error) {
+	if expected < 1 {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	encoded, err := courses.MarshalLessonContent(content)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	lessonKey, err := uuid(string(lessonID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	current, err := q.GetLesson(ctx, lessonKey)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && current.DraftID != draftKey) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	lessonRow, err := q.UpdateLessonContent(ctx, sqlc.UpdateLessonContentParams{ID: lessonKey, Revision: expected, Content: encoded})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	var revision int64
+	if err := tx.QueryRow(ctx, "SELECT revision FROM authoring.course_draft WHERE id = $1", draftKey).Scan(&revision); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: revision})
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	lesson, err := mapLesson(lessonRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	draft, err := mapDraft(draftRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	return lesson, draft, nil
+}
+
+func (r *Repository) ReorderLessonsForDraft(ctx context.Context, draftID authoring.DraftID, expected int64, order []authoring.ModuleLessonOrder) (authoring.CourseDraft, error) {
+	if expected < 1 || authoring.ValidateLessonOrder(order) != nil {
+		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	modules, err := q.ListModules(ctx, draftKey)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	moduleIDs := make([]authoring.ModuleID, 0, len(modules))
+	moduleRows := make(map[authoring.ModuleID]sqlc.AuthoringModule, len(modules))
+	for _, module := range modules {
+		id := authoring.ModuleID(module.ID.String())
+		moduleIDs = append(moduleIDs, id)
+		moduleRows[id] = module
+	}
+	requestedModules := make([]authoring.ModuleID, 0, len(order))
+	for _, item := range order {
+		if _, found := moduleRows[item.ModuleID]; !found {
+			return authoring.CourseDraft{}, authoring.ErrNotFound
+		}
+		requestedModules = append(requestedModules, item.ModuleID)
+	}
+	if !sameIDs(moduleIDs, requestedModules) {
+		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	lessons, err := q.ListLessonSummariesForDraft(ctx, draftKey)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	lessonRows := make(map[authoring.LessonID]sqlc.AuthoringLesson, len(lessons))
+	requestedLessons := make([]authoring.LessonID, 0, len(lessons))
+	for _, item := range order {
+		requestedLessons = append(requestedLessons, item.LessonIDs...)
+	}
+	for _, lesson := range lessons {
+		lessonRows[authoring.LessonID(lesson.ID.String())] = sqlc.AuthoringLesson(lesson)
+	}
+	actualLessons := make([]authoring.LessonID, 0, len(lessons))
+	for _, lesson := range lessons {
+		actualLessons = append(actualLessons, authoring.LessonID(lesson.ID.String()))
+	}
+	for _, lessonID := range requestedLessons {
+		if _, found := lessonRows[lessonID]; !found {
+			return authoring.CourseDraft{}, authoring.ErrNotFound
+		}
+	}
+	if !sameIDs(actualLessons, requestedLessons) {
+		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expected); err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_lesson_module_position_unique DEFERRED"); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	changedModules := make(map[authoring.ModuleID]struct{})
+	for _, item := range order {
+		module := moduleRows[item.ModuleID]
+		for position, lessonID := range item.LessonIDs {
+			lesson := lessonRows[lessonID]
+			if lesson.ModuleID == module.ID && lesson.Position == int32(position) {
+				continue
+			}
+			if _, err := q.SetLessonModuleAndPosition(ctx, sqlc.SetLessonModuleAndPositionParams{ID: lesson.ID, ModuleID: module.ID, Position: int32(position), Revision: lesson.Revision}); err != nil {
+				return authoring.CourseDraft{}, storageError(err)
+			}
+			changedModules[item.ModuleID] = struct{}{}
+			changedModules[authoring.ModuleID(lesson.ModuleID.String())] = struct{}{}
+		}
+	}
+	for moduleID := range changedModules {
+		module := moduleRows[moduleID]
+		if _, err := q.BumpModuleRevision(ctx, sqlc.BumpModuleRevisionParams{ID: module.ID, Revision: module.Revision}); err != nil {
+			return authoring.CourseDraft{}, storageError(err)
+		}
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: expected})
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	return mapDraft(draftRow)
+}
+
+func (r *Repository) ReplaceLessonPrerequisitesForDraft(ctx context.Context, draftID authoring.DraftID, lessonID authoring.LessonID, expected int64, keys []string) (authoring.DraftLesson, authoring.CourseDraft, error) {
+	if expected < 1 || authoring.ValidatePrerequisiteKeys("", keys) != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	lessonKey, err := uuid(string(lessonID))
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	currentRow, err := q.GetLesson(ctx, lessonKey)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && currentRow.DraftID != draftKey) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := authoring.ValidatePrerequisiteKeys(currentRow.StableKey, keys); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	targets := make([]sqlc.AuthoringLesson, 0, len(keys))
+	for _, key := range keys {
+		target, err := q.FindLessonByDraftAndKey(ctx, sqlc.FindLessonByDraftAndKeyParams{DraftID: draftKey, StableKey: key})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrConflict
+		}
+		if err != nil {
+			return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+		}
+		targets = append(targets, target)
+	}
+	lessonRow, err := q.BumpLessonRevision(ctx, sqlc.BumpLessonRevisionParams{ID: lessonKey, Revision: expected})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	}
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.DeletePrerequisites(ctx, lessonKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	for position, target := range targets {
+		if err := q.AddPrerequisite(ctx, sqlc.AddPrerequisiteParams{DraftID: draftKey, LessonID: lessonKey, PrerequisiteLessonID: target.ID, Position: int32(position)}); err != nil {
+			return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+		}
+	}
+	var revision int64
+	if err := tx.QueryRow(ctx, "SELECT revision FROM authoring.course_draft WHERE id = $1", draftKey).Scan(&revision); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: revision})
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, storageError(err)
+	}
+	lesson, err := mapLesson(lessonRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	draft, err := mapDraft(draftRow)
+	if err != nil {
+		return authoring.DraftLesson{}, authoring.CourseDraft{}, err
+	}
+	return lesson, draft, nil
+}
+
+func (r *Repository) DeleteLessonForDraft(ctx context.Context, draftID authoring.DraftID, lessonID authoring.LessonID, expectedDraft, expectedLesson int64) (authoring.CourseDraft, error) {
+	if expectedDraft < 1 || expectedLesson < 1 {
+		return authoring.CourseDraft{}, authoring.ErrInvalidStructure
+	}
+	draftKey, err := uuid(string(draftID))
+	if err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	lessonKey, err := uuid(string(lessonID))
+	if err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.lockActiveDraft(ctx, tx, draftKey); err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	q := r.q.WithTx(tx)
+	current, err := q.GetLesson(ctx, lessonKey)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && current.DraftID != draftKey) {
+		return authoring.CourseDraft{}, authoring.ErrNotFound
+	}
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := r.lockActiveDraftRevision(ctx, tx, draftKey, expectedDraft); err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	if _, err := tx.Exec(ctx, "SET CONSTRAINTS authoring.authoring_lesson_module_position_unique DEFERRED"); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.AdvanceLessonsAfterDeletion(ctx, sqlc.AdvanceLessonsAfterDeletionParams{ID: lessonKey, ModuleID: current.ModuleID, Position: current.Position}); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.DeleteIncomingPrerequisites(ctx, lessonKey); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.DeletePrerequisites(ctx, lessonKey); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if _, err := q.DeleteLessonForDraft(ctx, sqlc.DeleteLessonForDraftParams{ID: lessonKey, DraftID: draftKey, Revision: expectedLesson}); errors.Is(err, pgx.ErrNoRows) {
+		return authoring.CourseDraft{}, authoring.ErrRevisionMismatch
+	} else if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	module, err := q.GetModule(ctx, current.ModuleID)
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if _, err := q.BumpModuleRevision(ctx, sqlc.BumpModuleRevisionParams{ID: module.ID, Revision: module.Revision}); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	draftRow, err := q.BumpDraftRevision(ctx, sqlc.BumpDraftRevisionParams{ID: draftKey, Revision: expectedDraft})
+	if err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := q.TouchWorkspace(ctx, draftKey); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return authoring.CourseDraft{}, storageError(err)
+	}
+	return mapDraft(draftRow)
+}
+
 func (r *Repository) ReorderLessons(ctx context.Context, moduleID authoring.ModuleID, expected int64, order []authoring.LessonID) (authoring.DraftModule, error) {
 	module, err := r.GetModule(ctx, moduleID)
 	if err != nil {
@@ -305,7 +800,7 @@ func (r *Repository) ReorderLessons(ctx context.Context, moduleID authoring.Modu
 	if err != nil {
 		return authoring.DraftModule{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftModule{}, err
 	}
@@ -369,7 +864,7 @@ func (r *Repository) DeleteModule(ctx context.Context, moduleID authoring.Module
 	if err != nil {
 		return storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return err
 	}
@@ -407,7 +902,7 @@ func (r *Repository) DeleteLesson(ctx context.Context, lessonID authoring.Lesson
 	if err != nil {
 		return storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return err
 	}
@@ -448,7 +943,7 @@ func (r *Repository) ReplacePrerequisites(ctx context.Context, lessonID authorin
 	if err != nil {
 		return authoring.DraftLesson{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftLesson{}, err
 	}
@@ -556,7 +1051,7 @@ func (r *Repository) MoveLesson(ctx context.Context, lessonID authoring.LessonID
 	if err != nil {
 		return authoring.DraftLesson{}, storageError(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := r.lockActiveDraft(ctx, tx, draftID); err != nil {
 		return authoring.DraftLesson{}, err
 	}

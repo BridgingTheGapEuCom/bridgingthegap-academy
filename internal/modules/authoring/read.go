@@ -31,6 +31,16 @@ func NewReadService(repository ReadRepository, authorizer Authorizer) *ReadServi
 	return &ReadService{repository: repository, authorizer: authorizer}
 }
 
+// Drafts returns only the mutable workspaces to which this trusted actor has a
+// current membership. Listing uses the membership relation directly rather
+// than treating a global role or a client-provided claim as access.
+func (s *ReadService) Drafts(ctx context.Context, actor identity.AuthenticatedActor) ([]DraftSummary, error) {
+	if s.repository == nil || actor.UserID() == "" || actor.SessionID() == "" {
+		return nil, ErrAuthorizationUnavailable
+	}
+	return s.repository.ListAccessibleDrafts(ctx, string(actor.UserID()))
+}
+
 func (s *ReadService) Draft(ctx context.Context, actor identity.AuthenticatedActor, id DraftID) (CourseDraft, error) {
 	if err := s.authorize(ctx, actor, id); err != nil {
 		return CourseDraft{}, err
@@ -45,62 +55,28 @@ func (s *ReadService) Workspace(ctx context.Context, actor identity.Authenticate
 	return s.repository.GetWorkspace(ctx, id)
 }
 
+// Members returns the currently active, opaque workspace memberships for one
+// draft. Authorization happens before the repository read so this projection
+// cannot expose a draft's collaborators to an unrelated workspace member.
+func (s *ReadService) Members(ctx context.Context, actor identity.AuthenticatedActor, id DraftID) ([]WorkspaceMember, error) {
+	if err := s.authorize(ctx, actor, id); err != nil {
+		return nil, err
+	}
+	return s.repository.ActiveMembers(ctx, id)
+}
+
 func (s *ReadService) Structure(ctx context.Context, actor identity.AuthenticatedActor, id DraftID) ([]ModuleStructure, error) {
 	if err := s.authorize(ctx, actor, id); err != nil {
 		return nil, err
 	}
-	modules, err := s.repository.ListModules(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	lessons, err := s.repository.ListLessonsForDraft(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	prerequisites, err := s.repository.ListPrerequisitesForDraft(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	prerequisiteKeys := make(map[LessonID][]string, len(lessons))
-	for _, prerequisite := range prerequisites {
-		prerequisiteKeys[prerequisite.LessonID] = append(prerequisiteKeys[prerequisite.LessonID], prerequisite.TargetStableKey)
-	}
-	byModule := make(map[ModuleID][]LessonStructure, len(modules))
-	for _, lesson := range lessons {
-		byModule[lesson.ModuleID] = append(byModule[lesson.ModuleID], LessonStructure{
-			Lesson:                      lesson,
-			RecommendedPrerequisiteKeys: prerequisiteKeys[lesson.ID],
-		})
-	}
-	structure := make([]ModuleStructure, 0, len(modules))
-	for _, module := range modules {
-		structure = append(structure, ModuleStructure{Module: module, Lessons: byModule[module.ID]})
-	}
-	return structure, nil
+	return s.repository.ReadStructure(ctx, id)
 }
 
 func (s *ReadService) Lesson(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, lessonID LessonID) (DraftLesson, []Prerequisite, error) {
 	if err := s.authorize(ctx, actor, draftID); err != nil {
 		return DraftLesson{}, nil, err
 	}
-	lesson, err := s.repository.GetLesson(ctx, lessonID)
-	if err != nil {
-		return DraftLesson{}, nil, err
-	}
-	if lesson.DraftID != draftID {
-		return DraftLesson{}, nil, ErrNotFound
-	}
-	prerequisites, err := s.repository.ListPrerequisitesForDraft(ctx, draftID)
-	if err != nil {
-		return DraftLesson{}, nil, err
-	}
-	keys := make([]Prerequisite, 0)
-	for _, prerequisite := range prerequisites {
-		if prerequisite.LessonID == lessonID {
-			keys = append(keys, prerequisite)
-		}
-	}
-	return lesson, keys, nil
+	return s.repository.ReadLesson(ctx, draftID, lessonID)
 }
 
 func (s *ReadService) authorize(ctx context.Context, actor identity.AuthenticatedActor, id DraftID) error {

@@ -69,6 +69,12 @@ describe('authentication state', () => {
     expect(networkFailure.state.value).toEqual({ status: 'unavailable' })
   })
 
+  it('fails closed when a successful session response is malformed', async () => {
+    const malformed = createAuthService({ fetcher: responseFetcher(jsonResponse({ authenticated: true, user_id: 'user-without-csrf' })) })
+    await malformed.bootstrapSession()
+    expect(malformed.state.value).toEqual({ status: 'unavailable' })
+  })
+
   it('coalesces concurrent bootstrap calls and ignores a stale bootstrap after login', async () => {
     const bootstrap = pendingResponse()
     const fetcher = vi.fn((path: string) => path === '/api/auth/session'
@@ -175,13 +181,14 @@ describe('authentication service operations', () => {
     expect(new Headers(requestInit(fetcher, 2).headers).get('X-CSRF-Token')).toBeNull()
   })
 
-  it('keeps authenticated state on 403 and 429 protected-request responses', async () => {
-    const fetcher = responseFetcher(jsonResponse(session), jsonResponse(problem(403), 403), jsonResponse(problem(429), 429))
+  it('keeps authenticated state on 403, hidden 404, and conflict protected-request responses', async () => {
+    const fetcher = responseFetcher(jsonResponse(session), jsonResponse(problem(403), 403), jsonResponse(problem(404), 404), jsonResponse(problem(409), 409))
     const service = createAuthService({ fetcher })
     await service.bootstrapSession()
 
     await expect(service.request('/api/admin/status')).rejects.toMatchObject({ status: 403 })
-    await expect(service.request('/api/admin/status')).rejects.toMatchObject({ status: 429 })
+    await expect(service.request('/api/authoring/drafts/hidden')).rejects.toMatchObject({ status: 404 })
+    await expect(service.request('/api/authoring/drafts/current')).rejects.toMatchObject({ status: 409 })
     expect(service.state.value).toEqual({ status: 'authenticated', userId: session.user_id, expiresAt: session.expires_at })
   })
 

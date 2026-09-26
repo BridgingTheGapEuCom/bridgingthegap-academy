@@ -74,18 +74,18 @@ func testAuthoringPersistence(t *testing.T, ctx context.Context, pool *pgxpool.P
 		t.Fatalf("creator membership: %v %#v", err, initialMembers)
 	}
 	collaborator := "22222222-2222-4222-8222-222222222222"
-	member, err := r.AddMember(ctx, workspace.ID, collaborator, authoring.MemberAuthor)
+	member, err := addTestAuthoringMember(ctx, pool, r, workspace.ID, collaborator, authoring.MemberAuthor)
 	if err != nil || member.Role != authoring.MemberAuthor {
 		t.Fatalf("member insert: %v", err)
 	}
-	if _, err := r.AddMember(ctx, workspace.ID, collaborator, authoring.MemberMaintainer); !errors.Is(err, authoring.ErrConflict) {
+	if _, err := addTestAuthoringMember(ctx, pool, r, workspace.ID, collaborator, authoring.MemberMaintainer); !errors.Is(err, authoring.ErrConflict) {
 		t.Fatalf("duplicate active member accepted: %v", err)
 	}
-	revoked, err := r.RevokeMember(ctx, workspace.ID, collaborator)
+	revoked, err := revokeTestAuthoringMember(ctx, pool, r, workspace.ID, collaborator)
 	if err != nil || revoked.RevokedAt == nil {
 		t.Fatalf("member revoke: %v", err)
 	}
-	if _, err := r.AddMember(ctx, workspace.ID, collaborator, authoring.MemberMaintainer); err != nil {
+	if _, err := addTestAuthoringMember(ctx, pool, r, workspace.ID, collaborator, authoring.MemberMaintainer); err != nil {
 		t.Fatalf("member re-add: %v", err)
 	}
 	members, err := r.ListMembers(ctx, workspace.ID)
@@ -322,4 +322,29 @@ func testAuthoringPersistence(t *testing.T, ctx context.Context, pool *pgxpool.P
 	if err != nil || len(versions) != 0 {
 		t.Fatalf("authoring created published course version: %v", err)
 	}
+}
+
+// Fixtures use the same revision-checked membership operations as application writes.
+func testMembershipDraft(ctx context.Context, pool *pgxpool.Pool, r *authoringpostgres.Repository, workspace authoring.WorkspaceID) (authoring.CourseDraft, error) {
+	var draftID string
+	if err := pool.QueryRow(ctx, "SELECT draft_id FROM authoring.workspace WHERE id=$1", workspace).Scan(&draftID); err != nil {
+		return authoring.CourseDraft{}, err
+	}
+	return r.GetDraft(ctx, authoring.DraftID(draftID))
+}
+func addTestAuthoringMember(ctx context.Context, pool *pgxpool.Pool, r *authoringpostgres.Repository, workspace authoring.WorkspaceID, user string, role authoring.MemberRole) (authoring.WorkspaceMember, error) {
+	draft, err := testMembershipDraft(ctx, pool, r, workspace)
+	if err != nil {
+		return authoring.WorkspaceMember{}, err
+	}
+	member, _, err := r.AddMemberForDraft(ctx, draft.ID, draft.Revision, user, role)
+	return member, err
+}
+func revokeTestAuthoringMember(ctx context.Context, pool *pgxpool.Pool, r *authoringpostgres.Repository, workspace authoring.WorkspaceID, user string) (authoring.WorkspaceMember, error) {
+	draft, err := testMembershipDraft(ctx, pool, r, workspace)
+	if err != nil {
+		return authoring.WorkspaceMember{}, err
+	}
+	member, _, err := r.RevokeMemberForDraft(ctx, draft.ID, draft.Revision, user)
+	return member, err
 }

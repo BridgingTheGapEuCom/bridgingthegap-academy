@@ -73,9 +73,9 @@ These controls are per process, not shared across instances. Behind a reverse pr
 
 ## Build and generation
 
-`make build` runs the Vite build and then produces the single `./btg-lms` executable. Run `./btg-lms version`, `./btg-lms doctor`, or `./btg-lms serve` after exporting `.env` as above. To refresh sqlc Go code and OpenAPI TypeScript types, run `make generate`. Identity owns its SQL queries and generated persistence package; the PostgreSQL connectivity query remains in Infrastructure.
+`make build` installs pinned frontend dependencies when needed, runs the Vite build, and then produces the single `./btg-lms` executable. Run `./btg-lms version`, `./btg-lms doctor`, or `./btg-lms serve` after exporting `.env` as above. To refresh sqlc Go code and OpenAPI TypeScript types, run `make generate`. Identity owns its SQL queries and generated persistence package; the PostgreSQL connectivity query remains in Infrastructure.
 
-`internal/web/dist` is committed because Go embeds it, including its hashed CSS and JavaScript assets. Run `pnpm build` after frontend changes; CI checks that generated assets and contract types match their sources.
+`internal/web/dist` is generated production output for Go embedding and is intentionally ignored by Git. Do not commit its hashed CSS or JavaScript assets. `make build`, `make check`, `make test`, and `make test-e2e` generate it before a workflow compiles or serves the embedded application; `make clean` removes it safely. Docker follows the same path in its frontend build stage, so clean checkout builds do not require host-generated bundles.
 
 ## Tests
 
@@ -86,7 +86,7 @@ pnpm exec playwright install chromium
 make test-e2e
 ```
 
-`make check` runs the architecture checker, Go vet, frontend build, Go tests, and Vitest. `make test-integration` starts a real PostgreSQL container through Testcontainers. `make test-e2e` runs Chromium and axe against the built frontend; run `pnpm build` first if you skipped `make check`.
+`make check` runs the architecture checker, Go vet, frontend build, Go tests, and Vitest. `make test-integration` starts a real PostgreSQL container through Testcontainers. `make test-e2e` runs Chromium and axe against an automatically built frontend.
 
 ## Container deployment
 
@@ -96,6 +96,11 @@ The Compose file starts PostgreSQL by default; the application is behind the `ap
 docker compose up -d db
 docker compose run --rm --no-deps app migrate
 export BTG_LMS_PUBLIC_ORIGIN=https://academy.example.com # replace with your actual browser origin
+export BTG_LMS_ASSET_STORAGE_PATH=/var/lib/btg-lms/assets # absolute, writable application data directory
+export BTG_LMS_CERTIFICATE_ISSUER_ID=https://academy.example.com
+export BTG_LMS_CERTIFICATE_ISSUER_NAME="Academy"
+# Optional temporary default is 100 MiB; set an explicit deployment limit as needed.
+export BTG_LMS_ASSET_MAX_BYTES=104857600
 docker compose --profile app up -d app
 curl http://localhost:8080/health/ready
 ```

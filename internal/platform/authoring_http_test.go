@@ -15,13 +15,44 @@ import (
 )
 
 type authoringHTTPRepository struct {
+	accessible    map[string][]authoring.DraftSummary
 	drafts        map[authoring.DraftID]authoring.CourseDraft
 	workspaces    map[authoring.DraftID]authoring.AuthoringWorkspace
 	modules       map[authoring.DraftID][]authoring.DraftModule
 	lessons       map[authoring.LessonID]authoring.DraftLesson
 	byDraft       map[authoring.DraftID][]authoring.DraftLesson
 	prerequisites map[authoring.DraftID][]authoring.Prerequisite
+	members       map[authoring.DraftID][]authoring.WorkspaceMember
 	err           error
+}
+
+type authoringDraftCreationHTTPRepository struct {
+	draft       authoring.CourseDraft
+	input       authoring.DraftCreationInput
+	createdByID string
+	calls       int
+	err         error
+}
+
+func (r *authoringDraftCreationHTTPRepository) CreateDraftForCreator(_ context.Context, input authoring.DraftCreationInput, createdBy string) (authoring.CourseDraft, error) {
+	r.calls++
+	r.input = input
+	r.createdByID = createdBy
+	return r.draft, r.err
+}
+
+func (r authoringHTTPRepository) ListAccessibleDrafts(_ context.Context, userID string) ([]authoring.DraftSummary, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]authoring.DraftSummary(nil), r.accessible[userID]...), nil
+}
+
+func (r authoringHTTPRepository) ActiveMembers(_ context.Context, id authoring.DraftID) ([]authoring.WorkspaceMember, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]authoring.WorkspaceMember(nil), r.members[id]...), nil
 }
 
 func (r authoringHTTPRepository) GetDraft(_ context.Context, id authoring.DraftID) (authoring.CourseDraft, error) {
@@ -44,24 +75,35 @@ func (r authoringHTTPRepository) GetWorkspace(_ context.Context, id authoring.Dr
 	}
 	return value, nil
 }
-func (r authoringHTTPRepository) ListModules(_ context.Context, id authoring.DraftID) ([]authoring.DraftModule, error) {
-	return r.modules[id], r.err
+func (r authoringHTTPRepository) ReadStructure(_ context.Context, id authoring.DraftID) ([]authoring.ModuleStructure, error) {
+	result := make([]authoring.ModuleStructure, 0, len(r.modules[id]))
+	for _, module := range r.modules[id] {
+		item := authoring.ModuleStructure{Module: module}
+		for _, lesson := range r.byDraft[id] {
+			if lesson.ModuleID != module.ID {
+				continue
+			}
+			keys := []string{}
+			for _, p := range r.prerequisites[id] {
+				if p.LessonID == lesson.ID {
+					keys = append(keys, p.TargetStableKey)
+				}
+			}
+			item.Lessons = append(item.Lessons, authoring.LessonStructure{Lesson: lesson, RecommendedPrerequisiteKeys: keys})
+		}
+		result = append(result, item)
+	}
+	return result, r.err
 }
-func (r authoringHTTPRepository) GetLesson(_ context.Context, id authoring.LessonID) (authoring.DraftLesson, error) {
+func (r authoringHTTPRepository) ReadLesson(_ context.Context, draftID authoring.DraftID, id authoring.LessonID) (authoring.DraftLesson, []authoring.Prerequisite, error) {
 	if r.err != nil {
-		return authoring.DraftLesson{}, r.err
+		return authoring.DraftLesson{}, nil, r.err
 	}
-	value, ok := r.lessons[id]
-	if !ok {
-		return authoring.DraftLesson{}, authoring.ErrNotFound
+	lesson, found := r.lessons[id]
+	if !found || lesson.DraftID != draftID {
+		return authoring.DraftLesson{}, nil, authoring.ErrNotFound
 	}
-	return value, nil
-}
-func (r authoringHTTPRepository) ListLessonsForDraft(_ context.Context, id authoring.DraftID) ([]authoring.DraftLesson, error) {
-	return r.byDraft[id], r.err
-}
-func (r authoringHTTPRepository) ListPrerequisitesForDraft(_ context.Context, id authoring.DraftID) ([]authoring.Prerequisite, error) {
-	return r.prerequisites[id], r.err
+	return lesson, r.prerequisites[draftID], nil
 }
 
 func (r *authoringHTTPRepository) UpdateDraftMetadata(_ context.Context, id authoring.DraftID, expected int64, metadata authoring.DraftMetadata) (authoring.CourseDraft, error) {
@@ -80,6 +122,61 @@ func (r *authoringHTTPRepository) UpdateDraftMetadata(_ context.Context, id auth
 	draft.UpdatedAt = time.Now().UTC()
 	r.drafts[id] = draft
 	return draft, nil
+}
+
+func TestAuthoringDraftCreationHTTPSecurityAndResponse(t *testing.T) {
+	draftID := authoring.DraftID("11111111-1111-4111-8111-111111111111")
+	createdAt := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+	repository := &authoringDraftCreationHTTPRepository{draft: authoring.CourseDraft{
+		ID: draftID,
+		Metadata: authoring.DraftMetadata{
+			CourseID: "33333333-3333-4333-8333-333333333333", IntendedVersion: courses.Version{Major: 0, Minor: 1}, SourceLanguage: "en", Title: "New Draft",
+			Description: "A new editable Draft.", LearningObjectives: []string{"Explain the course"}, Changelog: "Initial Draft.", License: courses.ContentLicense{Kind: courses.ContentLicenseAllRightsReserved, DisplayName: "All Rights Reserved"},
+		},
+		Status: authoring.DraftActive, Revision: 1, CreatedAt: createdAt, UpdatedAt: createdAt,
+	}}
+	resolver := &authResolverFake{current: loginTestCurrent(t)}
+	router := authTestRouter(&authHTTP{sessions: resolver, authoringCreation: authoring.NewDraftCreationService(repository)})
+	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
+	csrf := authTestCSRFToken().Value()
+	path := "/api/authoring/drafts"
+	body := `{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":["Explain the course"],"changelog":"Initial Draft."}`
+
+	if response := authRequest(router, http.MethodPost, path, body, nil, csrf); response.Code != http.StatusUnauthorized || response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("unauthenticated creation = %d cache=%q", response.Code, response.Header().Get("Cache-Control"))
+	}
+	if response := authRequest(router, http.MethodPost, path, body, cookie); response.Code != http.StatusForbidden {
+		t.Fatalf("missing CSRF creation = %d", response.Code)
+	}
+	untrusted := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	untrusted.Header.Set("Content-Type", "application/json")
+	untrusted.Header.Set("Origin", "https://attacker.example")
+	untrusted.Header.Set("X-CSRF-Token", csrf)
+	untrusted.AddCookie(cookie)
+	untrustedResponse := httptest.NewRecorder()
+	router.ServeHTTP(untrustedResponse, untrusted)
+	if untrustedResponse.Code != http.StatusForbidden {
+		t.Fatalf("untrusted Origin creation = %d", untrustedResponse.Code)
+	}
+
+	response := authRequest(router, http.MethodPost, path, body, cookie, csrf)
+	if response.Code != http.StatusCreated || response.Header().Get("Cache-Control") != "no-store" || response.Header().Get("Location") != path+"/"+string(draftID) {
+		t.Fatalf("creation response = %d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
+	}
+	if repository.calls != 1 || repository.createdByID != string(loginTestUser) || repository.input.Title != "New Draft" || repository.input.IntendedVersion.String() != "0.1.0" || strings.Contains(response.Body.String(), "userId") {
+		t.Fatalf("creation identity/input response mismatch: %#v body=%s", repository, response.Body.String())
+	}
+	for _, invalid := range []string{
+		`{`,
+		`{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":["Explain"],"changelog":"Initial","creatorId":"forged"}`,
+		`{"title":"New Draft","intendedVersion":"1.bad.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":["Explain"],"changelog":"Initial"}`,
+		`{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":[],"changelog":"Initial"}`,
+		`{"title":"New Draft","intendedVersion":"0.1.0","sourceLanguage":"en","description":"A new editable Draft.","objectives":["Explain"],"changelog":"Initial","title":"Duplicate"}`,
+	} {
+		if response := authRequest(router, http.MethodPost, path, invalid, cookie, csrf); response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid creation %s = %d", invalid, response.Code)
+		}
+	}
 }
 
 type authoringMembershipsFake struct {
@@ -364,25 +461,37 @@ func TestAuthoringReadHTTPAuthorizationDTOsAndCachePolicy(t *testing.T) {
 	first := authoring.DraftLesson{ID: lessonA, LessonInput: authoring.LessonInput{DraftID: draftA, ModuleID: moduleA, StableKey: "first-lesson", Title: "First lesson", Description: "Description", LearningObjectives: []string{"Understand"}, Position: 0, Content: content}, Revision: 3}
 	other := authoring.DraftLesson{ID: lessonB, LessonInput: authoring.LessonInput{DraftID: draftB, ModuleID: moduleB, StableKey: "other-lesson", Title: "Other lesson", Description: "Description", LearningObjectives: []string{"Apply"}, Position: 0, Content: content}, Revision: 2}
 	repository := authoringHTTPRepository{
+		accessible:    map[string][]authoring.DraftSummary{string(loginTestUser): {{ID: draftA, Title: draft.Metadata.Title, IntendedVersion: draft.Metadata.IntendedVersion, Status: draft.Status}}},
 		drafts:        map[authoring.DraftID]authoring.CourseDraft{draftA: draft},
 		workspaces:    map[authoring.DraftID]authoring.AuthoringWorkspace{draftA: {ID: "88888888-8888-4888-8888-888888888888", DraftID: draftA}},
 		modules:       map[authoring.DraftID][]authoring.DraftModule{draftA: {{ID: moduleA, ModuleInput: authoring.ModuleInput{DraftID: draftA, StableKey: "first-module", Title: "First module", Position: 0}, Revision: 2}}},
 		lessons:       map[authoring.LessonID]authoring.DraftLesson{lessonA: first, lessonB: other},
 		byDraft:       map[authoring.DraftID][]authoring.DraftLesson{draftA: {first}},
 		prerequisites: map[authoring.DraftID][]authoring.Prerequisite{draftA: {{LessonID: lessonA, TargetStableKey: "foundation", Position: 0}}},
+		members: map[authoring.DraftID][]authoring.WorkspaceMember{draftA: {
+			{UserID: "00000000-0000-4000-8000-000000000001", Role: authoring.MemberAuthor},
+			{UserID: "00000000-0000-4000-8000-000000000002", Role: authoring.MemberMaintainer},
+		}},
 	}
 	readService := authoring.NewReadService(repository, authoring.NewAuthorizationService(authoringMembershipsFake{roles: map[authoring.DraftID]authoring.MemberRole{draftA: authoring.MemberAuthor}}))
 	resolver := &authResolverFake{current: loginTestCurrent(t)}
 	router := authTestRouter(&authHTTP{sessions: resolver, authoring: readService})
 	cookie := &http.Cookie{Name: sessionCookieName, Value: mustRawToken().Value()}
 
-	unauthenticated := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA), "", nil)
-	if unauthenticated.Code != http.StatusUnauthorized {
-		t.Fatalf("unauthenticated draft read = %d", unauthenticated.Code)
+	for _, path := range []string{"/api/authoring/drafts", "/api/authoring/drafts/" + string(draftA)} {
+		unauthenticated := authRequest(router, http.MethodGet, path, "", nil)
+		if unauthenticated.Code != http.StatusUnauthorized || unauthenticated.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("unauthenticated authoring read %s = %d cache=%q", path, unauthenticated.Code, unauthenticated.Header().Get("Cache-Control"))
+		}
+	}
+	listResponse := authRequest(router, http.MethodGet, "/api/authoring/drafts", "", cookie)
+	if listResponse.Code != http.StatusOK || listResponse.Header().Get("Cache-Control") != "no-store" || !strings.Contains(listResponse.Body.String(), `"drafts":[{"id":"`+string(draftA)+`"`) || strings.Contains(listResponse.Body.String(), `"course_id"`) || strings.Contains(listResponse.Body.String(), `"revision"`) {
+		t.Fatalf("draft discovery DTO/cache = %d %q %s", listResponse.Code, listResponse.Header().Get("Cache-Control"), listResponse.Body.String())
 	}
 	for _, path := range []string{
 		"/api/authoring/drafts/" + string(draftA),
 		"/api/authoring/drafts/" + string(draftA) + "/workspace",
+		"/api/authoring/drafts/" + string(draftA) + "/members",
 		"/api/authoring/drafts/" + string(draftA) + "/structure",
 		"/api/authoring/drafts/" + string(draftA) + "/lessons/" + string(lessonA),
 	} {
@@ -390,6 +499,10 @@ func TestAuthoringReadHTTPAuthorizationDTOsAndCachePolicy(t *testing.T) {
 		if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("GET %s = %d cache=%q body=%s", path, response.Code, response.Header().Get("Cache-Control"), response.Body.String())
 		}
+	}
+	membersResponse := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA)+"/members", "", cookie)
+	if !strings.Contains(membersResponse.Body.String(), `"userId":"00000000-0000-4000-8000-000000000001"`) || !strings.Contains(membersResponse.Body.String(), `"role":"AUTHOR"`) || strings.Contains(membersResponse.Body.String(), `"createdAt"`) || strings.Contains(membersResponse.Body.String(), `"revokedAt"`) || strings.Contains(membersResponse.Body.String(), `"id"`) {
+		t.Fatalf("active membership DTO leaked persistence fields or lost opaque roles: %s", membersResponse.Body.String())
 	}
 	lessonResponse := authRequest(router, http.MethodGet, "/api/authoring/drafts/"+string(draftA)+"/lessons/"+string(lessonA), "", cookie)
 	if !strings.Contains(lessonResponse.Body.String(), `"schemaVersion":1`) || strings.Contains(lessonResponse.Body.String(), "CreatedByUserID") {
@@ -414,6 +527,7 @@ func TestAuthoringReadHTTPAuthorizationDTOsAndCachePolicy(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/authoring/drafts/" + string(draftB),
+		"/api/authoring/drafts/" + string(draftB) + "/members",
 		"/api/authoring/drafts/" + string(draftA) + "/lessons/" + string(lessonB),
 	} {
 		response := authRequest(router, http.MethodGet, path, "", cookie)
@@ -423,6 +537,7 @@ func TestAuthoringReadHTTPAuthorizationDTOsAndCachePolicy(t *testing.T) {
 	}
 	for _, path := range []string{
 		"/api/authoring/drafts/not-a-uuid",
+		"/api/authoring/drafts/not-a-uuid/members",
 		"/api/authoring/drafts/" + string(draftA) + "/lessons/not-a-uuid",
 	} {
 		if response := authRequest(router, http.MethodGet, path, "", cookie); response.Code != http.StatusBadRequest {
@@ -432,12 +547,23 @@ func TestAuthoringReadHTTPAuthorizationDTOsAndCachePolicy(t *testing.T) {
 
 	failed := authoring.NewReadService(repository, authoring.NewAuthorizationService(authoringMembershipsFake{err: errors.New("database unavailable")}))
 	failedRouter := authTestRouter(&authHTTP{sessions: resolver, authoring: failed})
-	if response := authRequest(failedRouter, http.MethodGet, "/api/authoring/drafts/"+string(draftA), "", cookie); response.Code != http.StatusInternalServerError {
-		t.Fatalf("authorization outage = %d", response.Code)
+	for _, path := range []string{
+		"/api/authoring/drafts/" + string(draftA),
+		"/api/authoring/drafts/" + string(draftA) + "/members",
+	} {
+		if response := authRequest(failedRouter, http.MethodGet, path, "", cookie); response.Code != http.StatusInternalServerError {
+			t.Fatalf("authorization outage for %s = %d", path, response.Code)
+		}
 	}
 	storageFailed := authoring.NewReadService(authoringHTTPRepository{err: errors.New("storage unavailable")}, authoring.NewAuthorizationService(authoringMembershipsFake{roles: map[authoring.DraftID]authoring.MemberRole{draftA: authoring.MemberAuthor}}))
 	storageFailedRouter := authTestRouter(&authHTTP{sessions: resolver, authoring: storageFailed})
-	if response := authRequest(storageFailedRouter, http.MethodGet, "/api/authoring/drafts/"+string(draftA), "", cookie); response.Code != http.StatusInternalServerError {
-		t.Fatalf("storage outage = %d", response.Code)
+	for _, path := range []string{
+		"/api/authoring/drafts",
+		"/api/authoring/drafts/" + string(draftA),
+		"/api/authoring/drafts/" + string(draftA) + "/members",
+	} {
+		if response := authRequest(storageFailedRouter, http.MethodGet, path, "", cookie); response.Code != http.StatusInternalServerError {
+			t.Fatalf("storage outage for %s = %d", path, response.Code)
+		}
 	}
 }

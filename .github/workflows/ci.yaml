@@ -6,33 +6,29 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.33.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm api:types
-      - run: git add -N frontend/src/api/generated.ts && git diff --exit-code -- frontend/src/api/generated.ts
+      - run: make install
       - run: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
       - run: git add -N internal/modules/infrastructure/db/sqlc internal/modules/identity/db/sqlc internal/modules/audit/db/sqlc && git diff --exit-code -- internal/modules/infrastructure/db/sqlc internal/modules/identity/db/sqlc internal/modules/audit/db/sqlc
-      - run: pnpm build
-      - run: git diff --exit-code -- internal/web/dist
-      - run: go run ./tools/archcheck
-      - run: go vet ./...
+      - run: make check
+      - run: git add -N frontend/src/api/generated.ts && git diff --exit-code -- frontend/src/api/generated.ts
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+      - id: golangci-lint-version
+        run: echo "version=$(cat tools/golangci-lint-version)" >> "$GITHUB_OUTPUT"
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12
-      - run: go test ./...
+          version: ${{ steps.golangci-lint-version.outputs.version }}
       - run: go test -tags=integration ./internal/platform
-      - run: pnpm test
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
+      - run: make test-e2e

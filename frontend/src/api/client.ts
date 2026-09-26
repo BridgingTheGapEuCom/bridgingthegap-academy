@@ -5,6 +5,11 @@ export type LoginRequest = components['schemas']['LoginRequest']
 export type AuthenticatedSessionResponse = components['schemas']['AuthenticatedSession']
 export type AdminStatusResponse = components['schemas']['AdminStatus']
 export type ProblemDetails = components['schemas']['Problem']
+// Some endpoints extend the shared Problem Details envelope with structured
+// domain data. Keep that data intact for the feature that owns its display.
+export type APIProblemDetails = ProblemDetails
+  | components['schemas']['PublicationConflictProblem']
+  | components['schemas']['PublicationValidationProblem']
 
 type Fetcher = typeof fetch
 type UnsafeMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -21,7 +26,7 @@ export type APIRequestOptions = Omit<RequestInit, 'body' | 'credentials' | 'head
 export class APIProblemError extends Error {
   constructor(
     readonly status: number,
-    readonly problem: ProblemDetails | undefined,
+    readonly problem: APIProblemDetails | undefined,
     readonly retryAfterSeconds: number | undefined,
   ) {
     super(problem?.title ?? `Request failed with status ${status}`)
@@ -39,6 +44,7 @@ export class APIUnavailableError extends Error {
 
 export interface APIClient {
   request<T>(path: string, options?: APIRequestOptions): Promise<T>
+  requestWithStatus?<T>(path: string, options?: APIRequestOptions): Promise<{ data: T; status: number }>
 }
 
 export interface APIClientOptions {
@@ -50,50 +56,55 @@ export interface APIClientOptions {
 export function createAPIClient(options: APIClientOptions = {}): APIClient {
   const fetcher = options.fetcher ?? fetch
 
+  async function requestWithStatus<T>(path: string, requestOptions: APIRequestOptions = {}): Promise<{ data: T; status: number }> {
+    const {
+      body,
+      csrf,
+      expectJSON = true,
+      headers: requestHeaders,
+      invalidateOnUnauthorized = true,
+      method = 'GET',
+      ...fetchOptions
+    } = requestOptions
+    const normalizedMethod = method.toUpperCase()
+    const headers = new Headers(requestHeaders)
+    const shouldAttachCSRF = csrf ?? isUnsafeMethod(normalizedMethod)
+    const csrfToken = shouldAttachCSRF ? options.getCSRFToken?.() : undefined
+    if (csrfToken) headers.set('X-CSRF-Token', csrfToken)
+
+    let response: Response
+    try {
+      response = await fetcher(path, {
+        ...fetchOptions,
+        body,
+        credentials: 'same-origin',
+        headers,
+        method: normalizedMethod,
+      })
+    } catch (error) {
+      throw new APIUnavailableError(error)
+    }
+
+    if (!response.ok) {
+      const problem = await parseProblemDetails(response)
+      const problemError = new APIProblemError(response.status, problem, parseRetryAfter(response.headers.get('Retry-After')))
+      if (response.status === 401 && invalidateOnUnauthorized) options.onAuthenticatedSessionUnauthorized?.()
+      throw problemError
+    }
+
+    if (!expectJSON || response.status === 204) return { data: undefined as T, status: response.status }
+    try {
+      return { data: await response.json() as T, status: response.status }
+    } catch (error) {
+      throw new APIUnavailableError(error)
+    }
+  }
+
   return {
     async request<T>(path: string, requestOptions: APIRequestOptions = {}): Promise<T> {
-      const {
-        body,
-        csrf,
-        expectJSON = true,
-        headers: requestHeaders,
-        invalidateOnUnauthorized = true,
-        method = 'GET',
-        ...fetchOptions
-      } = requestOptions
-      const normalizedMethod = method.toUpperCase()
-      const headers = new Headers(requestHeaders)
-      const shouldAttachCSRF = csrf ?? isUnsafeMethod(normalizedMethod)
-      const csrfToken = shouldAttachCSRF ? options.getCSRFToken?.() : undefined
-      if (csrfToken) headers.set('X-CSRF-Token', csrfToken)
-
-      let response: Response
-      try {
-        response = await fetcher(path, {
-          ...fetchOptions,
-          body,
-          credentials: 'same-origin',
-          headers,
-          method: normalizedMethod,
-        })
-      } catch (error) {
-        throw new APIUnavailableError(error)
-      }
-
-      if (!response.ok) {
-        const problem = await parseProblemDetails(response)
-        const problemError = new APIProblemError(response.status, problem, parseRetryAfter(response.headers.get('Retry-After')))
-        if (response.status === 401 && invalidateOnUnauthorized) options.onAuthenticatedSessionUnauthorized?.()
-        throw problemError
-      }
-
-      if (!expectJSON || response.status === 204) return undefined as T
-      try {
-        return await response.json() as T
-      } catch (error) {
-        throw new APIUnavailableError(error)
-      }
+      return (await requestWithStatus<T>(path, requestOptions)).data
     },
+    requestWithStatus,
   }
 }
 
@@ -113,7 +124,7 @@ function parseRetryAfter(value: string | null): number | undefined {
   return Number.isSafeInteger(seconds) ? seconds : undefined
 }
 
-async function parseProblemDetails(response: Response): Promise<ProblemDetails | undefined> {
+async function parseProblemDetails(response: Response): Promise<APIProblemDetails | undefined> {
   try {
     const value: unknown = await response.json()
     return isProblemDetails(value) ? value : undefined

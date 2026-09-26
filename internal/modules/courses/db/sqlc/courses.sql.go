@@ -11,6 +11,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countLatestPublishedCourses = `-- name: CountLatestPublishedCourses :one
+WITH latest AS (
+    SELECT DISTINCT ON (version.course_id) version.course_id, version.source_language
+    FROM courses.course_version AS version
+    JOIN courses.course_version_publication_provenance AS provenance
+        ON provenance.course_version_id = version.id
+    WHERE version.status = 'PUBLISHED'
+    ORDER BY version.course_id, version.version_major DESC, version.version_minor DESC, version.version_patch DESC, version.id DESC
+)
+SELECT count(*)
+FROM latest
+WHERE ($1::text IS NULL OR source_language = $1::text)
+`
+
+func (q *Queries) CountLatestPublishedCourses(ctx context.Context, language pgtype.Text) (int64, error) {
+	row := q.db.QueryRow(ctx, countLatestPublishedCourses, language)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCourse = `-- name: CreateCourse :one
 INSERT INTO courses.course (slug)
 VALUES ($1)
@@ -28,10 +49,10 @@ const createCourseVersion = `-- name: CreateCourseVersion :one
 INSERT INTO courses.course_version (
     course_id, version, status, title, description, learning_objectives,
     source_language, changelog, license_kind, license_identifier,
-    license_display_name, license_url, license_custom_text, attribution, published_at
+    license_display_name, license_url, license_custom_text, attribution, published_at, publication_origin
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'NATIVE_PUBLICATION')
+RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 `
 
 type CreateCourseVersionParams struct {
@@ -92,6 +113,349 @@ func (q *Queries) CreateCourseVersion(ctx context.Context, arg CreateCourseVersi
 		&i.Attribution,
 		&i.CreatedAt,
 		&i.PublishedAt,
+		&i.PublicationOrigin,
+	)
+	return i, err
+}
+
+const createCourseVersionAssessmentBinding = `-- name: CreateCourseVersionAssessmentBinding :one
+INSERT INTO courses.course_version_assessment_binding (
+    course_version_id, assessment_key, definition
+)
+VALUES ($1, $2, $3)
+RETURNING course_version_id, assessment_key, definition
+`
+
+type CreateCourseVersionAssessmentBindingParams struct {
+	CourseVersionID pgtype.UUID
+	AssessmentKey   pgtype.UUID
+	Definition      []byte
+}
+
+func (q *Queries) CreateCourseVersionAssessmentBinding(ctx context.Context, arg CreateCourseVersionAssessmentBindingParams) (CoursesCourseVersionAssessmentBinding, error) {
+	row := q.db.QueryRow(ctx, createCourseVersionAssessmentBinding, arg.CourseVersionID, arg.AssessmentKey, arg.Definition)
+	var i CoursesCourseVersionAssessmentBinding
+	err := row.Scan(&i.CourseVersionID, &i.AssessmentKey, &i.Definition)
+	return i, err
+}
+
+const createCourseVersionAssetBinding = `-- name: CreateCourseVersionAssetBinding :one
+INSERT INTO courses.course_version_asset_binding (
+    course_version_id, asset_key, storage_object_id, original_filename,
+    media_type, byte_size, sha256_digest
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING course_version_id, asset_key, storage_object_id, original_filename, media_type, byte_size, sha256_digest
+`
+
+type CreateCourseVersionAssetBindingParams struct {
+	CourseVersionID  pgtype.UUID
+	AssetKey         pgtype.UUID
+	StorageObjectID  pgtype.UUID
+	OriginalFilename string
+	MediaType        string
+	ByteSize         int64
+	Sha256Digest     string
+}
+
+func (q *Queries) CreateCourseVersionAssetBinding(ctx context.Context, arg CreateCourseVersionAssetBindingParams) (CoursesCourseVersionAssetBinding, error) {
+	row := q.db.QueryRow(ctx, createCourseVersionAssetBinding,
+		arg.CourseVersionID,
+		arg.AssetKey,
+		arg.StorageObjectID,
+		arg.OriginalFilename,
+		arg.MediaType,
+		arg.ByteSize,
+		arg.Sha256Digest,
+	)
+	var i CoursesCourseVersionAssetBinding
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.AssetKey,
+		&i.StorageObjectID,
+		&i.OriginalFilename,
+		&i.MediaType,
+		&i.ByteSize,
+		&i.Sha256Digest,
+	)
+	return i, err
+}
+
+const createCourseVersionImportProvenance = `-- name: CreateCourseVersionImportProvenance :one
+INSERT INTO courses.course_version_import_provenance (course_version_id, import_id)
+VALUES ($1, $2)
+RETURNING course_version_id, import_id
+`
+
+type CreateCourseVersionImportProvenanceParams struct {
+	CourseVersionID pgtype.UUID
+	ImportID        pgtype.UUID
+}
+
+func (q *Queries) CreateCourseVersionImportProvenance(ctx context.Context, arg CreateCourseVersionImportProvenanceParams) (CoursesCourseVersionImportProvenance, error) {
+	row := q.db.QueryRow(ctx, createCourseVersionImportProvenance, arg.CourseVersionID, arg.ImportID)
+	var i CoursesCourseVersionImportProvenance
+	err := row.Scan(&i.CourseVersionID, &i.ImportID)
+	return i, err
+}
+
+const createCourseVersionPublicationProvenance = `-- name: CreateCourseVersionPublicationProvenance :one
+INSERT INTO courses.course_version_publication_provenance (
+    course_version_id, review_id, review_revision, draft_id, draft_revision,
+    snapshot_schema_version, submitted_by_user_id, submitted_at,
+    approved_by_user_id, approved_at, published_by_user_id
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING course_version_id, review_id, review_revision, draft_id, draft_revision, snapshot_schema_version, submitted_by_user_id, submitted_at, approved_by_user_id, approved_at, published_by_user_id
+`
+
+type CreateCourseVersionPublicationProvenanceParams struct {
+	CourseVersionID       pgtype.UUID
+	ReviewID              pgtype.UUID
+	ReviewRevision        int64
+	DraftID               pgtype.UUID
+	DraftRevision         int64
+	SnapshotSchemaVersion int32
+	SubmittedByUserID     pgtype.UUID
+	SubmittedAt           pgtype.Timestamptz
+	ApprovedByUserID      pgtype.UUID
+	ApprovedAt            pgtype.Timestamptz
+	PublishedByUserID     pgtype.UUID
+}
+
+func (q *Queries) CreateCourseVersionPublicationProvenance(ctx context.Context, arg CreateCourseVersionPublicationProvenanceParams) (CoursesCourseVersionPublicationProvenance, error) {
+	row := q.db.QueryRow(ctx, createCourseVersionPublicationProvenance,
+		arg.CourseVersionID,
+		arg.ReviewID,
+		arg.ReviewRevision,
+		arg.DraftID,
+		arg.DraftRevision,
+		arg.SnapshotSchemaVersion,
+		arg.SubmittedByUserID,
+		arg.SubmittedAt,
+		arg.ApprovedByUserID,
+		arg.ApprovedAt,
+		arg.PublishedByUserID,
+	)
+	var i CoursesCourseVersionPublicationProvenance
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.ReviewID,
+		&i.ReviewRevision,
+		&i.DraftID,
+		&i.DraftRevision,
+		&i.SnapshotSchemaVersion,
+		&i.SubmittedByUserID,
+		&i.SubmittedAt,
+		&i.ApprovedByUserID,
+		&i.ApprovedAt,
+		&i.PublishedByUserID,
+	)
+	return i, err
+}
+
+const createImmutableCourseVersionLesson = `-- name: CreateImmutableCourseVersionLesson :one
+INSERT INTO courses.lesson (
+    course_version_id, module_id, source_lesson_id, stable_key, title,
+    description, learning_objectives, estimated_duration_minutes, position, content
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
+`
+
+type CreateImmutableCourseVersionLessonParams struct {
+	CourseVersionID          pgtype.UUID
+	ModuleID                 pgtype.UUID
+	SourceLessonID           pgtype.UUID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []byte
+	EstimatedDurationMinutes pgtype.Int4
+	Position                 int32
+	Content                  []byte
+}
+
+func (q *Queries) CreateImmutableCourseVersionLesson(ctx context.Context, arg CreateImmutableCourseVersionLessonParams) (CoursesLesson, error) {
+	row := q.db.QueryRow(ctx, createImmutableCourseVersionLesson,
+		arg.CourseVersionID,
+		arg.ModuleID,
+		arg.SourceLessonID,
+		arg.StableKey,
+		arg.Title,
+		arg.Description,
+		arg.LearningObjectives,
+		arg.EstimatedDurationMinutes,
+		arg.Position,
+		arg.Content,
+	)
+	var i CoursesLesson
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.ModuleID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.EstimatedDurationMinutes,
+		&i.Position,
+		&i.CreatedAt,
+		&i.Content,
+		&i.SourceLessonID,
+	)
+	return i, err
+}
+
+const createImmutableCourseVersionModule = `-- name: CreateImmutableCourseVersionModule :one
+INSERT INTO courses.module (course_version_id, source_module_id, stable_key, title, description, position)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, course_version_id, stable_key, title, description, position, created_at, source_module_id
+`
+
+type CreateImmutableCourseVersionModuleParams struct {
+	CourseVersionID pgtype.UUID
+	SourceModuleID  pgtype.UUID
+	StableKey       string
+	Title           string
+	Description     string
+	Position        int32
+}
+
+func (q *Queries) CreateImmutableCourseVersionModule(ctx context.Context, arg CreateImmutableCourseVersionModuleParams) (CoursesModule, error) {
+	row := q.db.QueryRow(ctx, createImmutableCourseVersionModule,
+		arg.CourseVersionID,
+		arg.SourceModuleID,
+		arg.StableKey,
+		arg.Title,
+		arg.Description,
+		arg.Position,
+	)
+	var i CoursesModule
+	err := row.Scan(
+		&i.ID,
+		&i.CourseVersionID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.SourceModuleID,
+	)
+	return i, err
+}
+
+const createImportRecord = `-- name: CreateImportRecord :one
+INSERT INTO portability.import_record (
+    package_fingerprint, portable_source_course_id, portable_source_course_version_id,
+    source_version, target_course_id, target_course_version_id, imported_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, target_course_id, target_course_version_id, imported_at
+`
+
+type CreateImportRecordParams struct {
+	PackageFingerprint            string
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+	SourceVersion                 string
+	TargetCourseID                pgtype.UUID
+	TargetCourseVersionID         pgtype.UUID
+	ImportedAt                    pgtype.Timestamptz
+}
+
+func (q *Queries) CreateImportRecord(ctx context.Context, arg CreateImportRecordParams) (PortabilityImportRecord, error) {
+	row := q.db.QueryRow(ctx, createImportRecord,
+		arg.PackageFingerprint,
+		arg.PortableSourceCourseID,
+		arg.PortableSourceCourseVersionID,
+		arg.SourceVersion,
+		arg.TargetCourseID,
+		arg.TargetCourseVersionID,
+		arg.ImportedAt,
+	)
+	var i PortabilityImportRecord
+	err := row.Scan(
+		&i.ID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.TargetCourseID,
+		&i.TargetCourseVersionID,
+		&i.ImportedAt,
+	)
+	return i, err
+}
+
+const createImportedCourseVersion = `-- name: CreateImportedCourseVersion :one
+INSERT INTO courses.course_version (
+    course_id, version, status, title, description, learning_objectives,
+    source_language, changelog, license_kind, license_identifier,
+    license_display_name, license_url, license_custom_text, attribution, published_at, publication_origin
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'IMPORTED_PUBLICATION')
+RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
+`
+
+type CreateImportedCourseVersionParams struct {
+	CourseID           pgtype.UUID
+	Version            string
+	Status             string
+	Title              string
+	Description        string
+	LearningObjectives []byte
+	SourceLanguage     string
+	Changelog          string
+	LicenseKind        string
+	LicenseIdentifier  pgtype.Text
+	LicenseDisplayName string
+	LicenseUrl         pgtype.Text
+	LicenseCustomText  pgtype.Text
+	Attribution        []byte
+	PublishedAt        pgtype.Timestamptz
+}
+
+func (q *Queries) CreateImportedCourseVersion(ctx context.Context, arg CreateImportedCourseVersionParams) (CoursesCourseVersion, error) {
+	row := q.db.QueryRow(ctx, createImportedCourseVersion,
+		arg.CourseID,
+		arg.Version,
+		arg.Status,
+		arg.Title,
+		arg.Description,
+		arg.LearningObjectives,
+		arg.SourceLanguage,
+		arg.Changelog,
+		arg.LicenseKind,
+		arg.LicenseIdentifier,
+		arg.LicenseDisplayName,
+		arg.LicenseUrl,
+		arg.LicenseCustomText,
+		arg.Attribution,
+		arg.PublishedAt,
+	)
+	var i CoursesCourseVersion
+	err := row.Scan(
+		&i.ID,
+		&i.CourseID,
+		&i.Version,
+		&i.VersionMajor,
+		&i.VersionMinor,
+		&i.VersionPatch,
+		&i.Status,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.SourceLanguage,
+		&i.Changelog,
+		&i.LicenseKind,
+		&i.LicenseIdentifier,
+		&i.LicenseDisplayName,
+		&i.LicenseUrl,
+		&i.LicenseCustomText,
+		&i.Attribution,
+		&i.CreatedAt,
+		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }
@@ -102,7 +466,7 @@ INSERT INTO courses.lesson (
     learning_objectives, estimated_duration_minutes, position, content
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+RETURNING id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 `
 
 type CreateLessonParams struct {
@@ -142,6 +506,7 @@ func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) (Cou
 		&i.Position,
 		&i.CreatedAt,
 		&i.Content,
+		&i.SourceLessonID,
 	)
 	return i, err
 }
@@ -179,7 +544,7 @@ func (q *Queries) CreateLessonPrerequisite(ctx context.Context, arg CreateLesson
 const createModule = `-- name: CreateModule :one
 INSERT INTO courses.module (course_version_id, stable_key, title, description, position)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, course_version_id, stable_key, title, description, position, created_at
+RETURNING id, course_version_id, stable_key, title, description, position, created_at, source_module_id
 `
 
 type CreateModuleParams struct {
@@ -207,6 +572,57 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Cou
 		&i.Description,
 		&i.Position,
 		&i.CreatedAt,
+		&i.SourceModuleID,
+	)
+	return i, err
+}
+
+const createPortableSourceCourseMapping = `-- name: CreatePortableSourceCourseMapping :one
+INSERT INTO portability.source_course_mapping (portable_source_course_id, local_course_id)
+VALUES ($1, $2)
+RETURNING local_course_id
+`
+
+type CreatePortableSourceCourseMappingParams struct {
+	PortableSourceCourseID string
+	LocalCourseID          pgtype.UUID
+}
+
+func (q *Queries) CreatePortableSourceCourseMapping(ctx context.Context, arg CreatePortableSourceCourseMappingParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createPortableSourceCourseMapping, arg.PortableSourceCourseID, arg.LocalCourseID)
+	var local_course_id pgtype.UUID
+	err := row.Scan(&local_course_id)
+	return local_course_id, err
+}
+
+const finalizeImportRecord = `-- name: FinalizeImportRecord :one
+UPDATE portability.import_record
+SET target_course_id = $2,
+    target_course_version_id = $3
+WHERE id = $1
+  AND target_course_id IS NULL
+  AND target_course_version_id IS NULL
+RETURNING id, package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, target_course_id, target_course_version_id, imported_at
+`
+
+type FinalizeImportRecordParams struct {
+	ID                    pgtype.UUID
+	TargetCourseID        pgtype.UUID
+	TargetCourseVersionID pgtype.UUID
+}
+
+func (q *Queries) FinalizeImportRecord(ctx context.Context, arg FinalizeImportRecordParams) (PortabilityImportRecord, error) {
+	row := q.db.QueryRow(ctx, finalizeImportRecord, arg.ID, arg.TargetCourseID, arg.TargetCourseVersionID)
+	var i PortabilityImportRecord
+	err := row.Scan(
+		&i.ID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.TargetCourseID,
+		&i.TargetCourseVersionID,
+		&i.ImportedAt,
 	)
 	return i, err
 }
@@ -238,7 +654,7 @@ func (q *Queries) GetCourseBySlug(ctx context.Context, slug string) (CoursesCour
 }
 
 const getCourseVersion = `-- name: GetCourseVersion :one
-SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 FROM courses.course_version
 WHERE id = $1
 `
@@ -267,12 +683,13 @@ func (q *Queries) GetCourseVersion(ctx context.Context, id pgtype.UUID) (Courses
 		&i.Attribution,
 		&i.CreatedAt,
 		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }
 
 const getCourseVersionByCourseAndVersion = `-- name: GetCourseVersionByCourseAndVersion :one
-SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 FROM courses.course_version
 WHERE course_id = $1 AND version = $2
 `
@@ -306,12 +723,146 @@ func (q *Queries) GetCourseVersionByCourseAndVersion(ctx context.Context, arg Ge
 		&i.Attribution,
 		&i.CreatedAt,
 		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }
 
+const getCourseVersionIDByReviewID = `-- name: GetCourseVersionIDByReviewID :one
+SELECT course_version_id
+FROM courses.course_version_publication_provenance
+WHERE review_id = $1
+`
+
+func (q *Queries) GetCourseVersionIDByReviewID(ctx context.Context, reviewID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getCourseVersionIDByReviewID, reviewID)
+	var course_version_id pgtype.UUID
+	err := row.Scan(&course_version_id)
+	return course_version_id, err
+}
+
+const getCourseVersionImportProvenance = `-- name: GetCourseVersionImportProvenance :one
+SELECT imported.course_version_id, imported.import_id, record.package_fingerprint,
+       record.portable_source_course_id, record.portable_source_course_version_id,
+       record.source_version, record.imported_at
+FROM courses.course_version_import_provenance AS imported
+JOIN portability.import_record AS record ON record.id = imported.import_id
+WHERE imported.course_version_id = $1
+`
+
+type GetCourseVersionImportProvenanceRow struct {
+	CourseVersionID               pgtype.UUID
+	ImportID                      pgtype.UUID
+	PackageFingerprint            string
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+	SourceVersion                 string
+	ImportedAt                    pgtype.Timestamptz
+}
+
+func (q *Queries) GetCourseVersionImportProvenance(ctx context.Context, courseVersionID pgtype.UUID) (GetCourseVersionImportProvenanceRow, error) {
+	row := q.db.QueryRow(ctx, getCourseVersionImportProvenance, courseVersionID)
+	var i GetCourseVersionImportProvenanceRow
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.ImportID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.ImportedAt,
+	)
+	return i, err
+}
+
+const getCourseVersionPublicationProvenance = `-- name: GetCourseVersionPublicationProvenance :one
+SELECT course_version_id, review_id, review_revision, draft_id, draft_revision, snapshot_schema_version, submitted_by_user_id, submitted_at, approved_by_user_id, approved_at, published_by_user_id
+FROM courses.course_version_publication_provenance
+WHERE course_version_id = $1
+`
+
+func (q *Queries) GetCourseVersionPublicationProvenance(ctx context.Context, courseVersionID pgtype.UUID) (CoursesCourseVersionPublicationProvenance, error) {
+	row := q.db.QueryRow(ctx, getCourseVersionPublicationProvenance, courseVersionID)
+	var i CoursesCourseVersionPublicationProvenance
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.ReviewID,
+		&i.ReviewRevision,
+		&i.DraftID,
+		&i.DraftRevision,
+		&i.SnapshotSchemaVersion,
+		&i.SubmittedByUserID,
+		&i.SubmittedAt,
+		&i.ApprovedByUserID,
+		&i.ApprovedAt,
+		&i.PublishedByUserID,
+	)
+	return i, err
+}
+
+const getImportRecordByFingerprint = `-- name: GetImportRecordByFingerprint :one
+SELECT id, package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, target_course_id, target_course_version_id, imported_at FROM portability.import_record WHERE package_fingerprint = $1
+`
+
+func (q *Queries) GetImportRecordByFingerprint(ctx context.Context, packageFingerprint string) (PortabilityImportRecord, error) {
+	row := q.db.QueryRow(ctx, getImportRecordByFingerprint, packageFingerprint)
+	var i PortabilityImportRecord
+	err := row.Scan(
+		&i.ID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.TargetCourseID,
+		&i.TargetCourseVersionID,
+		&i.ImportedAt,
+	)
+	return i, err
+}
+
+const getImportRecordByPortableSourceVersion = `-- name: GetImportRecordByPortableSourceVersion :one
+SELECT id, package_fingerprint, portable_source_course_id, portable_source_course_version_id, source_version, target_course_id, target_course_version_id, imported_at FROM portability.import_record
+WHERE portable_source_course_id = $1 AND portable_source_course_version_id = $2
+`
+
+type GetImportRecordByPortableSourceVersionParams struct {
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+}
+
+func (q *Queries) GetImportRecordByPortableSourceVersion(ctx context.Context, arg GetImportRecordByPortableSourceVersionParams) (PortabilityImportRecord, error) {
+	row := q.db.QueryRow(ctx, getImportRecordByPortableSourceVersion, arg.PortableSourceCourseID, arg.PortableSourceCourseVersionID)
+	var i PortabilityImportRecord
+	err := row.Scan(
+		&i.ID,
+		&i.PackageFingerprint,
+		&i.PortableSourceCourseID,
+		&i.PortableSourceCourseVersionID,
+		&i.SourceVersion,
+		&i.TargetCourseID,
+		&i.TargetCourseVersionID,
+		&i.ImportedAt,
+	)
+	return i, err
+}
+
+const getLatestPublishedCourseVersionID = `-- name: GetLatestPublishedCourseVersionID :one
+SELECT id
+FROM courses.course_version
+WHERE course_id = $1 AND status = 'PUBLISHED'
+ORDER BY version_major DESC, version_minor DESC, version_patch DESC, id DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestPublishedCourseVersionID(ctx context.Context, courseID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getLatestPublishedCourseVersionID, courseID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getLesson = `-- name: GetLesson :one
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 FROM courses.lesson
 WHERE id = $1
 `
@@ -331,12 +882,13 @@ func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (CoursesLesson,
 		&i.Position,
 		&i.CreatedAt,
 		&i.Content,
+		&i.SourceLessonID,
 	)
 	return i, err
 }
 
 const getLessonByCourseVersionAndKey = `-- name: GetLessonByCourseVersionAndKey :one
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 FROM courses.lesson
 WHERE course_version_id = $1 AND stable_key = $2
 `
@@ -361,12 +913,13 @@ func (q *Queries) GetLessonByCourseVersionAndKey(ctx context.Context, arg GetLes
 		&i.Position,
 		&i.CreatedAt,
 		&i.Content,
+		&i.SourceLessonID,
 	)
 	return i, err
 }
 
 const getModule = `-- name: GetModule :one
-SELECT id, course_version_id, stable_key, title, description, position, created_at
+SELECT id, course_version_id, stable_key, title, description, position, created_at, source_module_id
 FROM courses.module
 WHERE id = $1
 `
@@ -382,12 +935,13 @@ func (q *Queries) GetModule(ctx context.Context, id pgtype.UUID) (CoursesModule,
 		&i.Description,
 		&i.Position,
 		&i.CreatedAt,
+		&i.SourceModuleID,
 	)
 	return i, err
 }
 
 const getModuleByCourseVersionAndKey = `-- name: GetModuleByCourseVersionAndKey :one
-SELECT id, course_version_id, stable_key, title, description, position, created_at
+SELECT id, course_version_id, stable_key, title, description, position, created_at, source_module_id
 FROM courses.module
 WHERE course_version_id = $1 AND stable_key = $2
 `
@@ -408,12 +962,137 @@ func (q *Queries) GetModuleByCourseVersionAndKey(ctx context.Context, arg GetMod
 		&i.Description,
 		&i.Position,
 		&i.CreatedAt,
+		&i.SourceModuleID,
 	)
 	return i, err
 }
 
+const getPortableSourceCourseMapping = `-- name: GetPortableSourceCourseMapping :one
+SELECT local_course_id
+FROM portability.source_course_mapping
+WHERE portable_source_course_id = $1
+`
+
+func (q *Queries) GetPortableSourceCourseMapping(ctx context.Context, portableSourceCourseID string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getPortableSourceCourseMapping, portableSourceCourseID)
+	var local_course_id pgtype.UUID
+	err := row.Scan(&local_course_id)
+	return local_course_id, err
+}
+
+const getPublishedAssetBindingByCourseAndVersionAndAssetKey = `-- name: GetPublishedAssetBindingByCourseAndVersionAndAssetKey :one
+SELECT binding.course_version_id, binding.asset_key, binding.storage_object_id, binding.original_filename, binding.media_type, binding.byte_size, binding.sha256_digest
+FROM courses.course_version_asset_binding AS binding
+JOIN courses.course_version AS version ON version.id = binding.course_version_id
+WHERE version.course_id = $1
+  AND version.version = $2
+  AND version.status = 'PUBLISHED'
+  AND binding.asset_key = $3
+`
+
+type GetPublishedAssetBindingByCourseAndVersionAndAssetKeyParams struct {
+	CourseID pgtype.UUID
+	Version  string
+	AssetKey pgtype.UUID
+}
+
+func (q *Queries) GetPublishedAssetBindingByCourseAndVersionAndAssetKey(ctx context.Context, arg GetPublishedAssetBindingByCourseAndVersionAndAssetKeyParams) (CoursesCourseVersionAssetBinding, error) {
+	row := q.db.QueryRow(ctx, getPublishedAssetBindingByCourseAndVersionAndAssetKey, arg.CourseID, arg.Version, arg.AssetKey)
+	var i CoursesCourseVersionAssetBinding
+	err := row.Scan(
+		&i.CourseVersionID,
+		&i.AssetKey,
+		&i.StorageObjectID,
+		&i.OriginalFilename,
+		&i.MediaType,
+		&i.ByteSize,
+		&i.Sha256Digest,
+	)
+	return i, err
+}
+
+const getPublishedCourseVersionIDByCourseAndVersion = `-- name: GetPublishedCourseVersionIDByCourseAndVersion :one
+SELECT id
+FROM courses.course_version
+WHERE course_id = $1 AND version = $2 AND status = 'PUBLISHED'
+`
+
+type GetPublishedCourseVersionIDByCourseAndVersionParams struct {
+	CourseID pgtype.UUID
+	Version  string
+}
+
+func (q *Queries) GetPublishedCourseVersionIDByCourseAndVersion(ctx context.Context, arg GetPublishedCourseVersionIDByCourseAndVersionParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getPublishedCourseVersionIDByCourseAndVersion, arg.CourseID, arg.Version)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const listCourseVersionAssessmentBindings = `-- name: ListCourseVersionAssessmentBindings :many
+SELECT course_version_id, assessment_key, definition
+FROM courses.course_version_assessment_binding
+WHERE course_version_id = $1
+ORDER BY assessment_key ASC
+`
+
+func (q *Queries) ListCourseVersionAssessmentBindings(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesCourseVersionAssessmentBinding, error) {
+	rows, err := q.db.Query(ctx, listCourseVersionAssessmentBindings, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesCourseVersionAssessmentBinding
+	for rows.Next() {
+		var i CoursesCourseVersionAssessmentBinding
+		if err := rows.Scan(&i.CourseVersionID, &i.AssessmentKey, &i.Definition); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCourseVersionAssetBindings = `-- name: ListCourseVersionAssetBindings :many
+SELECT course_version_id, asset_key, storage_object_id, original_filename, media_type, byte_size, sha256_digest
+FROM courses.course_version_asset_binding
+WHERE course_version_id = $1
+ORDER BY asset_key ASC
+`
+
+func (q *Queries) ListCourseVersionAssetBindings(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesCourseVersionAssetBinding, error) {
+	rows, err := q.db.Query(ctx, listCourseVersionAssetBindings, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesCourseVersionAssetBinding
+	for rows.Next() {
+		var i CoursesCourseVersionAssetBinding
+		if err := rows.Scan(
+			&i.CourseVersionID,
+			&i.AssetKey,
+			&i.StorageObjectID,
+			&i.OriginalFilename,
+			&i.MediaType,
+			&i.ByteSize,
+			&i.Sha256Digest,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCourseVersions = `-- name: ListCourseVersions :many
-SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 FROM courses.course_version
 WHERE course_id = $1
 ORDER BY version_major DESC, version_minor DESC, version_patch DESC, id DESC
@@ -449,6 +1128,7 @@ func (q *Queries) ListCourseVersions(ctx context.Context, courseID pgtype.UUID) 
 			&i.Attribution,
 			&i.CreatedAt,
 			&i.PublishedAt,
+			&i.PublicationOrigin,
 		); err != nil {
 			return nil, err
 		}
@@ -476,6 +1156,71 @@ func (q *Queries) ListCourses(ctx context.Context) ([]CoursesCourse, error) {
 	for rows.Next() {
 		var i CoursesCourse
 		if err := rows.Scan(&i.ID, &i.Slug, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestPublishedCourseVersions = `-- name: ListLatestPublishedCourseVersions :many
+WITH latest AS (
+    SELECT DISTINCT ON (version.course_id) version.id
+    FROM courses.course_version AS version
+    JOIN courses.course_version_publication_provenance AS provenance
+        ON provenance.course_version_id = version.id
+    WHERE version.status = 'PUBLISHED'
+    ORDER BY version.course_id, version.version_major DESC, version.version_minor DESC, version.version_patch DESC, version.id DESC
+)
+SELECT version.id, version.course_id, version.version, version.version_major, version.version_minor, version.version_patch, version.status, version.title, version.description, version.learning_objectives, version.source_language, version.changelog, version.license_kind, version.license_identifier, version.license_display_name, version.license_url, version.license_custom_text, version.attribution, version.created_at, version.published_at, version.publication_origin
+FROM courses.course_version AS version
+JOIN latest ON latest.id = version.id
+WHERE ($1::text IS NULL OR version.source_language = $1::text)
+ORDER BY version.title ASC, version.course_id ASC
+LIMIT $3 OFFSET $2
+`
+
+type ListLatestPublishedCourseVersionsParams struct {
+	Language pgtype.Text
+	Offset   int32
+	Limit    int32
+}
+
+func (q *Queries) ListLatestPublishedCourseVersions(ctx context.Context, arg ListLatestPublishedCourseVersionsParams) ([]CoursesCourseVersion, error) {
+	rows, err := q.db.Query(ctx, listLatestPublishedCourseVersions, arg.Language, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesCourseVersion
+	for rows.Next() {
+		var i CoursesCourseVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.Version,
+			&i.VersionMajor,
+			&i.VersionMinor,
+			&i.VersionPatch,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.SourceLanguage,
+			&i.Changelog,
+			&i.LicenseKind,
+			&i.LicenseIdentifier,
+			&i.LicenseDisplayName,
+			&i.LicenseUrl,
+			&i.LicenseCustomText,
+			&i.Attribution,
+			&i.CreatedAt,
+			&i.PublishedAt,
+			&i.PublicationOrigin,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -630,8 +1375,48 @@ func (q *Queries) ListLessonSummariesForCourseVersion(ctx context.Context, cours
 	return items, nil
 }
 
+const listLessonsForCourseVersion = `-- name: ListLessonsForCourseVersion :many
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
+FROM courses.lesson
+WHERE course_version_id = $1
+ORDER BY module_id ASC, position ASC, id ASC
+`
+
+func (q *Queries) ListLessonsForCourseVersion(ctx context.Context, courseVersionID pgtype.UUID) ([]CoursesLesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsForCourseVersion, courseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CoursesLesson
+	for rows.Next() {
+		var i CoursesLesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseVersionID,
+			&i.ModuleID,
+			&i.StableKey,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.EstimatedDurationMinutes,
+			&i.Position,
+			&i.CreatedAt,
+			&i.Content,
+			&i.SourceLessonID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLessonsForModule = `-- name: ListLessonsForModule :many
-SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content
+SELECT id, course_version_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, created_at, content, source_lesson_id
 FROM courses.lesson
 WHERE module_id = $1
 ORDER BY position ASC, id ASC
@@ -658,6 +1443,7 @@ func (q *Queries) ListLessonsForModule(ctx context.Context, moduleID pgtype.UUID
 			&i.Position,
 			&i.CreatedAt,
 			&i.Content,
+			&i.SourceLessonID,
 		); err != nil {
 			return nil, err
 		}
@@ -670,7 +1456,7 @@ func (q *Queries) ListLessonsForModule(ctx context.Context, moduleID pgtype.UUID
 }
 
 const listModulesForCourseVersion = `-- name: ListModulesForCourseVersion :many
-SELECT id, course_version_id, stable_key, title, description, position, created_at
+SELECT id, course_version_id, stable_key, title, description, position, created_at, source_module_id
 FROM courses.module
 WHERE course_version_id = $1
 ORDER BY position ASC, id ASC
@@ -693,6 +1479,7 @@ func (q *Queries) ListModulesForCourseVersion(ctx context.Context, courseVersion
 			&i.Description,
 			&i.Position,
 			&i.CreatedAt,
+			&i.SourceModuleID,
 		); err != nil {
 			return nil, err
 		}
@@ -705,7 +1492,7 @@ func (q *Queries) ListModulesForCourseVersion(ctx context.Context, courseVersion
 }
 
 const listPublishedCourseVersions = `-- name: ListPublishedCourseVersions :many
-SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+SELECT id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 FROM courses.course_version
 WHERE status = 'PUBLISHED'
 ORDER BY course_id ASC, version_major DESC, version_minor DESC, version_patch DESC, id DESC
@@ -741,6 +1528,7 @@ func (q *Queries) ListPublishedCourseVersions(ctx context.Context) ([]CoursesCou
 			&i.Attribution,
 			&i.CreatedAt,
 			&i.PublishedAt,
+			&i.PublicationOrigin,
 		); err != nil {
 			return nil, err
 		}
@@ -756,7 +1544,7 @@ const transitionCourseVersionStatus = `-- name: TransitionCourseVersionStatus :o
 UPDATE courses.course_version
 SET status = $3
 WHERE id = $1 AND status = $2
-RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at
+RETURNING id, course_id, version, version_major, version_minor, version_patch, status, title, description, learning_objectives, source_language, changelog, license_kind, license_identifier, license_display_name, license_url, license_custom_text, attribution, created_at, published_at, publication_origin
 `
 
 type TransitionCourseVersionStatusParams struct {
@@ -789,6 +1577,7 @@ func (q *Queries) TransitionCourseVersionStatus(ctx context.Context, arg Transit
 		&i.Attribution,
 		&i.CreatedAt,
 		&i.PublishedAt,
+		&i.PublicationOrigin,
 	)
 	return i, err
 }

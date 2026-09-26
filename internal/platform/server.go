@@ -12,15 +12,34 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
+	assessmentspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
+	assetslocal "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/localstorage"
+	assetspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
 	authoringpostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community"
+	communitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	coursespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges"
+	statuspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/publication"
+	credentialspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	identitypostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/infrastructure/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
+	pluginspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/portability"
+	progresspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
+	translationspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/web"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -37,6 +56,11 @@ const maxRequestHeaderBytes = 16 * 1024
 const maxRequestReadDuration = 10 * time.Second
 
 func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
+	assetStorage, err := assetslocal.New(cfg.AssetStoragePath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = assetStorage.Close() }()
 	origins, err := newOriginPolicy(cfg)
 	if err != nil {
 		return err
@@ -64,8 +88,89 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	metricsServer := &http.Server{Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: maxRequestHeaderBytes}
 	go func() { _ = metricsServer.Serve(metricsListener) }()
 
-	authoringRepository := authoringpostgres.New(pool)
+	authoringRepository := authoringpostgres.New(pool).WithAssessmentSnapshotReader(func(tx pgx.Tx) authoringpostgres.AssessmentSnapshotReader {
+		return assessmentspostgres.New(tx)
+	})
 	authoringAuthorizer := authoring.NewAuthorizationService(authoringRepository)
+	assetRepository := assetspostgres.New(pool)
+	assessmentRepository := assessmentspostgres.New(pool)
+	assetIngestion, err := assets.NewIngestionService(assetRepository, assetStorage, cfg.AssetMaxBytes)
+	if err != nil {
+		return err
+	}
+	coursesRepository := coursespostgres.New(pool)
+	pluginRepository := pluginspostgres.New(pool)
+	pluginRegistry := plugins.NewRegistryService(pluginRepository, plugins.Policy{})
+	dashboardWidgets := &dashboardWidgetAPI{placements: plugins.NewDashboardPlacementService(pluginRegistry, pluginRepository, time.Now), registry: pluginRegistry}
+	pluginManagement := &pluginManagementAPI{registry: pluginRegistry}
+	pluginContentValidator := plugins.NewCourseWidgetContentValidator(pluginRegistry)
+	certificateRepository := credentialspostgres.New(pool)
+	var badgePublication *publication.Service
+	if key, enabled, keyErr := cfg.signedOpenBadgesKey(); keyErr != nil {
+		return keyErr
+	} else if enabled {
+		mapper, mapErr := openbadges.NewMapper(openbadges.Config{PublicBaseURL: cfg.PublicOrigin, SubjectSalt: []byte(cfg.OpenBadgesSubjectSecret)})
+		if mapErr != nil {
+			return mapErr
+		}
+		badgePublication, mapErr = publication.NewService(certificateRepository, statuspostgres.New(pool), mapper, key, cfg.CertificateIssuer, time.Now)
+		if mapErr != nil {
+			return mapErr
+		}
+		badgePublication = badgePublication.WithLogger(log)
+		if mapErr = badgePublication.RegisterKey(ctx); mapErr != nil {
+			return mapErr
+		}
+	}
+	certificateIssuance, err := credentials.NewCertificateIssuanceService(certificateRepository, coursesRepository, progresspostgres.New(pool), cfg.CertificateIssuer, time.Now)
+	if err != nil {
+		return err
+	}
+	publicationAssetResolver := authoring.NewAssetPublicationResolver(assetRepository)
+	translationService, err := translations.NewService(coursesRepository, translationspostgres.New(pool), time.Now)
+	if err != nil {
+		return err
+	}
+	translationAuthorizer := translations.NewAuthorizationService(coursesRepository)
+	translationApplication, err := translations.NewApplicationService(translationService, translationAuthorizer)
+	if err != nil {
+		return err
+	}
+	translationWorkspace, err := translations.NewWorkspaceQueryService(translationService, translationAuthorizer)
+	if err != nil {
+		return err
+	}
+	translatedCourses, err := translations.NewLearnerReader(translationService, courses.NewPublishedReadService(coursesRepository))
+	if err != nil {
+		return err
+	}
+	publicationService := authoring.NewPublicationServiceWithAssetsAndWidgets(authoringRepository, publicationAssetResolver, courses.NewCourseVersionStore(coursesRepository), authoringRepository, pluginContentValidator)
+	packageExporter, err := portability.NewExporter(coursesRepository, translationService, assetStorage, time.Now)
+	if err != nil {
+		return err
+	}
+	packageImportRepository, err := portability.NewPostgresImportRepository(pool, assetStorage, cfg.AssetMaxBytes)
+	if err != nil {
+		return err
+	}
+	packageImporter, err := portability.NewImporterWithCourseWidgets(packageImportRepository, pluginRegistry, time.Now)
+	if err != nil {
+		return err
+	}
+	var pluginRuntime *pluginRuntimeHTTP
+	var courseWidgetRuntime courseWidgetLaunch
+	var dashboardWidgetRuntime dashboardWidgetLaunch
+	if tokenService, enabled, tokenErr := cfg.widgetRuntimeTokenService(); tokenErr != nil {
+		return tokenErr
+	} else if enabled {
+		runtimeService, runtimeErr := plugins.NewRuntimeService(pluginRegistry, tokenService, cfg.PluginRuntimeOrigin, cfg.PublicOrigin)
+		if runtimeErr != nil {
+			return runtimeErr
+		}
+		pluginRuntime = &pluginRuntimeHTTP{service: runtimeService}
+		courseWidgetRuntime = plugins.NewCourseWidgetLaunchService(coursesRepository, runtimeService)
+		dashboardWidgetRuntime = plugins.NewDashboardWidgetLaunchService(pluginRepository, runtimeService)
+	}
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
 		sessions:                    identity.NewSessionService(identitypostgres.New(pool), nil, nil),
@@ -76,10 +181,47 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		loginMetrics:                loginAttempts,
 		loginRejects:                loginRejections,
 		authorizer:                  identity.NewAuthorizationService(identitypostgres.New(pool)),
-		courses:                     courses.NewReadService(coursespostgres.New(pool)),
+		courses:                     courses.NewReadService(coursesRepository),
+		publishedCourses:            courses.NewPublishedReadService(coursesRepository),
+		publishedAssets:             courses.NewPublishedAssetReadService(coursesRepository),
+		publishedCatalog:            courses.NewPublishedCatalogService(coursesRepository),
+		assetStorage:                assetStorage,
 		authoring:                   authoring.NewReadService(authoringRepository, authoringAuthorizer),
+		authoringCreation:           authoring.NewDraftCreationService(authoringRepository),
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
+		authoringLessonMutations:    authoring.NewLessonMutationService(authoringRepository, authoringAuthorizer),
+		authoringLessonContent:      authoring.NewLessonContentMutationServiceWithValidator(authoringRepository, authoringAuthorizer, pluginContentValidator),
+		authoringCourseWidgets:      authoring.NewCourseWidgetDiscoveryService(courseWidgetDiscoveryAdapter{registry: pluginRegistry}, authoringAuthorizer),
+		authoringMemberships:        authoring.NewMembershipMutationService(authoringRepository, authoringAuthorizer),
+		authoringReviews:            newAuthoringReviewApplicationService(cfg, authoringRepository, authoringAuthorizer),
+		authoringPublicationStatus:  authoring.NewReviewPublicationStatusServiceWithAssets(authoringRepository, authoringAuthorizer, publicationAssetResolver),
+		authoringPublications:       authoring.NewPublicationApplicationService(publicationService, authoringAuthorizer, time.Now),
+		authoringAssetUploads:       authoring.NewAssetUploadService(assetIngestion, authoringAuthorizer),
+		authoringAssets:             authoring.NewAssetListService(assetRepository, authoringAuthorizer),
+		authoringAssessments:        authoring.NewAssessmentManagementService(assessmentRepository, authoringAuthorizer),
+		learnerAttempts:             assessments.NewLearnerAttemptService(assessmentRepository, coursesRepository, time.Now),
+		community:                   community.NewService(communitypostgres.New(pool), coursesRepository),
+		translations:                translationApplication,
+		translationWorkspace:        translationWorkspace,
+		translatedCourses:           translatedCourses,
+		certificateIssuance:         certificateIssuance,
+		certificates:                certificateRepository,
+		badgePublication:            badgePublication,
+		badgePublicOrigin:           cfg.PublicOrigin,
+		badgeIssuer:                 cfg.CertificateIssuer,
+		achievementVersions:         coursesRepository,
+		assetMaxBytes:               cfg.AssetMaxBytes,
+		portabilityExporter:         packageExporter,
+		portabilityImporter:         packageImporter,
+		courseWidgetRuntime:         courseWidgetRuntime,
+		dashboardWidgetRuntime:      dashboardWidgetRuntime,
+		dashboardWidgets:            dashboardWidgets,
+		pluginManagement:            pluginManagement,
+		portabilityReader:           portability.NewReader(portability.DefaultLimits()),
+		portabilityCourses:          coursesRepository,
+		portabilityPreviews:         newPortabilityPreviewStore(time.Now),
+		pluginRuntime:               pluginRuntime,
 		authzMetrics:                authorizationDecisions,
 		cookieSecure:                !cfg.DevelopmentHTTP,
 		now:                         time.Now,
@@ -103,6 +245,13 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	}
 }
 
+// newAuthoringReviewApplicationService keeps independent-review configuration
+// at composition time. The Review application remains responsible for the
+// decision policy itself; transports never receive deployment policy details.
+func newAuthoringReviewApplicationService(cfg Config, repository authoring.ReviewRepository, authorizer authoring.Authorizer) *authoring.ReviewApplicationService {
+	return authoring.NewReviewApplicationServiceWithDecisionPolicy(repository, authorizer, authoring.NewReviewDecisionPolicy(cfg.RequireIndependentReview))
+}
+
 func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.CounterVec, latency *prometheus.HistogramVec, auth *authHTTP) http.Handler {
 	r := chi.NewRouter()
 	r.Use(correlationID)
@@ -123,29 +272,146 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
+	if auth != nil && auth.pluginRuntime != nil {
+		r.Group(func(runtime chi.Router) {
+			runtime.Use(auth.pluginRuntime.requireRuntimeHost)
+			runtime.Get("/plugins/runtime/bridge-v1.js", auth.pluginRuntime.handleBridge)
+			runtime.Get("/plugins/runtime/{pluginId}/{version}/{digest}/widgets/{widgetId}", auth.pluginRuntime.handlePage)
+			runtime.Get("/plugins/runtime/{pluginId}/{version}/{digest}/resources/*", auth.pluginRuntime.handleResource)
+			runtime.Get("/api/plugin-runtime/context", auth.pluginRuntime.handleContext)
+			runtime.Post("/api/plugin-runtime/token/refresh", auth.pluginRuntime.handleRefresh)
+		})
+	}
 	if auth != nil {
 		r.Route("/api", func(api chi.Router) {
 			api.Use(auth.noStore)
 			api.Use(auth.enforceOrigin)
 			api.Post("/auth/login", auth.handleLogin)
+			if auth.publishedCatalog != nil {
+				api.Get("/courses/catalog", auth.handlePublishedCourseCatalog)
+			}
 			if auth.courses != nil {
 				api.Get("/courses", auth.handleCourseList)
 				api.Get("/courses/{slug}", auth.handleCourseCurrent)
 				api.Get("/courses/{slug}/versions/{version}", auth.handleCourseVersion)
 				api.Get("/courses/{slug}/versions/{version}/lessons/{lessonKey}", auth.handleLesson)
 			}
+			if auth.courseWidgetRuntime != nil {
+				api.Post("/courses/by-id/{courseId}/versions/{version}/lessons/{lessonKey}/blocks/{blockKey}/widget-runtime", auth.handleCourseWidgetRuntimeLaunch)
+			}
+			if auth.translatedCourses != nil {
+				api.Get("/courses/by-id/{courseId}/versions/{version}/translations/{language}", auth.handleLearnerTranslatedCourse)
+				api.Get("/courses/by-id/{courseId}/versions/{version}/languages", auth.handleTranslationLanguages)
+			}
+			if auth.publishedCourses != nil {
+				// The legacy public Courses routes are slug-addressed. The ID
+				// namespace keeps those stable while exposing complete immutable
+				// M4.5 publications through exact Courses-owned IDs.
+				api.Get("/courses/by-id/{courseId}/versions/{version}", auth.handlePublishedCourseVersion)
+				api.Get("/courses/by-id/{courseId}/latest", auth.handleLatestPublishedCourseVersion)
+			}
+			if auth.certificates != nil {
+				api.Get("/public/certificates/{certificateId}", auth.handlePublicCertificate)
+			}
+			if auth.badgePublication != nil {
+				api.Get("/public/open-badges/{certificateId}", auth.handleSignedOpenBadge)
+			}
+			if auth.publishedAssets != nil && auth.assetStorage != nil {
+				api.Get("/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}", auth.handlePublishedCourseAsset)
+				api.Head("/courses/by-id/{courseId}/versions/{version}/assets/{assetKey}", auth.handlePublishedCourseAsset)
+			}
 			api.With(auth.resolveSession(false), auth.csrfProtection).Post("/auth/logout", auth.handleLogout)
 			api.Group(func(protected chi.Router) {
 				// Future cookie-authenticated APIs belong in this group: both
 				// per-request resolution and unsafe-method CSRF are inherited.
 				protected.Use(auth.authenticated)
+				if auth.portabilityExporter != nil {
+					protected.Get("/courses/by-id/{courseId}/versions/{version}/export", auth.handleCoursePackageExport)
+				}
+				if auth.portabilityImporter != nil && auth.portabilityReader != nil {
+					portable := protected.With(auth.requireCapability(identity.CapabilityPortabilityImport, identity.InstanceResource()))
+					portable.Post("/portability/imports/preview", auth.handlePortabilityPreview)
+					portable.Post("/portability/imports/{previewToken}/execute", auth.handlePortabilityExecute)
+				}
 				protected.Get("/auth/session", auth.handleSession)
+				if auth.certificateIssuance != nil && auth.certificates != nil {
+					protected.Post("/courses/by-id/{courseId}/versions/{version}/certificate", auth.handleCertificateIssue)
+					protected.Get("/learner/certificates/{certificateId}", auth.handleLearnerCertificateGet)
+				}
+				if auth.learnerAttempts != nil {
+					protected.Post("/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts", auth.handleLearnerAttemptCreate)
+					protected.Get("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptGet)
+					protected.Put("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptUpdate)
+					protected.Post("/learner/assessment-attempts/{attemptId}/submit", auth.handleLearnerAttemptSubmit)
+				}
+				if auth.translations != nil && auth.translationWorkspace != nil {
+					protected.Post("/courses/by-id/{courseId}/versions/{version}/translations", auth.handleTranslationCreate)
+					protected.Get("/courses/by-id/{courseId}/versions/{version}/translations", auth.handleTranslationList)
+					protected.Get("/translations/{translationId}", auth.handleTranslationWorkspace)
+					protected.Patch("/translations/{translationId}", auth.handleTranslationPatch)
+					protected.Post("/translations/{translationId}/publish", auth.handleTranslationPublish)
+				}
+				if auth.community != nil {
+					protected.Get("/courses/by-id/{courseId}/community/moderation", auth.handleCommunityModerationProbe)
+					protected.Get("/courses/by-id/{courseId}/community/moderation/threads", auth.handleCommunityModeratorThreads)
+					protected.Get("/courses/by-id/{courseId}/community/moderation/threads/{threadId}", auth.handleCommunityModeratorThread)
+					protected.Get("/courses/by-id/{courseId}/community", auth.handleCommunity)
+					protected.Get("/courses/by-id/{courseId}/community/threads", auth.handleCommunityThreads)
+					protected.Post("/courses/by-id/{courseId}/community/threads", auth.handleCommunityCreateThread)
+					protected.Get("/courses/by-id/{courseId}/community/threads/{threadId}", auth.handleCommunityThread)
+					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/posts", auth.handleCommunityCreatePost)
+					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/{action:hide|unhide}", auth.handleCommunityModerateThread)
+					protected.Post("/courses/by-id/{courseId}/community/threads/{threadId}/posts/{postId}/{action:hide|unhide}", auth.handleCommunityModeratePost)
+				}
 				protected.With(auth.requireCapability(identity.CapabilityInstanceManage, identity.InstanceResource())).Get("/admin/status", auth.handleAdminStatus)
+				if auth.pluginManagement != nil {
+					management := protected.With(auth.requireCapability(identity.CapabilityPluginsManage, identity.InstanceResource()))
+					management.Get("/plugins", auth.pluginManagement.list)
+					management.Post("/plugins", auth.pluginManagement.register)
+					management.Get("/plugins/keys", auth.pluginManagement.keys)
+					management.Post("/plugins/keys", auth.pluginManagement.addKey)
+					management.Post("/plugins/keys/{keyId}/enable", func(w http.ResponseWriter, r *http.Request) { auth.pluginManagement.setKeyState(w, r, true) })
+					management.Post("/plugins/keys/{keyId}/disable", func(w http.ResponseWriter, r *http.Request) { auth.pluginManagement.setKeyState(w, r, false) })
+					management.Get("/plugins/{pluginId}/{version}", auth.pluginManagement.detail)
+					management.Post("/plugins/{pluginId}/{version}/approval", auth.pluginManagement.approve)
+					management.Delete("/plugins/{pluginId}/{version}/approval", auth.pluginManagement.revokeApproval)
+					management.Post("/plugins/{pluginId}/{version}/enable", auth.pluginManagement.enable)
+					management.Post("/plugins/{pluginId}/{version}/disable", auth.pluginManagement.disable)
+				}
+				if auth.dashboardWidgets != nil {
+					dashboard := protected.With(auth.requireCapability(identity.CapabilityDashboardWidgetsManage, identity.InstanceResource()))
+					dashboard.Get("/dashboard/widgets", auth.dashboardWidgets.list)
+					dashboard.Get("/dashboard/widgets/available", auth.dashboardWidgets.available)
+					dashboard.Post("/dashboard/widgets", auth.dashboardWidgets.create)
+					dashboard.Patch("/dashboard/widgets/{placementId}", auth.dashboardWidgets.update)
+					dashboard.Post("/dashboard/widgets/{placementId}/move-up", func(w http.ResponseWriter, r *http.Request) { auth.dashboardWidgets.move(w, r, -1) })
+					dashboard.Post("/dashboard/widgets/{placementId}/move-down", func(w http.ResponseWriter, r *http.Request) { auth.dashboardWidgets.move(w, r, 1) })
+					dashboard.Delete("/dashboard/widgets/{placementId}", auth.dashboardWidgets.delete)
+				}
+				if auth.dashboardWidgets != nil && auth.dashboardWidgetRuntime != nil {
+					protected.Post("/dashboard/widgets/{placementId}/widget-runtime", func(w http.ResponseWriter, r *http.Request) {
+						auth.dashboardWidgets.launch(w, r, auth.dashboardWidgetRuntime)
+					})
+				}
 				if auth.authoring != nil {
+					protected.Get("/authoring/drafts", auth.handleAuthoringDraftList)
 					protected.Get("/authoring/drafts/{draftId}", auth.handleAuthoringDraft)
 					protected.Get("/authoring/drafts/{draftId}/workspace", auth.handleAuthoringWorkspace)
+					protected.Get("/authoring/drafts/{draftId}/members", auth.handleAuthoringMembers)
 					protected.Get("/authoring/drafts/{draftId}/structure", auth.handleAuthoringStructure)
 					protected.Get("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLesson)
+				}
+				if auth.authoringAssets != nil {
+					protected.Get("/authoring/drafts/{draftId}/assets", auth.handleAuthoringAssetList)
+				}
+				if auth.authoringAssessments != nil {
+					protected.Get("/authoring/drafts/{draftId}/assessments", auth.handleAuthoringAssessmentList)
+					protected.Post("/authoring/drafts/{draftId}/assessments", auth.handleAuthoringAssessmentCreate)
+					protected.Get("/authoring/drafts/{draftId}/assessments/{assessmentId}", auth.handleAuthoringAssessmentGet)
+					protected.Put("/authoring/drafts/{draftId}/assessments/{assessmentId}", auth.handleAuthoringAssessmentUpdate)
+				}
+				if auth.authoringCreation != nil {
+					protected.Post("/authoring/drafts", auth.handleAuthoringDraftCreate)
 				}
 				if auth.authoringMutations != nil {
 					protected.Patch("/authoring/drafts/{draftId}", auth.handleAuthoringDraftUpdate)
@@ -155,6 +421,39 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Put("/authoring/drafts/{draftId}/modules/order", auth.handleAuthoringModuleReorder)
 					protected.Patch("/authoring/drafts/{draftId}/modules/{moduleId}", auth.handleAuthoringModuleUpdate)
 					protected.Delete("/authoring/drafts/{draftId}/modules/{moduleId}", auth.handleAuthoringModuleDelete)
+				}
+				if auth.authoringLessonMutations != nil {
+					protected.Post("/authoring/drafts/{draftId}/modules/{moduleId}/lessons", auth.handleAuthoringLessonCreate)
+					protected.Put("/authoring/drafts/{draftId}/lessons/order", auth.handleAuthoringLessonReorder)
+					protected.Patch("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLessonUpdate)
+					protected.Put("/authoring/drafts/{draftId}/lessons/{lessonId}/prerequisites", auth.handleAuthoringLessonPrerequisites)
+					protected.Delete("/authoring/drafts/{draftId}/lessons/{lessonId}", auth.handleAuthoringLessonDelete)
+				}
+				if auth.authoringLessonContent != nil {
+					protected.Put("/authoring/drafts/{draftId}/lessons/{lessonId}/content", auth.handleAuthoringLessonContent)
+				}
+				if auth.authoringCourseWidgets != nil {
+					protected.Get("/authoring/drafts/{draftId}/plugins/course-widgets", auth.handleAuthoringCourseWidgets)
+				}
+				if auth.authoringMemberships != nil {
+					protected.Post("/authoring/drafts/{draftId}/members", auth.handleAuthoringMemberAdd)
+					protected.Patch("/authoring/drafts/{draftId}/members/{userId}", auth.handleAuthoringMemberRole)
+					protected.Delete("/authoring/drafts/{draftId}/members/{userId}", auth.handleAuthoringMemberRevoke)
+				}
+				if auth.authoringReviews != nil {
+					protected.Post("/authoring/drafts/{draftId}/reviews", auth.handleAuthoringReviewSubmit)
+					protected.Get("/authoring/drafts/{draftId}/reviews", auth.handleAuthoringReviewHistory)
+					protected.Get("/authoring/drafts/{draftId}/reviews/active", auth.handleAuthoringReviewActive)
+					protected.Get("/authoring/drafts/{draftId}/reviews/latest", auth.handleAuthoringReviewLatest)
+					protected.Get("/authoring/drafts/{draftId}/reviews/{reviewId}", auth.handleAuthoringReview)
+					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/approve", auth.handleAuthoringReviewApprove)
+					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/request-changes", auth.handleAuthoringReviewRequestChanges)
+				}
+				if auth.authoringPublications != nil {
+					protected.Post("/authoring/drafts/{draftId}/reviews/{reviewId}/publish", auth.handleAuthoringReviewPublish)
+				}
+				if auth.authoringAssetUploads != nil {
+					protected.Post("/authoring/drafts/{draftId}/assets", auth.handleAuthoringAssetUpload)
 				}
 			})
 			api.Handle("/*", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -167,7 +466,25 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 			problem(w, req, http.StatusNotFound, "Not found")
 		}))
 	}
-	r.Get("/*", web.Serve)
+	if auth != nil && auth.badgePublication != nil {
+		r.Get("/open-badges/issuer", auth.handleOpenBadgesIssuer)
+		r.Get("/open-badges/status/revocation/{listId}", auth.handleSignedStatusList)
+		r.Get("/achievements/course-versions/{versionId}", auth.handleOpenBadgesAchievement)
+		r.Get("/verify/certificates/{certificateId}", func(w http.ResponseWriter, req *http.Request) {
+			if strings.Contains(req.Header.Get("Accept"), "application/vc") {
+				auth.handleSignedOpenBadge(w, req)
+				return
+			}
+			web.Serve(w, req)
+		})
+	}
+	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
+		if auth != nil && auth.pluginRuntime != nil && auth.pluginRuntime.servesHost(req.Host) {
+			http.NotFound(w, req)
+			return
+		}
+		web.Serve(w, req)
+	})
 	return r
 }
 
@@ -229,10 +546,18 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func problem(w http.ResponseWriter, r *http.Request, status int, title string) {
+	problemCode(w, r, status, title, "")
+}
+
+func problemCode(w http.ResponseWriter, r *http.Request, status int, title, code string) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	response := map[string]any{
 		"type": "about:blank", "title": title, "status": status,
 		"instance": strings.TrimSpace(r.URL.Path), "request_id": r.Context().Value(requestIDKey{}),
-	})
+	}
+	if code != "" {
+		response["code"] = code
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }

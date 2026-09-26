@@ -24,7 +24,12 @@ func (a AuthenticatedActor) SessionID() SessionID { return a.session.sessionID }
 
 type Capability string
 
-const CapabilityInstanceManage Capability = "instance.manage"
+const (
+	CapabilityInstanceManage         Capability = "instance.manage"
+	CapabilityPortabilityImport      Capability = "portability.import"
+	CapabilityPluginsManage          Capability = "plugins.manage"
+	CapabilityDashboardWidgetsManage Capability = "dashboard.widgets.manage"
+)
 
 // Resource has a narrow instance constructor now. Domain modules can later
 // contribute resource-specific policies without making Administrator a bypass.
@@ -52,7 +57,7 @@ func (s AuthorizationService) Authorize(ctx context.Context, actor Authenticated
 	if actor.UserID() == "" || actor.SessionID() == "" {
 		return ErrAuthorizationDenied
 	}
-	if capability != CapabilityInstanceManage || resource != InstanceResource() {
+	if (capability != CapabilityInstanceManage && capability != CapabilityPortabilityImport && capability != CapabilityPluginsManage && capability != CapabilityDashboardWidgetsManage) || resource != InstanceResource() {
 		return ErrAuthorizationDenied
 	}
 	if s.roles == nil {

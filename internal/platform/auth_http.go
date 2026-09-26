@@ -11,9 +11,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assessments"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/community"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/publication"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -21,12 +27,26 @@ const sessionCookieName = "btg_session"
 const maxLoginBodyBytes = 8 * 1024
 const maxAuthoringDraftMetadataBodyBytes = 128 * 1024
 const maxAuthoringModuleBodyBytes = 64 * 1024
+const maxAuthoringLessonBodyBytes = 256 * 1024
+
+// A complete layout of 1,000 Modules and 10,000 UUID Lessons fits within 1 MiB.
+const maxAuthoringLessonOrderBodyBytes = 1 << 20
+
+// Canonical LessonContent is capped at 1 MiB. This permits its complete
+// semantic document plus a small mutation envelope, never an unbounded editor
+// payload.
+const maxAuthoringLessonContentBodyBytes = courses.MaxLessonContentBytes + 16*1024
+const maxAuthoringMembershipBodyBytes = 16 * 1024
 const maxCookieHeaderBytes = 8 * 1024
 const maxSessionCookieValueBytes = 128
 
 type loginLogoutService interface {
 	LoginWithPassword(context.Context, string, []byte, string) (LoginResult, error)
 	Logout(context.Context, identity.ResolvedSession, string) error
+}
+
+type certificateIssuanceHTTP interface {
+	Issue(context.Context, string, courses.CourseID, courses.Version) (credentials.IssuanceResult, error)
 }
 
 type sessionResolver interface {
@@ -50,11 +70,50 @@ type authHTTP struct {
 	authorizer                  identity.Authorizer
 	authzMetrics                *prometheus.CounterVec
 	courses                     *courses.ReadService
+	publishedCourses            *courses.PublishedReadService
+	publishedAssets             *courses.PublishedAssetReadService
+	publishedCatalog            *courses.PublishedCatalogService
+	assetStorage                assets.BinaryStorage
 	authoring                   *authoring.ReadService
+	authoringCreation           *authoring.DraftCreationService
 	authoringMutations          *authoring.DraftMutationService
 	authoringStructureMutations *authoring.ModuleMutationService
-	cookieSecure                bool
-	now                         func() time.Time
+	authoringLessonMutations    *authoring.LessonMutationService
+	authoringLessonContent      *authoring.LessonContentMutationService
+	authoringCourseWidgets      *authoring.CourseWidgetDiscoveryService
+	authoringMemberships        *authoring.MembershipMutationService
+	authoringReviews            *authoring.ReviewApplicationService
+	authoringPublicationStatus  *authoring.ReviewPublicationStatusService
+	authoringPublications       *authoring.PublicationApplicationService
+	authoringAssetUploads       *authoring.AssetUploadService
+	authoringAssets             *authoring.AssetListService
+	authoringAssessments        *authoring.AssessmentManagementService
+	learnerAttempts             *assessments.LearnerAttemptService
+	community                   *community.Service
+	translations                *translations.ApplicationService
+	translationWorkspace        *translations.WorkspaceQueryService
+	translatedCourses           *translations.LearnerReader
+	certificateIssuance         certificateIssuanceHTTP
+	certificates                credentials.Repository
+	badgePublication            *publication.Service
+	badgePublicOrigin           string
+	badgeIssuer                 credentials.Issuer
+	achievementVersions         interface {
+		GetImmutableCourseVersion(context.Context, courses.CourseVersionID) (courses.ImmutableCourseVersion, error)
+	}
+	assetMaxBytes          int64
+	portabilityExporter    portabilityExport
+	portabilityImporter    portabilityImport
+	courseWidgetRuntime    courseWidgetLaunch
+	dashboardWidgetRuntime dashboardWidgetLaunch
+	dashboardWidgets       *dashboardWidgetAPI
+	pluginManagement       *pluginManagementAPI
+	portabilityReader      portabilityPackageReader
+	portabilityCourses     portabilityCourseReader
+	portabilityPreviews    *portabilityPreviewStore
+	pluginRuntime          *pluginRuntimeHTTP
+	cookieSecure           bool
+	now                    func() time.Time
 }
 
 type resolvedSessionKey struct{}

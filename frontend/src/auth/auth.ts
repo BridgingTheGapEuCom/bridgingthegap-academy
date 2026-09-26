@@ -1,6 +1,7 @@
 import { readonly, ref, type Ref } from 'vue'
 import {
   APIProblemError,
+  APIUnavailableError,
   createAPIClient,
   type APIRequestOptions,
   type AuthenticatedSessionResponse,
@@ -30,6 +31,7 @@ export interface AuthService {
   login(email: LoginRequest['email'], password: LoginRequest['password']): Promise<LoginOutcome>
   logout(): Promise<LogoutOutcome>
   request<T>(path: string, options?: APIRequestOptions): Promise<T>
+  requestWithStatus<T>(path: string, options?: APIRequestOptions): Promise<{ data: T; status: number }>
 }
 
 export interface AuthServiceOptions {
@@ -76,9 +78,10 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
       csrfToken = undefined
       const task = (async () => {
         try {
-          const session = await transport.request<AuthenticatedSessionResponse>('/api/auth/session', {
+          const session = await transport.request<unknown>('/api/auth/session', {
             invalidateOnUnauthorized: false,
           })
+          if (!isAuthenticatedSession(session)) throw new APIUnavailableError()
           if (version === operationVersion) applyAuthenticatedSession(session)
         } catch (error) {
           if (version === operationVersion) {
@@ -96,13 +99,14 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
     async login(email: LoginRequest['email'], password: LoginRequest['password']): Promise<LoginOutcome> {
       const version = ++operationVersion
       try {
-        const session = await transport.request<AuthenticatedSessionResponse>('/api/auth/login', {
+        const session = await transport.request<unknown>('/api/auth/login', {
           method: 'POST',
           body: JSON.stringify({ email, password } satisfies LoginRequest),
           headers: { 'Content-Type': 'application/json' },
           csrf: false,
           invalidateOnUnauthorized: false,
         })
+        if (!isAuthenticatedSession(session)) throw new APIUnavailableError()
         if (version !== operationVersion) return { kind: 'unavailable' }
         applyAuthenticatedSession(session)
         return { kind: 'authenticated', userId: session.user_id, expiresAt: session.expires_at }
@@ -151,6 +155,22 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
         throw error
       }
     },
+
+    async requestWithStatus<T>(path: string, requestOptions?: APIRequestOptions): Promise<{ data: T; status: number }> {
+      const version = operationVersion
+      const sessionAtDispatch = sessionVersion
+      const authenticated = state.value.status === 'authenticated'
+      try {
+        return await transport.requestWithStatus!<T>(path, { ...requestOptions, invalidateOnUnauthorized: false })
+      } catch (error) {
+        if (authenticated && state.value.status === 'authenticated' && sessionAtDispatch === sessionVersion
+          && (version === operationVersion || logoutInFlight > 0)
+          && requestOptions?.invalidateOnUnauthorized !== false && isStatus(error, 401)) {
+          transitionToUnauthenticated()
+        }
+        throw error
+      }
+    },
   }
 }
 
@@ -160,6 +180,15 @@ function isStatus(error: unknown, status: number): boolean {
 
 function retryAfter(error: unknown): number | undefined {
   return error instanceof APIProblemError ? error.retryAfterSeconds : undefined
+}
+
+function isAuthenticatedSession(value: unknown): value is AuthenticatedSessionResponse {
+  if (typeof value !== 'object' || value === null) return false
+  const session = value as Record<string, unknown>
+  return session.authenticated === true
+    && typeof session.user_id === 'string' && session.user_id.length > 0
+    && typeof session.csrf_token === 'string' && session.csrf_token.length > 0
+    && typeof session.expires_at === 'string' && Number.isFinite(Date.parse(session.expires_at))
 }
 
 // This is the sole application instance. Components may consume it through

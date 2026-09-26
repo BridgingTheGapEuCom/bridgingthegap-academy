@@ -6,6 +6,26 @@ RETURNING *;
 -- name: GetDraft :one
 SELECT * FROM authoring.course_draft WHERE id = $1;
 
+-- name: CreateReviewPublication :one
+INSERT INTO authoring.review_publication (
+    review_id, review_revision, draft_id, draft_revision, course_id,
+    course_version, course_version_id, published_at, published_by_user_id
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (review_id) DO NOTHING
+RETURNING *;
+
+-- name: GetReviewPublication :one
+SELECT * FROM authoring.review_publication WHERE review_id = $1;
+
+-- name: ListAccessibleDrafts :many
+SELECT draft.*
+FROM authoring.course_draft AS draft
+JOIN authoring.workspace AS workspace ON workspace.draft_id = draft.id
+JOIN authoring.workspace_member AS member ON member.workspace_id = workspace.id
+WHERE member.user_id = $1 AND member.revoked_at IS NULL
+ORDER BY draft.updated_at DESC, draft.id DESC;
+
 -- name: UpdateDraftMetadata :one
 UPDATE authoring.course_draft
 SET intended_version = $3, source_language = $4, title = $5, description = $6,
@@ -53,8 +73,24 @@ SET revoked_at = now()
 WHERE workspace_id = $1 AND user_id = $2 AND revoked_at IS NULL
 RETURNING *;
 
+-- name: GetActiveMember :one
+SELECT * FROM authoring.workspace_member
+WHERE workspace_id = $1 AND user_id = $2 AND revoked_at IS NULL;
+
+-- name: CountActiveMaintainers :one
+SELECT count(*)
+FROM authoring.workspace_member
+WHERE workspace_id = $1 AND role = 'MAINTAINER' AND revoked_at IS NULL;
+
 -- name: ListMembers :many
 SELECT * FROM authoring.workspace_member WHERE workspace_id = $1 ORDER BY created_at, id;
+
+-- name: ListActiveMembersForDraft :many
+SELECT member.*
+FROM authoring.workspace_member AS member
+JOIN authoring.workspace AS workspace ON workspace.id = member.workspace_id
+WHERE workspace.draft_id = $1 AND member.revoked_at IS NULL
+ORDER BY member.user_id, member.id;
 
 -- name: ActiveMembershipForDraft :one
 SELECT member.role
@@ -135,6 +171,19 @@ JOIN authoring.module AS module ON module.id = lesson.module_id
 WHERE lesson.draft_id = $1
 ORDER BY module.position, lesson.position, lesson.id;
 
+-- name: CountLessonsForDraft :one
+SELECT count(*) FROM authoring.lesson WHERE draft_id = $1;
+
+-- name: ShiftLessonsAtPosition :exec
+UPDATE authoring.lesson
+SET position = position + 1, revision = revision + 1, updated_at = now()
+WHERE module_id = $1 AND position >= $2;
+
+-- name: CompactLessonPositionsAfter :exec
+UPDATE authoring.lesson
+SET position = position - 1, revision = revision + 1, updated_at = now()
+WHERE module_id = $1 AND position > $2;
+
 -- name: UpdateLessonMetadata :one
 UPDATE authoring.lesson AS l
 SET title = $3, description = $4, learning_objectives = $5, estimated_duration_minutes = $6,
@@ -164,11 +213,20 @@ WHERE l.id = $1 AND l.revision = $2
   AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = l.draft_id AND d.status = 'ACTIVE')
 RETURNING l.id;
 
+-- name: DeleteLessonForDraft :one
+DELETE FROM authoring.lesson AS l
+WHERE l.id = $1 AND l.draft_id = $2 AND l.revision = $3
+  AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = l.draft_id AND d.status = 'ACTIVE')
+RETURNING l.id;
+
 -- name: FindLessonByDraftAndKey :one
 SELECT * FROM authoring.lesson WHERE draft_id = $1 AND stable_key = $2;
 
 -- name: DeletePrerequisites :exec
 DELETE FROM authoring.lesson_prerequisite WHERE lesson_id = $1;
+
+-- name: DeleteIncomingPrerequisites :exec
+DELETE FROM authoring.lesson_prerequisite WHERE prerequisite_lesson_id = $1;
 
 -- name: AddPrerequisite :exec
 INSERT INTO authoring.lesson_prerequisite (draft_id, lesson_id, prerequisite_lesson_id, position)
@@ -198,3 +256,27 @@ UPDATE authoring.module AS m SET revision = m.revision + 1, updated_at = now()
 WHERE m.id = $1 AND m.revision = $2
   AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = m.draft_id AND d.status = 'ACTIVE')
 RETURNING m.*;
+
+-- name: ListLessonSummariesForDraft :many
+SELECT lesson.id, lesson.draft_id, lesson.module_id, lesson.stable_key,
+       lesson.title, lesson.description, lesson.learning_objectives,
+       lesson.estimated_duration_minutes, lesson.position,
+       '{"schemaVersion":1,"blocks":[]}'::jsonb AS content,
+       lesson.revision, lesson.created_at, lesson.updated_at
+FROM authoring.lesson AS lesson
+JOIN authoring.module AS module ON module.id = lesson.module_id
+WHERE lesson.draft_id = $1
+ORDER BY module.position, lesson.position, lesson.id;
+
+-- name: GetLessonForDraft :one
+SELECT * FROM authoring.lesson WHERE draft_id = $1 AND id = $2;
+
+-- name: AdvanceLessonsAfterDeletion :exec
+UPDATE authoring.lesson AS source
+SET position = CASE WHEN source.module_id = $2 AND source.position > $3
+                    THEN source.position - 1 ELSE source.position END,
+    revision = source.revision + 1, updated_at = now()
+WHERE source.id <> $1 AND
+    ((source.module_id = $2 AND source.position > $3) OR EXISTS (
+       SELECT 1 FROM authoring.lesson_prerequisite AS prerequisite
+       WHERE prerequisite.lesson_id = source.id AND prerequisite.prerequisite_lesson_id = $1));

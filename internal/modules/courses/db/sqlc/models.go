@@ -8,6 +8,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AssetsAsset struct {
+	ID               pgtype.UUID
+	OwnerDraftID     pgtype.UUID
+	OriginalFilename string
+	MediaType        string
+	ByteSize         pgtype.Int8
+	Sha256Digest     pgtype.Text
+	StorageObjectID  pgtype.UUID
+	Lifecycle        string
+	CreatedByUserID  pgtype.UUID
+	CreatedAt        pgtype.Timestamptz
+	Origin           string
+	ImportID         pgtype.UUID
+	PackageAssetKey  pgtype.Text
+}
+
 type CoursesCourse struct {
 	ID        pgtype.UUID
 	Slug      string
@@ -35,6 +51,42 @@ type CoursesCourseVersion struct {
 	Attribution        []byte
 	CreatedAt          pgtype.Timestamptz
 	PublishedAt        pgtype.Timestamptz
+	PublicationOrigin  string
+}
+
+type CoursesCourseVersionAssessmentBinding struct {
+	CourseVersionID pgtype.UUID
+	AssessmentKey   pgtype.UUID
+	Definition      []byte
+}
+
+type CoursesCourseVersionAssetBinding struct {
+	CourseVersionID  pgtype.UUID
+	AssetKey         pgtype.UUID
+	StorageObjectID  pgtype.UUID
+	OriginalFilename string
+	MediaType        string
+	ByteSize         int64
+	Sha256Digest     string
+}
+
+type CoursesCourseVersionImportProvenance struct {
+	CourseVersionID pgtype.UUID
+	ImportID        pgtype.UUID
+}
+
+type CoursesCourseVersionPublicationProvenance struct {
+	CourseVersionID       pgtype.UUID
+	ReviewID              pgtype.UUID
+	ReviewRevision        int64
+	DraftID               pgtype.UUID
+	DraftRevision         int64
+	SnapshotSchemaVersion int32
+	SubmittedByUserID     pgtype.UUID
+	SubmittedAt           pgtype.Timestamptz
+	ApprovedByUserID      pgtype.UUID
+	ApprovedAt            pgtype.Timestamptz
+	PublishedByUserID     pgtype.UUID
 }
 
 type CoursesLesson struct {
@@ -49,6 +101,7 @@ type CoursesLesson struct {
 	Position                 int32
 	CreatedAt                pgtype.Timestamptz
 	Content                  []byte
+	SourceLessonID           pgtype.UUID
 }
 
 type CoursesLessonPrerequisite struct {
@@ -66,4 +119,21 @@ type CoursesModule struct {
 	Description     string
 	Position        int32
 	CreatedAt       pgtype.Timestamptz
+	SourceModuleID  pgtype.UUID
+}
+
+type PortabilityImportRecord struct {
+	ID                            pgtype.UUID
+	PackageFingerprint            string
+	PortableSourceCourseID        string
+	PortableSourceCourseVersionID string
+	SourceVersion                 string
+	TargetCourseID                pgtype.UUID
+	TargetCourseVersionID         pgtype.UUID
+	ImportedAt                    pgtype.Timestamptz
+}
+
+type PortabilitySourceCourseMapping struct {
+	PortableSourceCourseID string
+	LocalCourseID          pgtype.UUID
 }

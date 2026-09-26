@@ -113,6 +113,28 @@ func (q *Queries) AddPrerequisite(ctx context.Context, arg AddPrerequisiteParams
 	return err
 }
 
+const advanceLessonsAfterDeletion = `-- name: AdvanceLessonsAfterDeletion :exec
+UPDATE authoring.lesson AS source
+SET position = CASE WHEN source.module_id = $2 AND source.position > $3
+                    THEN source.position - 1 ELSE source.position END,
+    revision = source.revision + 1, updated_at = now()
+WHERE source.id <> $1 AND
+    ((source.module_id = $2 AND source.position > $3) OR EXISTS (
+       SELECT 1 FROM authoring.lesson_prerequisite AS prerequisite
+       WHERE prerequisite.lesson_id = source.id AND prerequisite.prerequisite_lesson_id = $1))
+`
+
+type AdvanceLessonsAfterDeletionParams struct {
+	ID       pgtype.UUID
+	ModuleID pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) AdvanceLessonsAfterDeletion(ctx context.Context, arg AdvanceLessonsAfterDeletionParams) error {
+	_, err := q.db.Exec(ctx, advanceLessonsAfterDeletion, arg.ID, arg.ModuleID, arg.Position)
+	return err
+}
+
 const bumpDraftRevision = `-- name: BumpDraftRevision :one
 UPDATE authoring.course_draft
 SET revision = revision + 1, updated_at = now()
@@ -208,6 +230,22 @@ func (q *Queries) BumpModuleRevision(ctx context.Context, arg BumpModuleRevision
 	return i, err
 }
 
+const compactLessonPositionsAfter = `-- name: CompactLessonPositionsAfter :exec
+UPDATE authoring.lesson
+SET position = position - 1, revision = revision + 1, updated_at = now()
+WHERE module_id = $1 AND position > $2
+`
+
+type CompactLessonPositionsAfterParams struct {
+	ModuleID pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) CompactLessonPositionsAfter(ctx context.Context, arg CompactLessonPositionsAfterParams) error {
+	_, err := q.db.Exec(ctx, compactLessonPositionsAfter, arg.ModuleID, arg.Position)
+	return err
+}
+
 const compactModulePositionsAfter = `-- name: CompactModulePositionsAfter :exec
 UPDATE authoring.module
 SET position = position - 1, revision = revision + 1, updated_at = now()
@@ -222,6 +260,30 @@ type CompactModulePositionsAfterParams struct {
 func (q *Queries) CompactModulePositionsAfter(ctx context.Context, arg CompactModulePositionsAfterParams) error {
 	_, err := q.db.Exec(ctx, compactModulePositionsAfter, arg.DraftID, arg.Position)
 	return err
+}
+
+const countActiveMaintainers = `-- name: CountActiveMaintainers :one
+SELECT count(*)
+FROM authoring.workspace_member
+WHERE workspace_id = $1 AND role = 'MAINTAINER' AND revoked_at IS NULL
+`
+
+func (q *Queries) CountActiveMaintainers(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveMaintainers, workspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countLessonsForDraft = `-- name: CountLessonsForDraft :one
+SELECT count(*) FROM authoring.lesson WHERE draft_id = $1
+`
+
+func (q *Queries) CountLessonsForDraft(ctx context.Context, draftID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countLessonsForDraft, draftID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const countLessonsForModule = `-- name: CountLessonsForModule :one
@@ -383,6 +445,56 @@ func (q *Queries) CreateModule(ctx context.Context, arg CreateModuleParams) (Aut
 	return i, err
 }
 
+const createReviewPublication = `-- name: CreateReviewPublication :one
+INSERT INTO authoring.review_publication (
+    review_id, review_revision, draft_id, draft_revision, course_id,
+    course_version, course_version_id, published_at, published_by_user_id
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (review_id) DO NOTHING
+RETURNING review_id, review_revision, draft_id, draft_revision, course_id, course_version, course_version_id, published_at, published_by_user_id, recorded_at
+`
+
+type CreateReviewPublicationParams struct {
+	ReviewID          pgtype.UUID
+	ReviewRevision    int64
+	DraftID           pgtype.UUID
+	DraftRevision     int64
+	CourseID          pgtype.UUID
+	CourseVersion     string
+	CourseVersionID   pgtype.UUID
+	PublishedAt       pgtype.Timestamptz
+	PublishedByUserID pgtype.UUID
+}
+
+func (q *Queries) CreateReviewPublication(ctx context.Context, arg CreateReviewPublicationParams) (AuthoringReviewPublication, error) {
+	row := q.db.QueryRow(ctx, createReviewPublication,
+		arg.ReviewID,
+		arg.ReviewRevision,
+		arg.DraftID,
+		arg.DraftRevision,
+		arg.CourseID,
+		arg.CourseVersion,
+		arg.CourseVersionID,
+		arg.PublishedAt,
+		arg.PublishedByUserID,
+	)
+	var i AuthoringReviewPublication
+	err := row.Scan(
+		&i.ReviewID,
+		&i.ReviewRevision,
+		&i.DraftID,
+		&i.DraftRevision,
+		&i.CourseID,
+		&i.CourseVersion,
+		&i.CourseVersionID,
+		&i.PublishedAt,
+		&i.PublishedByUserID,
+		&i.RecordedAt,
+	)
+	return i, err
+}
+
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO authoring.workspace (draft_id, created_by_user_id)
 VALUES ($1, $2) RETURNING id, draft_id, created_by_user_id, created_at, last_activity_at
@@ -406,6 +518,15 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 	return i, err
 }
 
+const deleteIncomingPrerequisites = `-- name: DeleteIncomingPrerequisites :exec
+DELETE FROM authoring.lesson_prerequisite WHERE prerequisite_lesson_id = $1
+`
+
+func (q *Queries) DeleteIncomingPrerequisites(ctx context.Context, prerequisiteLessonID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteIncomingPrerequisites, prerequisiteLessonID)
+	return err
+}
+
 const deleteLesson = `-- name: DeleteLesson :one
 DELETE FROM authoring.lesson AS l
 WHERE l.id = $1 AND l.revision = $2
@@ -420,6 +541,26 @@ type DeleteLessonParams struct {
 
 func (q *Queries) DeleteLesson(ctx context.Context, arg DeleteLessonParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, deleteLesson, arg.ID, arg.Revision)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const deleteLessonForDraft = `-- name: DeleteLessonForDraft :one
+DELETE FROM authoring.lesson AS l
+WHERE l.id = $1 AND l.draft_id = $2 AND l.revision = $3
+  AND EXISTS (SELECT 1 FROM authoring.course_draft AS d WHERE d.id = l.draft_id AND d.status = 'ACTIVE')
+RETURNING l.id
+`
+
+type DeleteLessonForDraftParams struct {
+	ID       pgtype.UUID
+	DraftID  pgtype.UUID
+	Revision int64
+}
+
+func (q *Queries) DeleteLessonForDraft(ctx context.Context, arg DeleteLessonForDraftParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteLessonForDraft, arg.ID, arg.DraftID, arg.Revision)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -503,6 +644,30 @@ func (q *Queries) FindLessonByDraftAndKey(ctx context.Context, arg FindLessonByD
 	return i, err
 }
 
+const getActiveMember = `-- name: GetActiveMember :one
+SELECT id, workspace_id, user_id, role, created_at, revoked_at FROM authoring.workspace_member
+WHERE workspace_id = $1 AND user_id = $2 AND revoked_at IS NULL
+`
+
+type GetActiveMemberParams struct {
+	WorkspaceID pgtype.UUID
+	UserID      pgtype.UUID
+}
+
+func (q *Queries) GetActiveMember(ctx context.Context, arg GetActiveMemberParams) (AuthoringWorkspaceMember, error) {
+	row := q.db.QueryRow(ctx, getActiveMember, arg.WorkspaceID, arg.UserID)
+	var i AuthoringWorkspaceMember
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const getDraft = `-- name: GetDraft :one
 SELECT id, course_id, intended_version, source_language, title, description, learning_objectives, changelog, license, status, revision, created_at, updated_at FROM authoring.course_draft WHERE id = $1
 `
@@ -553,6 +718,36 @@ func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (AuthoringLesso
 	return i, err
 }
 
+const getLessonForDraft = `-- name: GetLessonForDraft :one
+SELECT id, draft_id, module_id, stable_key, title, description, learning_objectives, estimated_duration_minutes, position, content, revision, created_at, updated_at FROM authoring.lesson WHERE draft_id = $1 AND id = $2
+`
+
+type GetLessonForDraftParams struct {
+	DraftID pgtype.UUID
+	ID      pgtype.UUID
+}
+
+func (q *Queries) GetLessonForDraft(ctx context.Context, arg GetLessonForDraftParams) (AuthoringLesson, error) {
+	row := q.db.QueryRow(ctx, getLessonForDraft, arg.DraftID, arg.ID)
+	var i AuthoringLesson
+	err := row.Scan(
+		&i.ID,
+		&i.DraftID,
+		&i.ModuleID,
+		&i.StableKey,
+		&i.Title,
+		&i.Description,
+		&i.LearningObjectives,
+		&i.EstimatedDurationMinutes,
+		&i.Position,
+		&i.Content,
+		&i.Revision,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getModule = `-- name: GetModule :one
 SELECT id, draft_id, stable_key, title, description, position, revision, created_at, updated_at FROM authoring.module WHERE id = $1
 `
@@ -574,6 +769,28 @@ func (q *Queries) GetModule(ctx context.Context, id pgtype.UUID) (AuthoringModul
 	return i, err
 }
 
+const getReviewPublication = `-- name: GetReviewPublication :one
+SELECT review_id, review_revision, draft_id, draft_revision, course_id, course_version, course_version_id, published_at, published_by_user_id, recorded_at FROM authoring.review_publication WHERE review_id = $1
+`
+
+func (q *Queries) GetReviewPublication(ctx context.Context, reviewID pgtype.UUID) (AuthoringReviewPublication, error) {
+	row := q.db.QueryRow(ctx, getReviewPublication, reviewID)
+	var i AuthoringReviewPublication
+	err := row.Scan(
+		&i.ReviewID,
+		&i.ReviewRevision,
+		&i.DraftID,
+		&i.DraftRevision,
+		&i.CourseID,
+		&i.CourseVersion,
+		&i.CourseVersionID,
+		&i.PublishedAt,
+		&i.PublishedByUserID,
+		&i.RecordedAt,
+	)
+	return i, err
+}
+
 const getWorkspace = `-- name: GetWorkspace :one
 SELECT id, draft_id, created_by_user_id, created_at, last_activity_at FROM authoring.workspace WHERE draft_id = $1
 `
@@ -589,6 +806,146 @@ func (q *Queries) GetWorkspace(ctx context.Context, draftID pgtype.UUID) (Author
 		&i.LastActivityAt,
 	)
 	return i, err
+}
+
+const listAccessibleDrafts = `-- name: ListAccessibleDrafts :many
+SELECT draft.id, draft.course_id, draft.intended_version, draft.source_language, draft.title, draft.description, draft.learning_objectives, draft.changelog, draft.license, draft.status, draft.revision, draft.created_at, draft.updated_at
+FROM authoring.course_draft AS draft
+JOIN authoring.workspace AS workspace ON workspace.draft_id = draft.id
+JOIN authoring.workspace_member AS member ON member.workspace_id = workspace.id
+WHERE member.user_id = $1 AND member.revoked_at IS NULL
+ORDER BY draft.updated_at DESC, draft.id DESC
+`
+
+func (q *Queries) ListAccessibleDrafts(ctx context.Context, userID pgtype.UUID) ([]AuthoringCourseDraft, error) {
+	rows, err := q.db.Query(ctx, listAccessibleDrafts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthoringCourseDraft
+	for rows.Next() {
+		var i AuthoringCourseDraft
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.IntendedVersion,
+			&i.SourceLanguage,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.Changelog,
+			&i.License,
+			&i.Status,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveMembersForDraft = `-- name: ListActiveMembersForDraft :many
+SELECT member.id, member.workspace_id, member.user_id, member.role, member.created_at, member.revoked_at
+FROM authoring.workspace_member AS member
+JOIN authoring.workspace AS workspace ON workspace.id = member.workspace_id
+WHERE workspace.draft_id = $1 AND member.revoked_at IS NULL
+ORDER BY member.user_id, member.id
+`
+
+func (q *Queries) ListActiveMembersForDraft(ctx context.Context, draftID pgtype.UUID) ([]AuthoringWorkspaceMember, error) {
+	rows, err := q.db.Query(ctx, listActiveMembersForDraft, draftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthoringWorkspaceMember
+	for rows.Next() {
+		var i AuthoringWorkspaceMember
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UserID,
+			&i.Role,
+			&i.CreatedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLessonSummariesForDraft = `-- name: ListLessonSummariesForDraft :many
+SELECT lesson.id, lesson.draft_id, lesson.module_id, lesson.stable_key,
+       lesson.title, lesson.description, lesson.learning_objectives,
+       lesson.estimated_duration_minutes, lesson.position,
+       '{"schemaVersion":1,"blocks":[]}'::jsonb AS content,
+       lesson.revision, lesson.created_at, lesson.updated_at
+FROM authoring.lesson AS lesson
+JOIN authoring.module AS module ON module.id = lesson.module_id
+WHERE lesson.draft_id = $1
+ORDER BY module.position, lesson.position, lesson.id
+`
+
+type ListLessonSummariesForDraftRow struct {
+	ID                       pgtype.UUID
+	DraftID                  pgtype.UUID
+	ModuleID                 pgtype.UUID
+	StableKey                string
+	Title                    string
+	Description              string
+	LearningObjectives       []byte
+	EstimatedDurationMinutes pgtype.Int4
+	Position                 int32
+	Content                  []byte
+	Revision                 int64
+	CreatedAt                pgtype.Timestamptz
+	UpdatedAt                pgtype.Timestamptz
+}
+
+func (q *Queries) ListLessonSummariesForDraft(ctx context.Context, draftID pgtype.UUID) ([]ListLessonSummariesForDraftRow, error) {
+	rows, err := q.db.Query(ctx, listLessonSummariesForDraft, draftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLessonSummariesForDraftRow
+	for rows.Next() {
+		var i ListLessonSummariesForDraftRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.DraftID,
+			&i.ModuleID,
+			&i.StableKey,
+			&i.Title,
+			&i.Description,
+			&i.LearningObjectives,
+			&i.EstimatedDurationMinutes,
+			&i.Position,
+			&i.Content,
+			&i.Revision,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listLessons = `-- name: ListLessons :many
@@ -936,6 +1293,22 @@ func (q *Queries) SetModulePosition(ctx context.Context, arg SetModulePositionPa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const shiftLessonsAtPosition = `-- name: ShiftLessonsAtPosition :exec
+UPDATE authoring.lesson
+SET position = position + 1, revision = revision + 1, updated_at = now()
+WHERE module_id = $1 AND position >= $2
+`
+
+type ShiftLessonsAtPositionParams struct {
+	ModuleID pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) ShiftLessonsAtPosition(ctx context.Context, arg ShiftLessonsAtPositionParams) error {
+	_, err := q.db.Exec(ctx, shiftLessonsAtPosition, arg.ModuleID, arg.Position)
+	return err
 }
 
 const shiftModulesAtPosition = `-- name: ShiftModulesAtPosition :exec
