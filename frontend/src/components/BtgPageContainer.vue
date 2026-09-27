@@ -1,5 +1,5 @@
 <template>
-  <component :is="as" class="btg-page-container" :class="`btg-page-container--${width}`">
+  <component :is="as" class="btg-page-container" :class="`btg-page-container--${spacing}`">
     <slot />
   </component>
 </template>
@@ -8,8 +8,8 @@
 withDefaults(
   defineProps<{
     as?: 'div' | 'section' | 'article'
-    width?: 'application' | 'reading' | 'form'
+    spacing?: 'page' | 'section'
   }>(),
-  { as: 'div', width: 'application' },
+  { as: 'div', spacing: 'page' },
 )
 </script>

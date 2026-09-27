@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/vue'
+import { cleanup, fireEvent, render, screen } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createI18n } from 'vue-i18n'
@@ -26,7 +26,7 @@ async function renderShell(path = '/') {
   await router.push(path)
   await router.isReady()
   const i18n = createI18n({ legacy: false, locale: 'en', messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home', dashboard: 'Dashboard', courses: 'Courses', authoring: 'Authoring' } } })
-  return render(App, { global: { plugins: [router, i18n] } })
+  return { ...render(App, { global: { plugins: [router, i18n] } }), router }
 }
 
 describe('application header', () => {
@@ -51,5 +51,15 @@ describe('application header', () => {
     expect(screen.getByRole('link', { name: 'Authoring' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy()
     expect(screen.queryByText('Signed in')).toBeNull()
+  })
+
+  it('keeps the shared shell mounted while RouterLink replaces routed page content', async () => {
+    const { router } = await renderShell('/')
+    const header = document.querySelector('.site-header')
+    await fireEvent.click(screen.getByRole('link', { name: 'Courses' }))
+    await screen.findByRole('heading', { name: 'Courses page' })
+    expect(router.currentRoute.value.path).toBe('/courses')
+    expect(document.querySelector('.site-header')).toBe(header)
+    expect(screen.queryByRole('heading', { name: 'Home page' })).toBeNull()
   })
 })

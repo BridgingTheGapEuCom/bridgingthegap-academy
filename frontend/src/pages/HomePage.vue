@@ -1,6 +1,6 @@
 <template>
   <div class="home-page">
-    <BtgPageContainer as="section" class="home-page__hero" width="application" aria-labelledby="home-title">
+    <BtgPageContainer as="section" class="home-page__hero" spacing="section" aria-labelledby="home-title">
       <div class="home-page__hero-layout">
         <div class="home-page__hero-content">
           <p class="home-page__eyebrow">Bridging the Gap Academy</p>
@@ -25,7 +25,7 @@
       </div>
     </BtgPageContainer>
 
-    <BtgPageContainer as="section" class="home-page__section home-page__topics" width="application" aria-labelledby="learning-areas-title">
+    <BtgPageContainer as="section" class="home-page__section home-page__topics" spacing="section" aria-labelledby="learning-areas-title">
       <header class="home-page__section-heading">
         <p class="home-page__eyebrow">Core concepts</p>
         <h2 id="learning-areas-title">What you can learn</h2>
@@ -50,7 +50,7 @@
     </BtgPageContainer>
 
     <section class="home-page__course-band" aria-labelledby="featured-courses-title">
-      <BtgPageContainer width="application">
+      <BtgPageContainer spacing="section">
         <header class="home-page__section-heading home-page__section-heading--split">
           <div>
             <p class="home-page__eyebrow">Start here</p>
@@ -82,7 +82,7 @@
       </BtgPageContainer>
     </section>
 
-    <BtgPageContainer as="section" class="home-page__section home-page__benefits" width="application" aria-labelledby="focused-learning-title">
+    <BtgPageContainer as="section" class="home-page__section home-page__benefits" spacing="section" aria-labelledby="focused-learning-title">
       <header class="home-page__section-heading">
         <p class="home-page__eyebrow">A calm way to learn</p>
         <h2 id="focused-learning-title">Designed for focused learning</h2>
@@ -95,7 +95,7 @@
       </ul>
     </BtgPageContainer>
 
-    <BtgPageContainer as="section" class="home-page__final-cta" width="application" aria-labelledby="start-title">
+    <BtgPageContainer as="section" class="home-page__final-cta" spacing="section" aria-labelledby="start-title">
       <div>
         <h2 id="start-title">Ready to start?</h2>
         <p>Browse the available courses and choose where to begin.</p>

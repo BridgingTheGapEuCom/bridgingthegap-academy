@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="published-course-reader" width="application" aria-labelledby="published-course-title">
+  <BtgPageContainer as="section" class="published-course-reader" aria-labelledby="published-course-title">
     <div v-if="state.kind === 'loading'" class="published-course-reader__state" role="status" aria-live="polite">
       <h1 id="published-course-title" ref="courseTitle" tabindex="-1">Loading course…</h1>
       <p>One moment while we load this published course.</p>

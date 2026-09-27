@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="plugin-management" width="application" aria-labelledby="plugin-management-title">
+  <BtgPageContainer as="section" class="plugin-management" aria-labelledby="plugin-management-title">
     <p class="sr-only" role="status" aria-live="polite">{{ announcement }}</p>
     <header class="plugin-management__header">
       <p class="plugin-management__eyebrow">Administration</p>
@@ -140,7 +140,7 @@ void load(); onBeforeUnmount(() => { active = false; generation += 1 })
 
 <style scoped>
 .plugin-management { overflow-wrap: anywhere; }
-.plugin-management__header, .plugin-management__section { max-width: 78rem; margin-block-end: 2rem; }
+.plugin-management__header, .plugin-management__section { margin-block-end: 2rem; }
 .plugin-management__eyebrow { font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .plugin-management__section { border-block-start: 1px solid var(--color-border, #b8b8b8); padding-block-start: 1.25rem; }
 .plugin-management__list { display: grid; gap: 1rem; padding: 0; list-style: none; }

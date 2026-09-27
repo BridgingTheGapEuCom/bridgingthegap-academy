@@ -161,12 +161,12 @@ th { font-weight: var(--btg-font-weight-strong); }
 label { font-weight: var(--btg-font-weight-strong); }
 
 .btg-page-container {
-  width: min(calc(100% - (2 * var(--btg-page-gutter))), var(--btg-width-application));
+  width: min(calc(100% - (2 * var(--academy-page-gutter))), var(--academy-page-max-width));
   margin-inline: auto;
 }
 
-.btg-page-container--reading { max-width: var(--btg-width-reading); }
-.btg-page-container--form { max-width: var(--btg-width-form); }
+.btg-page-container--page { padding-block: var(--academy-page-padding-block); }
+.btg-page-container--section { padding-block: 0; }
 
 .btg-button {
   max-width: 100%;

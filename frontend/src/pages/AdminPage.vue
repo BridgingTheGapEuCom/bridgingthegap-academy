@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="admin-page" width="reading" aria-labelledby="admin-title">
+  <BtgPageContainer as="section" class="admin-page" aria-labelledby="admin-title">
     <p class="sr-only" role="status">{{ accessAnnouncement }}</p>
     <div v-if="auth.state.value.status === 'bootstrapping'" class="admin-page__state" role="status">
       <h1 id="admin-title">Checking your session</h1>

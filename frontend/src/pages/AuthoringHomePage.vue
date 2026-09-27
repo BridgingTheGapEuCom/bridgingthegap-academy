@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="authoring-home" width="reading" aria-labelledby="authoring-home-title">
+  <BtgPageContainer as="section" class="authoring-home" aria-labelledby="authoring-home-title">
     <div v-if="auth.state.value.status === 'bootstrapping'" class="authoring-home__state" role="status">
       <h1 id="authoring-home-title">Checking your session</h1>
       <p>One moment while we check whether you are signed in.</p>

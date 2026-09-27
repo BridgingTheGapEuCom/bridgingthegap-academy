@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="article" class="lesson-page" width="reading" aria-labelledby="lesson-title">
+  <BtgPageContainer as="article" class="lesson-page" aria-labelledby="lesson-title">
     <div v-if="state.kind === 'loading'" class="lesson-page__state" role="status">
       <h1 id="lesson-title">Loading lesson…</h1>
       <p>One moment while we load this lesson.</p>

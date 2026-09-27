@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="authoring-shell" width="application" aria-labelledby="authoring-draft-title">
+  <BtgPageContainer as="section" class="authoring-shell" aria-labelledby="authoring-draft-title">
     <div v-if="auth.state.value.status === 'bootstrapping'" class="authoring-shell__state" role="status">
       <h1 id="authoring-draft-title">Checking your session</h1>
       <p>One moment while we check whether you are signed in.</p>

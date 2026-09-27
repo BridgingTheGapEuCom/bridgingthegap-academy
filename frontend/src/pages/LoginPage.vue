@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="login-page" width="form" aria-labelledby="login-title">
+  <BtgPageContainer as="section" class="login-page" aria-labelledby="login-title">
     <div v-if="auth.state.value.status === 'bootstrapping'" class="login-page__state" role="status">
       <h1 id="login-title">Checking your session</h1>
       <p>One moment while we check whether you are already signed in.</p>

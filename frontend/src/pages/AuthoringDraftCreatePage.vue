@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="authoring-create" width="reading" aria-labelledby="authoring-create-title">
+  <BtgPageContainer as="section" class="authoring-create" aria-labelledby="authoring-create-title">
     <RouterLink class="authoring-create__back" to="/authoring">Back to Authoring</RouterLink>
     <div v-if="auth.state.value.status === 'bootstrapping'" class="authoring-create__state" role="status">
       <h1 id="authoring-create-title">Checking your session</h1>

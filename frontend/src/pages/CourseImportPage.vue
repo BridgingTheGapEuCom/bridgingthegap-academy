@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="course-import" width="reading" aria-labelledby="course-import-title">
+  <BtgPageContainer as="section" class="course-import" aria-labelledby="course-import-title">
     <p class="sr-only" role="status" aria-live="polite">{{ announcement }}</p>
     <header>
       <p class="course-import__eyebrow">Administration</p>

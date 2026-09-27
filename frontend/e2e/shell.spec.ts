@@ -35,6 +35,7 @@ test('main navigation returns Home to the top and keeps the toolbar visible', as
   await expect.poll(() => page.locator('.site-header').evaluate((header) => Math.round(header.getBoundingClientRect().top))).toBe(0)
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Courses', exact: true }).click()
   await expect(page).toHaveURL('/courses')
+  await expect(page.locator('main')).toBeFocused()
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Home', exact: true }).click()
   await expect(page).toHaveURL('/')
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)

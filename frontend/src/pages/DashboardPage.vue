@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="dashboard-page" width="application" aria-labelledby="dashboard-title">
+  <BtgPageContainer as="section" class="dashboard-page" aria-labelledby="dashboard-title">
     <p class="sr-only" role="status" aria-live="polite">{{ announcement }}</p>
     <header class="dashboard-page__header">
       <div>
@@ -232,7 +232,7 @@ onBeforeUnmount(() => { active = false; generation += 1 })
 </script>
 
 <style scoped>
-.dashboard-page { --btg-color-link: var(--btg-home-text); --btg-color-link-hover: var(--btg-home-text-secondary); --btg-color-focus: var(--btg-home-focus); --btg-color-danger: var(--btg-home-interactive); --btg-color-danger-hover: var(--btg-home-interactive-active); display: grid; min-width: 0; gap: clamp(var(--btg-space-6), 5vw, var(--btg-space-8)); padding-block: clamp(var(--btg-space-6), 6vw, var(--btg-space-8)); color: var(--btg-home-text); overflow-wrap: anywhere; }
+.dashboard-page { --btg-color-link: var(--btg-home-text); --btg-color-link-hover: var(--btg-home-text-secondary); --btg-color-focus: var(--btg-home-focus); --btg-color-danger: var(--btg-home-interactive); --btg-color-danger-hover: var(--btg-home-interactive-active); display: grid; min-width: 0; gap: clamp(var(--btg-space-6), 5vw, var(--btg-space-8)); color: var(--btg-home-text); overflow-wrap: anywhere; }
 .dashboard-page * { min-width: 0; }
 .dashboard-page__header, .dashboard-page__management-header, .dashboard-page__placement-summary, .dashboard-page__picker article { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: var(--btg-space-4); }
 .dashboard-page__header > div, .dashboard-page__management-header > div { display: grid; gap: var(--btg-space-2); }
