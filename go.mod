@@ -3,7 +3,7 @@ module github.com/BridgingTheGapEuCom/bridgingthegap-academy
 go 1.25.14
 
 require (
-	github.com/go-chi/chi/v5 v5.2.3
+	github.com/go-chi/chi/v5 v5.2.4
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/multiformats/go-multibase v0.2.0
