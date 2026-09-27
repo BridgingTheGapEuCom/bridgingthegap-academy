@@ -16,8 +16,29 @@ test('application shell is keyboard accessible', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.locator('main')).toBeFocused()
+  await expect(page.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Courses', exact: true })).not.toHaveAttribute('aria-current', 'page')
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   const result = await new AxeBuilder({ page }).analyze()
   expect(result.violations).toEqual([])
+})
+
+test('main navigation returns Home to the top and keeps the toolbar visible', async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 401, contentType: 'application/problem+json', body: JSON.stringify(unauthenticated) }))
+  await page.route('**/api/courses/catalog**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], limit: 20, offset: 0, total: 0 }) }))
+  await page.goto('/')
+  await page.evaluate(() => window.scrollTo(0, 500))
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+  await expect.poll(() => page.locator('.site-header').evaluate((header) => Math.round(header.getBoundingClientRect().top))).toBe(0)
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Courses', exact: true }).click()
+  await expect(page).toHaveURL('/courses')
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Home', exact: true }).click()
+  await expect(page).toHaveURL('/')
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+  await expect.poll(() => page.locator('.site-header').evaluate((header) => Math.round(header.getBoundingClientRect().top))).toBe(0)
 })
 
 test('protected Authoring entry, expiry, and public Courses navigation remain predictable', async ({ page }) => {
@@ -44,7 +65,8 @@ test('protected Authoring entry, expiry, and public Courses navigation remain pr
   await page.getByLabel(/^Password/).fill('test-only-password')
   await page.getByRole('button', { name: 'Sign in' }).press('Enter')
   await expect(page).toHaveURL('/authoring')
-  await expect(page.getByLabel('Authentication status')).toHaveText('Signed in')
+  await expect(page.getByText('Signed in')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Authoring' })).toBeVisible()
 
   signedIn = false

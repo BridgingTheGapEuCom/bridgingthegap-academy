@@ -43,6 +43,14 @@ const i18n = createI18n({
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    const isPublishedReaderLessonChange =
+      (to.name === 'published-course-latest' || to.name === 'published-course-version') &&
+      to.path === from.path &&
+      to.query.lesson !== from.query.lesson
+    if (isPublishedReaderLessonChange) return false
+    return savedPosition ?? { top: 0 }
+  },
   routes: [
     { path: '/', component: HomePage },
     { path: '/dashboard', component: DashboardPage, meta: { requiresAuth: true } },
@@ -105,7 +113,7 @@ router.afterEach((to, from) => {
   if (isPublishedReaderLessonChange) {
     return
   }
-  void nextTick(() => document.getElementById('main')?.focus())
+  void nextTick(() => document.getElementById('main')?.focus({ preventScroll: true }))
 })
 
 createApp(App).use(router).use(i18n).mount('#app')

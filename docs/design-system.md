@@ -2,6 +2,15 @@
 
 The Academy is the structured-learning counterpart to BridgingTheGap.eu.com. It keeps the public site's typography-led hierarchy, near-neutral surfaces, thin dividers, compact corners, and restrained decoration. It does not copy the editorial layout or turn learning into a dashboard or game.
 
+The public homepage uses a deliberately grayscale, editorial treatment: charcoal text and controls, neutral surfaces, thin gray dividers, and hierarchy through type and spacing rather than chromatic accents. Its only card-like surfaces are the featured-course summaries and the final call to action; topic and learning-principle sections remain lightweight content blocks.
+
+The Dashboard follows the same grayscale language while retaining application
+semantics. Its default view prioritizes widget content in a responsive panel
+grid; installation-wide controls appear only in a distinct management mode.
+Widget discovery uses cards and Academy-rendered declarative forms. Plugin code
+never supplies configuration markup, and raw configuration JSON is not a user
+interface.
+
 ## Tokens and layout
 
 `frontend/src/styles/tokens.css` is the single presentation-token layer. It defines semantic colour, type, spacing, layout, shape, and motion values. Components consume token names such as `--btg-color-text` and `--btg-color-border`; they must not introduce arbitrary hard-coded component colours. Future declarative instance themes may override presentation tokens, but never component semantics or accessibility behaviour.

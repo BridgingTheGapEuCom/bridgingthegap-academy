@@ -71,18 +71,22 @@ func (s *DashboardPlacementService) Create(ctx context.Context, value DashboardP
 	value.Revision = 1
 	value.CreatedAt = s.now().UTC()
 	value.UpdatedAt = value.CreatedAt
-	if err := s.validate(ctx, value); err != nil {
+	normalized, err := s.validate(ctx, value)
+	if err != nil {
 		return DashboardPlacement{}, err
 	}
+	value.Configuration = normalized
 	return s.repository.CreateDashboardPlacement(ctx, value)
 }
 func (s *DashboardPlacementService) Update(ctx context.Context, value DashboardPlacement, expected int64) (DashboardPlacement, error) {
 	if s == nil || s.repository == nil {
 		return DashboardPlacement{}, ErrLaunchDenied
 	}
-	if err := s.validate(ctx, value); err != nil {
+	normalized, err := s.validate(ctx, value)
+	if err != nil {
 		return DashboardPlacement{}, err
 	}
+	value.Configuration = normalized
 	value.UpdatedAt = s.now().UTC()
 	return s.repository.UpdateDashboardPlacement(ctx, value, expected)
 }
@@ -108,25 +112,25 @@ func (s *DashboardPlacementService) Reorder(ctx context.Context, ids []string, r
 	}
 	return s.repository.ReorderDashboardPlacements(ctx, ids, revisions, s.now().UTC())
 }
-func (s *DashboardPlacementService) validate(ctx context.Context, value DashboardPlacement) error {
-	if uuid.Validate(value.ID) != nil || value.Position < -1 || len(value.Configuration) == 0 || len(value.Configuration) > 16<<10 {
-		return ErrLaunchDenied
+func (s *DashboardPlacementService) validate(ctx context.Context, value DashboardPlacement) (json.RawMessage, error) {
+	if uuid.Validate(value.ID) != nil || value.Position < -1 || len(value.Configuration) == 0 || len(value.Configuration) > MaxWidgetConfigurationBytes {
+		return nil, ErrLaunchDenied
 	}
 	var object map[string]json.RawMessage
 	if strictDecode(value.Configuration, &object) != nil || object == nil {
-		return ErrLaunchDenied
+		return nil, ErrInvalidWidgetConfiguration
 	}
 	return s.validateRelease(ctx, value)
 }
-func (s *DashboardPlacementService) validateRelease(ctx context.Context, value DashboardPlacement) error {
+func (s *DashboardPlacementService) validateRelease(ctx context.Context, value DashboardPlacement) (json.RawMessage, error) {
 	release, err := s.registry.RuntimeRelease(ctx, value.PluginID, value.PluginVersion)
 	if err != nil || release.Release.ArtifactDigest != value.ArtifactDigest {
-		return ErrLaunchDenied
+		return nil, ErrLaunchDenied
 	}
 	for _, entry := range release.Manifest.Entrypoints {
 		if entry.ID == value.WidgetID && entry.Type == TypeDashboardWidget {
-			return nil
+			return entry.NormalizeConfiguration(value.Configuration)
 		}
 	}
-	return ErrLaunchDenied
+	return nil, ErrLaunchDenied
 }

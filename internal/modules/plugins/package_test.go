@@ -15,7 +15,7 @@ import (
 )
 
 func testManifest(version string) Manifest {
-	return Manifest{Format: PackageFormat, FormatVersion: 1, ID: "com.example.academy.timeline", Version: version, Name: "Timeline", Description: "A timeline widget", Publisher: Publisher{Name: "Example"}, PluginTypes: []PluginType{TypeCourseWidget}, Entrypoints: []Entrypoint{{ID: "timeline", Type: TypeCourseWidget, Name: "Timeline", Resource: "resources/timeline.js"}}, Permissions: []Permission{PermissionNone}}
+	return Manifest{Format: PackageFormat, FormatVersion: 1, ID: "com.example.academy.timeline", Version: version, Name: "Timeline", Description: "A timeline widget", Publisher: Publisher{Name: "Example"}, PluginTypes: []PluginType{TypeCourseWidget}, Entrypoints: []Entrypoint{{ID: "timeline", Type: TypeCourseWidget, Name: "Timeline", Resource: "resources/timeline.js", Configuration: &ConfigurationSchema{Fields: []ConfigurationField{{Key: "theme", Type: ConfigurationText, Label: "Theme"}}}}}, Permissions: []Permission{PermissionNone}}
 }
 func readTestPackage(t *testing.T, b []byte) *ValidatedPluginPackage {
 	t.Helper()
@@ -71,6 +71,17 @@ func TestManifestRejectsInvalidValues(t *testing.T) {
 				t.Fatal("accepted invalid manifest")
 			}
 		})
+	}
+}
+
+func TestPackageRejectsInvalidDeclarativeConfigurationSchema(t *testing.T) {
+	manifest := testManifest("1.0.0")
+	manifest.Entrypoints[0].Configuration = &ConfigurationSchema{Fields: []ConfigurationField{
+		{Key: "title", Type: ConfigurationText, Label: "Title"},
+		{Key: "title", Type: ConfigurationText, Label: "Duplicate"},
+	}}
+	if _, err := BuildPackageForTesting(manifest, map[string][]byte{"resources/timeline.js": []byte("x")}, "", nil); err == nil {
+		t.Fatalf("invalid configuration schema was not rejected with the package: %v", err)
 	}
 }
 

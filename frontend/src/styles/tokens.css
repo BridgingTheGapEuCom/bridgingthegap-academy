@@ -36,6 +36,23 @@
   --btg-color-success: #216e3a;
   --btg-color-warning: #8a5200;
 
+  /* Homepage-specific presentation tokens. They keep the public landing page
+     deliberately monochrome without changing semantic colours elsewhere. */
+  --btg-home-background: #ffffff;
+  --btg-home-surface-muted: #f2f2f2;
+  --btg-home-surface-emphasis: #e9e9e9;
+  --btg-home-icon-surface: #e5e5e5;
+  --btg-home-icon-stroke: #353535;
+  --btg-home-text: #161616;
+  --btg-home-text-secondary: #4b4b4b;
+  --btg-home-text-muted: #686868;
+  --btg-home-border: #d2d2d2;
+  --btg-home-border-strong: #626262;
+  --btg-home-interactive: #1e1e1e;
+  --btg-home-interactive-hover: #393939;
+  --btg-home-interactive-active: #101010;
+  --btg-home-focus: #3b3b3b;
+
   --btg-space-1: 0.25rem;
   --btg-space-2: 0.5rem;
   --btg-space-3: 0.75rem;
@@ -49,7 +66,7 @@
   --btg-width-application: 76rem;
   --btg-width-form: 34rem;
   --btg-page-gutter: clamp(1rem, 3vw, 2rem);
-  --btg-header-height: 4.75rem;
+  --btg-header-height: 4rem;
 
   --btg-border-width: 1px;
   --btg-radius-control: 0.25rem;

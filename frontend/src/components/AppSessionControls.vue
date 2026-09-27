@@ -2,7 +2,6 @@
   <div class="site-session" :aria-busy="auth.state.value.status === 'bootstrapping' || undefined">
     <p v-if="auth.state.value.status === 'bootstrapping'" role="status">Checking session…</p>
     <template v-else-if="auth.state.value.status === 'authenticated'">
-      <p aria-label="Authentication status">Signed in</p>
       <BtgButton variant="quiet" :disabled="signingOut" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</BtgButton>
     </template>
     <RouterLink v-else to="/login">Sign in</RouterLink>

@@ -48,7 +48,7 @@ func (h *dashboardWidgetAPI) available(w http.ResponseWriter, r *http.Request) {
 	for _, release := range releases {
 		for _, entry := range release.Manifest.Entrypoints {
 			if entry.Type == plugins.TypeDashboardWidget {
-				items = append(items, map[string]any{"pluginId": release.Release.PluginID, "pluginName": release.Manifest.Name, "pluginVersion": release.Release.Version, "artifactDigest": release.Release.ArtifactDigest, "widgetId": entry.ID, "widgetName": entry.Name, "description": release.Manifest.Description})
+				items = append(items, map[string]any{"pluginId": release.Release.PluginID, "pluginName": release.Manifest.Name, "pluginVersion": release.Release.Version, "artifactDigest": release.Release.ArtifactDigest, "widgetId": entry.ID, "widgetName": entry.Name, "description": release.Manifest.Description, "configuration": entry.Configuration})
 			}
 		}
 	}
@@ -210,6 +210,10 @@ func dashboardProblem(w http.ResponseWriter, r *http.Request, e error) {
 	}
 	if errors.Is(e, plugins.ErrLaunchDenied) {
 		problem(w, r, 400, "Invalid dashboard widget")
+		return
+	}
+	if errors.Is(e, plugins.ErrInvalidWidgetConfiguration) {
+		problem(w, r, 400, "Invalid dashboard widget configuration")
 		return
 	}
 	problem(w, r, 500, "Dashboard unavailable")

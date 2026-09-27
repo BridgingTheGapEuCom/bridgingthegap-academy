@@ -54,7 +54,11 @@ func newDashboardHTTPFixture(t *testing.T, ctx context.Context, pool *pgxpool.Po
 		t.Fatal(err)
 	}
 	register := func(id plugins.PluginID, widgetID string, kind plugins.PluginType, enabled bool) plugins.InstalledRelease {
-		manifest := plugins.Manifest{Format: plugins.PackageFormat, FormatVersion: 1, ID: id, Version: "1.0.0", Name: "HTTP " + widgetID, Description: "safe widget metadata", Publisher: plugins.Publisher{Name: "BTG"}, PluginTypes: []plugins.PluginType{kind}, Entrypoints: []plugins.Entrypoint{{ID: widgetID, Type: kind, Name: "HTTP " + widgetID, Resource: "resources/widget.js"}}, Permissions: []plugins.Permission{plugins.PermissionNone}}
+		entrypoint := plugins.Entrypoint{ID: widgetID, Type: kind, Name: "HTTP " + widgetID, Resource: "resources/widget.js"}
+		if kind == plugins.TypeDashboardWidget {
+			entrypoint.Configuration = &plugins.ConfigurationSchema{Fields: []plugins.ConfigurationField{{Key: "rank", Type: plugins.ConfigurationInteger, Label: "Rank"}}}
+		}
+		manifest := plugins.Manifest{Format: plugins.PackageFormat, FormatVersion: 1, ID: id, Version: "1.0.0", Name: "HTTP " + widgetID, Description: "safe widget metadata", Publisher: plugins.Publisher{Name: "BTG"}, PluginTypes: []plugins.PluginType{kind}, Entrypoints: []plugins.Entrypoint{entrypoint}, Permissions: []plugins.Permission{plugins.PermissionNone}}
 		archive, err := plugins.BuildPackageForTesting(manifest, map[string][]byte{"resources/widget.js": []byte("export default {}")}, "dashboard-http-owned-2026", private)
 		if err != nil {
 			t.Fatal(err)
@@ -119,12 +123,17 @@ func testDashboardWidgetHTTP(t *testing.T, ctx context.Context, pool *pgxpool.Po
 
 	// The exact capability, not the unrelated plugins.manage capability, gates
 	// every Dashboard placement endpoint.
-	for _, path := range []string{"/api/dashboard/widgets", "/api/dashboard/widgets/available"} {
+	for _, path := range []string{"/api/dashboard/widgets/available"} {
 		deniedRouter, denied, deniedCookie := dashboardHTTPRouter(t, fixture, map[identity.Capability]bool{identity.CapabilityPluginsManage: true})
 		response := authRequest(deniedRouter, http.MethodGet, path, "", deniedCookie)
 		if response.Code != http.StatusForbidden || len(denied.calls) != 1 || denied.calls[0] != identity.CapabilityDashboardWidgetsManage {
 			t.Fatalf("plugins.manage granted %s: status=%d calls=%v", path, response.Code, denied.calls)
 		}
+	}
+	viewerRouter, viewerAuthorizer, viewerCookie := dashboardHTTPRouter(t, fixture, map[identity.Capability]bool{identity.CapabilityPluginsManage: true})
+	viewerList := authRequest(viewerRouter, http.MethodGet, "/api/dashboard/widgets", "", viewerCookie)
+	if viewerList.Code != http.StatusOK || len(viewerAuthorizer.calls) != 0 {
+		t.Fatalf("authenticated Dashboard viewer could not list placements: status=%d calls=%v", viewerList.Code, viewerAuthorizer.calls)
 	}
 	pluginsOnlyRouter, pluginsOnly, pluginsOnlyCookie := dashboardHTTPRouter(t, fixture, map[identity.Capability]bool{identity.CapabilityPluginsManage: true})
 	pluginsOnlyCreate := authRequest(pluginsOnlyRouter, http.MethodPost, "/api/dashboard/widgets", dashboardPlacementBody(fixture.dashboard, "dashboard", `{}`), pluginsOnlyCookie, csrf)
@@ -146,7 +155,7 @@ func testDashboardWidgetHTTP(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 
 	available := authRequest(router, http.MethodGet, "/api/dashboard/widgets/available", "", cookie)
-	if available.Code != http.StatusOK || available.Header().Get("Cache-Control") != "no-store" || strings.Contains(available.Body.String(), `"widgetId":"course"`) || strings.Contains(available.Body.String(), `"widgetId":"disabled"`) || !strings.Contains(available.Body.String(), `"widgetId":"dashboard"`) {
+	if available.Code != http.StatusOK || available.Header().Get("Cache-Control") != "no-store" || strings.Contains(available.Body.String(), `"widgetId":"course"`) || strings.Contains(available.Body.String(), `"widgetId":"disabled"`) || !strings.Contains(available.Body.String(), `"widgetId":"dashboard"`) || !strings.Contains(available.Body.String(), `"type":"INTEGER"`) {
 		t.Fatalf("available widgets = %d %s", available.Code, available.Body.String())
 	}
 	for _, forbidden := range []string{"publicKey", "signature", "approval", "token", "storage"} {
@@ -159,6 +168,8 @@ func testDashboardWidgetHTTP(t *testing.T, ctx context.Context, pool *pgxpool.Po
 		`{`,
 		dashboardPlacementBody(fixture.dashboard, "dashboard", `{}`)[:len(dashboardPlacementBody(fixture.dashboard, "dashboard", `{}`))-1] + `,"unexpected":true}`,
 		dashboardPlacementBody(fixture.dashboard, "missing", `{}`),
+		dashboardPlacementBody(fixture.dashboard, "dashboard", `{"rank":"first"}`),
+		dashboardPlacementBody(fixture.dashboard, "dashboard", `{"unknown":true}`),
 		dashboardPlacementBody(fixture.dashboard, "dashboard", `{"padding":"`+strings.Repeat("x", 17<<10)+`"}`),
 		dashboardPlacementBody(fixture.course, "course", `{}`),
 		dashboardPlacementBody(fixture.disabled, "disabled", `{}`),
@@ -277,7 +288,7 @@ func testDashboardWidgetPlacements(t *testing.T, ctx context.Context, pool *pgxp
 	repo := pluginspostgres.New(pool)
 	registry := plugins.NewRegistryService(repo, plugins.Policy{})
 	pub, priv, _ := ed25519.GenerateKey(bytes.NewReader(bytes.Repeat([]byte{91}, 64)))
-	manifest := plugins.Manifest{Format: plugins.PackageFormat, FormatVersion: 1, ID: "eu.com.bridgingthegap.widgets.dashboard", Version: "1.0.0", Name: "Dashboard", Description: "test", Publisher: plugins.Publisher{Name: "BTG"}, PluginTypes: []plugins.PluginType{plugins.TypeDashboardWidget}, Entrypoints: []plugins.Entrypoint{{ID: "dashboard", Type: plugins.TypeDashboardWidget, Name: "Dashboard", Resource: "resources/widget.js"}}, Permissions: []plugins.Permission{plugins.PermissionNone}}
+	manifest := plugins.Manifest{Format: plugins.PackageFormat, FormatVersion: 1, ID: "eu.com.bridgingthegap.widgets.dashboard", Version: "1.0.0", Name: "Dashboard", Description: "test", Publisher: plugins.Publisher{Name: "BTG"}, PluginTypes: []plugins.PluginType{plugins.TypeDashboardWidget}, Entrypoints: []plugins.Entrypoint{{ID: "dashboard", Type: plugins.TypeDashboardWidget, Name: "Dashboard", Resource: "resources/widget.js", Configuration: &plugins.ConfigurationSchema{Fields: []plugins.ConfigurationField{{Key: "one", Type: plugins.ConfigurationInteger, Label: "One"}, {Key: "two", Type: plugins.ConfigurationInteger, Label: "Two"}, {Key: "updated", Type: plugins.ConfigurationBoolean, Label: "Updated"}}}}}, Permissions: []plugins.Permission{plugins.PermissionNone}}
 	if err := repo.RegisterKey(ctx, plugins.VerificationKey{ID: "dashboard-owned-2026", PublicKey: pub, Purpose: plugins.KeyPurposeOwned, AllowedPluginIDs: []plugins.PluginID{manifest.ID}, Enabled: true}); err != nil {
 		t.Fatal(err)
 	}

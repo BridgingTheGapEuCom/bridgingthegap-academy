@@ -352,7 +352,7 @@ func testPluginLifecycleHTTP(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 
 	pluginID := plugins.PluginID("com.example.academy.lifecycle-http")
-	manifest := plugins.Manifest{Format: plugins.PackageFormat, FormatVersion: 1, ID: pluginID, Version: "1.0.0", Name: "Lifecycle", Description: "Lifecycle fixture", Publisher: plugins.Publisher{Name: "Community"}, PluginTypes: []plugins.PluginType{plugins.TypeCourseWidget, plugins.TypeDashboardWidget}, Entrypoints: []plugins.Entrypoint{{ID: "course", Type: plugins.TypeCourseWidget, Name: "Course", Resource: "resources/course.js"}, {ID: "dashboard", Type: plugins.TypeDashboardWidget, Name: "Dashboard", Resource: "resources/dashboard.js"}}, Permissions: []plugins.Permission{plugins.PermissionNone}}
+	manifest := plugins.Manifest{Format: plugins.PackageFormat, FormatVersion: 1, ID: pluginID, Version: "1.0.0", Name: "Lifecycle", Description: "Lifecycle fixture", Publisher: plugins.Publisher{Name: "Community"}, PluginTypes: []plugins.PluginType{plugins.TypeCourseWidget, plugins.TypeDashboardWidget}, Entrypoints: []plugins.Entrypoint{{ID: "course", Type: plugins.TypeCourseWidget, Name: "Course", Resource: "resources/course.js"}, {ID: "dashboard", Type: plugins.TypeDashboardWidget, Name: "Dashboard", Resource: "resources/dashboard.js", Configuration: &plugins.ConfigurationSchema{Fields: []plugins.ConfigurationField{{Key: "lifecycle", Type: plugins.ConfigurationBoolean, Label: "Lifecycle"}}}}}, Permissions: []plugins.Permission{plugins.PermissionNone}}
 	archive, err := plugins.BuildPackageForTesting(manifest, map[string][]byte{"resources/course.js": []byte("course"), "resources/dashboard.js": []byte("dashboard")}, "lifecycle-http-approval-2026", privateKey)
 	if err != nil {
 		t.Fatal(err)

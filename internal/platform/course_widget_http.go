@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
@@ -19,24 +20,26 @@ func (a courseWidgetDiscoveryAdapter) DiscoverCourseWidgets(ctx context.Context)
 	}
 	result := make([]authoring.CourseWidgetDescriptor, 0, len(entries))
 	for _, entry := range entries {
+		configuration, _ := json.Marshal(entry.Configuration)
 		result = append(result, authoring.CourseWidgetDescriptor{
 			PluginID: string(entry.PluginID), PluginName: entry.PluginName, PluginVersion: entry.PluginVersion,
 			ArtifactDigest: entry.ArtifactDigest, WidgetID: entry.WidgetID, WidgetName: entry.WidgetName,
-			Description: entry.Description, Trust: string(entry.Trust),
+			Description: entry.Description, Trust: string(entry.Trust), Configuration: configuration,
 		})
 	}
 	return result, nil
 }
 
 type courseWidgetDiscoveryDTO struct {
-	PluginID       string `json:"pluginId"`
-	PluginName     string `json:"pluginName"`
-	PluginVersion  string `json:"pluginVersion"`
-	ArtifactDigest string `json:"artifactDigest"`
-	WidgetID       string `json:"widgetId"`
-	WidgetName     string `json:"widgetName"`
-	Description    string `json:"description"`
-	Trust          string `json:"trust"`
+	PluginID       string          `json:"pluginId"`
+	PluginName     string          `json:"pluginName"`
+	PluginVersion  string          `json:"pluginVersion"`
+	ArtifactDigest string          `json:"artifactDigest"`
+	WidgetID       string          `json:"widgetId"`
+	WidgetName     string          `json:"widgetName"`
+	Description    string          `json:"description"`
+	Trust          string          `json:"trust"`
+	Configuration  json.RawMessage `json:"configuration"`
 }
 
 func (a *authHTTP) handleAuthoringCourseWidgets(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +54,7 @@ func (a *authHTTP) handleAuthoringCourseWidgets(w http.ResponseWriter, r *http.R
 	}
 	result := make([]courseWidgetDiscoveryDTO, 0, len(entries))
 	for _, entry := range entries {
-		result = append(result, courseWidgetDiscoveryDTO{PluginID: entry.PluginID, PluginName: entry.PluginName, PluginVersion: entry.PluginVersion, ArtifactDigest: entry.ArtifactDigest, WidgetID: entry.WidgetID, WidgetName: entry.WidgetName, Description: entry.Description, Trust: entry.Trust})
+		result = append(result, courseWidgetDiscoveryDTO{PluginID: entry.PluginID, PluginName: entry.PluginName, PluginVersion: entry.PluginVersion, ArtifactDigest: entry.ArtifactDigest, WidgetID: entry.WidgetID, WidgetName: entry.WidgetName, Description: entry.Description, Trust: entry.Trust, Configuration: entry.Configuration})
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"widgets": result})

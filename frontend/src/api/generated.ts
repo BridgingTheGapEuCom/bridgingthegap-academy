@@ -1468,6 +1468,27 @@ export interface components {
                 [key: string]: number;
             };
         };
+        WidgetConfigurationOption: {
+            value: string;
+            label: string;
+        };
+        WidgetConfigurationField: {
+            key: string;
+            /** @enum {string} */
+            type: "TEXT" | "TEXTAREA" | "INTEGER" | "NUMBER" | "BOOLEAN" | "SINGLE_SELECT";
+            label: string;
+            description?: string;
+            required: boolean;
+            default?: string | number | boolean;
+            minLength?: number;
+            maxLength?: number;
+            min?: number;
+            max?: number;
+            options?: components["schemas"]["WidgetConfigurationOption"][];
+        };
+        WidgetConfigurationSchema: {
+            fields: components["schemas"]["WidgetConfigurationField"][];
+        };
         AvailableDashboardWidget: {
             pluginId: string;
             pluginName: string;
@@ -1476,6 +1497,7 @@ export interface components {
             widgetId: string;
             widgetName: string;
             description: string;
+            configuration: components["schemas"]["WidgetConfigurationSchema"] | null;
         };
         AvailableDashboardWidgetList: {
             widgets: components["schemas"]["AvailableDashboardWidget"][];
@@ -2748,6 +2770,7 @@ export interface components {
             description: string;
             /** @enum {string} */
             trust: "BTG_OWNED" | "BTG_APPROVED" | "UNKNOWN";
+            configuration: components["schemas"]["WidgetConfigurationSchema"] | null;
         };
         AuthoringCourseWidgetList: {
             widgets: components["schemas"]["AuthoringCourseWidget"][];

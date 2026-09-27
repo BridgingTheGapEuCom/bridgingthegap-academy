@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
 const draftID = '11111111-1111-4111-8111-111111111111'
-const session = { authenticated: true, user_id: '22222222-2222-4222-8222-222222222222', expires_at: '2026-09-15T16:00:00Z', csrf_token: 'test-csrf-token' }
+const session = { authenticated: true, user_id: '22222222-2222-4222-8222-222222222222', expires_at: '2027-01-01T00:00:00Z', csrf_token: 'test-csrf-token' }
 const draft = {
   id: draftID,
   course_id: '33333333-3333-4333-8333-333333333333',
@@ -115,6 +115,7 @@ async function serveDraft(page: Page) {
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
   await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/plugins/course-widgets`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ widgets: [] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/assets**`, (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], limit: 20, offset: 0, total: 0 }) })
@@ -744,6 +745,7 @@ test('Authoring structure controls support keyboard reordering without narrow-sc
 test('Authoring Lesson metadata editor saves with the Lesson revision and remains usable at a narrow width', async ({ page }) => {
   let patchBody: unknown
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/plugins/course-widgets`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ widgets: [] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/structure**`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => {
     if (route.request().method() === 'PATCH') {
@@ -783,6 +785,7 @@ test('Authoring Lesson prerequisites remain advisory, ordered, keyboard-operable
   }
   const lessonWithPrerequisite = { ...lesson, recommended_prerequisite_keys: ['routing'] }
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/plugins/course-widgets`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ widgets: [] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
   await page.route(`**/api/authoring/drafts/${draftID}/structure**`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(prerequisiteStructure) }))
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}**`, (route) => {

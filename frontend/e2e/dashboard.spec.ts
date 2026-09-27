@@ -1,12 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
-const session = { authenticated: true, user_id: '11111111-1111-4111-8111-111111111111', expires_at: '2026-09-26T12:00:00Z', csrf_token: 'test-csrf-token' }
+const session = { authenticated: true, user_id: '11111111-1111-4111-8111-111111111111', expires_at: '2027-01-01T00:00:00Z', csrf_token: 'test-csrf-token' }
 const first = { placementId: '22222222-2222-4222-8222-222222222222', pluginId: 'com.example.dashboard', pluginVersion: '1.0.0', artifactDigest: 'a'.repeat(64), widgetId: 'overview', configuration: { title: 'Overview' }, position: 0, enabled: true, revision: 1 }
-const available = { pluginId: first.pluginId, pluginName: 'Example widgets', pluginVersion: first.pluginVersion, artifactDigest: first.artifactDigest, widgetId: first.widgetId, widgetName: 'Overview', description: 'A test Dashboard widget' }
+const available = { pluginId: first.pluginId, pluginName: 'Example widgets', pluginVersion: first.pluginVersion, artifactDigest: first.artifactDigest, widgetId: first.widgetId, widgetName: 'Overview', description: 'A test Dashboard widget', configuration: { fields: [{ key: 'title', type: 'TEXT', label: 'Title', description: 'Shown above recent activity.', required: true, maxLength: 80 }] } }
 
 function launch(placement: typeof first) {
-  return { context: { runtimeInstanceId: '33333333-3333-4333-8333-333333333333', pluginId: placement.pluginId, pluginVersion: placement.pluginVersion, artifactDigest: placement.artifactDigest, widgetId: placement.widgetId, widgetType: 'DASHBOARD_WIDGET' }, widgetName: 'Overview', runtimeUrl: 'https://plugins.academy.test/runtime#runtime=33333333-3333-4333-8333-333333333333', runtimeOrigin: 'https://plugins.academy.test', token: 'short-lived-token', expiresAt: '2026-09-26T12:05:00Z', capabilities: ['widget.runtime.bootstrap', 'widget.dashboard.context.read'], dashboardContext: { placementId: placement.placementId, configuration: placement.configuration } }
+  return { context: { runtimeInstanceId: '33333333-3333-4333-8333-333333333333', pluginId: placement.pluginId, pluginVersion: placement.pluginVersion, artifactDigest: placement.artifactDigest, widgetId: placement.widgetId, widgetType: 'DASHBOARD_WIDGET' }, widgetName: 'Overview', runtimeUrl: 'https://plugins.academy.test/runtime#runtime=33333333-3333-4333-8333-333333333333', runtimeOrigin: 'https://plugins.academy.test', token: 'short-lived-token', expiresAt: '2027-01-01T00:05:00Z', capabilities: ['widget.runtime.bootstrap', 'widget.dashboard.context.read'], dashboardContext: { placementId: placement.placementId, configuration: placement.configuration } }
 }
 
 async function serveDashboard(page: Page) {
@@ -58,17 +58,23 @@ test('a manager configures ordered Dashboard widgets without executing plugin co
   await page.goto('/dashboard')
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible()
   await expect(page.getByTitle('Overview')).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin')
-  await page.getByText('Add dashboard widget').click()
-  await page.getByRole('combobox').selectOption(`${available.pluginId}:${available.pluginVersion}:${available.artifactDigest}:${available.widgetId}`)
-  await page.getByRole('button', { name: 'Add dashboard widget' }).click()
-  await expect(page.getByRole('list', { name: 'Configured Dashboard widgets' })).toContainText('overview')
-  const firstArticle = page.getByRole('heading', { name: 'overview' }).first().locator('..')
-  await firstArticle.getByRole('button', { name: 'Configure placement' }).click()
-  await firstArticle.getByLabel(/Configuration/).fill('{"title":"Updated"}')
-  await firstArticle.getByRole('button', { name: 'Save configuration' }).click()
-  await firstArticle.getByRole('button', { name: 'Disable placement' }).click()
+  await page.getByRole('button', { name: 'Manage dashboard' }).click()
+  await expect(page.getByRole('heading', { name: 'Configure dashboard' })).toBeVisible()
+  await expect(page.getByText('Configuration (JSON)')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Add Overview' })).toBeVisible()
+  await page.getByRole('button', { name: 'Add Overview' }).click()
+  await page.getByRole('textbox', { name: /Title/ }).fill('Added overview')
+  await page.getByRole('button', { name: 'Add widget' }).click()
+  const configured = page.getByRole('list', { name: 'Configured Dashboard widgets' })
+  await expect(configured).toContainText('Overview')
+  await configured.getByRole('button', { name: 'Configure' }).first().click()
+  await configured.getByRole('textbox', { name: /Title/ }).fill('Updated')
+  await configured.getByRole('button', { name: 'Save changes' }).click()
+  await configured.getByRole('button', { name: 'Disable' }).first().click()
   await expect(page.getByTitle('Overview')).toHaveCount(1)
   await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

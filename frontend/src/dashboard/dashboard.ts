@@ -44,6 +44,37 @@ function isPlacementList(value: unknown): value is DashboardWidgetPlacementList 
 function isAvailableWidget(value: unknown): value is AvailableDashboardWidget {
   return object(value) && string(value.pluginId) && string(value.pluginName) && string(value.pluginVersion)
     && string(value.artifactDigest) && string(value.widgetId) && string(value.widgetName) && string(value.description)
+    && (value.configuration === null || isConfigurationSchema(value.configuration))
+}
+const configurationKey = /^[a-z][A-Za-z0-9]*$/
+const configurationTypes = ['TEXT', 'TEXTAREA', 'INTEGER', 'NUMBER', 'BOOLEAN', 'SINGLE_SELECT']
+function optionalFiniteNumber(value: unknown): boolean { return value === undefined || typeof value === 'number' && Number.isFinite(value) }
+function validDefault(field: Record<string, unknown>): boolean {
+  if (field.default === undefined) return true
+  if (field.type === 'TEXT' || field.type === 'TEXTAREA') return typeof field.default === 'string'
+  if (field.type === 'INTEGER') return typeof field.default === 'number' && Number.isInteger(field.default)
+  if (field.type === 'NUMBER') return typeof field.default === 'number' && Number.isFinite(field.default)
+  if (field.type === 'BOOLEAN') return typeof field.default === 'boolean'
+  return field.type === 'SINGLE_SELECT' && typeof field.default === 'string' && Array.isArray(field.options) && field.options.some((option) => object(option) && option.value === field.default)
+}
+function isConfigurationField(field: unknown): field is Record<string, unknown> {
+  if (!object(field) || !string(field.key) || !configurationKey.test(field.key) || field.key.length > 64 || ['constructor', 'prototype', '__proto__'].includes(field.key)
+    || !string(field.label) || field.label.length === 0 || field.label.length > 120 || typeof field.required !== 'boolean' || !configurationTypes.includes(String(field.type))
+    || field.description !== undefined && (!string(field.description) || field.description.length > 500) || !optionalFiniteNumber(field.min) || !optionalFiniteNumber(field.max)
+    || field.minLength !== undefined && (!nonNegativeInteger(field.minLength) || field.minLength > configurationLimit) || field.maxLength !== undefined && (!nonNegativeInteger(field.maxLength) || field.maxLength > configurationLimit)) return false
+  if (field.type === 'SINGLE_SELECT') {
+    if (!Array.isArray(field.options) || field.options.length === 0 || field.options.length > 50) return false
+    const values = new Set<string>()
+    for (const option of field.options) {
+      if (!object(option) || !string(option.value) || option.value.length === 0 || option.value.length > 120 || !string(option.label) || option.label.length === 0 || option.label.length > 120 || values.has(option.value)) return false
+      values.add(option.value)
+    }
+  }
+  return validDefault(field)
+}
+function isConfigurationSchema(value: unknown): boolean {
+  if (!object(value) || !Array.isArray(value.fields) || value.fields.length > 32 || !value.fields.every(isConfigurationField)) return false
+  return new Set(value.fields.map((field) => field.key)).size === value.fields.length
 }
 function isAvailableList(value: unknown): value is AvailableDashboardWidgetList {
   return object(value) && Array.isArray(value.widgets) && value.widgets.every(isAvailableWidget)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createDashboardWidget, isDashboardConfiguration, launchDashboardWidget, listDashboardWidgets, moveDashboardWidget } from './dashboard'
+import { createDashboardWidget, isDashboardConfiguration, launchDashboardWidget, listAvailableDashboardWidgets, listDashboardWidgets, moveDashboardWidget } from './dashboard'
 
 const placement = { placementId: '11111111-1111-4111-8111-111111111111', pluginId: 'com.example.widget', pluginVersion: '1.0.0', artifactDigest: 'a'.repeat(64), widgetId: 'dashboard', configuration: { title: 'Safe' }, position: 0, enabled: true, revision: 1 }
 
@@ -19,5 +19,11 @@ describe('Dashboard API helpers', () => {
     await launchDashboardWidget(placement.placementId, { request } as never)
     expect(request.mock.calls[1]![0]).toBe(`/api/dashboard/widgets/${placement.placementId}/widget-runtime`)
     expect(request.mock.calls[1]![1]).toEqual({ method: 'POST', cache: 'no-store' })
+  })
+
+  it('accepts only bounded declarative discovery metadata', async () => {
+    const widget = { pluginId: placement.pluginId, pluginName: 'Example', pluginVersion: placement.pluginVersion, artifactDigest: placement.artifactDigest, widgetId: placement.widgetId, widgetName: 'Dashboard', description: 'Safe', configuration: { fields: [{ key: 'scope', type: 'SINGLE_SELECT', label: 'Scope', required: true, options: [{ value: 'all', label: 'All' }] }] } }
+    await expect(listAvailableDashboardWidgets({ request: vi.fn().mockResolvedValue({ widgets: [widget] }) } as never)).resolves.toEqual({ widgets: [widget] })
+    await expect(listAvailableDashboardWidgets({ request: vi.fn().mockResolvedValue({ widgets: [{ ...widget, configuration: { fields: [{ key: '__proto__', type: 'TEXT', label: 'Unsafe', required: false }] } }] }) } as never)).rejects.toThrow('Invalid Dashboard response')
   })
 })

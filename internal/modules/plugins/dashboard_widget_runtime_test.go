@@ -39,7 +39,7 @@ func dashboardRuntimeFixture(t *testing.T) (*RegistryService, *RuntimeService, *
 	if err := repository.RegisterKey(ctx, key); err != nil {
 		t.Fatal(err)
 	}
-	manifest := Manifest{Format: PackageFormat, FormatVersion: 1, ID: pluginID, Version: "1.0.0", Name: "Dashboard runtime", Description: "Runtime test", Publisher: Publisher{Name: "Example"}, PluginTypes: []PluginType{TypeDashboardWidget, TypeCourseWidget}, Entrypoints: []Entrypoint{{ID: "summary", Type: TypeDashboardWidget, Name: "Summary", Resource: "resources/summary.js"}, {ID: "course", Type: TypeCourseWidget, Name: "Course", Resource: "resources/course.js"}}, Permissions: []Permission{PermissionNone}}
+	manifest := Manifest{Format: PackageFormat, FormatVersion: 1, ID: pluginID, Version: "1.0.0", Name: "Dashboard runtime", Description: "Runtime test", Publisher: Publisher{Name: "Example"}, PluginTypes: []PluginType{TypeDashboardWidget, TypeCourseWidget}, Entrypoints: []Entrypoint{{ID: "summary", Type: TypeDashboardWidget, Name: "Summary", Resource: "resources/summary.js", Configuration: &ConfigurationSchema{Fields: []ConfigurationField{{Key: "theme", Type: ConfigurationText, Label: "Theme"}, {Key: "scope", Type: ConfigurationText, Label: "Scope"}}}}, {ID: "course", Type: TypeCourseWidget, Name: "Course", Resource: "resources/course.js"}}, Permissions: []Permission{PermissionNone}}
 	archive, err := BuildPackageForTesting(manifest, map[string][]byte{"resources/summary.js": []byte("export function initialize() {}"), "resources/course.js": []byte("export default {}")}, key.ID, private)
 	if err != nil {
 		t.Fatal(err)

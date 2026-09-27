@@ -64,6 +64,9 @@ func (s *RegistryService) ValidateCourseWidgetPlacement(ctx context.Context, pla
 		if entry.Type != TypeCourseWidget || placement.WidgetType != string(TypeCourseWidget) {
 			return ErrLaunchDenied
 		}
+		if _, err := entry.NormalizeConfiguration(placement.Configuration); err != nil {
+			return err
+		}
 		resource, err := s.Resource(ctx, release.Release, entry.Resource)
 		if err != nil || resource.SHA256 != declaredDigest(release.Manifest, entry.Resource) {
 			return ErrResourceInvalid
@@ -84,6 +87,7 @@ type CourseWidgetEntrypoint struct {
 	WidgetName     string
 	Description    string
 	Trust          TrustLevel
+	Configuration  *ConfigurationSchema
 }
 
 func (s *RegistryService) DiscoverCourseWidgets(ctx context.Context) ([]CourseWidgetEntrypoint, error) {
@@ -101,7 +105,7 @@ func (s *RegistryService) DiscoverCourseWidgets(ctx context.Context) ([]CourseWi
 				PluginID: release.Release.PluginID, PluginName: release.Manifest.Name,
 				PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest,
 				WidgetID: entry.ID, WidgetName: entry.Name, Description: release.Manifest.Description,
-				Trust: release.CurrentTrust,
+				Trust: release.CurrentTrust, Configuration: entry.Configuration,
 			})
 		}
 	}

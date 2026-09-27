@@ -53,10 +53,11 @@ type Publisher struct {
 }
 
 type Entrypoint struct {
-	ID       string     `json:"id"`
-	Type     PluginType `json:"type"`
-	Name     string     `json:"name"`
-	Resource string     `json:"resource"`
+	ID            string               `json:"id"`
+	Type          PluginType           `json:"type"`
+	Name          string               `json:"name"`
+	Resource      string               `json:"resource"`
+	Configuration *ConfigurationSchema `json:"configuration,omitempty"`
 }
 
 type Resource struct {
@@ -391,7 +392,7 @@ func (m Manifest) Validate() error {
 	}
 	for _, e := range m.Entrypoints {
 		extension := strings.ToLower(path.Ext(e.Resource))
-		if !widgetIDPattern.MatchString(e.ID) || widgets[e.ID] || !types[e.Type] || strings.TrimSpace(e.Name) == "" || resources[e.Resource].Path == "" || extension != ".js" && extension != ".mjs" {
+		if !widgetIDPattern.MatchString(e.ID) || widgets[e.ID] || !types[e.Type] || strings.TrimSpace(e.Name) == "" || resources[e.Resource].Path == "" || extension != ".js" && extension != ".mjs" || e.Configuration.Validate() != nil {
 			return errors.New("entrypoints")
 		}
 		widgets[e.ID] = true
@@ -498,6 +499,17 @@ func canonicalSigningPayload(manifest []byte, artifact string) []byte {
 func cloneManifest(m Manifest) Manifest {
 	m.PluginTypes = append([]PluginType(nil), m.PluginTypes...)
 	m.Entrypoints = append([]Entrypoint(nil), m.Entrypoints...)
+	for i := range m.Entrypoints {
+		if m.Entrypoints[i].Configuration != nil {
+			configuration := *m.Entrypoints[i].Configuration
+			configuration.Fields = append([]ConfigurationField(nil), configuration.Fields...)
+			for j := range configuration.Fields {
+				configuration.Fields[j].Default = append(json.RawMessage(nil), configuration.Fields[j].Default...)
+				configuration.Fields[j].Options = append([]ConfigurationOption(nil), configuration.Fields[j].Options...)
+			}
+			m.Entrypoints[i].Configuration = &configuration
+		}
+	}
 	m.Permissions = append([]Permission(nil), m.Permissions...)
 	m.Resources = append([]Resource(nil), m.Resources...)
 	return m

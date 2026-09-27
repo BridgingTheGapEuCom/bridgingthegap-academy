@@ -30,13 +30,25 @@ plugin, so a widget type is identified by plugin ID plus widget ID. The only v1
 permission is `NONE`; network, database, filesystem, process, environment, and
 session access are not implied or expressible.
 
+An entrypoint may also declare an optional, data-only `configuration` schema.
+The v1 field vocabulary is deliberately small: `TEXT`, `TEXTAREA`, `INTEGER`,
+`NUMBER`, `BOOLEAN`, and `SINGLE_SELECT`. Fields have stable simple keys,
+labels, optional help and defaults, and only type-appropriate length, numeric,
+or finite-option constraints. Field counts, text, descriptions, and select
+options are bounded. Executable expressions, HTML, CSS, callbacks, remote
+schema references, and plugin-rendered configuration components are not part
+of the format. A missing schema means that the widget has no user-configurable
+fields and accepts only an empty configuration object.
+
 Parsing is strict. Unknown or duplicate JSON fields, trailing JSON, undeclared
 files, missing files, unsafe or duplicate ZIP paths, symlinks/special entries,
 checksum differences, unsupported types, and unsupported format versions are
 rejected. Compressed bytes, expanded bytes, entry bytes, entry count, and
 compression ratio are bounded while reading. Resources are treated as opaque
 bytes and are never executed. Validation produces an opaque
-`ValidatedPluginPackage`.
+`ValidatedPluginPackage`. Configuration schemas, including default value types
+and constraints, are validated in this same package boundary before a release
+can be registered.
 
 ## Integrity and signatures
 
@@ -175,9 +187,12 @@ relaunch. This avoids a durable per-render revocation table.
 Courses use one canonical `PLUGIN_WIDGET` LessonContent block. Its existing
 block key is the placement key and the immutable payload pins plugin ID,
 SemVer, artifact digest, Course-widget entrypoint ID, and bounded JSON
-configuration. Configuration is data only: it is never evaluated as HTML or
-JavaScript. Course authors use their existing Lesson-content capability and
-revision CAS; `plugins.manage` remains installation administration only.
+configuration. Academy renders any declared fields with its shared native form
+controls and validates the resulting object against the exact pinned
+entrypoint on the server. Raw JSON and plugin-provided configuration UI are
+never exposed to authors. Configuration is data only: it is never evaluated as
+HTML or JavaScript. Course authors use their existing Lesson-content capability
+and revision CAS; `plugins.manage` remains installation administration only.
 
 Only enabled releases that currently satisfy trust policy appear in Course
 authoring discovery. Draft replacement, Review submission, and publication
@@ -313,7 +328,10 @@ The Academy has no Dashboard aggregate, user preference store, or per-user
 Dashboard model. Dashboard widget placement is therefore installation-wide
 configuration, not user-owned state. Each placement pins an exact plugin ID,
 version, artifact digest, and Dashboard entrypoint; plugin upgrades never
-rewrite it. Placement configuration is bounded JSON data only.
+rewrite it. Placement configuration is bounded JSON data only and is validated
+against the declarative schema of that exact pinned entrypoint on creation and
+update. Unknown keys, wrong types, missing required values, out-of-bound
+numbers or strings, and unlisted select values are rejected.
 
 Placements form one deterministic vertical ordered list. Creation appends to
 the list. Move operations submit the full observed placement-revision map and
@@ -360,15 +378,25 @@ mutation. It renders each enabled placement with the same generic
 opaque placement ID; a failing or unavailable frame is contained in that
 widget's own region and never prevents the rest of the Dashboard from working.
 
-Users with the server-confirmed `dashboard.widgets.manage` capability can add
-from Dashboard-widget discovery, edit bounded JSON configuration, move a
-widget up or down, enable or disable a placement, and remove a placement. The
-controls use native buttons and forms; reordering is keyboard-accessible and
-sends the complete current revision map. Conflicts reload the authoritative
-list rather than attempting a browser-side merge. Configuration or enabled
-state changes remount a fresh runtime, so a new launch receives its own
-configuration snapshot. There is no per-user layout, drag-and-drop, grid, or
-browser persistence in v1.
+The default Dashboard is learner-facing: it shows enabled placements in a
+responsive grayscale card grid and keeps each frame's unavailable state inside
+its own region. Users with server-confirmed `dashboard.widgets.manage`
+authority can enter a separate local management mode. Discovery is presented
+as selectable widget cards, while the installed list exposes Configure, Move
+up/down, Enable/Disable, and Remove actions. It does not use a widget dropdown,
+drag-and-drop, or a permanently visible administration form.
+
+Academy owns the generic configuration form. It renders declared fields with
+labelled native inputs, textareas, number inputs, checkboxes, and finite selects;
+plugins cannot inject Vue, HTML, CSS, or JavaScript into management UI. There
+is no raw JSON editor or fallback. Widgets without declared fields are added
+with `{}`, while required fields without defaults must be completed before
+creation. Reordering is keyboard-accessible and sends the complete current
+revision map. Conflicts reload the authoritative list while preserving useful
+form input rather than attempting a browser-side merge. Configuration or
+enabled-state changes remount a fresh runtime, so a new launch receives its
+own configuration snapshot. There is no per-user layout, freeform positioning,
+or browser persistence in v1.
 
 Security invariants:
 

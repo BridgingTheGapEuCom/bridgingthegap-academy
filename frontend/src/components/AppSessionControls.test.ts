@@ -43,14 +43,15 @@ describe('AppSessionControls', () => {
     expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull()
   })
 
-  it('makes unauthenticated and authenticated states visible without exposing the opaque user ID', async () => {
+  it('shows the appropriate authentication action without exposing the opaque user ID or redundant status text', async () => {
     await renderControls()
     expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/login')
 
     cleanup()
     authMock.state = shallowRef<AuthenticationState>({ status: 'authenticated', userId: '33333333-3333-4333-8333-333333333333', expiresAt: '2026-09-17T12:00:00Z' })
     await renderControls()
-    expect(screen.getByLabelText('Authentication status').textContent).toBe('Signed in')
+    expect(screen.queryByLabelText('Authentication status')).toBeNull()
+    expect(screen.queryByText('Signed in')).toBeNull()
     expect(document.body.textContent).not.toContain('33333333-3333-4333-8333-333333333333')
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy()
   })

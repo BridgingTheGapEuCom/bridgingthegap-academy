@@ -2,6 +2,7 @@ package authoring
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
@@ -18,6 +19,7 @@ type CourseWidgetDescriptor struct {
 	WidgetName     string
 	Description    string
 	Trust          string
+	Configuration  json.RawMessage
 }
 
 type CourseWidgetDiscoveryProvider interface {

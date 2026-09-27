@@ -379,8 +379,8 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					management.Post("/plugins/{pluginId}/{version}/disable", auth.pluginManagement.disable)
 				}
 				if auth.dashboardWidgets != nil {
+					protected.Get("/dashboard/widgets", auth.dashboardWidgets.list)
 					dashboard := protected.With(auth.requireCapability(identity.CapabilityDashboardWidgetsManage, identity.InstanceResource()))
-					dashboard.Get("/dashboard/widgets", auth.dashboardWidgets.list)
 					dashboard.Get("/dashboard/widgets/available", auth.dashboardWidgets.available)
 					dashboard.Post("/dashboard/widgets", auth.dashboardWidgets.create)
 					dashboard.Patch("/dashboard/widgets/{placementId}", auth.dashboardWidgets.update)
