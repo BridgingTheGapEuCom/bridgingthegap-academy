@@ -93,10 +93,14 @@ func TestCourseVersionStatusAndTransitions(t *testing.T) {
 }
 
 func TestLanguageLicenseAndAttributionValidation(t *testing.T) {
-	if got, err := NormalizeLanguageTag("EN-gb"); err != nil || got != "en-GB" {
-		t.Fatalf("language canonicalization failed: %q, %v", got, err)
+	for input, want := range map[string]LanguageTag{
+		"en": "en", " EN ": "en", "en-us": "en-US", "PT-br": "pt-BR", "zh-hans": "zh-Hans",
+	} {
+		if got, err := NormalizeLanguageTag(input); err != nil || got != want {
+			t.Fatalf("language canonicalization failed for %q: %q, %v", input, got, err)
+		}
 	}
-	for _, language := range []string{"", "english", "en_uk", "en-"} {
+	for _, language := range []string{"", "english", "eng", "en_uk", "en-", "en--US"} {
 		if _, err := NormalizeLanguageTag(language); err == nil {
 			t.Fatalf("invalid language accepted: %q", language)
 		}

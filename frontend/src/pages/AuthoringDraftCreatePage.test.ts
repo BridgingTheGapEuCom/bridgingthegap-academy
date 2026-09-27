@@ -46,7 +46,7 @@ async function renderPage() {
 async function completeForm() {
   await fireEvent.update(screen.getByRole('textbox', { name: /^Title required$/ }), 'First Draft')
   await fireEvent.update(screen.getByRole('textbox', { name: /^Description required$/ }), 'A complete description.')
-  await fireEvent.update(screen.getByRole('textbox', { name: /^Learning objectives required$/ }), 'Explain the topic')
+  await fireEvent.update(screen.getByRole('textbox', { name: 'Learning objective 1' }), 'Explain the topic')
 }
 
 describe('AuthoringDraftCreatePage', () => {
@@ -67,6 +67,22 @@ describe('AuthoringDraftCreatePage', () => {
     }))
     await waitFor(() => expect(router.currentRoute.value.path).toBe(`/authoring/drafts/${draftID}/overview`))
     expect(createAuthoringDraftMock.mock.calls[0][0]).not.toHaveProperty('userId')
+  })
+
+  it('groups the form into three sections and preserves ordered repeatable objectives', async () => {
+    await renderPage()
+    expect(screen.getByRole('heading', { level: 2, name: /Course basics/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: /Learning overview/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: /Release notes/ })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: /^Source language required$/ })).toBeTruthy()
+    expect(screen.queryByText('Use another language tag')).toBeNull()
+
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Learning objective 1' }), 'First objective')
+    await fireEvent.click(screen.getByRole('button', { name: '+ Add objective' }))
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Learning objective 2' }), 'Second objective')
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove objective 1' }))
+    expect(screen.getByRole('textbox', { name: 'Learning objective 1' })).toBeTruthy()
+    expect((screen.getByRole('textbox', { name: 'Learning objective 1' }) as HTMLInputElement).value).toBe('Second objective')
   })
 
   it('blocks invalid input accessibly without sending a request and preserves values', async () => {

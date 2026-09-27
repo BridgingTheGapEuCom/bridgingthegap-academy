@@ -1,31 +1,94 @@
 <template>
-  <section class="authoring-section" aria-labelledby="authoring-overview-title">
-    <h2 id="authoring-overview-title">Overview</h2>
-    <p class="authoring-section__intro">Update this Draft’s metadata, then save your changes when you are ready.</p>
-    <form class="authoring-metadata-form" :aria-busy="saving" novalidate @submit.prevent="save">
+  <section class="authoring-section authoring-overview" aria-labelledby="authoring-overview-title">
+    <header class="authoring-overview__heading">
+      <h2 id="authoring-overview-title">Overview</h2>
+      <p class="authoring-section__intro">Update the core course metadata, learning information, and licensing details for this Draft.</p>
+    </header>
+    <form class="authoring-overview__form" :aria-busy="saving || undefined" novalidate @submit.prevent="save">
       <p v-if="formError" class="authoring-metadata-form__error" role="alert">{{ formError }}</p>
       <div v-if="conflict" class="authoring-metadata-form__conflict" role="status">
         <p>This Draft changed elsewhere. Your edits are still here, but you need to reload the latest Draft before saving again.</p>
         <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? 'Reloading…' : 'Reload latest Draft' }}</BtgButton>
       </div>
 
-      <BtgFormField label="Title" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }"><BtgTextInput :id="controlId" v-model="form.title" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required /></BtgFormField>
-      <BtgFormField label="Intended version" required description="Use a three-part version such as 1.0.0." :error="errors.intendedVersion" v-slot="{ controlId, describedBy, invalid }"><BtgTextInput :id="controlId" v-model="form.intendedVersion" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required /></BtgFormField>
-      <BtgFormField label="Source language" required description="Use the language tag already used for this Draft, such as en or en-GB." :error="errors.sourceLanguage" v-slot="{ controlId, describedBy, invalid }"><BtgTextInput :id="controlId" v-model="form.sourceLanguage" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required /></BtgFormField>
-      <BtgFormField label="Description" required :error="errors.description" v-slot="{ controlId, describedBy, invalid }"><textarea :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required /></BtgFormField>
-      <BtgFormField label="Learning objectives" required description="Enter one objective per line." :error="errors.objectives" v-slot="{ controlId, describedBy, invalid }"><textarea :id="controlId" v-model="form.objectivesText" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required /></BtgFormField>
-      <BtgFormField label="Changelog" required :error="errors.changelog" v-slot="{ controlId, describedBy, invalid }"><textarea :id="controlId" v-model="form.changelog" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required /></BtgFormField>
+      <section class="authoring-overview__panel" aria-labelledby="overview-course-basics-title">
+        <header class="authoring-overview__panel-header">
+          <h3 id="overview-course-basics-title"><span aria-hidden="true">01</span> Course basics</h3>
+          <p>Basic information about this course Draft.</p>
+        </header>
+        <div class="authoring-overview__panel-body">
+          <BtgFormField label="Title" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }">
+            <BtgTextInput :id="controlId" v-model="form.title" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
+          </BtgFormField>
+          <div class="authoring-overview__two-column">
+            <BtgFormField label="Intended version" required description="Use a three-part version such as 0.1.0." :error="errors.intendedVersion" v-slot="{ controlId, describedBy, invalid }">
+              <BtgTextInput :id="controlId" v-model="form.intendedVersion" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
+            </BtgFormField>
+            <BtgFormField label="Source language" required description="Language used by the original Course content." :error="errors.sourceLanguage" v-slot="{ controlId, describedBy, invalid }">
+              <LanguagePicker :id="controlId" v-model="form.sourceLanguage" :disabled="saving || reloading" :described-by="describedBy" :invalid="invalid" />
+            </BtgFormField>
+          </div>
+        </div>
+      </section>
 
-      <fieldset class="authoring-metadata-form__license">
-        <legend>Course content license</legend>
-        <BtgFormField label="License type" required :error="errors.license" v-slot="{ controlId, describedBy, invalid }"><select :id="controlId" v-model="form.license.kind" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required><option value="STANDARD">Standard license</option><option value="ALL_RIGHTS_RESERVED">All rights reserved</option><option value="CUSTOM">Custom license</option></select></BtgFormField>
-        <BtgFormField label="License display name" required v-slot="{ controlId, describedBy }"><BtgTextInput :id="controlId" v-model="form.license.display_name" :disabled="saving || reloading" :aria-describedby="describedBy" required /></BtgFormField>
-        <BtgFormField label="License identifier" v-slot="{ controlId, describedBy }"><BtgTextInput :id="controlId" v-model="form.license.identifier" :disabled="saving || reloading" :aria-describedby="describedBy" /></BtgFormField>
-        <BtgFormField label="License URL" v-slot="{ controlId, describedBy }"><BtgTextInput :id="controlId" v-model="form.license.url" :disabled="saving || reloading" :aria-describedby="describedBy" type="url" inputmode="url" /></BtgFormField>
-        <BtgFormField label="Custom license text" v-slot="{ controlId, describedBy }"><textarea :id="controlId" v-model="form.license.custom_text" :disabled="saving || reloading" :aria-describedby="describedBy" /></BtgFormField>
-      </fieldset>
+      <section class="authoring-overview__panel" aria-labelledby="overview-learning-title">
+        <header class="authoring-overview__panel-header">
+          <h3 id="overview-learning-title"><span aria-hidden="true">02</span> Learning overview</h3>
+          <p>Describe what the course is about and what learners will be able to do.</p>
+        </header>
+        <div class="authoring-overview__panel-body">
+          <BtgFormField label="Description" required description="Summarize the purpose, scope, and audience for this course." :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
+            <textarea class="authoring-overview__description" :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
+          </BtgFormField>
+          <RepeatableObjectivesEditor v-model="form.objectives" :disabled="saving || reloading" :error="errors.objectives" description="Add the learning outcomes learners should achieve." />
+        </div>
+      </section>
+
+      <section class="authoring-overview__panel" aria-labelledby="overview-release-notes-title">
+        <header class="authoring-overview__panel-header">
+          <h3 id="overview-release-notes-title"><span aria-hidden="true">03</span> Release notes</h3>
+          <p>Document the changes in this Draft version.</p>
+        </header>
+        <div class="authoring-overview__panel-body">
+          <BtgFormField label="Changelog" required description="Describe the changes in this version." :error="errors.changelog" v-slot="{ controlId, describedBy, invalid }">
+            <textarea class="authoring-overview__changelog" :id="controlId" v-model="form.changelog" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
+          </BtgFormField>
+        </div>
+      </section>
+
+      <section class="authoring-overview__panel" aria-labelledby="overview-license-title">
+        <header class="authoring-overview__panel-header">
+          <h3 id="overview-license-title"><span aria-hidden="true">04</span> Content licensing</h3>
+          <p>Specify the content license for this course.</p>
+        </header>
+        <div class="authoring-overview__panel-body">
+          <div class="authoring-overview__two-column">
+            <BtgFormField label="License type" required description="Choose the content license type." :error="errors.license" v-slot="{ controlId, describedBy, invalid }">
+              <select :id="controlId" v-model="form.license.kind" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required><option value="STANDARD">Standard license</option><option value="ALL_RIGHTS_RESERVED">All rights reserved</option><option value="CUSTOM">Custom license</option></select>
+            </BtgFormField>
+            <BtgFormField label="License display name" required description="Human-readable license name." :error="errors.license" v-slot="{ controlId, describedBy, invalid }">
+              <BtgTextInput :id="controlId" v-model="form.license.display_name" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
+            </BtgFormField>
+          </div>
+          <div class="authoring-overview__two-column">
+            <BtgFormField label="License identifier" description="Optional SPDX or other license identifier." v-slot="{ controlId, describedBy }">
+              <BtgTextInput :id="controlId" v-model="form.license.identifier" :disabled="saving || reloading" :aria-describedby="describedBy" />
+            </BtgFormField>
+            <BtgFormField label="License URL" description="Link to the full license text if available." v-slot="{ controlId, describedBy }">
+              <BtgTextInput :id="controlId" v-model="form.license.url" :disabled="saving || reloading" :aria-describedby="describedBy" type="url" inputmode="url" />
+            </BtgFormField>
+          </div>
+          <BtgFormField label="Custom license text" description="Provide the full license text if required for this license." v-slot="{ controlId, describedBy }">
+            <textarea class="authoring-overview__license-text" :id="controlId" v-model="form.license.custom_text" :disabled="saving || reloading" :aria-describedby="describedBy" />
+          </BtgFormField>
+        </div>
+      </section>
+
       <p v-if="dirty" class="authoring-metadata-form__unsaved" role="status">You have unsaved changes.</p>
-      <div class="authoring-metadata-form__actions"><BtgButton type="submit" :disabled="!dirty || saving || reloading || conflict">{{ saving ? 'Saving…' : 'Save changes' }}</BtgButton></div>
+      <div class="authoring-overview__actions">
+        <BtgButton type="button" variant="secondary" :disabled="!dirty || saving || reloading || conflict" @click="discardChanges">Discard changes</BtgButton>
+        <BtgButton type="submit" :disabled="!dirty || saving || reloading || conflict">{{ saving ? 'Saving…' : 'Save changes' }}</BtgButton>
+      </div>
     </form>
   </section>
 </template>
@@ -39,8 +102,10 @@ import { useAuthoringDraftContext } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
+import LanguagePicker from '../components/LanguagePicker.vue'
+import RepeatableObjectivesEditor from '../components/RepeatableObjectivesEditor.vue'
 
-type Form = { intendedVersion: string; sourceLanguage: string; title: string; description: string; objectivesText: string; changelog: string; license: AuthoringContentLicense }
+type Form = { intendedVersion: string; sourceLanguage: string; title: string; description: string; objectives: string[]; changelog: string; license: AuthoringContentLicense }
 const { draft, replaceDraft, markDraftUnavailable } = useAuthoringDraftContext()
 const original = ref(toForm(draft.value))
 const form = reactive(toForm(draft.value))
@@ -50,21 +115,19 @@ const saving = ref(false)
 const reloading = ref(false)
 const conflict = ref(false)
 const dirty = computed(() => JSON.stringify(normalized(form)) !== JSON.stringify(normalized(original.value)))
-
-
 const captureScope = useAuthoringAsyncScope(() => draft.value.id)
 
-function toForm(value: AuthoringDraft): Form { return { intendedVersion: value.intended_version, sourceLanguage: value.source_language, title: value.title, description: value.description, objectivesText: value.objectives.join('\n'), changelog: value.changelog, license: { ...value.license } } }
-function objectives(value: string): string[] { return value.split('\n').map((objective) => objective.trim()).filter(Boolean) }
-function normalized(value: Form) { return { ...value, objectives: objectives(value.objectivesText), license: { ...value.license } } }
+function toForm(value: AuthoringDraft): Form { return { intendedVersion: value.intended_version, sourceLanguage: value.source_language, title: value.title, description: value.description, objectives: [...value.objectives], changelog: value.changelog, license: { ...value.license } } }
+function objectives(value: string[]) { return value.map((objective) => objective.trim()).filter(Boolean) }
+function normalized(value: Form) { return { ...value, objectives: objectives(value.objectives), license: { ...value.license } } }
 function clearErrors() { for (const key of Object.keys(errors)) delete errors[key]; formError.value = undefined }
 function validate(): boolean {
   clearErrors()
   if (!form.title.trim()) errors.title = 'Enter a title.'
   if (!/^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$/.test(form.intendedVersion)) errors.intendedVersion = 'Enter a version such as 1.0.0.'
-  if (!form.sourceLanguage.trim()) errors.sourceLanguage = 'Enter a source language.'
+  if (!form.sourceLanguage.trim()) errors.sourceLanguage = 'Enter or select a source language.'
   if (!form.description.trim()) errors.description = 'Enter a description.'
-  if (!objectives(form.objectivesText).length) errors.objectives = 'Enter at least one learning objective.'
+  if (!objectives(form.objectives).length) errors.objectives = 'Enter at least one learning objective.'
   if (!form.changelog.trim()) errors.changelog = 'Enter a changelog.'
   if (!form.license.display_name.trim()) errors.license = 'Enter a license display name.'
   return Object.keys(errors).length === 0
@@ -79,6 +142,11 @@ function patch(): AuthoringDraftMetadataPatch {
   if (after.changelog !== before.changelog) result.changelog = after.changelog
   if (JSON.stringify(after.license) !== JSON.stringify(before.license)) result.license = after.license
   return result
+}
+function discardChanges() {
+  if (saving.value || reloading.value || conflict.value) return
+  clearErrors()
+  Object.assign(form, toForm(draft.value))
 }
 async function save() {
   const isCurrent = captureScope()

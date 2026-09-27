@@ -24,14 +24,14 @@
         <h1 id="published-course-title" ref="courseTitle" tabindex="-1">{{ state.course.title }}</h1>
         <p v-if="state.course.description" class="published-course-reader__description">{{ state.course.description }}</p>
         <label v-if="languages.length > 1" for="course-language">Course language</label>
-        <select v-if="languages.length > 1" id="course-language" :value="selectedLanguage" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="language in languages" :key="language.language" :value="language.language">{{ language.language }}</option></select>
+        <select v-if="languages.length > 1" id="course-language" :value="selectedLanguage" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="language in languages" :key="language.language" :value="language.language">{{ languageLabel(language.language) }}</option></select>
         <p v-if="translationUnavailable" role="alert">This translation is not available. <button type="button" @click="returnToSource">View the source version</button></p>
-        <aside v-if="lagNotice" role="status"><p>You are reading the {{ selectedLanguage }} translation of version {{ lagNotice.translated }}. A newer source version, {{ lagNotice.latest }}, is available.</p><button type="button" @click="openLatestSource">View version {{ lagNotice.latest }} in {{ sourceLanguage }}</button></aside>
+        <aside v-if="lagNotice" role="status"><p>You are reading the {{ languageLabel(selectedLanguage) }} translation of version {{ lagNotice.translated }}. A newer source version, {{ lagNotice.latest }}, is available.</p><button type="button" @click="openLatestSource">View version {{ lagNotice.latest }} in {{ languageLabel(sourceLanguage) }}</button></aside>
         <RouterLink :to="`/courses/by-id/${state.course.courseId}/community`">Course discussions</RouterLink>
         <button v-if="auth.state.value.status === 'authenticated'" type="button" @click="claimCertificate" :disabled="claiming">{{ claiming ? 'Requesting certificate…' : 'Get certificate' }}</button><p v-if="certificateMessage" role="status">{{ certificateMessage }}</p>
         <dl class="published-course-reader__metadata">
           <div><dt>Version</dt><dd>{{ state.course.version }}</dd></div>
-          <div v-if="state.course.sourceLanguage"><dt>Source language</dt><dd>{{ state.course.sourceLanguage }}</dd></div>
+          <div v-if="state.course.sourceLanguage"><dt>Source language</dt><dd>{{ languageLabel(state.course.sourceLanguage) }}</dd></div>
           <div><dt>Published</dt><dd><time :datetime="state.course.publishedAt">{{ formatPublishedDate(state.course.publishedAt) }}</time></dd></div>
           <div v-if="state.course.license.displayName"><dt>License</dt><dd>{{ state.course.license.displayName }}</dd></div>
         </dl>
@@ -72,6 +72,7 @@ import { useAuth } from '../auth/auth'
 import { issueCertificate, certificatePath } from '../courses/certificates'
 import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import { languageLabel } from '../i18n/languages'
 import PublishedCourseReaderLesson from '../components/PublishedCourseReaderLesson.vue'
 import PublishedCourseReaderNavigation from '../components/PublishedCourseReaderNavigation.vue'
 import {

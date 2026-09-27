@@ -24,7 +24,7 @@
         <p class="course-overview__description">{{ state.course.version.description }}</p>
         <dl class="course-overview__metadata">
           <div><dt>Version</dt><dd>{{ state.course.version.version }}</dd></div>
-          <div v-if="state.course.version.source_language"><dt>Source language</dt><dd>{{ state.course.version.source_language }}</dd></div>
+          <div v-if="state.course.version.source_language"><dt>Source language</dt><dd>{{ languageLabel(state.course.version.source_language) }}</dd></div>
         </dl>
         <p v-if="state.course.version.status && state.course.version.status !== 'PUBLISHED'" class="course-overview__notice" role="status">This course version is {{ statusLabel(state.course.version.status) }}.</p>
       </header>
@@ -80,6 +80,7 @@ import { useRoute } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import { languageLabel } from '../i18n/languages'
 import { formatDuration, getCourse, InvalidCourseSlugError, lessonPath, type CourseDetail } from '../courses/courses'
 
 type State = { kind: 'loading' } | { kind: 'ready'; course: CourseDetail } | { kind: 'not-found' } | { kind: 'unavailable' }

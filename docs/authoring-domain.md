@@ -29,6 +29,12 @@ and use target stable keys in the domain API. Draft deletion is hard deletion:
 deleting a lesson or Module cascades to its draft-owned children and prerequisite
 references. No published CourseVersion deletion or mutation path is added.
 
+Source language is one canonical BCP 47 tag, such as `en`, `en-GB`, `pt-BR`,
+or `zh-Hans`. Authoring normalizes accepted tag casing before storage; display
+names are frontend presentation only. Draft creation and metadata updates share
+the Courses language utility, so a noncanonical casing cannot create a separate
+source-language identity.
+
 Locks, autosave, general revision history, comments, and publication
 orchestration are separate future boundaries. Authoring imports Courses'
 canonical value objects and Identity's trusted actor type, never their

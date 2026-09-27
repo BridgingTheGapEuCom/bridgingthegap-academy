@@ -1405,7 +1405,8 @@ components:
     TranslationReadMetadata: { type: object, required: [language, sourceLanguage, sourceVersion, publicationId, publishedAt], properties: { language: { type: string }, sourceLanguage: { type: string }, sourceVersion: { type: string }, publicationId: { type: string, format: uuid }, publishedAt: { type: string, format: date-time } } }
     TranslationSourceLag: { type: object, required: [translatedSourceVersion], properties: { translatedSourceVersion: { type: string }, latestSourceVersion: { type: [string, 'null'] }, isLatest: { type: [boolean, 'null'] } } }
     CourseVersionLanguages: { type: object, required: [sourceLanguage, languages], properties: { sourceLanguage: { type: string }, languages: { type: array, items: { type: object, required: [language, kind], properties: { language: { type: string }, kind: { type: string, enum: [SOURCE, TRANSLATION] }, translationPublicationId: { type: [string, 'null'], format: uuid } } } } } }
-    TranslationCreateRequest: { type: object, additionalProperties: false, required: [targetLanguage], properties: { targetLanguage: { type: string } } }
+    LanguageTag: { type: string, minLength: 1, maxLength: 64, description: Canonical BCP 47 language tag, for example en, en-US, es, pt-BR, or zh-Hans. }
+    TranslationCreateRequest: { type: object, additionalProperties: false, required: [targetLanguage], properties: { targetLanguage: { $ref: '#/components/schemas/LanguageTag' } } }
     TranslationSummary: { type: object, additionalProperties: false, required: [translationId, targetLanguage, lifecycle, revision, completeness], properties: { translationId: { type: string, format: uuid }, targetLanguage: { type: string }, lifecycle: { type: string, enum: [DRAFT, PUBLISHED] }, revision: { type: integer, minimum: 1 }, completeness: { $ref: '#/components/schemas/TranslationCompleteness' } } }
     TranslationList: { type: object, additionalProperties: false, required: [translations], properties: { translations: { type: array, items: { $ref: '#/components/schemas/TranslationSummary' } } } }
     TranslationTextChange: { type: object, additionalProperties: false, required: [target, field, translated], properties: { target: { type: string, enum: [COURSE, MODULE, LESSON, BLOCK, ASSESSMENT_QUESTION, ASSESSMENT_OPTION, ASSESSMENT_LEFT_ITEM, ASSESSMENT_RIGHT_ITEM] }, field: { type: string }, moduleKey: { type: string }, lessonKey: { type: string }, blockKey: { type: string }, assessmentKey: { type: string, format: uuid }, questionKey: { type: string }, itemKey: { type: string }, objective: { type: integer, minimum: 0 }, translated: { type: [string, 'null'] } } }
@@ -1703,7 +1704,7 @@ components:
         revision: { type: integer, minimum: 1 }
         courseId: { type: string, format: uuid }
         intendedVersion: { type: string }
-        sourceLanguage: { type: string }
+        sourceLanguage: { $ref: '#/components/schemas/LanguageTag' }
         title: { type: string }
         description: { type: string }
         objectives: { type: array, items: { type: string } }
@@ -1932,7 +1933,7 @@ components:
       properties:
         expectedRevision: { type: integer, minimum: 1 }
         intendedVersion: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
-        sourceLanguage: { type: string, maxLength: 64 }
+        sourceLanguage: { $ref: '#/components/schemas/LanguageTag' }
         title: { type: string, minLength: 1, maxLength: 240 }
         description: { type: string, maxLength: 20000 }
         objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
@@ -1948,7 +1949,7 @@ components:
         objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
         changelog: { type: string, minLength: 1, maxLength: 20000 }
         intendedVersion: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
-        sourceLanguage: { type: string, minLength: 2, maxLength: 64 }
+        sourceLanguage: { $ref: '#/components/schemas/LanguageTag' }
     AuthoringDraft:
       type: object
       required: [id, course_id, intended_version, source_language, title, description, objectives, changelog, license, status, revision, created_at, updated_at]
@@ -1956,7 +1957,7 @@ components:
         id: { type: string, format: uuid }
         course_id: { type: string, format: uuid }
         intended_version: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }
-        source_language: { type: string, maxLength: 64 }
+        source_language: { $ref: '#/components/schemas/LanguageTag' }
         title: { type: string, minLength: 1, maxLength: 240 }
         description: { type: string, maxLength: 20000 }
         objectives: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
@@ -2031,7 +2032,7 @@ components:
             updated_at: { type: string, format: date-time }
     CourseList: { type: object, required: [courses], properties: { courses: { type: array, items: { $ref: '#/components/schemas/CourseSummary' } } } }
     PublishedCourseCatalogPage: { type: object, additionalProperties: false, required: [items, limit, offset, total], properties: { items: { type: array, items: { $ref: '#/components/schemas/PublishedCourseCatalogItem' } }, limit: { type: integer, minimum: 1, maximum: 100 }, offset: { type: integer, minimum: 0 }, total: { type: integer, minimum: 0 } } }
-    PublishedCourseCatalogItem: { type: object, additionalProperties: false, required: [courseId, version, title, description, sourceLanguage, license, contributors, publishedAt], properties: { courseId: { type: string, format: uuid }, version: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }, title: { type: string }, description: { type: string }, sourceLanguage: { type: string }, license: { $ref: '#/components/schemas/PublishedContentLicense' }, contributors: { type: array, items: { $ref: '#/components/schemas/PublishedContributor' } }, publishedAt: { type: string, format: date-time } } }
+    PublishedCourseCatalogItem: { type: object, additionalProperties: false, required: [courseId, version, title, description, sourceLanguage, license, contributors, publishedAt], properties: { courseId: { type: string, format: uuid }, version: { type: string, pattern: '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$' }, title: { type: string }, description: { type: string }, sourceLanguage: { $ref: '#/components/schemas/LanguageTag' }, license: { $ref: '#/components/schemas/PublishedContentLicense' }, contributors: { type: array, items: { $ref: '#/components/schemas/PublishedContributor' } }, publishedAt: { type: string, format: date-time } } }
     CourseSummary: { type: object, required: [slug, version], properties: { slug: { type: string }, version: { $ref: '#/components/schemas/CourseVersionSummary' } } }
     CourseIdentity: { type: object, required: [slug], properties: { slug: { type: string }, courseId: { type: string, format: uuid } } }
     CourseDetail: { type: object, required: [course, version, modules], properties: { course: { $ref: '#/components/schemas/CourseIdentity' }, version: { $ref: '#/components/schemas/CourseVersionSummary' }, modules: { type: array, items: { $ref: '#/components/schemas/ModuleStructure' } } } }

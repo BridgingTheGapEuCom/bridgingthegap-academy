@@ -15,6 +15,11 @@ checksums.json
 
 `manifest.json` identifies the format, exact source SemVer and language, frozen license and public attribution, a content inventory, included assets, and TranslationPublications. `checksums.json` contains SHA-256 hashes for each payload and asset entry; it intentionally does not hash the manifest to avoid a circular checksum. Checksums detect accidental corruption and are not a publisher-authenticity signature.
 
+Course and Translation language values are canonical BCP 47 tags. Export writes
+canonical tags. Import accepts valid casing variants and stores their canonical
+form, but rejects invalid tags and does not reinterpret display names or legacy
+aliases as language identities.
+
 `course.json` is canonical structured Course content: modules, lessons, prerequisites, and `LessonContent` blocks. Stable module, lesson, block, assessment, question, option, and matching-item keys remain portable semantic references. It has no database row IDs. `assessments.json` contains the immutable authoritative assessment binding, including correct answers and pairs. Packages are trusted administrative artifacts and must never be served through learner/public endpoints.
 
 Asset archive paths are generated solely from the frozen asset key. Original filenames are metadata only. The exporter reads each binary through `BinaryStorage`, checks its byte count and SHA-256 against the published binding before the archive is started, then streams it into the ZIP. Storage object IDs are never serialized.

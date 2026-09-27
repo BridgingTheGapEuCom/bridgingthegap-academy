@@ -170,14 +170,14 @@ test('Authoring discovery is reachable from main navigation and opens an accessi
 
 test('Authoring creates a Draft from the accessible home flow and opens its workspace', async ({ page }) => {
   const createdID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-  const created = { ...draft, id: createdID, course_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', title: 'First Draft', revision: 1 }
+  const created = { ...draft, id: createdID, course_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', title: 'First Draft', source_language: 'es', revision: 1 }
   let createdVisible = false
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route('**/api/authoring/drafts', (route) => {
     if (route.request().method() === 'POST') {
       expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
       expect(route.request().postDataJSON()).toEqual({
-        title: 'First Draft', intendedVersion: '0.1.0', sourceLanguage: 'en', description: 'A complete initial description.', objectives: ['Explain the first topic'], changelog: 'Initial Draft.',
+        title: 'First Draft', intendedVersion: '0.1.0', sourceLanguage: 'es', description: 'A complete initial description.', objectives: ['Explain the first topic'], changelog: 'Initial Draft.',
       })
       createdVisible = true
       return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(created) })
@@ -193,8 +193,12 @@ test('Authoring creates a Draft from the accessible home flow and opens its work
   await expect(page).toHaveURL('/authoring/new')
   await expect(page.getByRole('heading', { level: 1, name: 'Create Draft' })).toBeVisible()
   await page.getByRole('textbox', { name: /^Title required$/ }).fill('First Draft')
+  const languagePicker = page.getByRole('combobox', { name: /^Source language required$/ })
+  await languagePicker.click()
+  await languagePicker.fill('spanish')
+  await page.getByRole('option', { name: 'Spanish (es)' }).click()
   await page.getByRole('textbox', { name: /^Description required$/ }).fill('A complete initial description.')
-  await page.getByRole('textbox', { name: /^Learning objectives required$/ }).fill('Explain the first topic')
+  await page.getByRole('textbox', { name: 'Learning objective 1' }).fill('Explain the first topic')
   await page.getByRole('button', { name: 'Create Draft' }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(`/authoring/drafts/${createdID}/overview`)
@@ -693,8 +697,20 @@ test('Authoring submits the current Draft revision for Review and reloads author
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
-test('Authoring metadata editor saves a changed field with its current revision', async ({ page }) => {
+test('Authoring Overview edits structured metadata with its current revision', async ({ page }) => {
   let patchBody: unknown
+  const updated = {
+    ...draft,
+    title: 'Updated foundations',
+    intended_version: '1.0.1',
+    source_language: 'es',
+    description: 'An updated working version.',
+    objectives: ['Second objective'],
+    changelog: 'Updated Draft.',
+    license: { ...draft.license, identifier: 'UPDATED-LICENSE' },
+    revision: 4,
+    updated_at: '2026-09-15T12:00:00Z',
+  }
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => {
     if (route.request().method() === 'PATCH') {
@@ -702,7 +718,7 @@ test('Authoring metadata editor saves a changed field with its current revision'
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ ...draft, title: 'Updated foundations', revision: 4, updated_at: '2026-09-15T12:00:00Z' }),
+        body: JSON.stringify(updated),
       })
     }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) })
@@ -710,12 +726,26 @@ test('Authoring metadata editor saves a changed field with its current revision'
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`/authoring/drafts/${draftID}`)
+  await expect(page.getByRole('heading', { level: 3, name: /Course basics/ })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: /Content licensing/ })).toBeVisible()
   const title = page.getByRole('textbox', { name: /^Title\b/ })
   await title.fill('Updated foundations')
+  await page.getByRole('textbox', { name: /^Intended version/ }).fill('1.0.1')
+  const languagePicker = page.getByRole('combobox', { name: /^Source language required$/ })
+  await languagePicker.click()
+  await languagePicker.fill('spanish')
+  await page.getByRole('option', { name: 'Spanish (es)' }).click()
+  await page.getByRole('textbox', { name: /^Description required$/ }).fill('An updated working version.')
+  await page.getByRole('textbox', { name: 'Learning objective 1' }).fill('First objective')
+  await page.getByRole('button', { name: '+ Add objective' }).click()
+  await page.getByRole('textbox', { name: 'Learning objective 2' }).fill('Second objective')
+  await page.getByRole('button', { name: 'Remove objective 1' }).click()
+  await page.getByRole('textbox', { name: /^Changelog required$/ }).fill('Updated Draft.')
+  await page.getByRole('textbox', { name: 'License identifier' }).fill('UPDATED-LICENSE')
   await page.getByRole('button', { name: 'Save changes' }).click()
 
   await expect(page.getByRole('heading', { level: 1, name: 'Updated foundations' })).toBeVisible()
-  expect(patchBody).toEqual({ expectedRevision: 3, title: 'Updated foundations' })
+  expect(patchBody).toEqual({ expectedRevision: 3, title: 'Updated foundations', intendedVersion: '1.0.1', sourceLanguage: 'es', description: 'An updated working version.', objectives: ['Second objective'], changelog: 'Updated Draft.', license: { ...draft.license, identifier: 'UPDATED-LICENSE' } })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

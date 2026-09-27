@@ -253,6 +253,16 @@ func (r *Reader) validate(ctx context.Context, z *zip.Reader) (*ValidatedCourseP
 	if err := strictDecode(raw[coursePath], &course); err != nil {
 		return nil, packageError(ErrInvalidCourse, coursePath)
 	}
+	canonicalSource, err := courses.NormalizeLanguageTag(course.Language)
+	if err != nil {
+		return nil, packageError(ErrInvalidCourse, "metadata")
+	}
+	course.Language = string(canonicalSource)
+	manifestSource, err := courses.NormalizeLanguageTag(manifest.Course.Language)
+	if err != nil || manifestSource != canonicalSource {
+		return nil, packageError(ErrInvalidManifest, "course.language")
+	}
+	manifest.Course.Language = string(manifestSource)
 	var assessments AssessmentsPayload
 	if err := strictDecode(raw[assessmentsPath], &assessments); err != nil {
 		return nil, packageError(ErrInvalidAssessment, assessmentsPath)
@@ -272,14 +282,16 @@ func (r *Reader) validate(ctx context.Context, z *zip.Reader) (*ValidatedCourseP
 		if err := strictDecode(body, &t); err != nil {
 			return nil, packageError(ErrInvalidTranslation, entry.Path)
 		}
-		if t.Language != entry.Language || t.SourceVersion != entry.SourceVersion || t.SourceCourseID != manifest.Course.OriginCourseID || t.SourceCourseVersionID != manifest.Course.OriginCourseVersionID || seenLang[t.Language] || t.Language == course.Language {
-			return nil, packageError(ErrInvalidTranslation, entry.Path)
-		}
 		lang, err := courses.NormalizeLanguageTag(t.Language)
-		if err != nil || string(lang) != t.Language || t.Tree.ValidateAgainstSource(source) != nil || !translationComplete(t.Tree, source) {
+		entryLanguage, entryErr := courses.NormalizeLanguageTag(entry.Language)
+		if err != nil || entryErr != nil || lang != entryLanguage || t.SourceVersion != entry.SourceVersion || t.SourceCourseID != manifest.Course.OriginCourseID || t.SourceCourseVersionID != manifest.Course.OriginCourseVersionID || seenLang[string(lang)] || lang == canonicalSource {
 			return nil, packageError(ErrInvalidTranslation, entry.Path)
 		}
-		seenLang[t.Language] = true
+		t.Language = string(lang)
+		if t.Tree.ValidateAgainstSource(source) != nil || !translationComplete(t.Tree, source) {
+			return nil, packageError(ErrInvalidTranslation, entry.Path)
+		}
+		seenLang[string(lang)] = true
 		translationsPayload = append(translationsPayload, t)
 	}
 	assets := make([]validatedAsset, 0, len(manifest.Assets))

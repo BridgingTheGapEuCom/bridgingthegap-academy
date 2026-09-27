@@ -61,7 +61,7 @@
         <p v-if="courses.kind === 'loading'" class="home-page__status" role="status">Loading published courses…</p>
         <div v-else-if="courses.kind === 'ready'" class="home-page__course-grid">
           <article v-for="course in courses.items" :key="course.courseId" class="home-page__course-card">
-            <p class="home-page__course-meta">{{ course.sourceLanguage }} · Version {{ course.version }}</p>
+            <p class="home-page__course-meta">{{ languageLabel(course.sourceLanguage) }} · Version {{ course.version }}</p>
             <h3><RouterLink :to="publishedCoursePath(course.courseId)">{{ course.title }}</RouterLink></h3>
             <p v-if="course.description">{{ course.description }}</p>
             <p class="home-page__course-published"><time :datetime="course.publishedAt">Published {{ publishedDate(course.publishedAt) }}</time></p>
@@ -111,6 +111,7 @@ import { useAuth } from '../auth/auth'
 import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
 import { listPublishedCourseCatalog, publishedCoursePath, type PublishedCourseCatalogItem } from '../courses/courses'
+import { languageLabel } from '../i18n/languages'
 
 type CourseState =
   | { kind: 'loading' }

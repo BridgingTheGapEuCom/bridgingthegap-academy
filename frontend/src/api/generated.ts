@@ -1576,8 +1576,10 @@ export interface components {
                 translationPublicationId?: string | null;
             }[];
         };
+        /** @description Canonical BCP 47 language tag */
+        LanguageTag: string;
         TranslationCreateRequest: {
-            targetLanguage: string;
+            targetLanguage: components["schemas"]["LanguageTag"];
         };
         TranslationSummary: {
             /** Format: uuid */
@@ -1885,7 +1887,7 @@ export interface components {
             /** Format: uuid */
             courseId: string;
             intendedVersion: string;
-            sourceLanguage: string;
+            sourceLanguage: components["schemas"]["LanguageTag"];
             title: string;
             description: string;
             objectives: string[];
@@ -2044,7 +2046,7 @@ export interface components {
         AuthoringDraftUpdateRequest: {
             expectedRevision: number;
             intendedVersion?: string;
-            sourceLanguage?: string;
+            sourceLanguage?: components["schemas"]["LanguageTag"];
             title?: string;
             description?: string;
             objectives?: string[];
@@ -2057,7 +2059,7 @@ export interface components {
             objectives: string[];
             changelog: string;
             intendedVersion: string;
-            sourceLanguage: string;
+            sourceLanguage: components["schemas"]["LanguageTag"];
         };
         AuthoringDraft: {
             /** Format: uuid */
@@ -2065,7 +2067,7 @@ export interface components {
             /** Format: uuid */
             course_id: string;
             intended_version: string;
-            source_language: string;
+            source_language: components["schemas"]["LanguageTag"];
             title: string;
             description: string;
             objectives: string[];
@@ -2153,7 +2155,7 @@ export interface components {
             version: string;
             title: string;
             description: string;
-            sourceLanguage: string;
+            sourceLanguage: components["schemas"]["LanguageTag"];
             license: components["schemas"]["PublishedContentLicense"];
             contributors: components["schemas"]["PublishedContributor"][];
             /** Format: date-time */

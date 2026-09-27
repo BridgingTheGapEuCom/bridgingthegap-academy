@@ -889,7 +889,10 @@ func decodeAuthoringDraftUpdate(w http.ResponseWriter, r *http.Request) (int64, 
 		if input.SourceLanguage.null {
 			return 0, authoring.DraftMetadataPatch{}, errors.New("null source language")
 		}
-		language := courses.LanguageTag(input.SourceLanguage.value)
+		language, err := courses.NormalizeLanguageTag(input.SourceLanguage.value)
+		if err != nil {
+			return 0, authoring.DraftMetadataPatch{}, err
+		}
 		patch.SourceLanguage = &language
 	}
 	if input.Title.set {

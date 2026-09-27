@@ -64,6 +64,7 @@
 
   --btg-width-reading: 70ch;
   --btg-width-form: 34rem;
+  --btg-width-form-editor: 52rem;
   --academy-page-max-width: 74rem;
   --academy-page-gutter: clamp(1rem, 3vw, 2rem);
   --academy-page-padding-block: clamp(var(--btg-space-6), 5vw, var(--btg-space-8));

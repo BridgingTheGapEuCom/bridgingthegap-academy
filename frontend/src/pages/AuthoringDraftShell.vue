@@ -34,12 +34,15 @@
     </div>
 
     <div v-else class="authoring-shell__content">
+      <RouterLink class="authoring-shell__back" to="/authoring">Back to Authoring</RouterLink>
       <div class="authoring-shell__header">
         <p class="authoring-shell__eyebrow">Authoring Draft</p>
         <h1 id="authoring-draft-title">{{ state.draft.title }}</h1>
         <dl class="authoring-shell__metadata">
           <div><dt>Intended version</dt><dd>{{ state.draft.intended_version }}</dd></div>
           <div><dt>Status</dt><dd>{{ draftStatus(state.draft.status) }}</dd></div>
+          <div><dt>Source language</dt><dd>{{ languageLabel(state.draft.source_language) }}</dd></div>
+          <div><dt>Last updated</dt><dd>{{ updatedAt(state.draft.updated_at) }}</dd></div>
         </dl>
       </div>
 
@@ -53,7 +56,7 @@
         </ul>
       </nav>
 
-      <div class="authoring-shell__section">
+      <div class="authoring-shell__section" :class="{ 'authoring-shell__section--overview': route.name === 'authoring-draft-overview' || route.name === 'overview' }">
         <RouterView />
       </div>
     </div>
@@ -70,6 +73,7 @@ import { authoringDraftPath, getAuthoringDraft, InvalidAuthoringDraftIDError, ty
 import { authoringDraftContextKey } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import { languageLabel } from '../i18n/languages'
 
 type State = { kind: 'loading' } | { kind: 'ready'; draft: AuthoringDraft } | { kind: 'not-found' } | { kind: 'unavailable' }
 
@@ -142,5 +146,9 @@ async function retryBootstrap() {
 
 function draftStatus(status: AuthoringDraft['status']): string {
   return status === 'ACTIVE' ? 'Active Draft' : 'Abandoned Draft'
+}
+function updatedAt(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 </script>

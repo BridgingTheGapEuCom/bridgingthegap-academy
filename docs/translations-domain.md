@@ -6,6 +6,11 @@ once to one published immutable source `(Course ID, CourseVersion ID, SemVer,
 source language)` and one distinct normalized target language. PostgreSQL
 enforces one workspace per exact source CourseVersion and target language.
 
+Both source and target languages are canonical BCP 47 tags. Target input is
+normalized before workspace creation, so casing variants such as `es-es` and
+`es-ES` identify the same translation stream. Language names are UI labels,
+never persisted translation identity.
+
 The workspace tree mirrors the source Module, Lesson, LessonContent-block, and
 Assessment structure by stable source key and order. It contains nullable
 translated text overrides only: `nil` means untranslated; a present empty string

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/text/language"
 )
 
 type CourseID string
@@ -18,7 +20,6 @@ type LessonID string
 var (
 	slugPattern       = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	versionPattern    = regexp.MustCompile(`^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$`)
-	languagePattern   = regexp.MustCompile(`^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$`)
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9.+-]+$`)
 	uuidPattern       = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 )
@@ -131,44 +132,32 @@ func (s CourseVersionStatus) CanTransitionTo(next CourseVersionStatus) bool {
 
 type LanguageTag string
 
-// NormalizeLanguageTag accepts a deliberately small BCP 47-compatible profile
-// and stores its conventional casing (for example, en and en-GB).
+// NormalizeLanguageTag accepts one BCP 47 language tag and returns the
+// canonical spelling retained by golang.org/x/text. Tags are domain data, not
+// display names: callers must not map names such as "English" or aliases such
+// as "eng" into a different language on a user's behalf.
 func NormalizeLanguageTag(value string) (LanguageTag, error) {
 	value = strings.TrimSpace(value)
-	if len(value) > 64 || !languagePattern.MatchString(value) {
+	if value == "" || len(value) > 64 || strings.ContainsAny(value, "_ ") || strings.HasPrefix(value, "-") || strings.HasSuffix(value, "-") || strings.Contains(value, "--") {
 		return "", errors.New("invalid source language")
 	}
-	parts := strings.Split(value, "-")
-	parts[0] = strings.ToLower(parts[0])
-	for i := 1; i < len(parts); i++ {
-		switch {
-		case len(parts[i]) == 4 && isASCIIAlpha(parts[i]):
-			parts[i] = strings.ToUpper(parts[i][:1]) + strings.ToLower(parts[i][1:])
-		case (len(parts[i]) == 2 && isASCIIAlpha(parts[i])) || (len(parts[i]) == 3 && isDigits(parts[i])):
-			parts[i] = strings.ToUpper(parts[i])
-		default:
-			parts[i] = strings.ToLower(parts[i])
-		}
+	tag, err := language.Parse(value)
+	if err != nil {
+		return "", errors.New("invalid source language")
 	}
-	return LanguageTag(strings.Join(parts, "-")), nil
-}
-
-func isASCIIAlpha(value string) bool {
-	for _, r := range value {
-		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
-			return false
-		}
+	canonical := tag.String()
+	if canonical == "und" && !strings.EqualFold(value, "und") {
+		return "", errors.New("invalid source language")
 	}
-	return true
-}
-
-func isDigits(value string) bool {
-	for _, r := range value {
-		if r < '0' || r > '9' {
-			return false
-		}
+	// x/text intentionally canonicalizes deprecated aliases. Do not silently
+	// reinterpret a legacy three-letter alias such as "eng" as a distinct
+	// user-selected language; callers can submit the canonical tag instead.
+	inputBase := strings.Split(value, "-")[0]
+	canonicalBase := strings.Split(canonical, "-")[0]
+	if len(inputBase) == 3 && !strings.EqualFold(inputBase, canonicalBase) {
+		return "", errors.New("invalid source language")
 	}
-	return true
+	return LanguageTag(canonical), nil
 }
 
 type ContentLicenseKind string
@@ -311,7 +300,8 @@ func (m CourseVersionMetadata) Validate() error {
 			return errors.New("invalid learning objective")
 		}
 	}
-	if _, err := NormalizeLanguageTag(string(m.SourceLanguage)); err != nil || string(m.SourceLanguage) == "" {
+	language, err := NormalizeLanguageTag(string(m.SourceLanguage))
+	if err != nil || language != m.SourceLanguage {
 		return errors.New("invalid source language")
 	}
 	if len(strings.TrimSpace(m.Changelog)) == 0 || len(m.Changelog) > 20000 {

@@ -74,7 +74,11 @@ func (p DraftMetadataPatch) Apply(current DraftMetadata) (DraftMetadata, error) 
 		next.IntendedVersion = *p.IntendedVersion
 	}
 	if p.SourceLanguage != nil {
-		next.SourceLanguage = *p.SourceLanguage
+		language, err := courses.NormalizeLanguageTag(string(*p.SourceLanguage))
+		if err != nil {
+			return DraftMetadata{}, err
+		}
+		next.SourceLanguage = language
 	}
 	if p.Title != nil {
 		next.Title = *p.Title
@@ -101,8 +105,12 @@ func (m DraftMetadata) Validate() error {
 	if m.CourseID == "" || !m.IntendedVersion.Valid() {
 		return errors.New("invalid draft course or intended version")
 	}
-	if _, err := courses.NormalizeLanguageTag(string(m.SourceLanguage)); err != nil {
+	language, err := courses.NormalizeLanguageTag(string(m.SourceLanguage))
+	if err != nil {
 		return err
+	}
+	if language != m.SourceLanguage {
+		return errors.New("source language must be canonical")
 	}
 	if len(strings.TrimSpace(m.Title)) == 0 || len(m.Title) > 240 ||
 		len(strings.TrimSpace(m.Description)) == 0 || len(m.Description) > 20000 ||

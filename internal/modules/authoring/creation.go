@@ -55,7 +55,15 @@ func NewDraftCreationService(repository DraftCreationRepository) *DraftCreationS
 }
 
 func (s *DraftCreationService) Create(ctx context.Context, actor identity.AuthenticatedActor, input DraftCreationInput) (CourseDraft, error) {
-	if s == nil || s.repository == nil || actor.UserID() == "" || actor.SessionID() == "" || input.Validate() != nil {
+	if s == nil || s.repository == nil || actor.UserID() == "" || actor.SessionID() == "" {
+		return CourseDraft{}, ErrInvalidDraftCreation
+	}
+	language, err := courses.NormalizeLanguageTag(string(input.SourceLanguage))
+	if err != nil {
+		return CourseDraft{}, ErrInvalidDraftCreation
+	}
+	input.SourceLanguage = language
+	if input.Validate() != nil {
 		return CourseDraft{}, ErrInvalidDraftCreation
 	}
 	input.LearningObjectives = append([]string(nil), input.LearningObjectives...)

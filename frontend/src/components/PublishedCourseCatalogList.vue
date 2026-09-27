@@ -6,7 +6,7 @@
         <p v-if="course.description">{{ course.description }}</p>
         <dl class="course-list__metadata">
           <div><dt>Version</dt><dd>{{ course.version }}</dd></div>
-          <div><dt>Language</dt><dd>{{ course.sourceLanguage }}</dd></div>
+          <div><dt>Language</dt><dd>{{ languageLabel(course.sourceLanguage) }}</dd></div>
           <div><dt>Published</dt><dd><time :datetime="course.publishedAt">{{ publishedDate(course.publishedAt) }}</time></dd></div>
           <div v-if="course.license?.displayName"><dt>License</dt><dd>{{ course.license.displayName }}</dd></div>
         </dl>
@@ -18,6 +18,7 @@
 
 <script setup lang="ts">
 import { publishedCoursePath, type PublishedCourseCatalogItem } from '../courses/courses'
+import { languageLabel } from '../i18n/languages'
 
 defineProps<{ courses: PublishedCourseCatalogItem[] }>()
 
