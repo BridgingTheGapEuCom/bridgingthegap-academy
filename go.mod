@@ -13,7 +13,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/trustbloc/did-go v1.3.5
 	github.com/trustbloc/vc-go v1.3.6
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/term v0.43.0
 )
 
