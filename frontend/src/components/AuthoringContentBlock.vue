@@ -123,6 +123,5 @@ function selectedWidget() {
   <p v-else-if="block.type === 'DIVIDER'" class="authoring-section__intro">A semantic divider. No configuration is needed.</p>
   <template v-else>
     <p>This {{ block.type.toLowerCase().replaceAll('_', ' ') }} block is preserved read-only. You can move or remove it.</p>
-    <details><summary>Preserved canonical payload</summary><pre class="authoring-content__payload">{{ JSON.stringify(block.payload, null, 2) }}</pre></details>
   </template>
 </template>

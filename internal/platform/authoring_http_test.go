@@ -189,23 +189,14 @@ type authoringModuleHTTPRepository struct {
 	modules map[authoring.ModuleID]authoring.DraftModule
 }
 
-func (r *authoringModuleHTTPRepository) CreateModuleAtPosition(_ context.Context, draftID authoring.DraftID, expected int64, input authoring.ModuleInput) (authoring.DraftModule, authoring.CourseDraft, error) {
+func (r *authoringModuleHTTPRepository) CreateGeneratedModule(_ context.Context, draftID authoring.DraftID, expected int64, input authoring.ModuleInput) (authoring.DraftModule, authoring.CourseDraft, error) {
 	if draftID != r.draft.ID {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrNotFound
 	}
 	if expected != r.draft.Revision {
 		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrRevisionMismatch
 	}
-	if input.Position < 0 || input.Position > len(r.modules) {
-		return authoring.DraftModule{}, authoring.CourseDraft{}, authoring.ErrInvalidStructure
-	}
-	for id, module := range r.modules {
-		if module.Position >= input.Position {
-			module.Position++
-			module.Revision++
-			r.modules[id] = module
-		}
-	}
+	input.Position = len(r.modules)
 	module := authoring.DraftModule{ID: authoring.ModuleID("55555555-5555-4555-8555-555555555555"), ModuleInput: input, Revision: 1}
 	r.modules[module.ID] = module
 	r.draft.Revision++
@@ -285,16 +276,16 @@ func TestAuthoringModuleMutationHTTPSecurityAndStrictBodies(t *testing.T) {
 	csrf := authTestCSRFToken().Value()
 	base := "/api/authoring/drafts/" + string(draftID) + "/modules"
 
-	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`, nil, csrf); response.Code != http.StatusUnauthorized {
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"title":"New"}`, nil, csrf); response.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated create = %d", response.Code)
 	}
-	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`, cookie); response.Code != http.StatusForbidden {
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"title":"New"}`, cookie); response.Code != http.StatusForbidden {
 		t.Fatalf("missing CSRF create = %d", response.Code)
 	}
-	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`, cookie, "wrong"); response.Code != http.StatusForbidden {
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"title":"New"}`, cookie, "wrong"); response.Code != http.StatusForbidden {
 		t.Fatalf("wrong CSRF create = %d", response.Code)
 	}
-	untrusted := httptest.NewRequest(http.MethodPost, base, strings.NewReader(`{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`))
+	untrusted := httptest.NewRequest(http.MethodPost, base, strings.NewReader(`{"expectedDraftRevision":4,"title":"New"}`))
 	untrusted.Header.Set("Content-Type", "application/json")
 	untrusted.Header.Set("Origin", "https://attacker.example")
 	untrusted.Header.Set("X-CSRF-Token", csrf)
@@ -304,8 +295,11 @@ func TestAuthoringModuleMutationHTTPSecurityAndStrictBodies(t *testing.T) {
 	if untrustedResponse.Code != http.StatusForbidden {
 		t.Fatalf("untrusted Origin create = %d", untrustedResponse.Code)
 	}
-	response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"new-module","title":"New","position":1}`, cookie, csrf)
-	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), `"draftRevision":5`) {
+	if response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"legacy-key","title":"New"}`, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("legacy client stable key = %d: %s", response.Code, response.Body.String())
+	}
+	response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"title":"New"}`, cookie, csrf)
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), `"draftRevision":5`) || !strings.Contains(response.Body.String(), `"stable_key":"module-`) {
 		t.Fatalf("create = %d: %s", response.Code, response.Body.String())
 	}
 	patchPath := base + "/" + string(moduleID)
@@ -332,7 +326,7 @@ func TestAuthoringModuleMutationHTTPSecurityAndStrictBodies(t *testing.T) {
 	if response = authRequest(router, http.MethodDelete, patchPath, `{"expectedDraftRevision":6,"expectedModuleRevision":3}`, cookie, csrf); response.Code != http.StatusConflict {
 		t.Fatalf("stale delete = %d", response.Code)
 	}
-	oversized := `{"expectedDraftRevision":7,"stableKey":"too-large","title":"` + strings.Repeat("x", maxAuthoringModuleBodyBytes) + `","position":2}`
+	oversized := `{"expectedDraftRevision":7,"title":"` + strings.Repeat("x", maxAuthoringModuleBodyBytes) + `"}`
 	if response = authRequest(router, http.MethodPost, base, oversized, cookie, csrf); response.Code != http.StatusBadRequest {
 		t.Fatalf("oversized module create = %d", response.Code)
 	}

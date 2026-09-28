@@ -27,7 +27,7 @@ describe('LessonBlockRenderer', () => {
 
   it('renders controlled semantic variants without executable or fabricated media URLs', () => {
     const cases: Array<[RenderableBlock, RegExp, string]> = [
-      [{ key: 'image', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Event flow' } }, /Image asset unavailable/, 'img'],
+      [{ key: 'image', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Event flow' } }, /Image unavailable\./, 'img'],
       [{ key: 'video', type: 'VIDEO', payload: { asset: { assetKey: 'movie' }, title: 'Walkthrough', transcript: 'Transcript text', captionsAsset: { assetKey: 'captions' } } }, /Transcript text/, 'video'],
       [{ key: 'audio', type: 'AUDIO', payload: { asset: { assetKey: 'audio' }, title: 'Audio guide', transcript: 'Audio transcript' } }, /Audio transcript/, 'audio'],
       [{ key: 'code', type: 'CODE', payload: { code: 'line one\n  line two', language: 'go', title: 'Example' } }, /line one/, 'code'],

@@ -319,25 +319,26 @@ func testAuthoringModuleMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 	csrf := authTestCSRFToken().Value()
 	base := "/api/authoring/drafts/" + string(draft.ID) + "/modules"
 
-	response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":1,"stableKey":"advanced","title":"Advanced","position":0}`, cookie, csrf)
+	response := authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":1,"title":"Advanced"}`, cookie, csrf)
 	if response.Code != http.StatusOK {
 		t.Fatalf("first module create = %d: %s", response.Code, response.Body.String())
 	}
-	response = authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":2,"stableKey":"basics","title":"Basics","position":0}`, cookie, csrf)
+	response = authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":2,"title":"Basics"}`, cookie, csrf)
 	if response.Code != http.StatusOK {
 		t.Fatalf("middle module create = %d: %s", response.Code, response.Body.String())
 	}
 	modules, err := repository.ListModules(ctx, draft.ID)
-	if err != nil || len(modules) != 2 || modules[0].StableKey != "basics" || modules[0].Position != 0 || modules[1].StableKey != "advanced" || modules[1].Position != 1 {
-		t.Fatalf("insert did not shift positions: %v %#v", err, modules)
+	if err != nil || len(modules) != 2 || modules[0].Title != "Advanced" || modules[0].Position != 0 || modules[1].Title != "Basics" || modules[1].Position != 1 || !strings.HasPrefix(modules[0].StableKey, "module-") || !strings.HasPrefix(modules[1].StableKey, "module-") || modules[0].StableKey == modules[1].StableKey {
+		t.Fatalf("server-generated module keys or append ordering failed: %v %#v", err, modules)
 	}
 	basics, advanced := modules[0], modules[1]
+	basicsKey, advancedKey := basics.StableKey, advanced.StableKey
 	response = authRequest(router, http.MethodPatch, base+"/"+string(basics.ID), `{"expectedModuleRevision":1,"title":"Fundamentals"}`, cookie, csrf)
 	if response.Code != http.StatusOK {
 		t.Fatalf("module update = %d: %s", response.Code, response.Body.String())
 	}
 	basics, err = repository.GetModule(ctx, basics.ID)
-	if err != nil || basics.Revision != 2 || basics.StableKey != "basics" {
+	if err != nil || basics.Revision != 2 || basics.StableKey != basicsKey {
 		t.Fatalf("metadata update altered key/revision: %v %#v", err, basics)
 	}
 	draft, err = repository.GetDraft(ctx, draft.ID)
@@ -349,10 +350,10 @@ func testAuthoringModuleMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 		t.Fatalf("module reorder = %d: %s", response.Code, response.Body.String())
 	}
 	modules, err = repository.ListModules(ctx, draft.ID)
-	if err != nil || modules[0].ID != advanced.ID || modules[0].Position != 0 || modules[1].ID != basics.ID || modules[1].Position != 1 {
+	if err != nil || modules[0].ID != advanced.ID || modules[0].StableKey != advancedKey || modules[0].Position != 0 || modules[1].ID != basics.ID || modules[1].StableKey != basicsKey || modules[1].Position != 1 {
 		t.Fatalf("reorder was not contiguous: %v %#v", err, modules)
 	}
-	if response = authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"stableKey":"stale","title":"Stale","position":2}`, cookie, csrf); response.Code != http.StatusConflict {
+	if response = authRequest(router, http.MethodPost, base, `{"expectedDraftRevision":4,"title":"Stale"}`, cookie, csrf); response.Code != http.StatusConflict {
 		t.Fatalf("stale create = %d: %s", response.Code, response.Body.String())
 	}
 	basics, err = repository.GetModule(ctx, basics.ID)
@@ -512,7 +513,7 @@ func testAuthoringLessonMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 	if err != nil {
 		t.Fatal(err)
 	}
-	createBody := `{"expectedDraftRevision":` + strconv.FormatInt(draft.Revision, 10) + `,"stableKey":"protected-lesson","title":"Protected","description":"A lesson.","objectives":["Understand"],"position":0}`
+	createBody := `{"expectedDraftRevision":` + strconv.FormatInt(draft.Revision, 10) + `,"title":"Protected","description":"A lesson.","objectives":["Understand"]}`
 	if response := authRequest(router, http.MethodPost, createPath, createBody, nil, csrf); response.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated lesson create = %d", response.Code)
 	}
@@ -522,14 +523,17 @@ func testAuthoringLessonMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 	if response := authRequest(router, http.MethodPost, createPath, createBody, cookie, "wrong"); response.Code != http.StatusForbidden {
 		t.Fatalf("wrong CSRF lesson create = %d", response.Code)
 	}
-	if response := authRequest(router, http.MethodPost, createPath, `{"expectedDraftRevision":`+strconv.FormatInt(draft.Revision, 10)+`,"stableKey":"bad-input","title":"Bad","description":"A lesson.","objectives":["Understand"],"position":0,"content":{}}`, cookie, csrf); response.Code != http.StatusBadRequest {
+	if response := authRequest(router, http.MethodPost, createPath, `{"expectedDraftRevision":`+strconv.FormatInt(draft.Revision, 10)+`,"title":"Bad","description":"A lesson.","objectives":["Understand"],"content":{}}`, cookie, csrf); response.Code != http.StatusBadRequest {
 		t.Fatalf("LessonContent create boundary = %d", response.Code)
 	}
-	create := func(module authoring.ModuleID, revision int64, key string, position int) authoring.DraftLesson {
+	if response := authRequest(router, http.MethodPost, createPath, `{"expectedDraftRevision":`+strconv.FormatInt(draft.Revision, 10)+`,"stableKey":"legacy","title":"Legacy","description":"A lesson.","objectives":["Understand"]}`, cookie, csrf); response.Code != http.StatusBadRequest {
+		t.Fatalf("legacy Lesson stable key = %d", response.Code)
+	}
+	create := func(module authoring.ModuleID, revision int64, title string) authoring.DraftLesson {
 		t.Helper()
-		response := authRequest(router, http.MethodPost, "/api/authoring/drafts/"+string(draft.ID)+"/modules/"+string(module)+"/lessons", `{"expectedDraftRevision":`+strconv.FormatInt(revision, 10)+`,"stableKey":"`+key+`","title":"`+key+`","description":"A lesson.","objectives":["Understand"],"estimatedDurationMinutes":10,"position":`+strconv.Itoa(position)+`}`, cookie, csrf)
+		response := authRequest(router, http.MethodPost, "/api/authoring/drafts/"+string(draft.ID)+"/modules/"+string(module)+"/lessons", `{"expectedDraftRevision":`+strconv.FormatInt(revision, 10)+`,"title":"`+title+`","description":"A lesson.","objectives":["Understand"],"estimatedDurationMinutes":10}`, cookie, csrf)
 		if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" {
-			t.Fatalf("create %s = %d: %s", key, response.Code, response.Body.String())
+			t.Fatalf("create %s = %d: %s", title, response.Code, response.Body.String())
 		}
 		var dto struct {
 			ID string `json:"id"`
@@ -541,13 +545,18 @@ func testAuthoringLessonMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 		if err != nil {
 			t.Fatal(err)
 		}
+		if !strings.HasPrefix(lesson.StableKey, "lesson-") {
+			t.Fatalf("generated lesson key = %q", lesson.StableKey)
+		}
 		return lesson
 	}
-	first := create(moduleA.ID, draft.Revision, "first-lesson", 0)
+	first := create(moduleA.ID, draft.Revision, "First lesson")
+	firstKey := first.StableKey
 	draft, _ = repository.GetDraft(ctx, draft.ID)
-	second := create(moduleA.ID, draft.Revision, "second-lesson", 1)
+	second := create(moduleA.ID, draft.Revision, "Second lesson")
+	secondKey := second.StableKey
 	draft, _ = repository.GetDraft(ctx, draft.ID)
-	third := create(moduleB.ID, draft.Revision, "third-lesson", 0)
+	third := create(moduleB.ID, draft.Revision, "Third lesson")
 	draft, _ = repository.GetDraft(ctx, draft.ID)
 	lessons, err := repository.ListLessons(ctx, moduleA.ID)
 	if err != nil || len(lessons) != 2 || lessons[0].ID != first.ID || lessons[1].ID != second.ID {
@@ -575,18 +584,18 @@ func testAuthoringLessonMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 		t.Fatalf("lesson metadata PATCH = %d: %s", response.Code, response.Body.String())
 	}
 	first, err = repository.GetLesson(ctx, first.ID)
-	if err != nil || first.Title != "First revised" || first.EstimatedDurationMinutes != nil || first.StableKey != "first-lesson" || first.Revision != 2 {
+	if err != nil || first.Title != "First revised" || first.EstimatedDurationMinutes != nil || first.StableKey != firstKey || first.Revision != 2 {
 		t.Fatalf("metadata patch changed identity/content: %v %#v", err, first)
 	}
 	draft, _ = repository.GetDraft(ctx, draft.ID)
 	if response = authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/"+string(second.ID)+"/prerequisites", `{"expectedLessonRevision":1,"prerequisiteLessonKeys":["unknown-lesson"]}`, cookie, csrf); response.Code != http.StatusConflict {
 		t.Fatalf("unknown prerequisite = %d", response.Code)
 	}
-	response = authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/"+string(second.ID)+"/prerequisites", `{"expectedLessonRevision":1,"prerequisiteLessonKeys":["first-lesson"]}`, cookie, csrf)
+	response = authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/"+string(second.ID)+"/prerequisites", `{"expectedLessonRevision":1,"prerequisiteLessonKeys":["`+firstKey+`"]}`, cookie, csrf)
 	if response.Code != http.StatusOK {
 		t.Fatalf("prerequisite replacement = %d: %s", response.Code, response.Body.String())
 	}
-	if response = authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/"+string(second.ID)+"/prerequisites", `{"expectedLessonRevision":2,"prerequisiteLessonKeys":["second-lesson"]}`, cookie, csrf); response.Code != http.StatusBadRequest {
+	if response = authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/"+string(second.ID)+"/prerequisites", `{"expectedLessonRevision":2,"prerequisiteLessonKeys":["`+secondKey+`"]}`, cookie, csrf); response.Code != http.StatusBadRequest {
 		t.Fatalf("self prerequisite = %d", response.Code)
 	}
 	if response = authRequest(router, http.MethodPatch, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/"+string(second.ID), `{"expectedLessonRevision":1,"title":"Stale"}`, cookie, csrf); response.Code != http.StatusConflict {
@@ -598,14 +607,14 @@ func testAuthoringLessonMutation(t *testing.T, ctx context.Context, pool *pgxpoo
 		t.Fatalf("cross-module reorder = %d: %s", response.Code, response.Body.String())
 	}
 	first, _ = repository.GetLesson(ctx, first.ID)
-	if first.ModuleID != moduleB.ID || first.Position != 0 || first.StableKey != "first-lesson" || first.Revision != 3 {
+	if first.ModuleID != moduleB.ID || first.Position != 0 || first.StableKey != firstKey || first.Revision != 3 {
 		t.Fatalf("move lost lesson identity: %#v", first)
 	}
 	draft, _ = repository.GetDraft(ctx, draft.ID)
 	if response = authRequest(router, http.MethodPut, "/api/authoring/drafts/"+string(draft.ID)+"/lessons/order", `{"expectedDraftRevision":`+strconv.FormatInt(draft.Revision, 10)+`,"modules":[{"moduleId":"55555555-5555-4555-8555-555555555555","lessonIds":[]}]}`, cookie, csrf); response.Code != http.StatusNotFound {
 		t.Fatalf("foreign module reorder = %d", response.Code)
 	}
-	if response = authRequest(router, http.MethodPost, "/api/authoring/drafts/"+string(draft.ID)+"/modules/"+string(moduleB.ID)+"/lessons", `{"expectedDraftRevision":`+strconv.FormatInt(draft.Revision-1, 10)+`,"stableKey":"stale","title":"Stale","description":"A lesson.","objectives":["Understand"],"position":2}`, cookie, csrf); response.Code != http.StatusConflict {
+	if response = authRequest(router, http.MethodPost, "/api/authoring/drafts/"+string(draft.ID)+"/modules/"+string(moduleB.ID)+"/lessons", `{"expectedDraftRevision":`+strconv.FormatInt(draft.Revision-1, 10)+`,"title":"Stale","description":"A lesson.","objectives":["Understand"]}`, cookie, csrf); response.Code != http.StatusConflict {
 		t.Fatalf("stale create after move = %d", response.Code)
 	}
 	second, _ = repository.GetLesson(ctx, second.ID)

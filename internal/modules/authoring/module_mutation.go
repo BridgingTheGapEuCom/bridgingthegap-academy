@@ -10,7 +10,7 @@ import (
 // ModuleMutationRepository is the narrow structural-writing contract. It
 // cannot mutate lesson data, membership, or published CourseVersion rows.
 type ModuleMutationRepository interface {
-	CreateModuleAtPosition(context.Context, DraftID, int64, ModuleInput) (DraftModule, CourseDraft, error)
+	CreateGeneratedModule(context.Context, DraftID, int64, ModuleInput) (DraftModule, CourseDraft, error)
 	GetModule(context.Context, ModuleID) (DraftModule, error)
 	UpdateModuleMetadata(context.Context, DraftID, ModuleID, int64, DraftModulePatch) (DraftModule, CourseDraft, error)
 	ReorderModules(context.Context, DraftID, int64, []ModuleID) (CourseDraft, error)
@@ -28,23 +28,39 @@ type ModuleMutationResult struct {
 // every mutable structural operation. Denied drafts remain hidden to private
 // HTTP clients.
 type ModuleMutationService struct {
-	repository ModuleMutationRepository
-	authorizer Authorizer
+	repository        ModuleMutationRepository
+	authorizer        Authorizer
+	generateStableKey func() (string, error)
 }
 
 func NewModuleMutationService(repository ModuleMutationRepository, authorizer Authorizer) *ModuleMutationService {
-	return &ModuleMutationService{repository: repository, authorizer: authorizer}
+	return &ModuleMutationService{repository: repository, authorizer: authorizer, generateStableKey: newModuleStableKey}
 }
 
-func (s *ModuleMutationService) CreateModule(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, expectedDraftRevision int64, input ModuleInput) (ModuleMutationResult, error) {
+func (s *ModuleMutationService) CreateModule(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, expectedDraftRevision int64, input ModuleCreateInput) (ModuleMutationResult, error) {
 	if expectedDraftRevision < 1 || input.DraftID != draftID || input.Validate() != nil {
 		return ModuleMutationResult{}, ErrInvalidStructure
 	}
 	if err := s.authorize(ctx, actor, draftID); err != nil {
 		return ModuleMutationResult{}, err
 	}
-	module, draft, err := s.repository.CreateModuleAtPosition(ctx, draftID, expectedDraftRevision, input)
-	return ModuleMutationResult{Module: module, Draft: draft}, err
+	for attempt := 0; attempt < 3; attempt++ {
+		stableKey, err := s.generateStableKey()
+		if err != nil {
+			return ModuleMutationResult{}, err
+		}
+		moduleInput := ModuleInput{
+			DraftID: draftID, StableKey: stableKey, Title: input.Title, Description: input.Description,
+		}
+		if moduleInput.Validate() != nil {
+			return ModuleMutationResult{}, ErrInvalidStructure
+		}
+		module, draft, err := s.repository.CreateGeneratedModule(ctx, draftID, expectedDraftRevision, moduleInput)
+		if !errors.Is(err, ErrStableKeyCollision) || attempt == 2 {
+			return ModuleMutationResult{Module: module, Draft: draft}, err
+		}
+	}
+	return ModuleMutationResult{}, ErrStableKeyCollision
 }
 
 func (s *ModuleMutationService) UpdateModule(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, moduleID ModuleID, expectedModuleRevision int64, patch DraftModulePatch) (ModuleMutationResult, error) {

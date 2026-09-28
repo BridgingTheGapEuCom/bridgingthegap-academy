@@ -27,6 +27,7 @@ import AuthoringDraftOverviewPage from './pages/AuthoringDraftOverviewPage.vue'
 import AuthoringDraftStructurePage from './pages/AuthoringDraftStructurePage.vue'
 import AuthoringDraftMembersPage from './pages/AuthoringDraftMembersPage.vue'
 import AuthoringDraftLessonPage from './pages/AuthoringDraftLessonPage.vue'
+import AuthoringDraftLessonPreviewPage from './pages/AuthoringDraftLessonPreviewPage.vue'
 import AuthoringDraftReviewPage from './pages/AuthoringDraftReviewPage.vue'
 import AuthoringDraftReviewSnapshotPage from './pages/AuthoringDraftReviewSnapshotPage.vue'
 import AuthoringDraftAssessmentsPage from './pages/AuthoringDraftAssessmentsPage.vue'
@@ -81,7 +82,11 @@ const router = createRouter({
         { path: '', redirect: (to) => ({ name: 'authoring-draft-overview', params: { draftId: to.params.draftId } }) },
         { path: 'overview', name: 'authoring-draft-overview', component: AuthoringDraftOverviewPage },
         { path: 'structure', name: 'authoring-draft-structure', component: AuthoringDraftStructurePage },
-        { path: 'lessons/:lessonId', name: 'authoring-draft-lesson', component: AuthoringDraftLessonPage },
+        { path: 'lessons/:lessonId', redirect: (to) => ({ name: 'authoring-draft-lesson', params: to.params, query: to.query }) },
+        { path: 'lessons/:lessonId/details', name: 'authoring-draft-lesson', component: AuthoringDraftLessonPage },
+        { path: 'lessons/:lessonId/content', name: 'authoring-draft-lesson-content', component: AuthoringDraftLessonPage },
+        { path: 'lessons/:lessonId/prerequisites', name: 'authoring-draft-lesson-prerequisites', component: AuthoringDraftLessonPage },
+        { path: 'lessons/:lessonId/preview', name: 'authoring-draft-lesson-preview', component: AuthoringDraftLessonPreviewPage },
         { path: 'members', name: 'authoring-draft-members', component: AuthoringDraftMembersPage },
         { path: 'assessments', name: 'authoring-draft-assessments', component: AuthoringDraftAssessmentsPage },
         { path: 'assessments/:assessmentId', name: 'authoring-draft-assessment', component: AuthoringDraftAssessmentPage },

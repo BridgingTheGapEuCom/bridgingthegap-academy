@@ -517,7 +517,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates one draft Module at a zero-based position using the current draft revision. The authenticated session must provide a valid CSRF token and trusted same-origin Origin. */
+        /** @description Creates one draft Module at the end of the current ordered structure using the current draft revision. Academy generates the immutable stable key. The authenticated session must provide a valid CSRF token and trusted same-origin Origin. */
         post: operations["createAuthoringModule"];
         delete?: never;
         options?: never;
@@ -605,6 +605,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Creates one draft Lesson at the end of the target Module using the current draft revision. Academy generates the immutable stable key. The authenticated session must provide a valid CSRF token and trusted same-origin Origin. */
         post: operations["createAuthoringLesson"];
         delete?: never;
         options?: never;
@@ -1961,12 +1962,10 @@ export interface components {
         };
         AuthoringLessonCreateRequest: {
             expectedDraftRevision: number;
-            stableKey: string;
             title: string;
             description: string;
             objectives: string[];
             estimatedDurationMinutes?: number | null;
-            position: number;
         };
         AuthoringLessonUpdateRequest: {
             expectedLessonRevision: number;
@@ -2018,10 +2017,8 @@ export interface components {
         };
         AuthoringModuleCreateRequest: {
             expectedDraftRevision: number;
-            stableKey: string;
             title: string;
             description?: string;
-            position: number;
         };
         AuthoringModuleUpdateRequest: {
             expectedModuleRevision: number;

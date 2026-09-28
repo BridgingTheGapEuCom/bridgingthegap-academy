@@ -126,10 +126,8 @@ type authoringDraftCreateRequest struct {
 
 type authoringModuleCreateRequest struct {
 	ExpectedDraftRevision *int64 `json:"expectedDraftRevision"`
-	StableKey             string `json:"stableKey"`
 	Title                 string `json:"title"`
 	Description           string `json:"description"`
-	Position              *int   `json:"position"`
 }
 
 type authoringModuleUpdateRequest struct {
@@ -155,12 +153,10 @@ type authoringModuleMutationDTO struct {
 
 type authoringLessonCreateRequest struct {
 	ExpectedDraftRevision    *int64   `json:"expectedDraftRevision"`
-	StableKey                string   `json:"stableKey"`
 	Title                    string   `json:"title"`
 	Description              string   `json:"description"`
 	Objectives               []string `json:"objectives"`
 	EstimatedDurationMinutes *int     `json:"estimatedDurationMinutes"`
-	Position                 *int     `json:"position"`
 }
 
 type authoringLessonUpdateRequest struct {
@@ -955,17 +951,17 @@ func decodeAuthoringDraftCreate(w http.ResponseWriter, r *http.Request) (authori
 	return input, nil
 }
 
-func decodeAuthoringModuleCreate(w http.ResponseWriter, r *http.Request, draftID authoring.DraftID) (int64, authoring.ModuleInput, error) {
+func decodeAuthoringModuleCreate(w http.ResponseWriter, r *http.Request, draftID authoring.DraftID) (int64, authoring.ModuleCreateInput, error) {
 	var input authoringModuleCreateRequest
 	if err := decodeAuthoringJSON(w, r, &input); err != nil {
-		return 0, authoring.ModuleInput{}, err
+		return 0, authoring.ModuleCreateInput{}, err
 	}
-	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || input.Position == nil {
-		return 0, authoring.ModuleInput{}, errors.New("missing module create fields")
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 {
+		return 0, authoring.ModuleCreateInput{}, errors.New("missing module create fields")
 	}
-	module := authoring.ModuleInput{DraftID: draftID, StableKey: input.StableKey, Title: input.Title, Description: input.Description, Position: *input.Position}
+	module := authoring.ModuleCreateInput{DraftID: draftID, Title: input.Title, Description: input.Description}
 	if err := module.Validate(); err != nil {
-		return 0, authoring.ModuleInput{}, err
+		return 0, authoring.ModuleCreateInput{}, err
 	}
 	return *input.ExpectedDraftRevision, module, nil
 }
@@ -1029,17 +1025,17 @@ func decodeAuthoringModuleDelete(w http.ResponseWriter, r *http.Request) (int64,
 	return *input.ExpectedDraftRevision, *input.ExpectedModuleRevision, nil
 }
 
-func decodeAuthoringLessonCreate(w http.ResponseWriter, r *http.Request, draftID authoring.DraftID, moduleID authoring.ModuleID) (int64, authoring.LessonInput, error) {
+func decodeAuthoringLessonCreate(w http.ResponseWriter, r *http.Request, draftID authoring.DraftID, moduleID authoring.ModuleID) (int64, authoring.LessonCreateInput, error) {
 	var input authoringLessonCreateRequest
 	if err := decodeAuthoringLessonJSON(w, r, &input); err != nil {
-		return 0, authoring.LessonInput{}, err
+		return 0, authoring.LessonCreateInput{}, err
 	}
-	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 || input.Position == nil {
-		return 0, authoring.LessonInput{}, errors.New("missing lesson create fields")
+	if input.ExpectedDraftRevision == nil || *input.ExpectedDraftRevision < 1 {
+		return 0, authoring.LessonCreateInput{}, errors.New("missing lesson create fields")
 	}
-	lesson := authoring.NewDraftLessonInput(draftID, moduleID, input.StableKey, input.Title, input.Description, input.Objectives, input.EstimatedDurationMinutes, *input.Position)
+	lesson := authoring.LessonCreateInput{DraftID: draftID, ModuleID: moduleID, Title: input.Title, Description: input.Description, LearningObjectives: input.Objectives, EstimatedDurationMinutes: input.EstimatedDurationMinutes}
 	if err := lesson.Validate(); err != nil {
-		return 0, authoring.LessonInput{}, err
+		return 0, authoring.LessonCreateInput{}, err
 	}
 	return *input.ExpectedDraftRevision, lesson, nil
 }

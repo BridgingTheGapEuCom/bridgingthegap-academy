@@ -13,6 +13,9 @@ with at most one active assignment per user. User IDs are opaque references; the
 is no Identity foreign key or permission decision in this milestone.
 
 Draft Modules and Lessons have explicit, database-unique positions and stable keys.
+Academy generates each new Module and Lesson stable key server-side; authors provide
+only meaningful learning content. These keys are opaque, Draft-scoped immutable
+identifiers rather than title-derived authoring fields.
 Lesson keys are unique across the entire draft, so moving between Modules does not
 change logical identity. These keys, plus block keys inside canonical LessonContent,
 are intended to carry through the later Draft-to-CourseVersion conversion. Published
@@ -113,7 +116,9 @@ Draft Module mutations require `authoring.structure.edit`, the trusted Origin,
 and the session-bound CSRF token. Creation, full-list reorder, and deletion use
 the current Draft revision; metadata PATCH uses the Module revision and also
 advances the Draft revision. Module stable keys are immutable through ordinary
-metadata PATCH because they carry semantic identity into publication. Reorder
+metadata PATCH because they carry semantic identity into publication. New Module
+keys are generated server-side and append atomically under the locked Draft;
+authors cannot supply, edit, or derive them from a title. Reorder
 accepts every Module ID exactly once and commits contiguous zero-based
 positions atomically. The API deliberately deletes only empty Modules: a
 Module containing Lessons returns a conflict, rather than exposing the
@@ -125,7 +130,8 @@ Draft Lesson structural and metadata mutations also require
 token. A Lesson is created with an empty valid canonical content document.
 Ordinary metadata PATCH accepts only title, description, objectives, and
 estimated duration; stable keys, Module assignment, position, prerequisites,
-and content each remain outside that operation. Lesson stable keys are immutable
+and content each remain outside that operation. Academy generates Lesson stable
+keys during creation; authors cannot supply or edit them. They are immutable
 semantic identities across the whole Draft and survive moves between Modules.
 
 Lesson ordering is replaced as one complete Draft-wide Module-to-Lesson layout.
@@ -140,6 +146,22 @@ explicitly removed and their source Lesson revisions advance before the target
 is removed; remaining Lessons in its Module are compacted. These structural
 mutations are future audit candidates, but audit integration remains deferred
 until a shared transaction boundary exists.
+
+The Structure workspace is a responsive client of this existing structural API.
+It presents Modules as a collapsible course outline with client-side title search,
+then shows one selected Module or Lesson at a time: as a second pane on wide
+screens, inline with the outline at medium widths, and as a focused drill-in
+view on small screens. Creation and metadata edits occur in focused Academy
+dialogs; module and lesson stable keys remain system-owned and are never shown as
+authoring fields. Moving a lesson sends the existing complete, authoritative
+Draft-wide layout rather than making a client-side placement authoritative.
+
+Structure organizes Modules and Lessons; it does not contain a second content
+editor. A selected Lesson shows its metadata separately from a selected-only
+LessonContent summary. Its primary action opens the existing focused Lesson editor,
+where canonical learner-facing blocks are authored. That editor has a Back to
+Structure path which restores the selected Lesson and current outline search when
+available. The workspace never loads content documents for every outline item.
 
 Draft LessonContent replacement is a separate `authoring.content.edit` boundary.
 It accepts the complete canonical Courses `LessonContent` document and an
@@ -424,3 +446,41 @@ Assessment summary from the current Draft. The block stores just
 outside canonical LessonContent. Selecting an Assessment is a local content
 edit and is persisted only by the existing Lesson-content save flow. Unknown
 legacy keys are retained until an author deliberately replaces them.
+
+## Lesson workspace
+
+Lesson authoring separates three concerns into route-addressable workspace views.
+**Details** owns author-facing metadata: title, description, estimated duration,
+and ordered learning objectives. **Content** owns the ordered learner-facing
+LessonContent blocks. **Prerequisites** owns ordered, advisory references to
+other Lessons; they recommend useful preparation but never restrict learner
+access.
+
+The Content view uses an Academy-owned picker for the block types available in
+the installed product: Text, Heading, Image, Video, Audio, Download, Code,
+Callout, Quote, Divider, Knowledge check, and Course widget when the matching
+feature is available. Block-specific editors retain the existing canonical
+LessonContent, asset, assessment, and declarative widget-configuration models;
+raw storage identifiers, block payload JSON, and widget JSON are not
+user-facing.
+
+Lesson stable keys remain generated, immutable internal identifiers used by
+structure, prerequisite references, review snapshots, publication, translation,
+and portability. They are intentionally absent from normal authoring screens.
+
+### Lesson preview
+
+The Content workspace offers an authenticated **Draft preview — not published**
+route. It renders the last saved Draft Lesson through the same learner page structure
+and `LessonBlockRenderer` used by learner presentation, but it is never a
+CourseVersion and cannot create learner progress, attempts, assessment submissions,
+certificates, or widget runtime capabilities. The preview shell contains only its
+unpublished status, a return link, and width controls; its desktop canvas fills the
+available Academy page grid while tablet and mobile modes constrain the learner
+surface. Unsaved edits prompt the author to save and preview or preview the last
+saved version.
+
+Preview deliberately has no published-course asset binding or learner widget runtime
+coordinates. Until a narrowly scoped Draft asset/runtime preview capability exists,
+missing Draft media and Course widgets use learner-safe unavailable states;
+they do not make private assets public or grant plugins author or learner privileges.

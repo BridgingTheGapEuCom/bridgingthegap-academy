@@ -11,7 +11,7 @@ import (
 // LessonMutationRepository is the focused structural/metadata contract for
 // draft Lessons.
 type LessonMutationRepository interface {
-	CreateLessonAtPosition(context.Context, DraftID, ModuleID, int64, LessonInput) (DraftLesson, CourseDraft, error)
+	CreateGeneratedLesson(context.Context, DraftID, ModuleID, int64, LessonInput) (DraftLesson, CourseDraft, error)
 	UpdateLessonMetadataForDraft(context.Context, DraftID, LessonID, int64, DraftLessonPatch) (DraftLesson, CourseDraft, error)
 	ReorderLessonsForDraft(context.Context, DraftID, int64, []ModuleLessonOrder) (CourseDraft, error)
 	ReplaceLessonPrerequisitesForDraft(context.Context, DraftID, LessonID, int64, []string) (DraftLesson, CourseDraft, error)
@@ -31,8 +31,9 @@ type LessonMutationResult struct {
 }
 
 type LessonMutationService struct {
-	repository LessonMutationRepository
-	authorizer Authorizer
+	repository        LessonMutationRepository
+	authorizer        Authorizer
+	generateStableKey func() (string, error)
 }
 
 type LessonContentMutationService struct {
@@ -49,7 +50,7 @@ type LessonContentValidator interface {
 }
 
 func NewLessonMutationService(repository LessonMutationRepository, authorizer Authorizer) *LessonMutationService {
-	return &LessonMutationService{repository: repository, authorizer: authorizer}
+	return &LessonMutationService{repository: repository, authorizer: authorizer, generateStableKey: newLessonStableKey}
 }
 
 func NewLessonContentMutationService(repository LessonContentMutationRepository, authorizer Authorizer) *LessonContentMutationService {
@@ -83,15 +84,32 @@ func (s *LessonContentMutationService) ReplaceContent(ctx context.Context, actor
 	return LessonMutationResult{Lesson: lesson, Draft: draft}, err
 }
 
-func (s *LessonMutationService) CreateLesson(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, moduleID ModuleID, expectedDraftRevision int64, input LessonInput) (LessonMutationResult, error) {
+func (s *LessonMutationService) CreateLesson(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, moduleID ModuleID, expectedDraftRevision int64, input LessonCreateInput) (LessonMutationResult, error) {
 	if expectedDraftRevision < 1 || input.DraftID != draftID || input.ModuleID != moduleID || input.Validate() != nil {
 		return LessonMutationResult{}, ErrInvalidStructure
 	}
 	if err := s.authorize(ctx, actor, draftID); err != nil {
 		return LessonMutationResult{}, err
 	}
-	lesson, draft, err := s.repository.CreateLessonAtPosition(ctx, draftID, moduleID, expectedDraftRevision, input)
-	return LessonMutationResult{Lesson: lesson, Draft: draft}, err
+	for attempt := 0; attempt < 3; attempt++ {
+		stableKey, err := s.generateStableKey()
+		if err != nil {
+			return LessonMutationResult{}, err
+		}
+		lessonInput := LessonInput{
+			DraftID: draftID, ModuleID: moduleID, StableKey: stableKey, Title: input.Title, Description: input.Description,
+			LearningObjectives: input.LearningObjectives, EstimatedDurationMinutes: input.EstimatedDurationMinutes,
+			Content: courses.LessonContent{SchemaVersion: courses.LessonContentSchemaVersion, Blocks: []courses.Block{}},
+		}
+		if lessonInput.Validate() != nil {
+			return LessonMutationResult{}, ErrInvalidStructure
+		}
+		lesson, draft, err := s.repository.CreateGeneratedLesson(ctx, draftID, moduleID, expectedDraftRevision, lessonInput)
+		if !errors.Is(err, ErrStableKeyCollision) || attempt == 2 {
+			return LessonMutationResult{Lesson: lesson, Draft: draft}, err
+		}
+	}
+	return LessonMutationResult{}, ErrStableKeyCollision
 }
 
 func (s *LessonMutationService) UpdateLesson(ctx context.Context, actor identity.AuthenticatedActor, draftID DraftID, lessonID LessonID, expectedLessonRevision int64, patch DraftLessonPatch) (LessonMutationResult, error) {

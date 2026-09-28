@@ -34,8 +34,8 @@ function assetURL(asset: { assetKey: string }, download = false): string | undef
 
   <figure v-else-if="block.type === 'IMAGE'" class="lesson-block lesson-media" :class="{ 'lesson-media--unresolved': !assetURL(block.payload.asset) || mediaFailed }">
     <img v-if="assetURL(block.payload.asset) && !mediaFailed" class="lesson-media__element lesson-media__image" :src="assetURL(block.payload.asset)" :alt="block.payload.decorative ? '' : block.payload.altText" @error="mediaFailed = true" />
-    <div v-else-if="block.payload.decorative" aria-hidden="true">Image asset unavailable</div>
-    <div v-else role="img" :aria-label="block.payload.altText">Image asset unavailable</div>
+    <div v-else-if="block.payload.decorative" aria-hidden="true">Image unavailable.</div>
+    <div v-else role="img" :aria-label="block.payload.altText">Image unavailable.</div>
     <figcaption v-if="block.payload.caption">{{ block.payload.caption }}</figcaption>
   </figure>
 

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick, shallowRef } from 'vue'
@@ -81,6 +81,10 @@ async function renderShell(path = `/authoring/drafts/${firstID}`) {
 
 describe('AuthoringDraftShell', () => {
   beforeEach(() => {
+    Object.assign(HTMLDialogElement.prototype, {
+      showModal(this: HTMLDialogElement) { this.setAttribute('open', '') },
+      close(this: HTMLDialogElement) { this.removeAttribute('open') },
+    })
     authMock.state = shallowRef<AuthenticationState>({ status: 'authenticated', userId: '44444444-4444-4444-8444-444444444444', expiresAt: '2026-09-15T12:00:00Z' })
     authMock.bootstrapSession.mockReset()
     getAuthoringDraftMock.mockReset()
@@ -313,11 +317,13 @@ describe('AuthoringDraftShell', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await screen.findByRole('heading', { level: 1, name: 'Saved Draft' })
     await router.push(`/authoring/drafts/${firstID}/structure`)
-    await fireEvent.update(await screen.findByRole('textbox', { name: /Module stable key/ }), 'new-module')
-    await fireEvent.update(screen.getByRole('textbox', { name: /Module title/ }), 'New Module')
-    await fireEvent.click(screen.getByRole('button', { name: 'Create module' }))
+    await fireEvent.click(await screen.findByRole('button', { name: '+ Add module' }))
+    const dialog = document.querySelector('dialog[open]') as HTMLDialogElement
+    await fireEvent.update(within(dialog).getByRole('textbox', { name: /Module title/ }), 'New Module')
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Create module' }))
     await screen.findByText('Module created.')
     expect(createAuthoringModuleMock.mock.calls[0]![1].expectedDraftRevision).toBe(10)
+    expect(createAuthoringModuleMock.mock.calls[0]![1]).not.toHaveProperty('stableKey')
     await router.push(`/authoring/drafts/${firstID}/overview`)
     await fireEvent.update(await screen.findByRole('textbox', { name: /Title/ }), 'Saved again')
     await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))

@@ -8,12 +8,13 @@ import (
 )
 
 var (
-	ErrNotFound         = errors.New("authoring record not found")
-	ErrConflict         = errors.New("authoring conflict")
-	ErrRevisionMismatch = errors.New("authoring revision mismatch")
-	ErrInvalidState     = errors.New("invalid draft state")
-	ErrInvalidPatch     = errors.New("invalid draft metadata patch")
-	ErrInvalidStructure = errors.New("invalid authoring structure mutation")
+	ErrNotFound           = errors.New("authoring record not found")
+	ErrConflict           = errors.New("authoring conflict")
+	ErrRevisionMismatch   = errors.New("authoring revision mismatch")
+	ErrInvalidState       = errors.New("invalid draft state")
+	ErrInvalidPatch       = errors.New("invalid draft metadata patch")
+	ErrInvalidStructure   = errors.New("invalid authoring structure mutation")
+	ErrStableKeyCollision = errors.New("generated structure stable key collision")
 )
 
 // Repository is Authoring-owned. All mutators are explicit; published Courses

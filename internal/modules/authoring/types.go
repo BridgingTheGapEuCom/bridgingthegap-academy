@@ -176,6 +176,15 @@ type ModuleInput struct {
 	Position                      int
 }
 
+// ModuleCreateInput contains the author-controlled data for a new Module.
+// Stable keys and positions are assigned by the authoring service so neither
+// mutable presentation text nor a client request can define publication
+// identity or structural placement.
+type ModuleCreateInput struct {
+	DraftID            DraftID
+	Title, Description string
+}
+
 // MaxModulesPerDraft bounds authoring structure operations and their request
 // payloads without constraining ordinary course design.
 const MaxModulesPerDraft = 1000
@@ -196,6 +205,16 @@ func (m ModuleInput) Validate() error {
 	}
 	if m.Position < 0 || m.Position > 100000 {
 		return errors.New("invalid module position")
+	}
+	return nil
+}
+
+func (m ModuleCreateInput) Validate() error {
+	if m.DraftID == "" {
+		return errors.New("draft identifier required")
+	}
+	if len(strings.TrimSpace(m.Title)) == 0 || len(m.Title) > 240 || len(m.Description) > 20000 {
+		return errors.New("invalid draft module text")
 	}
 	return nil
 }
@@ -261,6 +280,17 @@ type LessonInput struct {
 	Content                       courses.LessonContent
 }
 
+// LessonCreateInput contains only author-controlled initial Lesson metadata.
+// The authoring service supplies the immutable stable key, empty canonical
+// content, and append position.
+type LessonCreateInput struct {
+	DraftID                  DraftID
+	ModuleID                 ModuleID
+	Title, Description       string
+	LearningObjectives       []string
+	EstimatedDurationMinutes *int
+}
+
 func (l LessonInput) Validate() error {
 	if l.DraftID == "" || l.ModuleID == "" {
 		return errors.New("draft and module identifiers required")
@@ -281,6 +311,22 @@ func (l LessonInput) Validate() error {
 		return errors.New("invalid lesson position")
 	}
 	return l.Content.Validate()
+}
+
+func (l LessonCreateInput) Validate() error {
+	if l.DraftID == "" || l.ModuleID == "" {
+		return errors.New("draft and module identifiers required")
+	}
+	if len(strings.TrimSpace(l.Title)) == 0 || len(l.Title) > 240 || len(strings.TrimSpace(l.Description)) == 0 || len(l.Description) > 20000 {
+		return errors.New("invalid draft lesson text")
+	}
+	if err := validateObjectives(l.LearningObjectives); err != nil {
+		return err
+	}
+	if l.EstimatedDurationMinutes != nil && (*l.EstimatedDurationMinutes < 1 || *l.EstimatedDurationMinutes > 1440) {
+		return errors.New("invalid estimated lesson duration")
+	}
+	return nil
 }
 
 type DraftLesson struct {

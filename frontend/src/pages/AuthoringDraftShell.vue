@@ -33,6 +33,10 @@
       <BtgButton variant="secondary" @click="load">Try again</BtgButton>
     </div>
 
+    <div v-else-if="isLessonPreview" class="authoring-shell__content authoring-shell__content--preview">
+      <RouterView />
+    </div>
+
     <div v-else class="authoring-shell__content">
       <RouterLink class="authoring-shell__back" to="/authoring">Back to Authoring</RouterLink>
       <div class="authoring-shell__header">
@@ -56,7 +60,13 @@
         </ul>
       </nav>
 
-      <div class="authoring-shell__section" :class="{ 'authoring-shell__section--overview': route.name === 'authoring-draft-overview' || route.name === 'overview' }">
+      <div
+        class="authoring-shell__section"
+        :class="{
+          'authoring-shell__section--overview': route.name === 'authoring-draft-overview' || route.name === 'overview',
+          'authoring-shell__section--structure': route.name === 'authoring-draft-structure' || route.name === 'structure',
+        }"
+      >
         <RouterView />
       </div>
     </div>
@@ -64,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { useAuth } from '../auth/auth'
@@ -82,6 +92,7 @@ const route = useRoute()
 const router = useRouter()
 const state = ref<State>({ kind: 'loading' })
 const draft = ref<AuthoringDraft>()
+const isLessonPreview = computed(() => route.name === 'authoring-draft-lesson-preview')
 
 let requestVersion = 0
 let active = true

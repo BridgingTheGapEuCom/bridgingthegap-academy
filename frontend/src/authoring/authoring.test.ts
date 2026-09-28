@@ -129,7 +129,7 @@ describe('Authoring API service', () => {
     const moduleID = '22222222-2222-4222-8222-222222222222'
     const lessonID = '33333333-3333-4333-8333-333333333333'
     await getAuthoringStructure(draftID, { request })
-    await createAuthoringModule(draftID, { expectedDraftRevision: 3, stableKey: 'foundations', title: 'Foundations', position: 0 }, { request })
+    await createAuthoringModule(draftID, { expectedDraftRevision: 3, title: 'Foundations' }, { request })
     await reorderAuthoringLessons(draftID, 4, [{ moduleId: moduleID, lessonIds: [lessonID] }], { request })
     expect(request).toHaveBeenNthCalledWith(1, `/api/authoring/drafts/${draftID}/structure`)
     expect(request).toHaveBeenNthCalledWith(2, `/api/authoring/drafts/${draftID}/modules`, expect.objectContaining({ method: 'POST' }))

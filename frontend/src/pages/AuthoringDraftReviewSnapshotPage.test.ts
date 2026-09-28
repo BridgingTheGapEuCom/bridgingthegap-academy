@@ -168,7 +168,7 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     await renderPage()
     expect(await screen.findByText('<script>never execute</script>')).toBeTruthy()
     expect(document.querySelector('script')).toBeNull()
-    expect(screen.getByText('Image asset unavailable')).toBeTruthy()
+    expect(screen.getByText('Image unavailable.')).toBeTruthy()
     expect(screen.getByText(/Interactive knowledge checks will be available/)).toBeTruthy()
     expect(screen.getByText('This lesson block cannot be displayed safely.')).toBeTruthy()
     expect(document.querySelector('[src]')).toBeNull()

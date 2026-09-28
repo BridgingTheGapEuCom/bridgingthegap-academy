@@ -53,7 +53,7 @@ describe('PublishedCourseReaderLesson', () => {
     expect(screen.getByRole('table')).toBeTruthy()
     expect(screen.getByRole('columnheader', { name: 'Term' })).toBeTruthy()
     expect(document.querySelector('.lesson-table-scroll')).toBeTruthy()
-    expect(screen.getByRole('img', { name: 'Event flow' }).textContent).toContain('Image asset unavailable')
+    expect(screen.getByRole('img', { name: 'Event flow' }).textContent).toContain('Image unavailable.')
     expect(screen.getByText('Video transcript')).toBeTruthy()
     expect(screen.getByText('Audio transcript')).toBeTruthy()
     expect(screen.getByText('Download unavailable.')).toBeTruthy()

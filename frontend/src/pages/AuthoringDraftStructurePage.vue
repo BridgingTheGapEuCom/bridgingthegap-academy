@@ -1,269 +1,52 @@
 <template>
   <section class="authoring-section authoring-structure" aria-labelledby="authoring-structure-title">
-    <header class="authoring-structure__header">
-      <h2 id="authoring-structure-title" tabindex="-1">Structure</h2>
-      <p class="authoring-section__intro">Arrange Modules and Lessons in the order learners will encounter them.</p>
-    </header>
-
+    <header class="authoring-structure__header"><div><h2 id="authoring-structure-title" tabindex="-1">Structure</h2><p class="authoring-section__intro">Arrange modules and lessons in the order learners will encounter them.</p></div></header>
     <p v-if="state.kind === 'loading'" role="status">Loading Draft structure…</p>
-    <div v-else-if="state.kind === 'unavailable'" class="authoring-structure__state">
-      <p>We couldn’t load this Draft structure right now.</p>
-      <BtgButton variant="secondary" @click="loadStructure()">Try again</BtgButton>
-    </div>
-
-    <template v-else-if="state.kind === 'ready'">
-      <p v-if="message" class="authoring-structure__status" role="status">{{ message }}</p>
-      <p v-if="error" class="authoring-structure__error" role="alert">{{ error }}</p>
-      <div v-if="conflict" class="authoring-structure__conflict" role="status">
-        <p>This Draft changed elsewhere. Your structure has not been overwritten.</p>
-        <BtgButton variant="secondary" :disabled="busy" @click="reloadLatest">Reload latest Draft</BtgButton>
+    <div v-else-if="state.kind === 'unavailable'" class="authoring-structure__state"><p>We couldn’t load this Draft structure right now.</p><BtgButton variant="secondary" @click="load">Try again</BtgButton></div>
+    <template v-else>
+      <p v-if="message" class="authoring-structure__status" role="status">{{ message }}</p><p v-if="error" class="authoring-structure__error" role="alert">{{ error }}</p>
+      <div v-if="conflict" class="authoring-structure__conflict" role="status"><p>This Draft changed elsewhere. Your structure has not been overwritten.</p><BtgButton variant="secondary" @click="reload">Reload latest Draft</BtgButton></div>
+      <div v-if="!modules.length" class="authoring-structure__empty"><h3>No modules yet</h3><p>Start structuring this course by adding the first module.</p><BtgButton @click="openModule()">Add module</BtgButton></div>
+      <div ref="workspace" class="authoring-structure-workspace-shell" :class="{ 'is-mobile-detail': mobile && selection }">
+        <div class="authoring-structure-workspace__toolbar"><label><span class="sr-only">Search structure</span><input v-model="query" type="search" placeholder="Search modules and lessons…" /></label><div><BtgButton variant="quiet" @click="expandAll">Expand all</BtgButton><BtgButton variant="quiet" @click="collapseAll">Collapse all</BtgButton><BtgButton :disabled="busy || conflict" @click="openModule()">+ Add module</BtgButton></div></div>
+      <div class="authoring-structure-workspace">
+        <aside class="authoring-structure-outline" aria-label="Course structure">
+          <p v-if="!filtered.length" class="authoring-structure-outline__empty">No matching modules or lessons found.</p>
+          <ol v-else class="authoring-structure-outline__modules"><li v-for="module in filtered" :key="module.id">
+            <div class="authoring-structure-outline__module" :class="{ selected: selection?.kind === 'module' && selection.id === module.id }"><button type="button" class="authoring-structure-outline__disclosure" :aria-label="`${expanded.has(module.id) || query ? 'Collapse' : 'Expand'} ${module.title}`" :aria-expanded="expanded.has(module.id) || Boolean(query)" @click="toggle(module.id)">{{ expanded.has(module.id) || query ? '▾' : '▸' }}</button><button type="button" class="authoring-structure-outline__select" :aria-pressed="selection?.kind === 'module' && selection.id === module.id" @click="selectModule(module)"><b>{{ number(module.position) }}</b><span>{{ module.title }}</span><small>{{ module.lessons.length }} {{ module.lessons.length === 1 ? 'lesson' : 'lessons' }}</small></button></div>
+            <ol v-if="expanded.has(module.id) || query" class="authoring-structure-outline__lessons"><li v-for="lesson in lessons(module)" :key="lesson.id"><button type="button" :class="{ selected: selection?.kind === 'lesson' && selection.id === lesson.id }" :aria-pressed="selection?.kind === 'lesson' && selection.id === lesson.id" @click="selectLesson(module, lesson)"><b>{{ number(lesson.position) }}</b>{{ lesson.title }}</button><Detail v-if="!wide && !mobile && selection?.kind === 'lesson' && selection.id === lesson.id" :item="current" :busy="busy || conflict" :module-count="modules.length" :content="contentSummary" @edit-module="openModule" @edit-details="openLessonDetails" @edit-content="openLessonContent" @retry-content="loadContentSummary" @move-module="moveModule" @move-lesson="openMove" @delete-module="removeModule" @delete-lesson="removeLesson" /></li><li v-if="!module.lessons.length" class="authoring-structure-outline__empty-module">No lessons yet. <button type="button" @click="openLesson(module)">Add the first lesson</button></li></ol>
+            <div v-if="expanded.has(module.id) || query" class="authoring-structure-outline__add"><BtgButton variant="quiet" @click="openLesson(module)">+ Add lesson</BtgButton></div>
+            <Detail v-if="!wide && !mobile && selection?.kind === 'module' && selection.id === module.id" :item="current" :busy="busy || conflict" :module-count="modules.length" :content="contentSummary" @edit-module="openModule" @edit-details="openLessonDetails" @edit-content="openLessonContent" @retry-content="loadContentSummary" @move-module="moveModule" @move-lesson="openMove" @delete-module="removeModule" @delete-lesson="removeLesson" />
+          </li></ol>
+        </aside>
+        <section v-if="selection && (wide || mobile)" class="authoring-structure-detail"><BtgButton v-if="mobile" variant="quiet" @click="clearSelection">← Back to structure</BtgButton><Detail :item="current" :busy="busy || conflict" :module-count="modules.length" :content="contentSummary" @edit-module="openModule" @edit-details="openLessonDetails" @edit-content="openLessonContent" @retry-content="loadContentSummary" @move-module="moveModule" @move-lesson="openMove" @delete-module="removeModule" @delete-lesson="removeLesson" /></section>
       </div>
-
-      <form class="authoring-structure__create-module" @submit.prevent="createModule">
-        <h3>Add module</h3>
-        <BtgFormField label="Module stable key" required description="A stable identifier that cannot later be changed." :error="moduleCreateErrors.stableKey" v-slot="{ controlId, describedBy, invalid }">
-          <BtgTextInput :id="controlId" v-model="moduleCreate.stableKey" :aria-describedby="describedBy" :invalid="invalid" required />
-        </BtgFormField>
-        <BtgFormField label="Module title" required :error="moduleCreateErrors.title" v-slot="{ controlId, describedBy, invalid }">
-          <BtgTextInput :id="controlId" v-model="moduleCreate.title" :aria-describedby="describedBy" :invalid="invalid" required />
-        </BtgFormField>
-        <BtgFormField label="Module description" v-slot="{ controlId, describedBy }">
-          <textarea :id="controlId" v-model="moduleCreate.description" :aria-describedby="describedBy" />
-        </BtgFormField>
-        <BtgButton type="submit" :disabled="busy || conflict">Create module</BtgButton>
-      </form>
-
-      <p v-if="!state.structure.modules.length" class="authoring-structure__empty">No Modules yet. Add the first Module to begin arranging this Draft.</p>
-      <div v-else class="authoring-structure__modules">
-        <AuthoringStructureModule
-          v-for="(module, moduleIndex) in state.structure.modules"
-          :key="module.id"
-          :draft-id="draft.id"
-          :module="module"
-          :module-index="moduleIndex"
-          :module-count="state.structure.modules.length"
-          :previous-module="state.structure.modules[moduleIndex - 1]"
-          :next-module="state.structure.modules[moduleIndex + 1]"
-          :busy="busy || conflict"
-          @update-module="updateModule"
-          @move-module="moveModule(moduleIndex, $event)"
-          @delete-module="deleteModule"
-          @create-lesson="createLesson"
-          @move-lesson="moveLesson"
-          @delete-lesson="deleteLesson"
-        />
       </div>
     </template>
+    <dialog ref="moduleDialog" class="authoring-structure-dialog" @close="restoreFocus"><form @submit.prevent="saveModule"><h3>{{ moduleEdit ? 'Edit module' : 'Add module' }}</h3><p>{{ moduleEdit ? 'Update this module’s course information.' : 'Add a module to the end of this course outline.' }}</p><BtgFormField label="Module title" required :error="moduleErrors.title" v-slot="p"><BtgTextInput :id="p.controlId" v-model="moduleForm.title" :aria-describedby="p.describedBy" :invalid="p.invalid" required /></BtgFormField><BtgFormField label="Module description" v-slot="p"><textarea :id="p.controlId" v-model="moduleForm.description" :aria-describedby="p.describedBy" /></BtgFormField><div class="authoring-structure-dialog__actions"><BtgButton variant="secondary" @click.prevent="close(moduleDialog)">Cancel</BtgButton><BtgButton type="submit" :disabled="busy">{{ moduleEdit ? 'Save module' : 'Create module' }}</BtgButton></div></form></dialog>
+    <dialog ref="lessonDialog" class="authoring-structure-dialog" @close="restoreFocus"><form @submit.prevent="saveLesson"><h3>{{ lessonEdit ? 'Edit lesson' : 'Add lesson' }}</h3><p>{{ lessonEdit ? 'Update this lesson’s learning information.' : 'Add a lesson to this module.' }}</p><BtgFormField label="Lesson title" required :error="lessonErrors.title" v-slot="p"><BtgTextInput :id="p.controlId" v-model="lessonForm.title" placeholder="Enter lesson title" :aria-describedby="p.describedBy" :invalid="p.invalid" required /></BtgFormField><BtgFormField label="Initial lesson description" required description="Briefly describe what learners will cover in this lesson." :error="lessonErrors.description" v-slot="p"><textarea :id="p.controlId" v-model="lessonForm.description" :aria-describedby="p.describedBy" :aria-invalid="p.invalid || undefined" required /></BtgFormField><RepeatableObjectivesEditor v-model="lessonForm.objectives" label="Initial learning objectives" description="Add the learning outcomes learners should achieve in this lesson." :error="lessonErrors.objectives" :disabled="busy" /><div class="authoring-structure-dialog__actions"><BtgButton variant="secondary" @click.prevent="close(lessonDialog)">Cancel</BtgButton><BtgButton type="submit" :disabled="busy">{{ lessonEdit ? 'Save lesson' : 'Create lesson' }}</BtgButton></div></form></dialog>
+    <dialog ref="moveDialog" class="authoring-structure-dialog" @close="restoreFocus"><form @submit.prevent="saveMove"><h3>Move lesson</h3><p>Choose where <strong>{{ moving?.title }}</strong> appears in the outline.</p><BtgFormField label="Module" v-slot="p"><select :id="p.controlId" v-model="targetModule" :aria-describedby="p.describedBy"><option v-for="module in modules" :key="module.id" :value="module.id">{{ module.title }}</option></select></BtgFormField><BtgFormField label="Position" v-slot="p"><select :id="p.controlId" v-model.number="targetPosition" :aria-describedby="p.describedBy"><option v-for="(label, index) in positions" :key="index" :value="index">{{ label }}</option></select></BtgFormField><div class="authoring-structure-dialog__actions"><BtgButton variant="secondary" @click.prevent="close(moveDialog)">Cancel</BtgButton><BtgButton type="submit" :disabled="busy">Move lesson</BtgButton></div></form></dialog>
   </section>
 </template>
-
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
-import { preserveFocusAfterRemoval } from '../authoring/focus'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
-import {
-  createAuthoringLesson,
-  createAuthoringModule,
-  deleteAuthoringLesson,
-  deleteAuthoringModule,
-  getAuthoringDraft,
-  getAuthoringStructure,
-  reorderAuthoringLessons,
-  reorderAuthoringModules,
-  updateAuthoringModule,
-  type AuthoringLessonCreate,
-  type AuthoringLessonSummary,
-  type AuthoringModuleSummary,
-  type AuthoringStructure,
-} from '../authoring/authoring'
+import { authoringDraftPath, createAuthoringLesson, createAuthoringModule, deleteAuthoringLesson, deleteAuthoringModule, getAuthoringDraft, getAuthoringLesson, getAuthoringStructure, reorderAuthoringLessons, reorderAuthoringModules, updateAuthoringLesson, updateAuthoringModule, type AuthoringLessonSummary, type AuthoringModuleSummary, type AuthoringStructure } from '../authoring/authoring'
 import { useAuthoringDraftContext } from '../authoring/draftContext'
-import AuthoringStructureModule from '../components/AuthoringStructureModule.vue'
-import BtgButton from '../components/BtgButton.vue'
-import BtgFormField from '../components/BtgFormField.vue'
-import BtgTextInput from '../components/BtgTextInput.vue'
-
-type State = { kind: 'loading' } | { kind: 'ready'; structure: AuthoringStructure } | { kind: 'unavailable' }
-
-const { draft, replaceDraft, markDraftUnavailable } = useAuthoringDraftContext()
-const state = ref<State>({ kind: 'loading' })
-const busy = ref(false)
-const conflict = ref(false)
-const error = ref<string>()
-const message = ref<string>()
-const moduleCreate = reactive({ stableKey: '', title: '', description: '' })
-const moduleCreateErrors = reactive<Record<string, string | undefined>>({})
-let requestVersion = 0
-let active = true
-
-const captureScope = useAuthoringAsyncScope(() => draft.value.id)
-
-watch(() => draft.value.id, () => { void loadStructure() }, { immediate: true })
-onBeforeUnmount(() => { active = false })
-
-async function loadStructure(refresh = false) {
-  const isCurrent = captureScope()
-  const version = ++requestVersion
-  if (!refresh) state.value = { kind: 'loading' }
-  try {
-    const structure = await getAuthoringStructure(draft.value.id)
-    if (!isCurrent()) return
-    if (!active || version !== requestVersion) return
-    state.value = { kind: 'ready', structure }
-  } catch (cause) {
-    if (!isCurrent()) return
-    if (!active || version !== requestVersion) return
-    if (cause instanceof APIProblemError && cause.status === 404) { markDraftUnavailable(); return }
-    state.value = { kind: 'unavailable' }
-  }
-}
-
-async function reloadLatest() {
-  if (busy.value) return
-  const isCurrent = captureScope()
-  busy.value = true
-  error.value = undefined
-  try {
-    const [latestDraft, structure] = await Promise.all([getAuthoringDraft(draft.value.id), getAuthoringStructure(draft.value.id)])
-    if (!isCurrent()) return
-    replaceDraft(latestDraft)
-    state.value = { kind: 'ready', structure }
-    conflict.value = false
-    message.value = 'The latest Draft structure has been loaded.'
-  } catch (cause) {
-    if (!isCurrent()) return
-    handleError(cause, 'We couldn’t reload this Draft right now. Please try again.')
-  } finally {
-    if (isCurrent()) busy.value = false
-  }
-}
-
-function validateStableKey(value: string): boolean {
-  return value.length >= 3 && value.length <= 96 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
-}
-
-async function createModule() {
-  for (const key of Object.keys(moduleCreateErrors)) delete moduleCreateErrors[key]
-  if (!validateStableKey(moduleCreate.stableKey)) moduleCreateErrors.stableKey = 'Use lowercase letters, numbers, and hyphens.'
-  if (!moduleCreate.title.trim()) moduleCreateErrors.title = 'Enter a module title.'
-  if (Object.keys(moduleCreateErrors).length || state.value.kind !== 'ready') return
-  await mutate(async () => {
-    const isCurrent = captureScope()
-    const result = await createAuthoringModule(draft.value.id, {
-      expectedDraftRevision: draft.value.revision,
-      stableKey: moduleCreate.stableKey,
-      title: moduleCreate.title,
-      ...(moduleCreate.description ? { description: moduleCreate.description } : {}),
-      position: state.value.kind === 'ready' ? state.value.structure.modules.length : 0,
-    })
-    if (!isCurrent()) return
-    moduleCreate.stableKey = ''
-    moduleCreate.title = ''
-    moduleCreate.description = ''
-    await commit(result.draftRevision, 'Module created.')
-  })
-}
-
-async function updateModule(module: AuthoringModuleSummary, patch: { title?: string; description?: string }) {
-  await mutate(async () => {
-    const isCurrent = captureScope()
-    const result = await updateAuthoringModule(draft.value.id, module.id, { expectedModuleRevision: module.revision, ...patch })
-    if (!isCurrent()) return
-    await commit(result.draftRevision, 'Module updated.')
-  })
-}
-
-async function moveModule(index: number, delta: -1 | 1) {
-  if (state.value.kind !== 'ready') return
-  const moduleIDs = state.value.structure.modules.map((module) => module.id)
-  const target = index + delta
-  if (target < 0 || target >= moduleIDs.length) return
-  ;[moduleIDs[index], moduleIDs[target]] = [moduleIDs[target], moduleIDs[index]]
-  await mutate(async () => {
-    const isCurrent = captureScope()
-    const result = await reorderAuthoringModules(draft.value.id, draft.value.revision, moduleIDs)
-    if (!isCurrent()) return
-    await commit(result.draftRevision, 'Module order updated.')
-  })
-}
-
-async function deleteModule(module: AuthoringModuleSummary) {
-  if (module.lessons.length) { error.value = 'Move or delete this Module’s Lessons before deleting the Module.'; return }
-  await mutate(async () => {
-    const isCurrent = captureScope()
-    const result = await deleteAuthoringModule(draft.value.id, module.id, draft.value.revision, module.revision)
-    if (!isCurrent()) return
-    await commit(result.draftRevision, 'Empty Module deleted.')
-  })
-}
-
-async function createLesson(moduleID: string, input: AuthoringLessonCreate) {
-  await mutate(async () => {
-    const isCurrent = captureScope()
-    const result = await createAuthoringLesson(draft.value.id, moduleID, { ...input, expectedDraftRevision: draft.value.revision })
-    if (!isCurrent()) return
-    await commit(result.draftRevision, 'Lesson created.')
-  })
-}
-
-async function moveLesson(input: { lessonID: string; moduleID: string; position: number }) {
-  if (state.value.kind !== 'ready') return
-  const modules = state.value.structure.modules.map((module) => ({ moduleId: module.id, lessonIds: [...module.lessons.map((lesson) => lesson.id)] }))
-  const source = modules.find((module) => module.lessonIds.includes(input.lessonID))
-  const target = modules.find((module) => module.moduleId === input.moduleID)
-  if (!source || !target) return
-  source.lessonIds.splice(source.lessonIds.indexOf(input.lessonID), 1)
-  const position = Math.max(0, Math.min(input.position, target.lessonIds.length))
-  target.lessonIds.splice(position, 0, input.lessonID)
-  await mutate(async () => {
-    const isCurrent = captureScope()
-    const result = await reorderAuthoringLessons(draft.value.id, draft.value.revision, modules)
-    if (!isCurrent()) return
-    await commit(result.draftRevision, 'Lesson order updated.')
-  })
-}
-
-async function deleteLesson(lesson: AuthoringLessonSummary) {
-  await mutate(async () => {
-    const isCurrent = captureScope()
-    const result = await deleteAuthoringLesson(draft.value.id, lesson.id, draft.value.revision, lesson.revision)
-    if (!isCurrent()) return
-    await commit(result.draftRevision, 'Lesson deleted.')
-  })
-}
-
-async function mutate(operation: () => Promise<void>) {
-  const isCurrent = captureScope()
-  if (busy.value || conflict.value) return
-  const restoreFocus = preserveFocusAfterRemoval(() => document.getElementById('authoring-structure-title'))
-  busy.value = true
-  error.value = undefined
-  message.value = undefined
-  try {
-    await operation()
-    if (!isCurrent()) return
-    void restoreFocus()
-  } catch (cause) {
-    if (!isCurrent()) return
-    handleError(cause, 'We couldn’t save this structure right now. Please try again.')
-  } finally {
-    if (isCurrent()) busy.value = false
-  }
-}
-
-async function commit(revision: number, successMessage: string) {
-  const isCurrent = captureScope()
-  replaceDraft({ ...draft.value, revision })
-  await loadStructure(true)
-    if (!isCurrent()) return
-  message.value = successMessage
-}
-
-function handleError(cause: unknown, fallback: string) {
-  if (cause instanceof APIProblemError && cause.status === 404) { markDraftUnavailable(); return }
-  if (cause instanceof APIProblemError && cause.status === 409) { conflict.value = true; return }
-  error.value = cause instanceof APIProblemError && cause.status === 400
-    ? 'We couldn’t save these changes. Check the fields and try again.'
-    : fallback
-}
+import BtgButton from '../components/BtgButton.vue'; import BtgFormField from '../components/BtgFormField.vue'; import BtgTextInput from '../components/BtgTextInput.vue'; import RepeatableObjectivesEditor from '../components/RepeatableObjectivesEditor.vue'; import Detail from '../components/StructureDetail.vue'
+type State = { kind: 'loading' } | { kind: 'ready'; structure: AuthoringStructure } | { kind: 'unavailable' }; type Selected = { kind: 'module'; id: string } | { kind: 'lesson'; id: string }
+const route = useRoute(); const router = useRouter(); const { draft, replaceDraft, markDraftUnavailable } = useAuthoringDraftContext(); const state = ref<State>({ kind: 'loading' }); const busy = ref(false); const conflict = ref(false); const message = ref<string>(); const error = ref<string>(); const query = ref(typeof route.query.search === 'string' ? route.query.search : ''); const expanded = ref(new Set<string>()); const selection = ref<Selected>(); const wide = ref(false); const mobile = ref(false); const workspace = ref<HTMLElement>(); const moduleDialog = ref<HTMLDialogElement>(); const lessonDialog = ref<HTMLDialogElement>(); const moveDialog = ref<HTMLDialogElement>(); const lastFocus = ref<HTMLElement>(); const moduleEdit = ref<AuthoringModuleSummary>(); const lessonEdit = ref<AuthoringLessonSummary>(); const lessonModule = ref<AuthoringModuleSummary>(); const moving = ref<AuthoringLessonSummary>(); const targetModule = ref(''); const targetPosition = ref(0); const moduleForm = reactive({ title: '', description: '', objectives: [''] }); const lessonForm = reactive({ title: '', description: '', objectives: [''] }); const moduleErrors = reactive<Record<string,string|undefined>>({}); const lessonErrors = reactive<Record<string,string|undefined>>({}); const content = ref<{ kind: 'loading'; lessonID: string } | { kind: 'unavailable'; lessonID: string } | { kind: 'ready'; lessonID: string; blocks: string[] }>({ kind: 'ready', lessonID: '', blocks: [] }); let alive = true; let version = 0; let contentVersion = 0; let workspaceObserver: ResizeObserver | undefined; const scope = useAuthoringAsyncScope(() => draft.value.id)
+const modules = computed(() => state.value.kind === 'ready' ? state.value.structure.modules : []); const filtered = computed(() => { const q = query.value.trim().toLowerCase(); return !q ? modules.value : modules.value.filter(m => `${m.title} ${m.description}`.toLowerCase().includes(q) || m.lessons.some(l => `${l.title} ${l.description}`.toLowerCase().includes(q))) }); const current = computed(() => { for (const module of modules.value) { if (selection.value?.kind === 'module' && selection.value.id === module.id) return { kind: 'module' as const, module }; const lesson = module.lessons.find(l => l.id === selection.value?.id); if (lesson) return { kind: 'lesson' as const, module, lesson } } return undefined }); const contentSummary = computed(() => current.value?.kind === 'lesson' && content.value.lessonID === current.value.lesson.id ? content.value.kind === 'ready' ? { kind: 'ready' as const, blocks: content.value.blocks } : { kind: content.value.kind } : { kind: 'ready' as const, blocks: [] }); const positions = computed(() => { const m = modules.value.find(x => x.id === targetModule.value); const rest = m?.lessons.filter(x => x.id !== moving.value?.id) ?? []; return ['At the beginning', ...rest.map(x => `After ${x.title}`)] })
+function updateWorkspaceMode(width: number) { wide.value = width >= 60 * 16; mobile.value = width <= 42 * 16 }
+function observeWorkspace(element?: HTMLElement) { workspaceObserver?.disconnect(); if (!element || !window.ResizeObserver) return; updateWorkspaceMode(element.clientWidth); workspaceObserver = new ResizeObserver(([entry]) => updateWorkspaceMode(entry?.contentRect.width ?? element.clientWidth)); workspaceObserver.observe(element) }
+watch(() => draft.value.id, () => { void load() }, { immediate: true }); watch(query, () => { if (query.value) expanded.value = new Set(filtered.value.map(m => m.id)) }); watch(targetModule, () => { targetPosition.value = Math.min(targetPosition.value, positions.value.length - 1) }); watch(workspace, observeWorkspace, { flush: 'post' }); onBeforeUnmount(() => { alive = false; workspaceObserver?.disconnect() })
+function number(n:number) { return String(n + 1).padStart(2,'0') }; function lessons(m: AuthoringModuleSummary) { const q=query.value.trim().toLowerCase(); return q ? m.lessons.filter(l => `${l.title} ${l.description}`.toLowerCase().includes(q)) : m.lessons }; function toggle(id:string) { const x=new Set(expanded.value); x.has(id)?x.delete(id):x.add(id); expanded.value=x }; function expandAll() { expanded.value=new Set(modules.value.map(m=>m.id)) }; function collapseAll(){ expanded.value=new Set() }; function clearSelection(){ contentVersion += 1; selection.value=undefined }; function selectModule(m:AuthoringModuleSummary){ contentVersion += 1; selection.value={kind:'module',id:m.id}; expanded.value=new Set(expanded.value).add(m.id) }; function selectLesson(m:AuthoringModuleSummary,l:AuthoringLessonSummary){ selection.value={kind:'lesson',id:l.id}; expanded.value=new Set(expanded.value).add(m.id); void loadContentSummary(l) }
+async function loadContentSummary(lesson?: AuthoringLessonSummary) { const selected = lesson ?? (current.value?.kind === 'lesson' ? current.value.lesson : undefined); if (!selected) return; const currentScope = scope(); const request = ++contentVersion; content.value = { kind: 'loading', lessonID: selected.id }; try { const detail = await getAuthoringLesson(draft.value.id, selected.id); if (!currentScope() || !alive || request !== contentVersion || selection.value?.kind !== 'lesson' || selection.value.id !== selected.id) return; content.value = { kind: 'ready', lessonID: selected.id, blocks: detail.content.blocks.map((block) => block.type) } } catch { if (!currentScope() || !alive || request !== contentVersion || selection.value?.kind !== 'lesson' || selection.value.id !== selected.id) return; content.value = { kind: 'unavailable', lessonID: selected.id } } }
+function openLessonDetails(_module: AuthoringModuleSummary, lesson: AuthoringLessonSummary) { void openLessonEditor(lesson, 'authoring-draft-lesson') }; function openLessonContent(_module: AuthoringModuleSummary, lesson: AuthoringLessonSummary) { void openLessonEditor(lesson, 'authoring-draft-lesson-content') }; async function openLessonEditor(lesson: AuthoringLessonSummary, name: 'authoring-draft-lesson' | 'authoring-draft-lesson-content') { await router.push({ name, params: { draftId: draft.value.id, lessonId: lesson.id }, query: { from: 'structure', lesson: lesson.id, search: query.value || undefined } }) }
+function dialog(d?:HTMLDialogElement,e?:Event){ lastFocus.value=e?.currentTarget instanceof HTMLElement?e.currentTarget:document.activeElement instanceof HTMLElement?document.activeElement:undefined; d?.showModal() }; function close(r:{value?:HTMLDialogElement}|HTMLDialogElement|undefined){ const element = r && 'value' in r ? r.value : r as HTMLDialogElement | undefined; element?.close() }; function restoreFocus(){ nextTick(()=>lastFocus.value?.focus()) }; function clear(x:Record<string,string|undefined>){ Object.keys(x).forEach(k=>delete x[k]) }; function openModule(m?:AuthoringModuleSummary,e?:Event){ moduleEdit.value=m; moduleForm.title=m?.title??''; moduleForm.description=m?.description??''; clear(moduleErrors); dialog(moduleDialog.value,e) }; function openLesson(m?:AuthoringModuleSummary,l?:AuthoringLessonSummary,e?:Event){ lessonModule.value=m ?? current.value?.module; lessonEdit.value=l; lessonForm.title=l?.title??''; lessonForm.description=l?.description??''; lessonForm.objectives=l?[...l.objectives]:['']; clear(lessonErrors); dialog(lessonDialog.value,e) }; function openMove(l?:AuthoringLessonSummary,e?:Event){ const lesson=l??current.value?.lesson; if(!lesson)return; moving.value=lesson; const module=modules.value.find(m=>m.lessons.some(x=>x.id===lesson.id)); targetModule.value=module?.id??''; targetPosition.value=module?.lessons.findIndex(x=>x.id===lesson.id)??0; dialog(moveDialog.value,e) }
+async function load(refresh=false){ const currentScope=scope(); const request=++version; if(!refresh)state.value={kind:'loading'}; try { const structure=await getAuthoringStructure(draft.value.id); if(!currentScope()||!alive||request!==version)return; state.value={kind:'ready',structure}; const returnedLessonID=typeof route.query.lesson==='string'?route.query.lesson:undefined; const restored=returnedLessonID?modules.value.find(m=>m.lessons.some(l=>l.id===returnedLessonID)):undefined; if(restored){ const lesson=restored.lessons.find(l=>l.id===returnedLessonID)!; selectLesson(restored,lesson) } else { const parent=modules.value.find(m=>m.lessons.some(l=>l.id===selection.value?.id)); if(parent)expanded.value=new Set(expanded.value).add(parent.id) } } catch(cause){ if(!currentScope()||!alive||request!==version)return; if(cause instanceof APIProblemError&&cause.status===404){markDraftUnavailable();return}; state.value={kind:'unavailable'} } }
+async function reload(){ busy.value=true; try{const [d,s]=await Promise.all([getAuthoringDraft(draft.value.id),getAuthoringStructure(draft.value.id)]);replaceDraft(d);state.value={kind:'ready',structure:s};conflict.value=false;message.value='The latest Draft structure has been loaded.'}catch(cause){fail(cause)}finally{busy.value=false} }; async function saveModule(){clear(moduleErrors);if(!moduleForm.title.trim())moduleErrors.title='Enter a module title.';if(Object.keys(moduleErrors).length)return; await mutate(async()=>{const r=moduleEdit.value?await updateAuthoringModule(draft.value.id,moduleEdit.value.id,{expectedModuleRevision:moduleEdit.value.revision,title:moduleForm.title,description:moduleForm.description}):await createAuthoringModule(draft.value.id,{expectedDraftRevision:draft.value.revision,title:moduleForm.title,...(moduleForm.description?{description:moduleForm.description}:{})});await commit(r.draftRevision,moduleEdit.value?'Module updated.':'Module created.');close(moduleDialog)})}; async function saveLesson(){clear(lessonErrors);if(!lessonForm.title.trim())lessonErrors.title='Enter a lesson title.';if(!lessonForm.description.trim())lessonErrors.description='Enter an initial lesson description.';const objectives=lessonForm.objectives.map(x=>x.trim());if(!objectives.length||objectives.some(x=>!x))lessonErrors.objectives='Enter at least one learning objective.';if(Object.keys(lessonErrors).length||!lessonModule.value)return;await mutate(async()=>{const r=lessonEdit.value?await updateAuthoringLesson(draft.value.id,lessonEdit.value.id,{expectedLessonRevision:lessonEdit.value.revision,title:lessonForm.title,description:lessonForm.description,objectives}):await createAuthoringLesson(draft.value.id,lessonModule.value!.id,{expectedDraftRevision:draft.value.revision,title:lessonForm.title,description:lessonForm.description,objectives});await commit(r.draftRevision,lessonEdit.value?'Lesson updated.':'Lesson created.');close(lessonDialog)})}
+async function moveModule(delta:-1|1,m?:AuthoringModuleSummary){const module=m??current.value?.module;if(!module)return;const ids=modules.value.map(x=>x.id);const i=ids.indexOf(module.id);if(i+delta<0||i+delta>=ids.length)return;[ids[i],ids[i+delta]]=[ids[i+delta]!,ids[i]!];await mutate(async()=>{const r=await reorderAuthoringModules(draft.value.id,draft.value.revision,ids);await commit(r.draftRevision,'Module order updated.')})}; async function saveMove(){if(!moving.value)return;await moveLesson(moving.value,targetModule.value,targetPosition.value);close(moveDialog)}; async function moveLesson(l:AuthoringLessonSummary,moduleID:string,position:number){const order=modules.value.map(m=>({moduleId:m.id,lessonIds:m.lessons.map(x=>x.id)}));const from=order.find(m=>m.lessonIds.includes(l.id));const to=order.find(m=>m.moduleId===moduleID);if(!from||!to)return;from.lessonIds.splice(from.lessonIds.indexOf(l.id),1);to.lessonIds.splice(Math.max(0,Math.min(position,to.lessonIds.length)),0,l.id);await mutate(async()=>{const r=await reorderAuthoringLessons(draft.value.id,draft.value.revision,order);await commit(r.draftRevision,'Lesson moved.')})}; async function removeModule(m?:AuthoringModuleSummary){const module=m??current.value?.module;if(!module)return;if(module.lessons.length){error.value='Move or delete this Module’s Lessons before deleting the Module.';return}await mutate(async()=>{const r=await deleteAuthoringModule(draft.value.id,module.id,draft.value.revision,module.revision);selection.value=undefined;await commit(r.draftRevision,'Empty Module deleted.')})}; async function removeLesson(l?:AuthoringLessonSummary){const lesson=l??current.value?.lesson;if(!lesson)return;await mutate(async()=>{const r=await deleteAuthoringLesson(draft.value.id,lesson.id,draft.value.revision,lesson.revision);selection.value=undefined;await commit(r.draftRevision,'Lesson deleted.')})}; async function mutate(action:()=>Promise<void>){if(busy.value||conflict.value)return;busy.value=true;error.value=undefined;message.value=undefined;try{await action()}catch(cause){fail(cause)}finally{busy.value=false}}; async function commit(revision:number,text:string){replaceDraft({...draft.value,revision});await load(true);message.value=text}; function fail(cause:unknown){if(cause instanceof APIProblemError&&cause.status===404){markDraftUnavailable();return};if(cause instanceof APIProblemError&&cause.status===409){conflict.value=true;return};error.value=cause instanceof APIProblemError&&cause.status===400?'We couldn’t save these changes. Check the fields and try again.':'We couldn’t save this structure right now. Please try again.'}
 </script>

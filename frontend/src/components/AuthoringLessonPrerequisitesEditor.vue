@@ -20,19 +20,26 @@
       </div>
 
       <div v-if="availableCandidates.length" class="authoring-prerequisites__add">
-        <BtgFormField label="Available Lessons" description="Choose a Lesson to recommend before this one." v-slot="{ controlId, describedBy }">
-          <select :id="controlId" v-model="selectedKey" :disabled="saving || reloading" :aria-describedby="describedBy">
-            <option value="">Choose a Lesson</option>
-            <option v-for="candidate in availableCandidates" :key="candidate.stable_key" :value="candidate.stable_key">{{ candidate.title }} ({{ candidate.stable_key }})</option>
-          </select>
-        </BtgFormField>
-        <BtgButton variant="secondary" :disabled="saving || reloading || !selectedKey" @click="addPrerequisite">Add recommended prerequisite</BtgButton>
+        <label class="btg-form-field">
+          <span class="btg-form-field__label">Search Lessons</span>
+          <span class="btg-form-field__description">Find a Lesson to recommend before this one.</span>
+          <input v-model="searchQuery" type="search" placeholder="Search Lessons by title or keyword…" :disabled="saving || reloading" />
+        </label>
+        <div v-if="filteredGroups.length" class="authoring-prerequisites__candidates" aria-label="Available Lessons">
+          <section v-for="group in filteredGroups" :key="group.moduleId" class="authoring-prerequisites__candidate-group">
+            <h4>{{ group.moduleTitle }}</h4>
+            <ul>
+              <li v-for="candidate in group.lessons" :key="candidate.stable_key"><BtgButton variant="secondary" :disabled="saving || reloading" @click="addPrerequisite(candidate.stable_key)">Add {{ candidate.title }}</BtgButton></li>
+            </ul>
+          </section>
+        </div>
+        <p v-else class="authoring-prerequisites__empty">No matching Lessons found.</p>
       </div>
       <p v-else class="authoring-prerequisites__empty">No other Lessons are available to recommend.</p>
 
       <ol v-if="selectedKeys.length" class="authoring-prerequisites__list" aria-label="Ordered recommended prerequisites">
         <li v-for="(key, index) in selectedKeys" :key="key">
-          <div><strong>{{ candidateFor(key)?.title || key }}</strong> <code>{{ key }}</code></div>
+          <div><strong>{{ candidateFor(key)?.title || 'Lesson unavailable' }}</strong></div>
           <div class="authoring-prerequisites__actions">
             <BtgButton variant="secondary" :disabled="saving || reloading || index === 0" :aria-label="`Move ${candidateFor(key)?.title || key} up`" @click="move(index, -1)">Move up</BtgButton>
             <BtgButton variant="secondary" :disabled="saving || reloading || index === selectedKeys.length - 1" :aria-label="`Move ${candidateFor(key)?.title || key} down`" @click="move(index, 1)">Move down</BtgButton>
@@ -55,7 +62,6 @@ import { preserveFocusAfterRemoval } from '../authoring/focus'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { getAuthoringLesson, getAuthoringStructure, InvalidAuthoringDraftIDError, replaceAuthoringLessonPrerequisites, type AuthoringLessonDetail, type AuthoringLessonSummary } from '../authoring/authoring'
 import BtgButton from './BtgButton.vue'
-import BtgFormField from './BtgFormField.vue'
 
 const props = defineProps<{ draftId: string; lesson: AuthoringLessonDetail }>()
 const emit = defineEmits<{
@@ -66,9 +72,10 @@ const emit = defineEmits<{
 
 const state = ref<'loading' | 'ready' | 'unavailable'>('loading')
 const candidates = ref<AuthoringLessonSummary[]>([])
+const candidateGroups = ref<Array<{ moduleId: string; moduleTitle: string; lessons: AuthoringLessonSummary[] }>>([])
 const originalKeys = ref<string[]>([])
 const selectedKeys = ref<string[]>([])
-const selectedKey = ref('')
+const searchQuery = ref('')
 const saving = ref(false)
 const reloading = ref(false)
 const conflict = ref(false)
@@ -77,6 +84,13 @@ const saveMessage = ref<string>()
 const dirty = computed(() => JSON.stringify(selectedKeys.value) !== JSON.stringify(originalKeys.value))
 const candidateByKey = computed(() => new Map(candidates.value.map((candidate) => [candidate.stable_key, candidate])))
 const availableCandidates = computed(() => candidates.value.filter((candidate) => candidate.stable_key !== props.lesson.stable_key && !selectedKeys.value.includes(candidate.stable_key)))
+const filteredGroups = computed(() => {
+  const query = searchQuery.value.trim().toLocaleLowerCase()
+  return candidateGroups.value.map((group) => ({
+    ...group,
+    lessons: group.lessons.filter((candidate) => candidate.stable_key !== props.lesson.stable_key && !selectedKeys.value.includes(candidate.stable_key) && (!query || `${candidate.title} ${candidate.description}`.toLocaleLowerCase().includes(query))),
+  })).filter((group) => group.lessons.length)
+})
 
 let requestVersion = 0
 let active = true
@@ -86,7 +100,7 @@ const captureScope = useAuthoringAsyncScope(() => `${props.draftId}/${props.less
 watch(() => props.lesson.id, () => {
   originalKeys.value = [...props.lesson.recommended_prerequisite_keys]
   selectedKeys.value = [...props.lesson.recommended_prerequisite_keys]
-  selectedKey.value = ''
+  searchQuery.value = ''
   conflict.value = false
   void loadCandidates()
 }, { immediate: true })
@@ -105,15 +119,14 @@ watch(() => JSON.stringify(props.lesson.recommended_prerequisite_keys), () => {
 
 
 function candidateFor(key: string) { return candidateByKey.value.get(key) }
-function addPrerequisite() {
+function addPrerequisite(key: string) {
   if (saving.value || reloading.value) return
-  if (!selectedKey.value || selectedKey.value === props.lesson.stable_key || selectedKeys.value.includes(selectedKey.value) || !candidateFor(selectedKey.value)) return
-  selectedKeys.value.push(selectedKey.value)
-  selectedKey.value = ''
+  if (key === props.lesson.stable_key || selectedKeys.value.includes(key) || !candidateFor(key)) return
+  selectedKeys.value.push(key)
 }
 function removePrerequisite(index: number) {
   if (saving.value || reloading.value) return
-  const restoreFocus = preserveFocusAfterRemoval(() => document.querySelector<HTMLElement>('.authoring-prerequisites__add select, .authoring-prerequisites__save button'))
+  const restoreFocus = preserveFocusAfterRemoval(() => document.querySelector<HTMLElement>('.authoring-prerequisites__add input, .authoring-prerequisites__save button'))
   selectedKeys.value.splice(index, 1)
   void restoreFocus()
 }
@@ -136,7 +149,8 @@ async function loadCandidates() {
     const structure = await getAuthoringStructure(props.draftId)
     if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
-    candidates.value = structure.modules.flatMap((module) => module.lessons)
+    candidateGroups.value = structure.modules.map((module) => ({ moduleId: module.id, moduleTitle: module.title, lessons: module.lessons }))
+    candidates.value = candidateGroups.value.flatMap((group) => group.lessons)
     state.value = 'ready'
   } catch (error) {
     if (!isCurrent()) return
