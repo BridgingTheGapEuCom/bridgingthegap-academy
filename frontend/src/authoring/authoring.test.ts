@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringAssessment, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringAssessment, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringAssessmentResponseError, InvalidAuthoringAssetResponseError, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringPublicationResponseError, InvalidAuthoringReviewResponseError, listAuthoringDraftAssessments, listAuthoringDraftAssets, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringAssessment, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson, uploadAuthoringAsset } from './authoring'
+import { addAuthoringMember, approveAuthoringReview, authoringDraftReviewPath, changeAuthoringMemberRole, createAuthoringAssessment, createAuthoringDraft, createAuthoringModule, getAuthoringActiveDraftReview, getAuthoringAssessment, getAuthoringDraft, getAuthoringDraftMembers, getAuthoringDraftReview, getAuthoringDraftReviewHistory, getAuthoringLatestDraftReview, getAuthoringLesson, getAuthoringStructure, isAuthoringDraftID, InvalidAuthoringAssessmentResponseError, InvalidAuthoringAssetResponseError, InvalidAuthoringDraftIDError, InvalidAuthoringDraftResponseError, InvalidAuthoringPublicationResponseError, InvalidAuthoringReviewResponseError, launchDraftPreviewWidgetRuntime, listAuthoringDraftAssessments, listAuthoringDraftAssets, listAuthoringDrafts, publishAuthoringDraftReview, reorderAuthoringLessons, replaceAuthoringAssessment, replaceAuthoringLessonContent, replaceAuthoringLessonPrerequisites, requestAuthoringReviewChanges, revokeAuthoringMember, submitAuthoringDraftReview, updateAuthoringDraft, updateAuthoringLesson, uploadAuthoringAsset } from './authoring'
 
 describe('Authoring API service', () => {
   it('uses the authenticated server-authoritative Draft discovery boundary', async () => {
@@ -39,6 +39,18 @@ describe('Authoring API service', () => {
     expect(request).toHaveBeenCalledWith(`/api/authoring/drafts/${draftID}/lessons/${lessonID}/content`, expect.objectContaining({ method: 'PUT', body: JSON.stringify(body) }))
     await expect(replaceAuthoringLessonContent(draftID, 'invalid', body, { request })).rejects.toBeInstanceOf(InvalidAuthoringDraftIDError)
     expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('launches Draft Preview widgets with placement identity only through the authenticated request boundary', async () => {
+    const draftID = '11111111-1111-4111-8111-111111111111'
+    const lessonID = '22222222-2222-4222-8222-222222222222'
+    const request = vi.fn().mockResolvedValue({})
+    await launchDraftPreviewWidgetRuntime(draftID, lessonID, 'preview-widget', { request })
+    expect(request).toHaveBeenCalledWith(
+      `/api/authoring/drafts/${draftID}/lessons/${lessonID}/blocks/preview-widget/widget-runtime`,
+      { method: 'POST', cache: 'no-store' },
+    )
+    expect(request.mock.calls[0]![1]).not.toHaveProperty('body')
   })
 
   it('uploads exactly one file to the scoped Asset boundary and validates the authoritative response', async () => {

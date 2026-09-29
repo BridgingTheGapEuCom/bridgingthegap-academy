@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { RenderableBlock } from '../lesson/content'
-import { publishedAssetURL, type PublishedAssetDeliveryContext } from '../lesson/assets'
+import { lessonAssetURL, type AssetRenderingContext } from '../lesson/assets'
 import LessonRichText from './LessonRichText.vue'
 import LessonRichTextInlines from './LessonRichTextInlines.vue'
 import LearnerKnowledgeCheck from './LearnerKnowledgeCheck.vue'
@@ -9,7 +9,7 @@ import CourseWidgetBlock from './CourseWidgetBlock.vue'
 import type { PublishedAssessmentLearnerView } from '../courses/courses'
 import type { LearnerAttemptSession } from '../courses/attempts'
 
-const props = defineProps<{ block: RenderableBlock; publishedAssetContext?: PublishedAssetDeliveryContext; publishedAssessment?: PublishedAssessmentLearnerView; attemptSession?: LearnerAttemptSession; courseId?: string; courseVersion?: string; lessonKey?: string }>()
+const props = defineProps<{ block: RenderableBlock; assetContext?: AssetRenderingContext; draftPreviewWidgetContext?: { draftID: string; lessonID: string }; publishedAssessment?: PublishedAssessmentLearnerView; attemptSession?: LearnerAttemptSession; courseId?: string; courseVersion?: string; lessonKey?: string }>()
 
 const headingTag = computed(() => props.block.type === 'HEADING' ? `h${props.block.payload.level}` : 'h2')
 const calloutLabel = computed(() => props.block.type === 'CALLOUT' ? ({ INFO: 'Information', NOTE: 'Note', WARNING: 'Warning', TIP: 'Tip' }[props.block.payload.kind]) : '')
@@ -18,8 +18,8 @@ const mediaFailed = ref(false)
 
 watch(() => props.block, () => { mediaFailed.value = false }, { deep: true })
 
-function assetURL(asset: { assetKey: string }, download = false): string | undefined {
-  return props.publishedAssetContext ? publishedAssetURL(props.publishedAssetContext, asset, download) : undefined
+function assetURL(asset: { assetKey: string } | undefined, download = false): string | undefined {
+  return props.assetContext && asset ? lessonAssetURL(props.assetContext, asset, download) : undefined
 }
 </script>
 
@@ -106,7 +106,7 @@ function assetURL(asset: { assetKey: string }, download = false): string | undef
     <p>Interactive knowledge checks will be available when assessments are enabled.</p>
   </div>
 
-  <CourseWidgetBlock v-else-if="block.type === 'PLUGIN_WIDGET'" :block="block" :course-id="courseId" :version="courseVersion" :lesson-key="lessonKey" />
+  <CourseWidgetBlock v-else-if="block.type === 'PLUGIN_WIDGET'" :block="block" :course-id="courseId" :version="courseVersion" :lesson-key="lessonKey" :draft-id="draftPreviewWidgetContext?.draftID" :draft-lesson-id="draftPreviewWidgetContext?.lessonID" />
 
   <hr v-else-if="block.type === 'DIVIDER'" class="lesson-block lesson-block--divider" />
 

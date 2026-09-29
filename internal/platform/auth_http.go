@@ -19,6 +19,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/publication"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -87,6 +88,7 @@ type authHTTP struct {
 	authoringPublications       *authoring.PublicationApplicationService
 	authoringAssetUploads       *authoring.AssetUploadService
 	authoringAssets             *authoring.AssetListService
+	authoringAssetDelivery      *authoring.DraftAssetReadService
 	authoringAssessments        *authoring.AssessmentManagementService
 	learnerAttempts             *assessments.LearnerAttemptService
 	community                   *community.Service
@@ -101,10 +103,13 @@ type authHTTP struct {
 	achievementVersions         interface {
 		GetImmutableCourseVersion(context.Context, courses.CourseVersionID) (courses.ImmutableCourseVersion, error)
 	}
-	assetMaxBytes          int64
-	portabilityExporter    portabilityExport
-	portabilityImporter    portabilityImport
-	courseWidgetRuntime    courseWidgetLaunch
+	assetMaxBytes             int64
+	portabilityExporter       portabilityExport
+	portabilityImporter       portabilityImport
+	courseWidgetRuntime       courseWidgetLaunch
+	draftPreviewWidgetRuntime interface {
+		Prepare(context.Context, identity.AuthenticatedActor, authoring.DraftID, authoring.LessonID, string) (plugins.RuntimeLaunch, error)
+	}
 	dashboardWidgetRuntime dashboardWidgetLaunch
 	dashboardWidgets       *dashboardWidgetAPI
 	pluginManagement       *pluginManagementAPI

@@ -106,6 +106,9 @@ func TestDashboardRuntimeDerivesExactPlacementAndNarrowContext(t *testing.T) {
 	if _, err := runtime.CourseContext(launch.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
 		t.Fatalf("Dashboard token read Course context: %v", err)
 	}
+	if _, err := runtime.DraftPreviewContext(launch.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
+		t.Fatalf("Dashboard token read Draft Preview context: %v", err)
+	}
 
 	// Context is a launch-time snapshot, matching Course runtime semantics. A
 	// placement edit affects the next launch, while this runtime retains its

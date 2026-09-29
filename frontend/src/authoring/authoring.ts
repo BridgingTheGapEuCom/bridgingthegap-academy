@@ -329,6 +329,12 @@ export async function listAuthoringCourseWidgets(draftID: string, client: Pick<A
   return client.request<AuthoringCourseWidgetList>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/plugins/course-widgets`, { cache: 'no-store' })
 }
 
+export async function launchDraftPreviewWidgetRuntime(draftID: string, lessonID: string, placementKey: string, client: Pick<AuthService, 'request'> = useAuth()): Promise<unknown> {
+  assertAuthoringID(draftID); assertAuthoringID(lessonID)
+  if (placementKey.trim() === '') throw new InvalidAuthoringDraftIDError()
+  return client.request<unknown>(`/api/authoring/drafts/${encodeURIComponent(draftID)}/lessons/${encodeURIComponent(lessonID)}/blocks/${encodeURIComponent(placementKey)}/widget-runtime`, { method: 'POST', cache: 'no-store' })
+}
+
 // The server owns asset identity, ownership, MIME detection, integrity, and
 // lifecycle. This client deliberately sends one file part and no metadata.
 export async function uploadAuthoringAsset(draftID: string, file: File, client: Pick<AuthService, 'request'> = useAuth()): Promise<AuthoringAsset> {

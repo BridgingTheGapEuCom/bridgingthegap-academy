@@ -54,6 +54,29 @@ describe('WidgetRuntimeFrame', () => {
     await fireEvent(frame, new Event('load'))
   })
 
+  it('passes only the dedicated Draft Preview context to the generic runtime frame', () => {
+    const previewLaunch: WidgetRuntimeLaunch = {
+      ...launch,
+      dashboardContext: undefined,
+      capabilities: ['widget.runtime.bootstrap', 'widget.runtime.context.read', 'widget.course.preview.context.read'],
+      draftPreviewContext: { contextType: 'DRAFT_PREVIEW', placementKey: 'preview-widget', configuration: { message: 'Safe preview' } },
+    }
+    const { getByTitle } = render(WidgetRuntimeFrame, { props: { launch: previewLaunch } })
+    const frame = getByTitle('Timeline') as HTMLIFrameElement
+    const postMessage = vi.spyOn(frame.contentWindow!, 'postMessage')
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { protocol: 'btg-widget-runtime', version: 1, type: 'WIDGET_READY', runtimeInstanceId: previewLaunch.context.runtimeInstanceId, payload: {} },
+      origin: previewLaunch.runtimeOrigin,
+      source: frame.contentWindow,
+    }))
+    const payload = postMessage.mock.calls[0]![0] as { payload: Record<string, unknown> }
+    expect(() => structuredClone(payload)).not.toThrow()
+    expect(payload.payload.draftPreviewContext).toEqual(previewLaunch.draftPreviewContext)
+    expect(payload.payload.courseContext).toBeUndefined()
+    expect(payload.payload.dashboardContext).toBeUndefined()
+    expect(JSON.stringify(payload.payload)).not.toMatch(/userId|email|progress|answers|draftId|lessonId/i)
+  })
+
   it('does not create a privileged same-origin frame from a malformed descriptor', () => {
     const unsafe = { ...launch, runtimeOrigin: window.location.origin, runtimeUrl: `${window.location.origin}/plugin.js` }
     const { queryByTitle, getByRole } = render(WidgetRuntimeFrame, { props: { launch: unsafe } })

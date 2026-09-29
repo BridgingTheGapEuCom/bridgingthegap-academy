@@ -49,6 +49,10 @@ type dashboardRuntimeContextService interface {
 	DashboardContext(string) (plugins.DashboardWidgetRuntimeContext, error)
 }
 
+type draftPreviewRuntimeContextService interface {
+	DraftPreviewContext(string) (plugins.DraftPreviewWidgetRuntimeContext, error)
+}
+
 type pluginRuntimeHTTP struct{ service pluginRuntimeService }
 
 func (h *pluginRuntimeHTTP) requireRuntimeHost(next http.Handler) http.Handler {
@@ -182,6 +186,17 @@ func (h *pluginRuntimeHTTP) handleContext(w http.ResponseWriter, r *http.Request
 	}
 	if dashboard, ok := h.service.(dashboardRuntimeContextService); ok {
 		context, err := dashboard.DashboardContext(token)
+		if err == nil {
+			writeJSON(w, http.StatusOK, context)
+			return
+		}
+		if !errors.Is(err, plugins.ErrRuntimeCapabilityDenied) {
+			problem(w, r, http.StatusUnauthorized, "Unauthenticated")
+			return
+		}
+	}
+	if preview, ok := h.service.(draftPreviewRuntimeContextService); ok {
+		context, err := preview.DraftPreviewContext(token)
 		if err == nil {
 			writeJSON(w, http.StatusOK, context)
 			return

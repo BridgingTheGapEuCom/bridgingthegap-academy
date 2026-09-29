@@ -160,7 +160,7 @@ paths:
       description: Returns the minimal identity bound to a short-lived widget-runtime capability token. Academy session cookies are not accepted.
       security: [{ WidgetRuntimeBearer: [] }]
       responses:
-        '200': { description: Minimal widget runtime context, content: { application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/WidgetRuntimeContext' }, { $ref: '#/components/schemas/CourseWidgetRuntimeContext' }, { $ref: '#/components/schemas/DashboardWidgetRuntimeContext' }] } } } }
+        '200': { description: Minimal widget runtime context, content: { application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/WidgetRuntimeContext' }, { $ref: '#/components/schemas/CourseWidgetRuntimeContext' }, { $ref: '#/components/schemas/DashboardWidgetRuntimeContext' }, { $ref: '#/components/schemas/DraftPreviewWidgetRuntimeContext' }] } } } }
         '401': { $ref: '#/components/responses/Problem' }
   /api/plugin-runtime/token/refresh:
     post:
@@ -411,6 +411,41 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '413': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/assets/{assetId}/content:
+    get:
+      operationId: getAuthoringDraftAssetContent
+      description: Streams one AVAILABLE binary owned by the exact authorized Draft. The private response supports ETag revalidation and byte ranges for media preview; storage identity is never exposed.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/AuthoringDraftID' }
+        - { $ref: '#/components/parameters/AuthoringAssetID' }
+        - { name: download, in: query, required: false, schema: { type: integer, enum: [1] }, description: Requests a safe attachment disposition. }
+      responses:
+        '200':
+          description: Private Draft binary with authoritative Content-Type, safe Content-Disposition, ETag, and private revalidation headers.
+          content: { application/octet-stream: { schema: { type: string, format: binary } } }
+        '206':
+          description: Requested byte range with Content-Range and Accept-Ranges headers.
+          content: { application/octet-stream: { schema: { type: string, format: binary } } }
+        '304': { description: The private binary matches If-None-Match. }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '416': { description: The requested byte range cannot be satisfied. }
+        '503': { $ref: '#/components/responses/Problem' }
+    head:
+      operationId: headAuthoringDraftAssetContent
+      description: Returns the same authorized Draft representation headers as GET without a response body.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/AuthoringDraftID' }
+        - { $ref: '#/components/parameters/AuthoringAssetID' }
+        - { name: download, in: query, required: false, schema: { type: integer, enum: [1] } }
+      responses:
+        '200': { description: Private Draft binary representation headers. }
+        '304': { description: The private binary matches If-None-Match. }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/authoring/drafts/{draftId}/modules:
     post:
       operationId: createAuthoringModule
@@ -669,6 +704,24 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /api/authoring/drafts/{draftId}/lessons/{lessonId}/blocks/{blockKey}/widget-runtime:
+    post:
+      operationId: launchDraftPreviewWidgetRuntime
+      description: Derives a short-lived Preview-only Course-widget runtime from the exact saved Draft LessonContent placement. Plugin coordinates, capabilities, and configuration are server-derived.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/AuthoringDraftID' }
+        - { $ref: '#/components/parameters/AuthoringLessonID' }
+        - { name: blockKey, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/AuthoringOrigin' }
+        - { $ref: '#/components/parameters/AuthoringCSRFToken' }
+      responses:
+        '200': { description: Preview-only runtime launch descriptor, content: { application/json: { schema: { $ref: '#/components/schemas/WidgetRuntimeLaunch' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /api/courses/by-id/{courseId}/versions/{version}/lessons/{lessonKey}/blocks/{blockKey}/widget-runtime:
     post:
       operationId: launchCourseWidgetRuntime
@@ -1228,6 +1281,7 @@ components:
     AuthoringOrigin: { name: Origin, in: header, required: true, schema: { type: string }, description: Trusted application Origin required for browser mutations. }
     AuthoringCSRFToken: { name: X-CSRF-Token, in: header, required: true, schema: { type: string }, description: CSRF token bound to the authenticated session. }
     AuthoringDraftID: { name: draftId, in: path, required: true, schema: { type: string, format: uuid } }
+    AuthoringAssetID: { name: assetId, in: path, required: true, schema: { type: string, format: uuid }, description: Stable canonical Asset ID owned by the requested Draft. }
     AuthoringAssessmentID: { name: assessmentId, in: path, required: true, schema: { type: string, format: uuid } }
     LearnerAttemptID: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
     CertificateID: { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1380,9 +1434,10 @@ components:
         runtimeOrigin: { type: string, format: uri }
         token: { type: string, writeOnly: true }
         expiresAt: { type: string, format: date-time }
-        capabilities: { type: array, items: { type: string, enum: [widget.runtime.bootstrap, widget.runtime.context.read, widget.course.context.read, widget.dashboard.context.read] } }
+        capabilities: { type: array, items: { type: string, enum: [widget.runtime.bootstrap, widget.runtime.context.read, widget.course.context.read, widget.dashboard.context.read, widget.course.preview.context.read] } }
         courseContext: { $ref: '#/components/schemas/CourseWidgetRuntimeContext' }
         dashboardContext: { $ref: '#/components/schemas/DashboardWidgetRuntimeContext' }
+        draftPreviewContext: { $ref: '#/components/schemas/DraftPreviewWidgetRuntimeContext' }
     CourseWidgetRuntimeContext:
       type: object
       additionalProperties: false
@@ -1401,6 +1456,14 @@ components:
       required: [placementId, configuration]
       properties:
         placementId: { type: string, format: uuid }
+        configuration: { type: object, additionalProperties: true }
+    DraftPreviewWidgetRuntimeContext:
+      type: object
+      additionalProperties: false
+      required: [contextType, placementKey, configuration]
+      properties:
+        contextType: { type: string, enum: [DRAFT_PREVIEW] }
+        placementKey: { type: string }
         configuration: { type: object, additionalProperties: true }
     TranslatedCourse: { type: object, required: [course, translation, sourceLag], properties: { course: { $ref: '#/components/schemas/PublishedCourseVersionDetail' }, translation: { $ref: '#/components/schemas/TranslationReadMetadata' }, sourceLag: { $ref: '#/components/schemas/TranslationSourceLag' } } }
     TranslationReadMetadata: { type: object, required: [language, sourceLanguage, sourceVersion, publicationId, publishedAt], properties: { language: { type: string }, sourceLanguage: { type: string }, sourceVersion: { type: string }, publicationId: { type: string, format: uuid }, publishedAt: { type: string, format: date-time } } }

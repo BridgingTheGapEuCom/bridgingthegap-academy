@@ -31,6 +31,11 @@ export type WidgetRuntimeLaunch = {
     placementId: string
     configuration: Record<string, unknown>
   }
+  draftPreviewContext?: {
+    contextType: 'DRAFT_PREVIEW'
+    placementKey: string
+    configuration: Record<string, unknown>
+  }
 }
 
 export type WidgetRuntimeMessage = {

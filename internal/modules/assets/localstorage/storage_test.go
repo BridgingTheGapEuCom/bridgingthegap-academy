@@ -142,6 +142,29 @@ func TestPutNeverOverwritesAndCleansPartialFiles(t *testing.T) {
 	}
 }
 
+func TestOpenSeekableSupportsBoundedReadsWithoutExposingPaths(t *testing.T) {
+	storage, err := newStorage(t.TempDir(), func() (assets.StorageObjectID, error) { return fixedObjectID, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = storage.Close() })
+	if _, err := storage.Put(context.Background(), bytes.NewReader([]byte("0123456789"))); err != nil {
+		t.Fatal(err)
+	}
+	opened, err := storage.OpenSeekable(context.Background(), fixedObjectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = opened.Close() }()
+	if _, err := opened.Seek(4, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	buffer := make([]byte, 3)
+	if _, err := io.ReadFull(opened, buffer); err != nil || string(buffer) != "456" {
+		t.Fatalf("bounded seek read=%q err=%v", buffer, err)
+	}
+}
+
 type failingReader struct{ read bool }
 
 func (r *failingReader) Read(buffer []byte) (int, error) {

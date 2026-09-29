@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,15 @@ import (
 
 type courseRuntimeVersionFake struct {
 	value courses.ImmutableCourseVersion
+}
+
+type draftPreviewPlacementReaderFake struct {
+	placement courses.PluginWidgetBlockPayload
+	err       error
+}
+
+func (f *draftPreviewPlacementReaderFake) DraftPreviewPlacement(context.Context, string, string, string) (courses.PluginWidgetBlockPayload, error) {
+	return f.placement, f.err
 }
 
 func (f courseRuntimeVersionFake) GetPublishedImmutableCourseVersionByCourseAndVersion(_ context.Context, courseID courses.CourseID, version courses.Version) (courses.ImmutableCourseVersion, error) {
@@ -104,6 +114,9 @@ func TestCourseWidgetRuntimePinsPlacementContextAndGrant(t *testing.T) {
 	if _, err := runtime.DashboardContext(launch.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
 		t.Fatalf("course token read Dashboard context: %v", err)
 	}
+	if _, err := runtime.DraftPreviewContext(launch.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
+		t.Fatalf("course token read Draft Preview context: %v", err)
+	}
 	placementContext, err := runtime.CourseContext(launch.Token)
 	if err != nil || string(placementContext.Configuration) != `{"theme":"light"}` {
 		t.Fatalf("context = %#v, %v", placementContext, err)
@@ -111,6 +124,111 @@ func TestCourseWidgetRuntimePinsPlacementContextAndGrant(t *testing.T) {
 	generic, _ := runtime.PrepareWidgetRuntime(context.Background(), release.Release.PluginID, release.Release.Version, "timeline", TypeCourseWidget)
 	if _, err := runtime.CourseContext(generic.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
 		t.Fatalf("generic launch received Course context: %v", err)
+	}
+}
+
+func TestDraftPreviewRuntimeHasIsolatedMinimalContextAndCapability(t *testing.T) {
+	_, runtime, tokens, release := runtimeFixture(t, Policy{})
+	placement := courses.PluginWidgetBlockPayload{PluginID: string(release.Release.PluginID), PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: "timeline", WidgetType: string(TypeCourseWidget), Configuration: json.RawMessage(`{"label":"preview"}`)}
+	reader := &draftPreviewPlacementReaderFake{placement: placement}
+	runtime.SetDraftPreviewPlacementReader(reader)
+	launch, err := runtime.PrepareDraftPreviewWidgetRuntime(context.Background(), DraftPreviewWidgetRuntimePlacement{
+		DraftID: "11111111-1111-4111-8111-111111111111", LessonID: "22222222-2222-4222-8222-222222222222", Placement: placement,
+		Context: DraftPreviewWidgetRuntimeContext{ContextType: "DRAFT_PREVIEW", PlacementKey: "preview-widget", Configuration: placement.Configuration},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCapabilities := []string{CapabilityBootstrap, CapabilityContextRead, CapabilityDraftPreviewContextRead}
+	if !slices.Equal(launch.Capabilities, wantCapabilities) || launch.CourseContext != nil || launch.DashboardContext != nil || launch.DraftPreviewContext == nil {
+		t.Fatalf("Preview launch crossed context boundary: %#v", launch)
+	}
+	if _, err := tokens.Verify(launch.Token, RuntimeTokenExpectation{Capability: CapabilityDraftPreviewContextRead}); err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{CapabilityCourseContextRead, CapabilityDashboardContextRead, "plugins.manage", "authoring.content.edit", "progress.write", "assessment.attempt.submit"} {
+		if hasCapability(launch.Capabilities, forbidden) {
+			t.Fatalf("Preview received %q", forbidden)
+		}
+	}
+	if _, err := runtime.CourseContext(launch.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
+		t.Fatalf("Preview token read Course context: %v", err)
+	}
+	if _, err := runtime.DashboardContext(launch.Token); !errors.Is(err, ErrRuntimeCapabilityDenied) {
+		t.Fatalf("Preview token read Dashboard context: %v", err)
+	}
+	context, err := runtime.DraftPreviewContext(launch.Token)
+	if err != nil || context.ContextType != "DRAFT_PREVIEW" || context.PlacementKey != "preview-widget" || string(context.Configuration) != `{"label":"preview"}` {
+		t.Fatalf("Preview context=%#v err=%v", context, err)
+	}
+	encoded, _ := json.Marshal(context)
+	for _, forbidden := range []string{"user", "email", "draftId", "lessonId", "progress", "answer", "storage"} {
+		if strings.Contains(strings.ToLower(string(encoded)), strings.ToLower(forbidden)) {
+			t.Fatalf("Preview context leaked %q: %s", forbidden, encoded)
+		}
+	}
+}
+
+func TestDraftPreviewRefreshRechecksPlacementAndKeepsLaunchSnapshot(t *testing.T) {
+	ctx := context.Background()
+	registry, runtime, _, release := runtimeFixture(t, Policy{})
+	placement := courses.PluginWidgetBlockPayload{PluginID: string(release.Release.PluginID), PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: "timeline", WidgetType: string(TypeCourseWidget), Configuration: json.RawMessage(`{"label":"first"}`)}
+	reader := &draftPreviewPlacementReaderFake{placement: placement}
+	runtime.SetDraftPreviewPlacementReader(reader)
+	input := DraftPreviewWidgetRuntimePlacement{DraftID: "11111111-1111-4111-8111-111111111111", LessonID: "22222222-2222-4222-8222-222222222222", Placement: placement, Context: DraftPreviewWidgetRuntimeContext{ContextType: "DRAFT_PREVIEW", PlacementKey: "preview-widget", Configuration: placement.Configuration}}
+	launch, err := runtime.PrepareDraftPreviewWidgetRuntime(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader.placement.Configuration = json.RawMessage(`{"label":"second"}`)
+	refreshed, err := runtime.Refresh(ctx, launch.Token)
+	if err != nil || refreshed.DraftPreviewContext == nil || string(refreshed.DraftPreviewContext.Configuration) != `{"label":"first"}` {
+		t.Fatalf("refresh snapshot=%#v err=%v", refreshed, err)
+	}
+	input.Placement = reader.placement
+	input.Context.Configuration = reader.placement.Configuration
+	newLaunch, err := runtime.PrepareDraftPreviewWidgetRuntime(ctx, input)
+	if err != nil || string(newLaunch.DraftPreviewContext.Configuration) != `{"label":"second"}` {
+		t.Fatalf("new launch=%#v err=%v", newLaunch, err)
+	}
+	reader.placement.ArtifactDigest = strings.Repeat("b", 64)
+	if _, err := runtime.Refresh(ctx, newLaunch.Token); !errors.Is(err, ErrLaunchDenied) {
+		t.Fatalf("changed pinned release refreshed: %v", err)
+	}
+	reader.placement = input.Placement
+
+	reader.err = ErrNotFound
+	if _, err := runtime.Refresh(ctx, launch.Token); !errors.Is(err, ErrLaunchDenied) {
+		t.Fatalf("deleted placement refreshed: %v", err)
+	}
+	if old, err := runtime.DraftPreviewContext(launch.Token); err != nil || string(old.Configuration) != `{"label":"first"}` {
+		t.Fatalf("existing token lost snapshot: %#v %v", old, err)
+	}
+	reader.err = nil
+	reader.placement = placement
+	if _, err := registry.Disable(ctx, release.Release.PluginID, release.Release.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.PrepareDraftPreviewWidgetRuntime(ctx, input); !errors.Is(err, ErrLaunchDenied) {
+		t.Fatalf("disabled launch=%v", err)
+	}
+	if _, err := runtime.Refresh(ctx, newLaunch.Token); !errors.Is(err, ErrLaunchDenied) {
+		t.Fatalf("disabled refresh=%v", err)
+	}
+	if _, err := runtime.DraftPreviewContext(newLaunch.Token); err != nil {
+		t.Fatalf("existing token stopped before expiry: %v", err)
+	}
+}
+
+func TestDraftPreviewRejectsNonCourseWidgetPlacement(t *testing.T) {
+	_, runtime, _, release := runtimeFixture(t, Policy{})
+	placement := courses.PluginWidgetBlockPayload{PluginID: string(release.Release.PluginID), PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: "timeline", WidgetType: string(TypeDashboardWidget), Configuration: json.RawMessage(`{"label":"preview"}`)}
+	_, err := runtime.PrepareDraftPreviewWidgetRuntime(context.Background(), DraftPreviewWidgetRuntimePlacement{
+		DraftID: "11111111-1111-4111-8111-111111111111", LessonID: "22222222-2222-4222-8222-222222222222", Placement: placement,
+		Context: DraftPreviewWidgetRuntimeContext{ContextType: "DRAFT_PREVIEW", PlacementKey: "preview-widget", Configuration: placement.Configuration},
+	})
+	if !errors.Is(err, ErrLaunchDenied) {
+		t.Fatalf("Dashboard widget placement launched in Draft Preview: %v", err)
 	}
 }
 

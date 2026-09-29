@@ -71,6 +71,29 @@ func (f *dashboardRuntimeHTTPFake) DashboardContext(token string) (plugins.Dashb
 	return plugins.DashboardWidgetRuntimeContext{PlacementID: "22222222-2222-4222-8222-222222222222", Configuration: []byte(`{"density":"compact"}`)}, nil
 }
 
+type isolatedRuntimeHTTPFake struct{ *runtimeHTTPFake }
+
+func (f *isolatedRuntimeHTTPFake) CourseContext(token string) (plugins.CourseWidgetRuntimeContext, error) {
+	if token != "course-runtime-token" {
+		return plugins.CourseWidgetRuntimeContext{}, plugins.ErrRuntimeCapabilityDenied
+	}
+	return plugins.CourseWidgetRuntimeContext{CourseID: "course", CourseVersionID: "11111111-1111-4111-8111-111111111111", CourseVersion: "1.0.0", LessonKey: "lesson", PlacementKey: "course-widget", PresentationLanguage: "en", Configuration: []byte(`{"mode":"course"}`)}, nil
+}
+
+func (f *isolatedRuntimeHTTPFake) DashboardContext(token string) (plugins.DashboardWidgetRuntimeContext, error) {
+	if token != "dashboard-runtime-token" {
+		return plugins.DashboardWidgetRuntimeContext{}, plugins.ErrRuntimeCapabilityDenied
+	}
+	return plugins.DashboardWidgetRuntimeContext{PlacementID: "22222222-2222-4222-8222-222222222222", Configuration: []byte(`{"mode":"dashboard"}`)}, nil
+}
+
+func (f *isolatedRuntimeHTTPFake) DraftPreviewContext(token string) (plugins.DraftPreviewWidgetRuntimeContext, error) {
+	if token != "preview-runtime-token" {
+		return plugins.DraftPreviewWidgetRuntimeContext{}, plugins.ErrRuntimeCapabilityDenied
+	}
+	return plugins.DraftPreviewWidgetRuntimeContext{ContextType: "DRAFT_PREVIEW", PlacementKey: "preview-widget", Configuration: []byte(`{"mode":"preview"}`)}, nil
+}
+
 func runtimeRequest(router http.Handler, method, path string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, nil)
 	req.Host = "plugins.academy.example"
@@ -185,5 +208,36 @@ func TestDashboardRuntimeContextIsBearerOnlyAndPrivacyBounded(t *testing.T) {
 	router.ServeHTTP(sessionResponse, sessionOnly)
 	if sessionResponse.Code != http.StatusUnauthorized {
 		t.Fatalf("Academy session substituted for Dashboard runtime token: %d", sessionResponse.Code)
+	}
+}
+
+func TestRuntimeContextModesAreBearerIsolated(t *testing.T) {
+	router := runtimeTestRouter(&isolatedRuntimeHTTPFake{runtimeHTTPFake: &runtimeHTTPFake{}})
+	tests := []struct {
+		token, required, forbidden string
+	}{
+		{"course-runtime-token", `"placementKey":"course-widget"`, `"mode":"preview"`},
+		{"dashboard-runtime-token", `"placementId":"22222222-2222-4222-8222-222222222222"`, `"courseId"`},
+		{"preview-runtime-token", `"contextType":"DRAFT_PREVIEW"`, `"courseId"`},
+	}
+	for _, test := range tests {
+		req := httptest.NewRequest(http.MethodGet, "/api/plugin-runtime/context", nil)
+		req.Host = "plugins.academy.example"
+		req.Header.Set("Authorization", "Bearer "+test.token)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, req)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), test.required) || strings.Contains(response.Body.String(), test.forbidden) {
+			t.Fatalf("%s context=%d %s", test.token, response.Code, response.Body.String())
+		}
+	}
+	preview := httptest.NewRequest(http.MethodGet, "/api/plugin-runtime/context", nil)
+	preview.Host = "plugins.academy.example"
+	preview.Header.Set("Authorization", "Bearer preview-runtime-token")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, preview)
+	for _, forbidden := range []string{"user", "email", "draftId", "lessonId", "progress", "answer", "session", "storage", "capabilities", "token"} {
+		if strings.Contains(strings.ToLower(response.Body.String()), strings.ToLower(forbidden)) {
+			t.Fatalf("Preview context leaked %q: %s", forbidden, response.Body.String())
+		}
 	}
 }

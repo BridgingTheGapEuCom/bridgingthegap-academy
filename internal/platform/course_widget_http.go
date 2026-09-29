@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/authoring"
@@ -89,4 +90,43 @@ func (a *authHTTP) handleCourseWidgetRuntimeLaunch(w http.ResponseWriter, r *htt
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, launch)
+}
+
+func (a *authHTTP) handleDraftPreviewWidgetRuntimeLaunch(w http.ResponseWriter, r *http.Request) {
+	if a.draftPreviewWidgetRuntime == nil {
+		problem(w, r, http.StatusNotFound, "Widget unavailable in preview")
+		return
+	}
+	if r.ContentLength > 0 || requestContainsBody(r) {
+		problem(w, r, http.StatusBadRequest, "Request body is not allowed")
+		return
+	}
+	draftID, actor, ok := authoringRequest(w, r)
+	if !ok {
+		return
+	}
+	lessonID, ok := authoringLessonID(w, r)
+	if !ok {
+		return
+	}
+	launch, err := a.draftPreviewWidgetRuntime.Prepare(r.Context(), actor, draftID, lessonID, chi.URLParam(r, "blockKey"))
+	if err != nil {
+		if isDraftPreviewWidgetUnavailable(err) {
+			problem(w, r, http.StatusNotFound, "Widget unavailable in preview")
+			return
+		}
+		problem(w, r, http.StatusServiceUnavailable, "Widget unavailable in preview")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, launch)
+}
+
+func requestContainsBody(r *http.Request) bool {
+	if r.Body == nil || r.Body == http.NoBody {
+		return false
+	}
+	var one [1]byte
+	_, err := r.Body.Read(one[:])
+	return err != io.EOF
 }

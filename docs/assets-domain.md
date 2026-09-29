@@ -100,8 +100,8 @@ only; a claimed MIME type is ignored in favor of content detection. A successful
 filename, detected media type, measured byte size, and status. It does not return
 the storage object ID, filesystem path, digest, creator, or Draft provenance.
 The private response is `no-store` and inherits the established authenticated
-Origin and CSRF protections. No Asset read, preview, download, or delivery API
-is introduced.
+Origin and CSRF protections. Binary reads use the separate authenticated
+Draft-delivery boundary described below.
 
 The local provider is only the first implementation. The ingestion contract is
 streaming and provider-neutral, so an S3-compatible provider can implement the
@@ -119,8 +119,7 @@ file details, and storage data remain transient editor information. Upload and
 the normal revision-checked Lesson-content save are separate operations: a
 successful upload can remain unreferenced if the later Draft save fails or is
 abandoned. Replacements leave the existing canonical key intact until the new
-upload succeeds, and no Asset deletion, preview, delivery, listing, or
-binary delivery is performed here.
+upload succeeds. Upload itself performs no deletion or delivery.
 
 `GET /api/authoring/drafts/{draftId}/assets` is a private Draft-scoped,
 `no-store` read using the existing `authoring.asset.upload` capability: active
@@ -130,8 +129,25 @@ time descending with Asset ID as a stable tie-breaker and use bounded
 `limit`/`offset` pagination. The summary exposes only `assetKey`, filename,
 detected media type, byte size, and creation time. The editor filters this
 server-authoritative metadata for the current block and saves only a selected
-`assetKey`; there is still no preview, delivery, deletion, cross-Draft reuse,
-or binary delivery.
+`assetKey`; listing does not enable deletion or cross-Draft reuse.
+
+`GET|HEAD /api/authoring/drafts/{draftId}/assets/{assetId}/content` is the
+private binary boundary used by Draft Lesson Preview. A normal Academy session
+must have `authoring.read` for the exact Draft, and persisted Asset ownership
+must match the path Draft. Missing Drafts, denied Drafts, foreign-Draft Assets,
+unknown Assets, and non-AVAILABLE Assets use the same hidden not-found result.
+The browser receives only the authoring URL; provider object IDs and paths stay
+server-side. Runtime widget bearer tokens are not accepted.
+
+Draft delivery uses the authoritative detected media type, a sanitized filename,
+`X-Content-Type-Options: nosniff`, and the same safe inline-media allowlist as
+published delivery. DOWNLOAD requests use attachment disposition. Its strong
+ETag is derived from the stored SHA-256 digest, while
+`Cache-Control: private, no-cache` prevents shared caching and requires
+revalidation. The optional `SeekableBinaryStorage` capability lets the HTTP
+layer serve byte ranges without buffering whole video or audio objects; the
+local provider supplies it with a private file handle. Providers lacking this
+capability fail closed for Draft delivery.
 
 Courses asset bindings and their CourseVersion commit in one Courses
 transaction and deliberately have no FK to mutable Asset metadata. Repeated
@@ -156,5 +172,10 @@ The delivery URL is same-origin and contains only Course ID, exact SemVer, and
 canonical Asset ID. Safe raster images plus audio/video media may render inline;
 SVG, HTML, and every other non-allowlisted type are forced to attachment, as is
 an explicit download request. `Content-Disposition` is constructed from the
-frozen validated filename and `X-Content-Type-Options: nosniff` is sent. There
-is still no Authoring preview or unpublished binary endpoint.
+frozen validated filename and `X-Content-Type-Options: nosniff` is sent.
+Published delivery remains separate from authenticated mutable-Draft delivery.
+Course widget preview remains separate from asset delivery. It uses the verified
+plugin runtime with a short-lived preview-only bearer and a minimal saved
+placement/configuration context. Widget bearers are deliberately not accepted by
+the Draft asset endpoint, so widget access to private Draft assets would require
+a separate, explicit capability design.

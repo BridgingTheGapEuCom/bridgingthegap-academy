@@ -28,6 +28,7 @@ type Storage struct {
 }
 
 var _ assets.BinaryStorage = (*Storage)(nil)
+var _ assets.SeekableBinaryStorage = (*Storage)(nil)
 
 func New(rootPath string) (*Storage, error) {
 	return newStorage(rootPath, randomObjectID)
@@ -127,6 +128,14 @@ func (s *Storage) Put(ctx context.Context, source io.Reader) (assets.StoredBinar
 }
 
 func (s *Storage) Open(ctx context.Context, id assets.StorageObjectID) (io.ReadCloser, error) {
+	return s.open(ctx, id)
+}
+
+func (s *Storage) OpenSeekable(ctx context.Context, id assets.StorageObjectID) (assets.ReadSeekCloser, error) {
+	return s.open(ctx, id)
+}
+
+func (s *Storage) open(ctx context.Context, id assets.StorageObjectID) (*os.File, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

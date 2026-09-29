@@ -20,15 +20,16 @@ import (
 )
 
 const (
-	RuntimeIssuer                  = "btg-academy"
-	RuntimeAudience                = "btg-widget-runtime"
-	RuntimeProtocol                = "btg-widget-runtime"
-	RuntimeProtocolVersion         = 1
-	CapabilityBootstrap            = "widget.runtime.bootstrap"
-	CapabilityContextRead          = "widget.runtime.context.read"
-	CapabilityCourseContextRead    = "widget.course.context.read"
-	CapabilityDashboardContextRead = "widget.dashboard.context.read"
-	DefaultTokenLifetime           = 5 * time.Minute
+	RuntimeIssuer                     = "btg-academy"
+	RuntimeAudience                   = "btg-widget-runtime"
+	RuntimeProtocol                   = "btg-widget-runtime"
+	RuntimeProtocolVersion            = 1
+	CapabilityBootstrap               = "widget.runtime.bootstrap"
+	CapabilityContextRead             = "widget.runtime.context.read"
+	CapabilityCourseContextRead       = "widget.course.context.read"
+	CapabilityDashboardContextRead    = "widget.dashboard.context.read"
+	CapabilityDraftPreviewContextRead = "widget.course.preview.context.read"
+	DefaultTokenLifetime              = 5 * time.Minute
 )
 
 var (
@@ -48,15 +49,16 @@ type RuntimeContext struct {
 }
 
 type RuntimeLaunch struct {
-	Context          RuntimeContext                 `json:"context"`
-	WidgetName       string                         `json:"widgetName"`
-	RuntimeURL       string                         `json:"runtimeUrl"`
-	RuntimeOrigin    string                         `json:"runtimeOrigin"`
-	Token            string                         `json:"token"`
-	ExpiresAt        time.Time                      `json:"expiresAt"`
-	Capabilities     []string                       `json:"capabilities"`
-	CourseContext    *CourseWidgetRuntimeContext    `json:"courseContext,omitempty"`
-	DashboardContext *DashboardWidgetRuntimeContext `json:"dashboardContext,omitempty"`
+	Context             RuntimeContext                    `json:"context"`
+	WidgetName          string                            `json:"widgetName"`
+	RuntimeURL          string                            `json:"runtimeUrl"`
+	RuntimeOrigin       string                            `json:"runtimeOrigin"`
+	Token               string                            `json:"token"`
+	ExpiresAt           time.Time                         `json:"expiresAt"`
+	Capabilities        []string                          `json:"capabilities"`
+	CourseContext       *CourseWidgetRuntimeContext       `json:"courseContext,omitempty"`
+	DashboardContext    *DashboardWidgetRuntimeContext    `json:"dashboardContext,omitempty"`
+	DraftPreviewContext *DraftPreviewWidgetRuntimeContext `json:"draftPreviewContext,omitempty"`
 }
 
 type RuntimeClaims struct {
@@ -157,14 +159,17 @@ func (s *RuntimeTokenService) Verify(token string, expected RuntimeTokenExpectat
 }
 
 type RuntimeService struct {
-	registry            *RegistryService
-	tokens              *RuntimeTokenService
-	runtimeOrigin       string
-	hostOrigin          string
-	contexts            map[string]CourseWidgetRuntimeContext
-	dashboardContexts   map[string]DashboardWidgetRuntimeContext
-	dashboardPlacements DashboardPlacementReader
-	contextsMu          sync.RWMutex
+	registry               *RegistryService
+	tokens                 *RuntimeTokenService
+	runtimeOrigin          string
+	hostOrigin             string
+	contexts               map[string]CourseWidgetRuntimeContext
+	dashboardContexts      map[string]DashboardWidgetRuntimeContext
+	draftPreviewContexts   map[string]DraftPreviewWidgetRuntimeContext
+	draftPreviewBindings   map[string]DraftPreviewWidgetRuntimeBinding
+	draftPreviewPlacements DraftPreviewPlacementReader
+	dashboardPlacements    DashboardPlacementReader
+	contextsMu             sync.RWMutex
 }
 
 func NewRuntimeService(registry *RegistryService, tokens *RuntimeTokenService, runtimeOrigin, hostOrigin string) (*RuntimeService, error) {
@@ -173,7 +178,61 @@ func NewRuntimeService(registry *RegistryService, tokens *RuntimeTokenService, r
 	if registry == nil || tokens == nil || runtimeErr != nil || hostErr != nil || strings.EqualFold(runtimeURL, hostURL) {
 		return nil, ErrInvalidRuntimeConfiguration
 	}
-	return &RuntimeService{registry: registry, tokens: tokens, runtimeOrigin: runtimeURL, hostOrigin: hostURL, contexts: map[string]CourseWidgetRuntimeContext{}, dashboardContexts: map[string]DashboardWidgetRuntimeContext{}}, nil
+	return &RuntimeService{registry: registry, tokens: tokens, runtimeOrigin: runtimeURL, hostOrigin: hostURL, contexts: map[string]CourseWidgetRuntimeContext{}, dashboardContexts: map[string]DashboardWidgetRuntimeContext{}, draftPreviewContexts: map[string]DraftPreviewWidgetRuntimeContext{}, draftPreviewBindings: map[string]DraftPreviewWidgetRuntimeBinding{}}, nil
+}
+
+type DraftPreviewWidgetRuntimeContext struct {
+	ContextType   RuntimeMode     `json:"contextType"`
+	PlacementKey  string          `json:"placementKey"`
+	Configuration json.RawMessage `json:"configuration"`
+}
+
+type RuntimeMode string
+
+const RuntimeModeDraftPreview RuntimeMode = "DRAFT_PREVIEW"
+
+type DraftPreviewWidgetRuntimePlacement struct {
+	DraftID, LessonID string
+	Context           DraftPreviewWidgetRuntimeContext
+	Placement         courses.PluginWidgetBlockPayload
+}
+
+type DraftPreviewWidgetRuntimeBinding struct {
+	DraftID, LessonID, PlacementKey                     string
+	PluginID                                            PluginID
+	PluginVersion, ArtifactDigest, WidgetID, WidgetType string
+}
+
+type DraftPreviewPlacementReader interface {
+	DraftPreviewPlacement(context.Context, string, string, string) (courses.PluginWidgetBlockPayload, error)
+}
+
+func (s *RuntimeService) SetDraftPreviewPlacementReader(reader DraftPreviewPlacementReader) {
+	if s != nil {
+		s.draftPreviewPlacements = reader
+	}
+}
+
+func (s *RuntimeService) PrepareDraftPreviewWidgetRuntime(ctx context.Context, placement DraftPreviewWidgetRuntimePlacement) (RuntimeLaunch, error) {
+	if s == nil || uuid.Validate(placement.DraftID) != nil || uuid.Validate(placement.LessonID) != nil || placement.Placement.Validate() != nil || validateDraftPreviewWidgetContext(placement.Context) != nil {
+		return RuntimeLaunch{}, ErrLaunchDenied
+	}
+	release, entry, err := s.resolve(ctx, PluginID(placement.Placement.PluginID), placement.Placement.PluginVersion, placement.Placement.WidgetID, TypeCourseWidget)
+	if err != nil || release.Release.ArtifactDigest != placement.Placement.ArtifactDigest {
+		return RuntimeLaunch{}, ErrLaunchDenied
+	}
+	runtime := RuntimeContext{RuntimeInstanceID: uuid.NewString(), PluginID: release.Release.PluginID, PluginVersion: release.Release.Version, ArtifactDigest: release.Release.ArtifactDigest, WidgetID: entry.ID, WidgetType: TypeCourseWidget}
+	launch, err := s.issue(runtime, entry.Name, []string{CapabilityBootstrap, CapabilityContextRead, CapabilityDraftPreviewContextRead})
+	if err != nil {
+		return RuntimeLaunch{}, err
+	}
+	binding := DraftPreviewWidgetRuntimeBinding{DraftID: placement.DraftID, LessonID: placement.LessonID, PlacementKey: placement.Context.PlacementKey, PluginID: runtime.PluginID, PluginVersion: runtime.PluginVersion, ArtifactDigest: runtime.ArtifactDigest, WidgetID: runtime.WidgetID, WidgetType: string(runtime.WidgetType)}
+	s.contextsMu.Lock()
+	s.draftPreviewContexts[runtime.RuntimeInstanceID] = cloneDraftPreviewWidgetContext(placement.Context)
+	s.draftPreviewBindings[runtime.RuntimeInstanceID] = binding
+	s.contextsMu.Unlock()
+	launch.DraftPreviewContext = pointerDraftPreviewWidgetContext(placement.Context)
+	return launch, nil
 }
 
 func (s *RuntimeService) PrepareWidgetRuntime(ctx context.Context, id PluginID, version, widgetID string, widgetType PluginType) (RuntimeLaunch, error) {
@@ -268,8 +327,10 @@ func (s *RuntimeService) Refresh(ctx context.Context, token string) (RuntimeLaun
 	s.contextsMu.RLock()
 	_, coursePlacement := s.contexts[claims.Context.RuntimeInstanceID]
 	dashboardContext, dashboardPlacement := s.dashboardContexts[claims.Context.RuntimeInstanceID]
+	draftPreviewContext, draftPreviewPlacement := s.draftPreviewContexts[claims.Context.RuntimeInstanceID]
+	draftPreviewBinding := s.draftPreviewBindings[claims.Context.RuntimeInstanceID]
 	s.contextsMu.RUnlock()
-	if coursePlacement && dashboardPlacement {
+	if boolCount(coursePlacement, dashboardPlacement, draftPreviewPlacement) > 1 {
 		return RuntimeLaunch{}, ErrInvalidRuntimeToken
 	}
 	if coursePlacement {
@@ -289,6 +350,18 @@ func (s *RuntimeService) Refresh(ctx context.Context, token string) (RuntimeLaun
 	} else if hasCapability(claims.Capabilities, CapabilityDashboardContextRead) {
 		return RuntimeLaunch{}, ErrInvalidRuntimeToken
 	}
+	if draftPreviewPlacement {
+		if s.draftPreviewPlacements == nil {
+			return RuntimeLaunch{}, ErrInvalidRuntimeToken
+		}
+		placement, placementErr := s.draftPreviewPlacements.DraftPreviewPlacement(ctx, draftPreviewBinding.DraftID, draftPreviewBinding.LessonID, draftPreviewBinding.PlacementKey)
+		if placementErr != nil || placement.Validate() != nil || placement.PluginID != string(draftPreviewBinding.PluginID) || placement.PluginVersion != draftPreviewBinding.PluginVersion || placement.ArtifactDigest != draftPreviewBinding.ArtifactDigest || placement.WidgetID != draftPreviewBinding.WidgetID || placement.WidgetType != draftPreviewBinding.WidgetType {
+			return RuntimeLaunch{}, ErrLaunchDenied
+		}
+		capabilities = append(capabilities, CapabilityDraftPreviewContextRead)
+	} else if hasCapability(claims.Capabilities, CapabilityDraftPreviewContextRead) {
+		return RuntimeLaunch{}, ErrInvalidRuntimeToken
+	}
 	launch, err := s.issue(claims.Context, entry.Name, capabilities)
 	if err != nil {
 		return RuntimeLaunch{}, err
@@ -302,7 +375,24 @@ func (s *RuntimeService) Refresh(ctx context.Context, token string) (RuntimeLaun
 	if dashboardPlacement {
 		launch.DashboardContext = pointerDashboardWidgetContext(dashboardContext)
 	}
+	if draftPreviewPlacement {
+		launch.DraftPreviewContext = pointerDraftPreviewWidgetContext(draftPreviewContext)
+	}
 	return launch, nil
+}
+
+func (s *RuntimeService) DraftPreviewContext(token string) (DraftPreviewWidgetRuntimeContext, error) {
+	claims, err := s.tokens.Verify(token, RuntimeTokenExpectation{Capability: CapabilityDraftPreviewContextRead})
+	if err != nil {
+		return DraftPreviewWidgetRuntimeContext{}, err
+	}
+	s.contextsMu.RLock()
+	context, ok := s.draftPreviewContexts[claims.Context.RuntimeInstanceID]
+	s.contextsMu.RUnlock()
+	if !ok {
+		return DraftPreviewWidgetRuntimeContext{}, ErrInvalidRuntimeToken
+	}
+	return cloneDraftPreviewWidgetContext(context), nil
 }
 
 func (s *RuntimeService) VerifyContextToken(token string) (RuntimeClaims, error) {
@@ -416,12 +506,44 @@ func validCapabilities(values []string) bool {
 	}
 	seen := map[string]bool{}
 	for _, value := range values {
-		if value != CapabilityBootstrap && value != CapabilityContextRead && value != CapabilityCourseContextRead && value != CapabilityDashboardContextRead || seen[value] {
+		if value != CapabilityBootstrap && value != CapabilityContextRead && value != CapabilityCourseContextRead && value != CapabilityDashboardContextRead && value != CapabilityDraftPreviewContextRead || seen[value] {
 			return false
 		}
 		seen[value] = true
 	}
 	return true
+}
+
+func validateDraftPreviewWidgetContext(value DraftPreviewWidgetRuntimeContext) error {
+	placement, err := courses.NormalizeStructureKey(value.PlacementKey)
+	if value.ContextType != RuntimeModeDraftPreview || err != nil || placement != value.PlacementKey || len(value.Configuration) == 0 || len(value.Configuration) > courses.MaxPluginWidgetConfigBytes {
+		return ErrLaunchDenied
+	}
+	var object map[string]json.RawMessage
+	if strictDecode(value.Configuration, &object) != nil || object == nil {
+		return ErrLaunchDenied
+	}
+	return nil
+}
+
+func cloneDraftPreviewWidgetContext(value DraftPreviewWidgetRuntimeContext) DraftPreviewWidgetRuntimeContext {
+	value.Configuration = append(json.RawMessage(nil), value.Configuration...)
+	return value
+}
+
+func pointerDraftPreviewWidgetContext(value DraftPreviewWidgetRuntimeContext) *DraftPreviewWidgetRuntimeContext {
+	copy := cloneDraftPreviewWidgetContext(value)
+	return &copy
+}
+
+func boolCount(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
 }
 
 func validateDashboardWidgetContext(value DashboardWidgetRuntimeContext) error {

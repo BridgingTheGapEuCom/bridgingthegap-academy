@@ -474,13 +474,21 @@ The Content workspace offers an authenticated **Draft preview — not published*
 route. It renders the last saved Draft Lesson through the same learner page structure
 and `LessonBlockRenderer` used by learner presentation, but it is never a
 CourseVersion and cannot create learner progress, attempts, assessment submissions,
-certificates, or widget runtime capabilities. The preview shell contains only its
+or certificates. The preview shell contains only its
 unpublished status, a return link, and width controls; its desktop canvas fills the
 available Academy page grid while tablet and mobile modes constrain the learner
 surface. Unsaved edits prompt the author to save and preview or preview the last
 saved version.
 
-Preview deliberately has no published-course asset binding or learner widget runtime
-coordinates. Until a narrowly scoped Draft asset/runtime preview capability exists,
-missing Draft media and Course widgets use learner-safe unavailable states;
-they do not make private assets public or grant plugins author or learner privileges.
+Preview resolves saved IMAGE, VIDEO, AUDIO, and DOWNLOAD references through an
+authenticated Draft-scoped binary endpoint. Draft assets remain private, the
+route verifies exact Draft ownership, and responses reveal no provider storage
+identity. Published Course asset delivery remains a separate immutable path.
+Course widgets launch through a dedicated Draft-preview runtime. Academy derives
+the exact saved placement and pinned release server-side and issues a short-lived
+`widget.course.preview.context.read` bearer. The widget receives only the block
+placement key and saved configuration snapshot. It receives neither author nor
+learner identity, learner state, Draft metadata, management authority, nor broad
+Draft-asset access. Published Course and Dashboard runtime contexts remain
+separate. Preview refresh and new launch stop when the placement is removed or
+its exact release is no longer enabled, trusted, approved, or intact.

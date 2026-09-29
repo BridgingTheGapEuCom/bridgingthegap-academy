@@ -213,9 +213,23 @@ test('Authoring creates a Draft from the accessible home flow and opens its work
 
 test('Authoring content edits canonical blocks with keyboard controls and preserves deferred payloads', async ({ page }) => {
   let contentBody: { expectedLessonRevision: number; content: { schemaVersion: number; blocks: { key: string; type: string; payload: unknown }[] } } | undefined
-  const deferred = { key: 'architecture-diagram', type: 'IMAGE', payload: { asset: { assetKey: 'diagram' }, decorative: false, altText: 'Architecture diagram', caption: 'Reference' } }
+  const previewAssetKey = '55555555-5555-4555-8555-555555555555'
+  const deferred = { key: 'architecture-diagram', type: 'IMAGE', payload: { asset: { assetKey: previewAssetKey }, decorative: false, altText: 'Architecture diagram', caption: 'Reference' } }
   let previewContent = { schemaVersion: 1, blocks: [deferred] }
+  const draftAssetResponses: Array<{ method: string; status: number; url: string }> = []
   await serveDraft(page)
+  const draftAssetPath = `/api/authoring/drafts/${draftID}/assets/${previewAssetKey}/content`
+  await page.route(`**${draftAssetPath}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'image/gif',
+    headers: { 'Cache-Control': 'private, no-cache', 'X-Content-Type-Options': 'nosniff' },
+    body: Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64'),
+  }))
+  page.on('response', (response) => {
+    if (response.url().endsWith(draftAssetPath)) {
+      draftAssetResponses.push({ method: response.request().method(), status: response.status(), url: response.url() })
+    }
+  })
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, content: previewContent }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}/content`, (route) => {
     contentBody = route.request().postDataJSON()
@@ -260,6 +274,12 @@ test('Authoring content edits canonical blocks with keyboard controls and preser
   await expect(page.getByRole('navigation', { name: 'Draft sections' })).toHaveCount(0)
   await expect(page.getByRole('heading', { level: 1, name: lesson.title })).toBeVisible()
   await expect(page.getByText('A semantic lesson paragraph.')).toBeVisible()
+  const previewImage = page.getByRole('img', { name: 'Architecture diagram' })
+  await expect(previewImage).toHaveAttribute('src', draftAssetPath)
+  await expect.poll(() => previewImage.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+  await expect.poll(() => draftAssetResponses.length).toBe(1)
+  expect(draftAssetResponses).toEqual([{ method: 'GET', status: 200, url: `http://127.0.0.1:4173${draftAssetPath}` }])
+  await expect(page.getByText('Image unavailable.')).toHaveCount(0)
   const desktopWidth = await page.locator('.authoring-lesson-preview__frame').evaluate((element) => element.getBoundingClientRect().width)
   const previewWidth = await page.locator('.authoring-shell__content--preview').evaluate((element) => element.getBoundingClientRect().width)
   expect(desktopWidth).toBeGreaterThan(previewWidth * 0.75)
@@ -279,6 +299,83 @@ test('Authoring content edits canonical blocks with keyboard controls and preser
   await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Draft Lesson Preview runs an eligible Course widget with Preview-only context', async ({ page }) => {
+  const runtimeID = '77777777-7777-4777-8777-777777777777'
+  const placementKey = 'preview-course-widget'
+  let runtimeEligible = true
+  const widgetContent = {
+    schemaVersion: 1,
+    blocks: [{
+      key: placementKey,
+      type: 'PLUGIN_WIDGET',
+      payload: {
+        pluginId: 'com.example.preview-fixture', pluginVersion: '1.0.0', artifactDigest: 'a'.repeat(64),
+        widgetId: 'preview-fixture', widgetType: 'COURSE_WIDGET', configuration: { message: 'Saved Draft configuration' },
+      },
+    }],
+  }
+  const learnerMutationRequests: string[] = []
+  page.on('request', (request) => {
+    if (/progress|attempt|completion|certificate|answer/i.test(request.url())) learnerMutationRequests.push(request.url())
+  })
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ...lesson, content: widgetContent }),
+  }))
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}/blocks/${placementKey}/widget-runtime`, (route) => {
+    expect(route.request().method()).toBe('POST')
+    expect(route.request().postData()).toBeNull()
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf-token')
+    if (!runtimeEligible) return route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({ title: 'Widget unavailable in preview' }) })
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        context: { runtimeInstanceId: runtimeID, pluginId: 'com.example.preview-fixture', pluginVersion: '1.0.0', artifactDigest: 'a'.repeat(64), widgetId: 'preview-fixture', widgetType: 'COURSE_WIDGET' },
+        widgetName: 'Preview fixture', runtimeUrl: `https://plugins.academy.test/runtime#runtime=${runtimeID}`, runtimeOrigin: 'https://plugins.academy.test', token: 'short-lived-preview-token', expiresAt: '2027-01-01T00:05:00Z',
+        capabilities: ['widget.runtime.bootstrap', 'widget.runtime.context.read', 'widget.course.preview.context.read'],
+        draftPreviewContext: { contextType: 'DRAFT_PREVIEW', placementKey, configuration: { message: 'Saved Draft configuration' } },
+      }),
+    })
+  })
+  await page.route('https://plugins.academy.test/**', (route) => route.fulfill({
+    contentType: 'text/html',
+    body: `<main id="widget-root" aria-label="Preview widget"></main><script>
+      const runtimeInstanceId = location.hash.slice(9);
+      const ready = () => parent.postMessage({protocol:'btg-widget-runtime',version:1,type:'WIDGET_READY',runtimeInstanceId,payload:{}}, 'http://127.0.0.1:4173');
+      const readyTimer = setInterval(ready, 50);
+      addEventListener('message', (event) => {
+        if (event.origin !== 'http://127.0.0.1:4173' || event.data?.type !== 'RUNTIME_INIT') return;
+        clearInterval(readyTimer);
+        const context = event.data.payload.draftPreviewContext;
+        document.getElementById('widget-root').textContent = context.contextType + ': ' + context.configuration.message;
+        parent.postMessage({protocol:'btg-widget-runtime',version:1,type:'RUNTIME_INITIALIZED',runtimeInstanceId,payload:{}}, 'http://127.0.0.1:4173');
+      });
+      ready();
+    </script>`,
+  }))
+
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto(`/authoring/drafts/${draftID}/lessons/${lesson.id}/preview`)
+  await expect(page.getByText('Draft preview — not published')).toBeVisible()
+  const widgetFrame = page.frameLocator('iframe[title="Preview fixture"]')
+  await expect(widgetFrame.getByText('DRAFT_PREVIEW: Saved Draft configuration')).toBeVisible()
+  await expect(page.getByText('Widget unavailable in preview.')).toHaveCount(0)
+  expect(learnerMutationRequests).toEqual([])
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  runtimeEligible = false
+  await page.reload()
+  await expect(page.getByText('Widget unavailable in preview.')).toBeVisible()
+  runtimeEligible = true
+  await page.reload()
+  await expect(page.frameLocator('iframe[title="Preview fixture"]').getByText('DRAFT_PREVIEW: Saved Draft configuration')).toBeVisible()
 })
 
 test('Authoring attaches an uploaded asset to the exact block and persists only its asset key', async ({ page }) => {

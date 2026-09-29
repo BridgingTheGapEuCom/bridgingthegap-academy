@@ -43,3 +43,18 @@ type BinaryStorage interface {
 	Open(context.Context, StorageObjectID) (io.ReadCloser, error)
 	DiscardUncommitted(context.Context, StorageObjectID) error
 }
+
+// ReadSeekCloser is the bounded random-access read contract used by private
+// media delivery. It exposes bytes, never provider paths or object locators.
+type ReadSeekCloser interface {
+	io.Reader
+	io.Seeker
+	io.Closer
+}
+
+// SeekableBinaryStorage is an optional delivery capability. Providers that
+// implement it can serve browser byte ranges without buffering whole media
+// objects into memory. BinaryStorage remains the ingestion/read baseline.
+type SeekableBinaryStorage interface {
+	OpenSeekable(context.Context, StorageObjectID) (ReadSeekCloser, error)
+}

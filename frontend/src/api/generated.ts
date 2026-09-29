@@ -508,6 +508,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/authoring/drafts/{draftId}/assets/{assetId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Streams one AVAILABLE binary owned by the exact authorized Draft. The private response supports ETag revalidation and byte ranges for media preview; storage identity is never exposed. */
+        get: operations["getAuthoringDraftAssetContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** @description Returns the same authorized Draft representation headers as GET without a response body. */
+        head: operations["headAuthoringDraftAssetContent"];
+        patch?: never;
+        trace?: never;
+    };
     "/api/authoring/drafts/{draftId}/modules": {
         parameters: {
             query?: never;
@@ -693,6 +711,23 @@ export interface paths {
         get: operations["listAuthoringCourseWidgets"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authoring/drafts/{draftId}/lessons/{lessonId}/blocks/{blockKey}/widget-runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Derives a short-lived Preview-only Course-widget runtime from the exact saved Draft LessonContent placement. Plugin coordinates, capabilities, and configuration are server-derived. */
+        post: operations["launchDraftPreviewWidgetRuntime"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1524,9 +1559,10 @@ export interface components {
             token: string;
             /** Format: date-time */
             expiresAt: string;
-            capabilities: ("widget.runtime.bootstrap" | "widget.runtime.context.read" | "widget.course.context.read" | "widget.dashboard.context.read")[];
+            capabilities: ("widget.runtime.bootstrap" | "widget.runtime.context.read" | "widget.course.context.read" | "widget.dashboard.context.read" | "widget.course.preview.context.read")[];
             courseContext?: components["schemas"]["CourseWidgetRuntimeContext"];
             dashboardContext?: components["schemas"]["DashboardWidgetRuntimeContext"];
+            draftPreviewContext?: components["schemas"]["DraftPreviewWidgetRuntimeContext"];
         };
         CourseWidgetRuntimeContext: {
             /** Format: uuid */
@@ -1544,6 +1580,14 @@ export interface components {
         DashboardWidgetRuntimeContext: {
             /** Format: uuid */
             placementId: string;
+            configuration: {
+                [key: string]: unknown;
+            };
+        };
+        DraftPreviewWidgetRuntimeContext: {
+            /** @enum {string} */
+            contextType: "DRAFT_PREVIEW";
+            placementKey: string;
             configuration: {
                 [key: string]: unknown;
             };
@@ -2890,6 +2934,8 @@ export interface components {
         /** @description CSRF token bound to the authenticated session. */
         AuthoringCSRFToken: string;
         AuthoringDraftID: string;
+        /** @description Stable canonical Asset ID owned by the requested Draft. */
+        AuthoringAssetID: string;
         AuthoringAssessmentID: string;
         LearnerAttemptID: string;
         CertificateID: string;
@@ -3479,7 +3525,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WidgetRuntimeContext"] | components["schemas"]["CourseWidgetRuntimeContext"] | components["schemas"]["DashboardWidgetRuntimeContext"];
+                    "application/json": components["schemas"]["WidgetRuntimeContext"] | components["schemas"]["CourseWidgetRuntimeContext"] | components["schemas"]["DashboardWidgetRuntimeContext"] | components["schemas"]["DraftPreviewWidgetRuntimeContext"];
                 };
             };
             401: components["responses"]["Problem"];
@@ -4143,6 +4189,93 @@ export interface operations {
             500: components["responses"]["Problem"];
         };
     };
+    getAuthoringDraftAssetContent: {
+        parameters: {
+            query?: {
+                /** @description Requests a safe attachment disposition. */
+                download?: 1;
+            };
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                /** @description Stable canonical Asset ID owned by the requested Draft. */
+                assetId: components["parameters"]["AuthoringAssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private Draft binary with authoritative Content-Type, safe Content-Disposition, ETag, and private revalidation headers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Requested byte range with Content-Range and Accept-Ranges headers. */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description The private binary matches If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The requested byte range cannot be satisfied. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["Problem"];
+        };
+    };
+    headAuthoringDraftAssetContent: {
+        parameters: {
+            query?: {
+                download?: 1;
+            };
+            header?: never;
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                /** @description Stable canonical Asset ID owned by the requested Draft. */
+                assetId: components["parameters"]["AuthoringAssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private Draft binary representation headers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The private binary matches If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     createAuthoringModule: {
         parameters: {
             query?: never;
@@ -4709,6 +4842,40 @@ export interface operations {
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
+        };
+    };
+    launchDraftPreviewWidgetRuntime: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path: {
+                draftId: components["parameters"]["AuthoringDraftID"];
+                lessonId: components["parameters"]["AuthoringLessonID"];
+                blockKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preview-only runtime launch descriptor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetRuntimeLaunch"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     launchCourseWidgetRuntime: {

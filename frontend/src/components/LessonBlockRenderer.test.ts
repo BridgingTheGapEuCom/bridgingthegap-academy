@@ -44,6 +44,34 @@ describe('LessonBlockRenderer', () => {
     }
   })
 
+  it('resolves media through the supplied rendering context and otherwise fails closed', () => {
+    const block: RenderableBlock = { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: '55555555-5555-4555-8555-555555555555' }, decorative: false, altText: 'Event flow' } }
+    render(LessonBlockRenderer, { props: { block, assetContext: { kind: 'draft-preview', draftID: '11111111-1111-4111-8111-111111111111' } } })
+    expect(screen.getByRole('img', { name: 'Event flow' }).getAttribute('src')).toBe('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets/55555555-5555-4555-8555-555555555555/content')
+    expect(document.body.innerHTML).not.toContain('storage')
+    cleanup()
+    renderBlock(block)
+    expect(screen.getByText('Image unavailable.')).toBeTruthy()
+    expect(document.querySelector('[src]')).toBeNull()
+  })
+
+  it('keeps published media on immutable Course delivery URLs', () => {
+    render(LessonBlockRenderer, { props: { block: { key: 'download', type: 'DOWNLOAD', payload: { asset: { assetKey: 'asset-key' }, label: 'Worksheet' } }, assetContext: { kind: 'published', courseID: 'course-id', version: '1.2.3' } } })
+    expect(screen.getByRole('link', { name: 'Worksheet' }).getAttribute('href')).toBe('/api/courses/by-id/course-id/versions/1.2.3/assets/asset-key?download=1')
+  })
+
+  it('uses authenticated Draft URLs for video, audio, and downloads in Preview', () => {
+    const assetContext = { kind: 'draft-preview' as const, draftID: '11111111-1111-4111-8111-111111111111' }
+    render(LessonBlockRenderer, { props: { block: { key: 'video', type: 'VIDEO', payload: { asset: { assetKey: 'video-asset' }, title: 'Walkthrough', transcript: 'Transcript', captionsAsset: { assetKey: 'captions-asset' } } }, assetContext } })
+    expect(document.querySelector('video source')?.getAttribute('src')).toContain('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets/video-asset/content')
+    cleanup()
+    render(LessonBlockRenderer, { props: { block: { key: 'audio', type: 'AUDIO', payload: { asset: { assetKey: 'audio-asset' }, title: 'Audio guide', transcript: 'Transcript' } }, assetContext } })
+    expect(document.querySelector('audio source')?.getAttribute('src')).toContain('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets/audio-asset/content')
+    cleanup()
+    render(LessonBlockRenderer, { props: { block: { key: 'download', type: 'DOWNLOAD', payload: { asset: { assetKey: 'file-asset' }, label: 'Worksheet' } }, assetContext } })
+    expect(screen.getByRole('link', { name: 'Worksheet' }).getAttribute('href')).toBe('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets/file-asset/content?download=1')
+  })
+
   it('renders quote, callout, table, divider, and unsupported content with clear semantics', () => {
     renderBlock({ key: 'quote', type: 'QUOTE', payload: { text: 'Quoted words', attribution: 'Ada' } })
     expect(document.querySelector('blockquote cite')?.textContent).toBe('Ada')

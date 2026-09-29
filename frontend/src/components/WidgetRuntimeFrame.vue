@@ -62,20 +62,25 @@ function receive(event: MessageEvent) {
   const message = runtimeMessageFrom(event, frame.value, props.launch)
   if (!message) return
   if (message.type === 'WIDGET_READY') {
+    // Vue props are reactive proxies, which the browser's structured-clone
+    // algorithm cannot send across a frame boundary. Runtime launch data is a
+    // JSON contract, so materialize one plain snapshot for the handshake.
+    const payload = JSON.parse(JSON.stringify({
+      token: props.launch.token,
+      context: props.launch.context,
+      courseContext: props.launch.courseContext,
+      dashboardContext: props.launch.dashboardContext,
+      draftPreviewContext: props.launch.draftPreviewContext,
+      capabilities: props.launch.capabilities,
+      expiresAt: props.launch.expiresAt,
+    })) as Record<string, unknown>
     frame.value.contentWindow?.postMessage(
       {
         protocol: widgetRuntimeProtocol,
         version: widgetRuntimeProtocolVersion,
         type: 'RUNTIME_INIT',
         runtimeInstanceId: props.launch.context.runtimeInstanceId,
-        payload: {
-          token: props.launch.token,
-          context: props.launch.context,
-          courseContext: props.launch.courseContext,
-          dashboardContext: props.launch.dashboardContext,
-          capabilities: props.launch.capabilities,
-          expiresAt: props.launch.expiresAt,
-        },
+        payload,
       },
       props.launch.runtimeOrigin,
     )

@@ -92,6 +92,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		return assessmentspostgres.New(tx)
 	})
 	authoringAuthorizer := authoring.NewAuthorizationService(authoringRepository)
+	authoringReads := authoring.NewReadService(authoringRepository, authoringAuthorizer)
 	assetRepository := assetspostgres.New(pool)
 	assessmentRepository := assessmentspostgres.New(pool)
 	assetIngestion, err := assets.NewIngestionService(assetRepository, assetStorage, cfg.AssetMaxBytes)
@@ -160,6 +161,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	var pluginRuntime *pluginRuntimeHTTP
 	var courseWidgetRuntime courseWidgetLaunch
 	var dashboardWidgetRuntime dashboardWidgetLaunch
+	var draftPreviewWidgetRuntime *draftPreviewWidgetLaunchService
 	if tokenService, enabled, tokenErr := cfg.widgetRuntimeTokenService(); tokenErr != nil {
 		return tokenErr
 	} else if enabled {
@@ -170,6 +172,9 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		pluginRuntime = &pluginRuntimeHTTP{service: runtimeService}
 		courseWidgetRuntime = plugins.NewCourseWidgetLaunchService(coursesRepository, runtimeService)
 		dashboardWidgetRuntime = plugins.NewDashboardWidgetLaunchService(pluginRepository, runtimeService)
+		draftPreviewSource := &authoringDraftPreviewPlacementSource{reads: authoringReads, repository: authoringRepository}
+		runtimeService.SetDraftPreviewPlacementReader(draftPreviewSource)
+		draftPreviewWidgetRuntime = &draftPreviewWidgetLaunchService{source: draftPreviewSource, runtime: runtimeService}
 	}
 	auth := &authHTTP{
 		login:                       NewPostgresLoginOrchestrator(pool, nil, nil),
@@ -186,7 +191,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		publishedAssets:             courses.NewPublishedAssetReadService(coursesRepository),
 		publishedCatalog:            courses.NewPublishedCatalogService(coursesRepository),
 		assetStorage:                assetStorage,
-		authoring:                   authoring.NewReadService(authoringRepository, authoringAuthorizer),
+		authoring:                   authoringReads,
 		authoringCreation:           authoring.NewDraftCreationService(authoringRepository),
 		authoringMutations:          authoring.NewDraftMutationService(authoringRepository, authoringAuthorizer),
 		authoringStructureMutations: authoring.NewModuleMutationService(authoringRepository, authoringAuthorizer),
@@ -199,6 +204,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringPublications:       authoring.NewPublicationApplicationService(publicationService, authoringAuthorizer, time.Now),
 		authoringAssetUploads:       authoring.NewAssetUploadService(assetIngestion, authoringAuthorizer),
 		authoringAssets:             authoring.NewAssetListService(assetRepository, authoringAuthorizer),
+		authoringAssetDelivery:      authoring.NewDraftAssetReadService(assetRepository, authoringAuthorizer),
 		authoringAssessments:        authoring.NewAssessmentManagementService(assessmentRepository, authoringAuthorizer),
 		learnerAttempts:             assessments.NewLearnerAttemptService(assessmentRepository, coursesRepository, time.Now),
 		community:                   community.NewService(communitypostgres.New(pool), coursesRepository),
@@ -215,6 +221,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		portabilityExporter:         packageExporter,
 		portabilityImporter:         packageImporter,
 		courseWidgetRuntime:         courseWidgetRuntime,
+		draftPreviewWidgetRuntime:   draftPreviewWidgetRuntime,
 		dashboardWidgetRuntime:      dashboardWidgetRuntime,
 		dashboardWidgets:            dashboardWidgets,
 		pluginManagement:            pluginManagement,
@@ -404,6 +411,10 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				if auth.authoringAssets != nil {
 					protected.Get("/authoring/drafts/{draftId}/assets", auth.handleAuthoringAssetList)
 				}
+				if auth.authoringAssetDelivery != nil && auth.assetStorage != nil {
+					protected.Get("/authoring/drafts/{draftId}/assets/{assetId}/content", auth.handleAuthoringDraftAsset)
+					protected.Head("/authoring/drafts/{draftId}/assets/{assetId}/content", auth.handleAuthoringDraftAsset)
+				}
 				if auth.authoringAssessments != nil {
 					protected.Get("/authoring/drafts/{draftId}/assessments", auth.handleAuthoringAssessmentList)
 					protected.Post("/authoring/drafts/{draftId}/assessments", auth.handleAuthoringAssessmentCreate)
@@ -434,6 +445,9 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 				}
 				if auth.authoringCourseWidgets != nil {
 					protected.Get("/authoring/drafts/{draftId}/plugins/course-widgets", auth.handleAuthoringCourseWidgets)
+				}
+				if auth.draftPreviewWidgetRuntime != nil {
+					protected.Post("/authoring/drafts/{draftId}/lessons/{lessonId}/blocks/{blockKey}/widget-runtime", auth.handleDraftPreviewWidgetRuntimeLaunch)
 				}
 				if auth.authoringMemberships != nil {
 					protected.Post("/authoring/drafts/{draftId}/members", auth.handleAuthoringMemberAdd)

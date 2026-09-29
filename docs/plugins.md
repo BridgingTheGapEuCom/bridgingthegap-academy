@@ -212,6 +212,31 @@ The launch descriptor conveys that context in the existing handshake because
 the runtime CSP deliberately has `connect-src 'none'`; the protected context
 endpoint remains available to a future host-mediated boundary.
 
+Draft Lesson Preview uses the same sandbox, runtime page, bridge protocol,
+short-lived token issuer, and `WidgetRuntimeFrame`, but it has a distinct
+runtime mode. The authenticated authoring launch URL identifies only the Draft,
+Lesson, and saved `PLUGIN_WIDGET` block key. The server authorizes that Draft,
+loads the exact saved placement, and derives the pinned plugin ID, version,
+artifact digest, Course-widget entrypoint, and configuration. The client cannot
+submit or override those values.
+
+A Draft Preview launch receives `widget.course.preview.context.read` instead of
+the published Course or Dashboard context capability. Its complete widget
+context is `contextType: DRAFT_PREVIEW`, placement key, and the saved
+configuration snapshot. It contains no author or learner identity, Draft or
+Lesson metadata, progress, answers, storage identity, or management authority.
+The three context capabilities are mutually isolated; their bearer tokens
+cannot substitute for one another. Widgets do not receive broad Draft-asset
+access.
+
+Refresh preserves the launch-time configuration snapshot while reloading the
+authoritative placement and requiring its pinned release coordinates to remain
+identical. Removing or replacing the block, disabling the plugin, revoking its
+approval, disabling its signing key, or failing integrity checks blocks refresh
+and new launches. An already issued token follows the normal five-minute expiry
+rule; no active-token revocation mechanism is introduced. A later saved
+configuration is visible only through a new Preview launch.
+
 If a pinned release is later disabled or loses trust, the CourseVersion remains
 unchanged and the rest of the Course reads normally. The widget renders a calm
 unavailable state and cannot obtain a fresh launch or refreshed token.

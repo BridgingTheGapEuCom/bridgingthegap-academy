@@ -20,7 +20,7 @@
             <header class="lesson-page__header"><p class="lesson-page__eyebrow">{{ moduleTitle }}</p><h1 id="authoring-lesson-preview-title">{{ state.lesson.title }}</h1><p v-if="state.lesson.description" class="lesson-page__description">{{ state.lesson.description }}</p></header>
             <section v-if="state.lesson.objectives.length" aria-labelledby="authoring-preview-objectives"><h2 id="authoring-preview-objectives">Lesson objectives</h2><ul><li v-for="objective in state.lesson.objectives" :key="objective">{{ objective }}</li></ul></section>
             <section v-if="!state.content.blocks.length" class="lesson-content" aria-label="Lesson content"><p>This lesson has no published content yet.</p></section>
-            <section v-else class="lesson-content" aria-label="Lesson content"><div v-for="block in state.content.blocks" :key="block.key" class="lesson-content__block"><LessonBlockRenderer :block="block" /></div></section>
+            <section v-else class="lesson-content" aria-label="Lesson content"><div v-for="block in state.content.blocks" :key="block.key" class="lesson-content__block"><LessonBlockRenderer :block="block" :asset-context="{ kind: 'draft-preview', draftID: draft.id }" :draft-preview-widget-context="{ draftID: draft.id, lessonID: state.lesson.id }" /></div></section>
           </div>
         </article>
       </div>

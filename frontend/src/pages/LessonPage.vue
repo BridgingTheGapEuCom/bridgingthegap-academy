@@ -59,7 +59,7 @@
 
       <section v-else-if="mode === 'continuous'" class="lesson-content" aria-label="Lesson content">
         <div v-for="block in state.content.blocks" :id="`lesson-block-${block.key}`" :key="block.key" class="lesson-content__block">
-          <LessonBlockRenderer :block="block" :course-id="state.lesson.course.courseId" :course-version="state.lesson.version.version" :lesson-key="state.lesson.lesson.key" />
+          <LessonBlockRenderer :block="block" :asset-context="assetContext" :course-id="state.lesson.course.courseId" :course-version="state.lesson.version.version" :lesson-key="state.lesson.lesson.key" />
         </div>
       </section>
 
@@ -67,7 +67,7 @@
         <h2 id="focus-title">Focus mode</h2>
         <p class="lesson-focus__position" aria-live="polite">Block {{ focusIndex + 1 }} of {{ state.content.blocks.length }}</p>
         <div class="lesson-focus__block" tabindex="-1">
-          <LessonBlockRenderer :block="state.content.blocks[focusIndex]" :course-id="state.lesson.course.courseId" :course-version="state.lesson.version.version" :lesson-key="state.lesson.lesson.key" />
+          <LessonBlockRenderer :block="state.content.blocks[focusIndex]" :asset-context="assetContext" :course-id="state.lesson.course.courseId" :course-version="state.lesson.version.version" :lesson-key="state.lesson.lesson.key" />
         </div>
         <div class="lesson-focus__actions">
           <BtgButton variant="secondary" :disabled="focusIndex === 0" @click="previousBlock">Previous block</BtgButton>
@@ -102,6 +102,12 @@ const mode = ref<'continuous' | 'focus'>('continuous')
 const focusIndex = ref(0)
 let requestVersion = 0
 let active = true
+
+const assetContext = computed(() => {
+  const ready = state.value
+  if (ready.kind !== 'ready' || !ready.lesson.course.courseId || !ready.lesson.version.version) return undefined
+  return { kind: 'published' as const, courseID: ready.lesson.course.courseId, version: ready.lesson.version.version }
+})
 
 const neighbors = computed(() => {
   const ready = state.value
