@@ -10,7 +10,7 @@ function renderInline(inline: RichTextInline): VNode {
     if (mark.type === 'strong') node = h('strong', [node])
     else if (mark.type === 'emphasis') node = h('em', [node])
     else if (mark.type === 'inline_code') node = h('code', [node])
-    else if (mark.type === 'link') node = h('a', { href: mark.href }, [node])
+    else if (mark.type === 'link') node = h('a', { href: mark.href, rel: 'noopener noreferrer' }, [node])
   }
   return node
 }

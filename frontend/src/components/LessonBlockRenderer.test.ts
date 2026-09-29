@@ -17,9 +17,24 @@ describe('LessonBlockRenderer', () => {
   afterEach(cleanup)
 
   it('renders constrained rich text, headings, and safe links as semantic DOM', () => {
-    renderBlock({ key: 'text', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Reference', marks: [{ type: 'link', href: 'https://example.test' }] }] }, { type: 'ordered_list', items: [[{ type: 'text', text: 'First', marks: [] }]] }] } } })
-    expect(screen.getByRole('link', { name: 'Reference' }).getAttribute('href')).toBe('https://example.test')
-    expect(screen.getByRole('list')).toBeTruthy()
+    renderBlock({ key: 'text', type: 'TEXT', payload: { content: { nodes: [
+      { type: 'paragraph', content: [
+        { type: 'text', text: 'Bold', marks: [{ type: 'strong' }] },
+        { type: 'text', text: ' italic', marks: [{ type: 'emphasis' }] },
+        { type: 'text', text: ' code', marks: [{ type: 'inline_code' }] },
+        { type: 'text', text: ' Reference', marks: [{ type: 'link', href: 'https://example.test' }] },
+      ] },
+      { type: 'bullet_list', items: [[{ type: 'text', text: 'Bullet', marks: [] }]] },
+      { type: 'ordered_list', items: [[{ type: 'text', text: 'First', marks: [] }]] },
+    ] } } })
+    const link = screen.getByRole('link', { name: 'Reference' })
+    expect(link.getAttribute('href')).toBe('https://example.test')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(document.querySelector('strong')?.textContent).toBe('Bold')
+    expect(document.querySelector('em')?.textContent).toBe(' italic')
+    expect(document.querySelector('code')?.textContent).toBe(' code')
+    expect(document.querySelectorAll('ul li')).toHaveLength(1)
+    expect(document.querySelectorAll('ol li')).toHaveLength(1)
     cleanup()
     renderBlock({ key: 'heading', type: 'HEADING', payload: { level: 2, content: [{ type: 'text', text: 'A heading', marks: [] }] } })
     expect(screen.getByRole('heading', { level: 2, name: 'A heading' })).toBeTruthy()

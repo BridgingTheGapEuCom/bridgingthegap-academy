@@ -12,6 +12,9 @@
     "api:types": "openapi-typescript api/openapi.yaml -o frontend/src/api/generated.ts"
   },
   "dependencies": {
+    "@tiptap/extension-link": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
+    "@tiptap/vue-3": "3.31.3",
     "reka-ui": "2.10.4",
     "vue": "3.5.42",
     "vue-i18n": "11.4.10",

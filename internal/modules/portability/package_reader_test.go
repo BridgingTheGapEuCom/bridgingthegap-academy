@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/assets"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/courses"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
 )
 
@@ -28,6 +29,10 @@ func TestReaderValidatesExportAndBuildsSafePreview(t *testing.T) {
 	preview := validated.Preview()
 	if preview.Title != "Portable course" || preview.Version != "1.0.0" || preview.AssetCount != 1 || preview.AssessmentCount != 1 || preview.LessonCount != 1 || preview.FormatVersion != 1 {
 		t.Fatalf("preview = %#v", preview)
+	}
+	rich := validated.course.Modules[0].Lessons[0].Content.Blocks[0].Payload.(courses.TextBlockPayload).Content
+	if rich.Nodes[0].Content[0].Marks[0].Type != "strong" || rich.Nodes[0].Content[1].Marks[0].Type != "link" || rich.Nodes[1].Type != "ordered_list" {
+		t.Fatalf("import reader flattened rich text: %#v", rich)
 	}
 	encoded, _ := json.Marshal(preview)
 	if bytes.Contains(encoded, []byte("option-b")) || bytes.Contains(encoded, []byte("StorageObjectID")) {

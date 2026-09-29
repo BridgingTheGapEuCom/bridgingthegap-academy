@@ -69,6 +69,9 @@ export function contentEditorError(content: AuthoringLessonContent): string | un
     if (block.type === 'QUOTE' && block.payload.sourceUrl && !safePublishedURL(block.payload.sourceUrl)) return 'Use a safe HTTPS or internal source URL.'
     const inlineGroups = block.type === 'HEADING' ? [block.payload.content]
       : block.type === 'TEXT' || block.type === 'CALLOUT' ? block.payload.content.nodes.flatMap((node) => node.type === 'paragraph' ? [node.content ?? []] : node.items ?? []) : []
+    if ((block.type === 'HEADING' || block.type === 'TEXT' || block.type === 'CALLOUT')
+      && (!inlineGroups.length || inlineGroups.some((items) => !items.length)
+        || !inlineGroups.some((items) => items.some((item) => item.type === 'text' && item.text)))) return 'Enter text for every paragraph or list item.'
     if (inlineGroups.length && (inlineGroups.some((items) => items.some((item) => item.type === 'text' && !item.text))
       || inlineGroups.reduce((count, items) => count + items.reduce((n, item) => n + Array.from(item.text ?? '').length, 0), 0) > contentEditorLimits.text)) return 'Each text run needs text, within the 50,000-character block limit.'
   }

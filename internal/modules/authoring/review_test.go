@@ -33,7 +33,10 @@ func reviewSnapshotFixture(t *testing.T) (CourseDraft, []DraftModule, []DraftLes
 		{ID: "30000000-0000-4000-8000-000000000001", ModuleInput: ModuleInput{DraftID: draft.ID, StableKey: "foundations", Title: "Foundations", Position: 0}},
 		{ID: "30000000-0000-4000-8000-000000000002", ModuleInput: ModuleInput{DraftID: draft.ID, StableKey: "practice", Title: "Practice", Position: 1}},
 	}
-	content := courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{{Key: "separator", Type: courses.BlockDivider, Payload: courses.DividerBlockPayload{}}}}
+	content := courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{
+		{Key: "separator", Type: courses.BlockDivider, Payload: courses.DividerBlockPayload{}},
+		{Key: "rich-text", Type: courses.BlockText, Payload: courses.TextBlockPayload{Content: courses.RichText{Nodes: []courses.RichTextNode{{Type: "paragraph", Content: []courses.RichTextInline{{Type: "text", Text: "Formatted", Marks: []courses.RichTextMark{{Type: "strong"}, {Type: "link", Href: "/reference"}}}}}, {Type: "bullet_list", Items: [][]courses.RichTextInline{{{Type: "text", Text: "Item"}}}}}}}},
+	}}
 	lessons := []DraftLesson{
 		{ID: "40000000-0000-4000-8000-000000000001", LessonInput: LessonInput{DraftID: draft.ID, ModuleID: modules[0].ID, StableKey: "introduction", Title: "Introduction", Description: "Introduce the review model.", LearningObjectives: []string{"Describe a review cycle"}, Position: 0, Content: content}},
 		{ID: "40000000-0000-4000-8000-000000000002", LessonInput: LessonInput{DraftID: draft.ID, ModuleID: modules[1].ID, StableKey: "exercise", Title: "Exercise", Description: "Apply the review model.", LearningObjectives: []string{"Apply a review cycle"}, Position: 0, Content: courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{}}}},
@@ -63,6 +66,10 @@ func TestReviewSnapshotFreezesCanonicalDraftState(t *testing.T) {
 	prerequisites[0].TargetStableKey = "changed-later"
 	if snapshot.Draft.Title != "Review fixture" || snapshot.Modules[0].Title != "Foundations" || snapshot.Modules[0].Lessons[0].Objectives[0] != "Describe a review cycle" || snapshot.Modules[0].Lessons[0].Content.Blocks[0].Key != "separator" || snapshot.Modules[1].Lessons[0].PrerequisiteStableKeys[0] != "introduction" {
 		t.Fatal("snapshot retained mutable source aliases")
+	}
+	rich := snapshot.Modules[0].Lessons[0].Content.Blocks[1].Payload.(courses.TextBlockPayload).Content
+	if rich.Nodes[0].Content[0].Marks[0].Type != "strong" || rich.Nodes[0].Content[0].Marks[1].Href != "/reference" || rich.Nodes[1].Type != "bullet_list" {
+		t.Fatalf("review snapshot flattened rich text: %#v", rich)
 	}
 
 	encoded, err := MarshalReviewSnapshot(snapshot)
