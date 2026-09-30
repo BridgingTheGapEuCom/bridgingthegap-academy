@@ -68,11 +68,15 @@ export function contentEditorError(content: AuthoringLessonContent): string | un
     if (block.type === 'QUOTE' && (!block.payload.text.trim() || new TextEncoder().encode(block.payload.text).length > contentEditorLimits.text)) return 'Enter quote text within the 50,000-byte limit.'
     if (block.type === 'QUOTE' && block.payload.sourceUrl && !safePublishedURL(block.payload.sourceUrl)) return 'Use a safe HTTPS or internal source URL.'
     const inlineGroups = block.type === 'HEADING' ? [block.payload.content]
-      : block.type === 'TEXT' || block.type === 'CALLOUT' ? block.payload.content.nodes.flatMap((node) => node.type === 'paragraph' ? [node.content ?? []] : node.items ?? []) : []
+      : block.type === 'TEXT' || block.type === 'CALLOUT' ? block.payload.content.nodes.flatMap((node) => node.type === 'paragraph' ? [node.content ?? []] : node.type === 'code_block' ? [] : node.items ?? []) : []
+    const codeText = block.type === 'TEXT' || block.type === 'CALLOUT'
+      ? block.payload.content.nodes.filter((node) => node.type === 'code_block').map((node) => node.text ?? '') : []
     if ((block.type === 'HEADING' || block.type === 'TEXT' || block.type === 'CALLOUT')
-      && (!inlineGroups.length || inlineGroups.some((items) => !items.length)
-        || !inlineGroups.some((items) => items.some((item) => item.type === 'text' && item.text)))) return 'Enter text for every paragraph or list item.'
-    if (inlineGroups.length && (inlineGroups.some((items) => items.some((item) => item.type === 'text' && !item.text))
-      || inlineGroups.reduce((count, items) => count + items.reduce((n, item) => n + Array.from(item.text ?? '').length, 0), 0) > contentEditorLimits.text)) return 'Each text run needs text, within the 50,000-character block limit.'
+      && ((!inlineGroups.length && !codeText.length) || inlineGroups.some((items) => !items.length)
+        || (!inlineGroups.some((items) => items.some((item) => item.type === 'text' && item.text)) && !codeText.some((text) => text)))) return 'Enter text for every paragraph, list item, or code block.'
+    if ((inlineGroups.length || codeText.length) && (inlineGroups.some((items) => items.some((item) => item.type === 'text' && !item.text))
+      || inlineGroups.reduce((count, items) => count + items.reduce((n, item) => n + Array.from(item.text ?? '').length, 0), 0)
+        + codeText.reduce((count, text) => count + Array.from(text).length, 0) > contentEditorLimits.text)) return 'Each text run and code block needs text, within the 50,000-character block limit.'
+    if (codeText.some((text) => text === '')) return 'Enter code in every embedded code block.'
   }
 }

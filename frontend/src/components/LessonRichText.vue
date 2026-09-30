@@ -13,8 +13,9 @@ defineProps<{ content: RichText }>()
     <ul v-else-if="node.type === 'bullet_list'">
       <li v-for="(item, itemIndex) in node.items" :key="itemIndex"><LessonRichTextInlines :items="item" /></li>
     </ul>
-    <ol v-else>
+    <ol v-else-if="node.type === 'ordered_list'">
       <li v-for="(item, itemIndex) in node.items" :key="itemIndex"><LessonRichTextInlines :items="item" /></li>
     </ol>
+    <pre v-else-if="node.type === 'code_block'" class="lesson-rich-text__code"><code>{{ node.text }}</code></pre>
   </template>
 </template>

@@ -218,6 +218,7 @@ type RichTextNode struct {
 	Type    string             `json:"type"`
 	Content []RichTextInline   `json:"content,omitempty"`
 	Items   [][]RichTextInline `json:"items,omitempty"`
+	Text    string             `json:"text,omitempty"`
 }
 type RichTextInline struct {
 	Type  string         `json:"type"`
@@ -238,12 +239,12 @@ func (r RichText) Validate() error {
 		switch x.Type {
 		case "paragraph":
 			c, e := inlines(x.Content)
-			if e != nil || len(x.Items) > 0 {
+			if e != nil || len(x.Items) > 0 || x.Text != "" {
 				return errors.New("invalid paragraph")
 			}
 			n += c
 		case "bullet_list", "ordered_list":
-			if len(x.Content) > 0 || len(x.Items) == 0 || len(x.Items) > 100 {
+			if len(x.Content) > 0 || len(x.Items) == 0 || len(x.Items) > 100 || x.Text != "" {
 				return errors.New("invalid list")
 			}
 			for _, i := range x.Items {
@@ -253,6 +254,11 @@ func (r RichText) Validate() error {
 				}
 				n += c
 			}
+		case "code_block":
+			if len(x.Content) > 0 || len(x.Items) > 0 || x.Text == "" {
+				return errors.New("invalid rich text code block")
+			}
+			n += utf8.RuneCountInString(x.Text)
 		default:
 			return errors.New("unsupported rich text node")
 		}

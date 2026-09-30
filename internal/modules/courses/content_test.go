@@ -11,8 +11,10 @@ func validRichText() RichText {
 }
 
 func TestLessonContentValidationAndRoundTrip(t *testing.T) {
+	rich := validRichText()
+	rich.Nodes = append(rich.Nodes, RichTextNode{Type: "code_block", Text: "kubectl get pods\n  kubectl get services"})
 	content := LessonContent{SchemaVersion: LessonContentSchemaVersion, Blocks: []Block{
-		{Key: "intro", Type: BlockText, Payload: TextBlockPayload{Content: validRichText()}},
+		{Key: "intro", Type: BlockText, Payload: TextBlockPayload{Content: rich}},
 		{Key: "divider", Type: BlockDivider, Payload: DividerBlockPayload{}},
 	}}
 	data, err := MarshalLessonContent(content)
@@ -22,6 +24,10 @@ func TestLessonContentValidationAndRoundTrip(t *testing.T) {
 	loaded, err := ParseLessonContent(data)
 	if err != nil || len(loaded.Blocks) != 2 || loaded.Blocks[0].Key != "intro" || loaded.Blocks[1].Key != "divider" {
 		t.Fatalf("content round trip failed: %#v, %v", loaded, err)
+	}
+	loadedRich := loaded.Blocks[0].Payload.(TextBlockPayload).Content
+	if loadedRich.Nodes[1].Type != "code_block" || loadedRich.Nodes[1].Text != "kubectl get pods\n  kubectl get services" {
+		t.Fatalf("rich-text code block round trip failed: %#v", loadedRich)
 	}
 	if err := (LessonContent{SchemaVersion: 2}).Validate(); err == nil {
 		t.Fatal("unsupported schema version accepted")
@@ -103,6 +109,12 @@ func TestBuiltInBlockPayloadValidation(t *testing.T) {
 	}
 	if err := (CodeBlockPayload{Code: strings.Repeat("x", MaxCodeCharacters+1)}).Validate(); err == nil {
 		t.Fatal("oversized code accepted")
+	}
+	if err := (RichText{Nodes: []RichTextNode{{Type: "code_block"}}}).Validate(); err == nil {
+		t.Fatal("empty embedded code block accepted")
+	}
+	if err := (RichText{Nodes: []RichTextNode{{Type: "code_block", Text: "code", Content: []RichTextInline{{Type: "text", Text: "nested"}}}}}).Validate(); err == nil {
+		t.Fatal("embedded code block with inline content accepted")
 	}
 	if err := (PluginWidgetBlockPayload{PluginID: "com.example.academy.timeline", PluginVersion: "1.0.0", ArtifactDigest: strings.Repeat("a", 64), WidgetID: "timeline", WidgetType: "COURSE_WIDGET", Configuration: json.RawMessage(`{"onclick":"x"}`)}).Validate(); err == nil {
 		t.Fatal("event-handler configuration accepted")

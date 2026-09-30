@@ -58,7 +58,7 @@ func publicationRichText(text string) courses.RichText {
 			{Type: "text", Text: "with emphasis", Marks: []courses.RichTextMark{{Type: "emphasis"}, {Type: "inline_code"}}},
 			{Type: "text", Text: " and a reference", Marks: []courses.RichTextMark{{Type: "link", Href: "https://example.test/reference"}}},
 		},
-	}, {Type: "bullet_list", Items: [][]courses.RichTextInline{{{Type: "text", Text: "Bullet item"}}}}, {Type: "ordered_list", Items: [][]courses.RichTextInline{{{Type: "text", Text: "First item"}}}}}}
+	}, {Type: "bullet_list", Items: [][]courses.RichTextInline{{{Type: "text", Text: "Bullet item"}}}}, {Type: "ordered_list", Items: [][]courses.RichTextInline{{{Type: "text", Text: "First item"}}}}, {Type: "code_block", Text: "one\n  two"}}}
 }
 
 func TestPublicationConverterConvertsApprovedFrozenReview(t *testing.T) {
@@ -96,7 +96,7 @@ func TestPublicationConverterConvertsApprovedFrozenReview(t *testing.T) {
 		t.Fatalf("canonical content changed: keys=%#v content=%#v", gotBlockKeys, converted.Modules[0].Lessons[0].Content)
 	}
 	rich := converted.Modules[0].Lessons[0].Content.Blocks[0].Payload.(courses.TextBlockPayload).Content
-	if rich.Nodes[0].Content[0].Marks[0].Type != "strong" || rich.Nodes[0].Content[2].Marks[0].Href != "https://example.test/reference" || rich.Nodes[1].Type != "bullet_list" || rich.Nodes[2].Type != "ordered_list" {
+	if rich.Nodes[0].Content[0].Marks[0].Type != "strong" || rich.Nodes[0].Content[2].Marks[0].Href != "https://example.test/reference" || rich.Nodes[1].Type != "bullet_list" || rich.Nodes[2].Type != "ordered_list" || rich.Nodes[3].Text != "one\n  two" {
 		t.Fatalf("rich-text semantics did not survive publication: %#v", rich)
 	}
 	if converted.ID != "" || converted.Modules[0].ID != "" || converted.Modules[0].Lessons[0].ID != "" {

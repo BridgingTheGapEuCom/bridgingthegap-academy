@@ -7,6 +7,7 @@ export type RichText = { nodes: RichTextNode[] }
 export type RichTextNode =
   | { type: 'paragraph'; content: RichTextInline[] }
   | { type: 'bullet_list' | 'ordered_list'; items: RichTextInline[][] }
+  | { type: 'code_block'; text: string }
 export type RichTextInline = { type: 'text'; text: string; marks: RichTextMark[] } | { type: 'hard_break' }
 export type RichTextMark = { type: 'emphasis' | 'strong' | 'inline_code' } | { type: 'link'; href: string }
 
@@ -171,6 +172,8 @@ function richText(value: unknown): RichText | undefined {
       const items = rawNode.items.map(inlineList)
       if (items.some((item) => !item)) return undefined
       nodes.push({ type: rawNode.type, items: items as RichTextInline[][] })
+    } else if (rawNode.type === 'code_block' && isString(rawNode.text) && rawNode.text !== '') {
+      nodes.push({ type: 'code_block', text: rawNode.text })
     } else return undefined
   }
   return { nodes }

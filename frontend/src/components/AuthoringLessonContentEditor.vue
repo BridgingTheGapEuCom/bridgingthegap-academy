@@ -17,10 +17,9 @@ const baseline = ref(contentFingerprint(props.lesson.content))
 const supported = ref(false)
 const picker = ref<HTMLDialogElement>()
 const previewWarning = ref<HTMLDialogElement>()
-const blockEditor = ref<HTMLDialogElement>()
-const editingIndex = ref<number>()
+const editingKey = ref<string>()
 const editingBlock = ref<CanonicalBlock>()
-const blockEditorTrigger = ref<HTMLElement>()
+const editingOriginal = ref<CanonicalBlock>()
 const actionsIndex = ref<number>()
 const pickerTrigger = ref<HTMLElement>()
 const saving = ref(false)
@@ -72,6 +71,9 @@ function initialize(content: AuthoringLessonContent) {
   conflict.value = false
   formError.value = undefined
   message.value = undefined
+  editingKey.value = undefined
+  editingBlock.value = undefined
+  editingOriginal.value = undefined
 }
 const captureScope = useAuthoringAsyncScope(() => `${props.draftId}/${props.lesson.id}`)
 
@@ -92,7 +94,7 @@ onBeforeUnmount(() => { active = false })
 
 function label(type: string) { return (editableBlockTypes.find((entry) => entry.type === type)?.label ?? type).toLowerCase().replaceAll('_', ' ') }
 function openPicker(event: Event) { pickerTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined; if (picker.value?.showModal) picker.value.showModal(); else picker.value?.setAttribute('open', '') }
-function preview() { if (dirty.value) { if (previewWarning.value?.showModal) previewWarning.value.showModal(); else previewWarning.value?.setAttribute('open', ''); return }; emit('preview') }
+function preview() { commitEditing(false); if (dirty.value) { if (previewWarning.value?.showModal) previewWarning.value.showModal(); else previewWarning.value?.setAttribute('open', ''); return }; emit('preview') }
 function closePreviewWarning() { if (previewWarning.value && typeof previewWarning.value.close === 'function' && previewWarning.value.open) previewWarning.value.close(); else previewWarning.value?.removeAttribute('open') }
 function onPickerClosed() { closePicker(true) }
 function closePicker(restoreFocus = true) { const dialog = picker.value; if (dialog && typeof dialog.close === 'function' && dialog.open) dialog.close(); else dialog?.removeAttribute('open'); if (restoreFocus) void nextTick(() => pickerTrigger.value?.focus()) }
@@ -107,14 +109,47 @@ function addBlock(blockType: EditableBlockType) {
   const index = next.blocks.length - 1
   void nextTick(() => {
     if (blockType === 'DIVIDER') globalThis.document.getElementById(`authoring-content-block-${block.key}`)?.focus()
-    else openBlockEditor(index)
+    else startEditing(index)
   })
 }
 function blockSummary(block: CanonicalBlock): string { const p: any = block.payload; if (block.type === 'TEXT') return richTextPlainText(p.content).slice(0, 140) || 'Written content'; if (block.type === 'HEADING') return p.content.map((i: any) => i.text).join(' '); if (block.type === 'IMAGE') return p.caption || p.altText || 'Image asset'; if (block.type === 'VIDEO' || block.type === 'AUDIO') return p.title; if (block.type === 'DOWNLOAD') return p.label; if (block.type === 'CODE') return [p.language, p.code.split('\n')[0]].filter(Boolean).join(' · '); if (block.type === 'QUOTE') return p.text.slice(0,140); if (block.type === 'CALLOUT') return p.title || 'Callout'; if (block.type === 'KNOWLEDGE_CHECK') return 'Inline learner assessment'; if (block.type === 'PLUGIN_WIDGET') return 'Course widget'; return '' }
-function openBlockEditor(index: number, event?: Event) { blockEditorTrigger.value = event?.currentTarget instanceof HTMLElement ? event.currentTarget : undefined; editingIndex.value=index; editingBlock.value=JSON.parse(JSON.stringify(document.value.blocks[index])); if (blockEditor.value?.showModal) blockEditor.value.showModal(); else blockEditor.value?.setAttribute('open','') }
-function onBlockEditorClosed() { editingIndex.value = undefined; editingBlock.value = undefined; void nextTick(() => blockEditorTrigger.value?.focus()) }
-function closeBlockEditor() { if (blockEditor.value && typeof blockEditor.value.close === 'function' && blockEditor.value.open) blockEditor.value.close(); else { blockEditor.value?.removeAttribute('open'); onBlockEditorClosed() } }
-function applyBlockEditor() { if (editingIndex.value === undefined || !editingBlock.value) return; updateBlock(document.value.blocks[editingIndex.value]!.key, editingBlock.value); closeBlockEditor() }
+function copyBlock(block: CanonicalBlock) { return JSON.parse(JSON.stringify(block)) as CanonicalBlock }
+function isEditing(block: CanonicalBlock) { return editingKey.value === block.key }
+function focusEditor(key: string) {
+  const region = globalThis.document.getElementById(`authoring-content-editor-${key}`)
+  region?.querySelector<HTMLElement>('[contenteditable="true"], input, textarea, select, button')?.focus()
+}
+function focusEditControl(key: string) { globalThis.document.getElementById(`authoring-content-edit-${key}`)?.focus() }
+function finishEditing(restoreFocus: boolean) {
+  const key = editingKey.value
+  editingKey.value = undefined
+  editingBlock.value = undefined
+  editingOriginal.value = undefined
+  if (restoreFocus && key) void nextTick(() => focusEditControl(key))
+}
+function commitEditing(restoreFocus = true) { if (editingKey.value) finishEditing(restoreFocus) }
+function startEditing(index: number) {
+  if (saving.value) return
+  const block = document.value.blocks[index]
+  if (!block || block.type === 'DIVIDER') return
+  if (isEditing(block)) return
+  commitEditing(false)
+  editingKey.value = block.key
+  editingOriginal.value = copyBlock(block)
+  editingBlock.value = copyBlock(block)
+  closeActions()
+  void nextTick(() => focusEditor(block.key))
+}
+function updateEditing(block: CanonicalBlock) {
+  if (!editingKey.value || editingKey.value !== block.key) return
+  editingBlock.value = copyBlock(block)
+  updateBlock(block.key, block)
+}
+function doneEditing() { commitEditing(true) }
+function cancelEditing() {
+  if (editingKey.value && editingOriginal.value) updateBlock(editingKey.value, editingOriginal.value)
+  finishEditing(true)
+}
 function toggleActions(index: number) { actionsIndex.value = actionsIndex.value === index ? undefined : index }
 function closeActions() { actionsIndex.value = undefined }
 function updateBlock(key: string, block: CanonicalBlock) {
@@ -128,6 +163,7 @@ function updateBlock(key: string, block: CanonicalBlock) {
 }
 function move(index: number, direction: -1 | 1) {
   if (saving.value) return
+  commitEditing(false)
   const destination = index + direction
   if (destination < 0 || destination >= document.value.blocks.length) return
   const blocks = [...document.value.blocks]
@@ -139,6 +175,7 @@ function move(index: number, direction: -1 | 1) {
 }
 function removeBlock(index: number) {
   if (saving.value) return
+  commitEditing(false)
   const restoreFocus = preserveFocusAfterRemoval(() => globalThis.document.querySelector<HTMLElement>('.authoring-content__add button'))
   document.value.blocks.splice(index, 1)
   closeActions()
@@ -148,6 +185,7 @@ function removeBlock(index: number) {
 
 async function save() {
   const isCurrent = captureScope()
+  commitEditing(false)
   if (saving.value || reloading.value || conflict.value || !supported.value || !dirty.value) return
   formError.value = contentEditorError(document.value)
   if (formError.value) return
@@ -209,24 +247,36 @@ async function reloadLatest() {
         <div v-if="document.blocks.length" class="authoring-content__add"><BtgButton variant="secondary" :disabled="document.blocks.length >= contentEditorLimits.blocks" @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
         <p v-if="document.blocks.length >= contentEditorLimits.blocks">The Lesson has reached the 200-block limit.</p>
         <ol v-if="document.blocks.length" class="authoring-content__blocks" aria-label="Lesson content blocks">
-          <li v-for="(block, index) in document.blocks" :id="`authoring-content-block-${block.key}`" :key="block.key" class="authoring-content__row" tabindex="-1">
-            <span class="authoring-content__number">{{ String(index + 1).padStart(2, '0') }}</span>
-            <div class="authoring-content__summary">
-              <p>{{ label(block.type) }}</p>
-              <strong v-if="block.type !== 'DIVIDER'">{{ blockSummary(block) }}</strong>
-              <hr v-else />
-            </div>
-            <div class="authoring-content__row-actions">
-              <BtgButton v-if="block.type !== 'DIVIDER'" variant="secondary" :aria-label="`Edit block ${index + 1}, ${label(block.type)}`" @click="openBlockEditor(index, $event)">Edit</BtgButton>
-              <div class="authoring-content__menu">
-                <BtgButton variant="secondary" :aria-expanded="actionsIndex === index" :aria-label="`Actions for block ${index + 1}, ${label(block.type)}`" @click="toggleActions(index)">Actions</BtgButton>
-                <div v-if="actionsIndex === index" role="menu" class="authoring-content__menu-items" @keydown.esc="closeActions">
-                  <BtgButton role="menuitem" variant="secondary" :disabled="index === 0" @click="move(index, -1)">Move up</BtgButton>
-                  <BtgButton role="menuitem" variant="secondary" :disabled="index === document.blocks.length - 1" @click="move(index, 1)">Move down</BtgButton>
-                  <BtgButton role="menuitem" variant="destructive" @click="removeBlock(index)">Remove</BtgButton>
+          <li v-for="(block, index) in document.blocks" :id="`authoring-content-block-${block.key}`" :key="block.key" :class="['authoring-content__row', { 'is-expanded': isEditing(block) }]" tabindex="-1">
+            <div class="authoring-content__row-header">
+              <span class="authoring-content__number">{{ String(index + 1).padStart(2, '0') }}</span>
+              <div class="authoring-content__summary">
+                <p>{{ label(block.type) }}</p>
+                <strong v-if="block.type !== 'DIVIDER'">{{ blockSummary(block) }}</strong>
+                <hr v-else />
+              </div>
+              <div class="authoring-content__row-actions">
+                <template v-if="block.type !== 'DIVIDER'">
+                  <BtgButton v-if="!isEditing(block)" :id="`authoring-content-edit-${block.key}`" variant="secondary" :aria-controls="`authoring-content-editor-${block.key}`" :aria-expanded="false" :aria-label="`Edit block ${index + 1}, ${label(block.type)}`" @click="startEditing(index)">Edit</BtgButton>
+                  <template v-else>
+                    <BtgButton variant="secondary" :aria-label="`Cancel changes for block ${index + 1}, ${label(block.type)}`" @click="cancelEditing">Cancel changes</BtgButton>
+                    <BtgButton :id="`authoring-content-edit-${block.key}`" :aria-controls="`authoring-content-editor-${block.key}`" :aria-expanded="true" :aria-label="`Done editing block ${index + 1}, ${label(block.type)}`" @click="doneEditing">Done</BtgButton>
+                  </template>
+                </template>
+                <div class="authoring-content__menu">
+                  <BtgButton variant="secondary" :aria-expanded="actionsIndex === index" :aria-label="`Actions for block ${index + 1}, ${label(block.type)}`" @click="toggleActions(index)">Actions</BtgButton>
+                  <div v-if="actionsIndex === index" role="menu" class="authoring-content__menu-items" @keydown.esc="closeActions">
+                    <BtgButton role="menuitem" variant="secondary" :disabled="index === 0" @click="move(index, -1)">Move up</BtgButton>
+                    <BtgButton role="menuitem" variant="secondary" :disabled="index === document.blocks.length - 1" @click="move(index, 1)">Move down</BtgButton>
+                    <BtgButton role="menuitem" variant="destructive" @click="removeBlock(index)">Remove</BtgButton>
+                  </div>
                 </div>
               </div>
             </div>
+            <section v-if="isEditing(block) && editingBlock" :id="`authoring-content-editor-${block.key}`" class="authoring-content__inline-editor" :aria-label="`Editing block ${index + 1}, ${label(block.type)}`">
+              <h4>Editing {{ label(block.type) }}</h4>
+              <AuthoringContentBlock :block="editingBlock" :position="index + 1" :draft-id="draftId" :lesson-id="lesson.id" :course-widgets="courseWidgets" @update="updateEditing" @unavailable="emit('unavailable')" />
+            </section>
           </li>
         </ol>
         <div v-else class="authoring-content__empty"><p><strong>No lesson content yet.</strong></p><p>Add text, media, code, callouts, and other learning material.</p><BtgButton @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
@@ -250,6 +300,5 @@ async function reloadLatest() {
       <footer><BtgButton variant="secondary" @click="closePicker">Cancel</BtgButton></footer>
     </div>
   </dialog>
-  <dialog ref="blockEditor" class="authoring-content__picker authoring-content__block-editor" aria-labelledby="authoring-block-editor-title" @close="onBlockEditorClosed"><div><h3 id="authoring-block-editor-title">Edit {{ editingBlock ? label(editingBlock.type) : 'content' }} block</h3><AuthoringContentBlock v-if="editingBlock" :block="editingBlock" :position="(editingIndex ?? 0) + 1" :draft-id="draftId" :lesson-id="lesson.id" :course-widgets="courseWidgets" @update="editingBlock = $event" @unavailable="emit('unavailable')" /><footer><BtgButton variant="secondary" @click="closeBlockEditor">Cancel</BtgButton><BtgButton @click="applyBlockEditor">Apply</BtgButton></footer></div></dialog>
   <dialog ref="previewWarning" class="authoring-content__picker authoring-content__preview-warning" aria-labelledby="authoring-preview-warning-title"><div><h3 id="authoring-preview-warning-title">You have unsaved changes</h3><p>Preview will show the last saved version.</p><footer><BtgButton variant="secondary" @click="closePreviewWarning">Cancel</BtgButton><BtgButton variant="secondary" @click="closePreviewWarning(); emit('preview')">Preview saved version</BtgButton><BtgButton @click="save().then(() => { if (!formError) { closePreviewWarning(); emit('preview') } })">Save and preview</BtgButton></footer></div></dialog>
 </template>

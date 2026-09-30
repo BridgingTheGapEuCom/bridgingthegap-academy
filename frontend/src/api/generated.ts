@@ -2824,9 +2824,11 @@ export interface components {
         };
         RichTextNode: {
             /** @enum {string} */
-            type?: "paragraph" | "bullet_list" | "ordered_list";
+            type?: "paragraph" | "bullet_list" | "ordered_list" | "code_block";
             content?: components["schemas"]["RichTextInline"][];
             items?: components["schemas"]["RichTextInline"][][];
+            /** @description Preserved plain text for a multiline code block. */
+            text?: string;
         };
         RichTextInline: {
             /** @enum {string} */

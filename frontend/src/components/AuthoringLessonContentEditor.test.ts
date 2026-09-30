@@ -18,7 +18,7 @@ function lesson(content: AuthoringLessonContent = { schemaVersion: 1, blocks: []
 async function add(type: string) {
   await fireEvent.click(screen.getByRole('button', { name: '+ Add content' }))
   await fireEvent.click(screen.getByRole('button', { name: type }))
-  if (type !== 'Divider') await fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+  if (type !== 'Divider') await fireEvent.click(await screen.findByRole('button', { name: /Done editing block/ }))
 }
 async function edit(index: number) { await fireEvent.click(screen.getByRole('button', { name: new RegExp(`Edit block ${index}`) })) }
 async function replaceEditorHTML(html: string) {
@@ -44,7 +44,8 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.queryByRole('button', { name: /Edit block 2/ })).toBeNull()
     await edit(1)
-    expect(screen.getByRole('dialog', { name: 'Edit text block' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: /Edit text block/ })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Editing block 1, text' })).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'Block 1 text' }).querySelector('strong')?.textContent).toBe('Coupling describes dependency.')
     expect(screen.getByRole('toolbar', { name: 'Block 1 text formatting' })).toBeTruthy()
   })
@@ -54,11 +55,11 @@ describe('AuthoringLessonContentEditor', () => {
     await add('Text')
     await edit(1)
     await replaceEditorHTML('<p>Applied text</p>')
-    await fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Done editing block 1, text' }))
     expect(screen.getByText('Applied text')).toBeTruthy()
     await edit(1)
     await replaceEditorHTML('<p>Cancelled</p>')
-    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel changes for block 1, text' }))
     expect(screen.getByText('Applied text')).toBeTruthy()
     expect(replaceContent).not.toHaveBeenCalled()
     await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
@@ -75,6 +76,7 @@ describe('AuthoringLessonContentEditor', () => {
       ] },
       { type: 'bullet_list', items: [[{ type: 'text', text: 'First', marks: [] }], [{ type: 'text', text: 'Second', marks: [] }]] },
       { type: 'ordered_list', items: [[{ type: 'text', text: 'One', marks: [] }]] },
+      { type: 'code_block', text: 'kubectl get pods\n  kubectl get services' },
     ] } } }] }
     render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson(content) } })
     await edit(1)
@@ -84,9 +86,9 @@ describe('AuthoringLessonContentEditor', () => {
     expect(editor.querySelector('code')).toBeTruthy()
     expect(editor.querySelector('a')?.getAttribute('href')).toBe('https://example.test/read')
     expect(editor.querySelectorAll('ul li')).toHaveLength(2)
-    expect(editor.querySelectorAll('ol li')).toHaveLength(1)
+    expect(editor.querySelector('ol')).toBeTruthy()
     await replaceEditorHTML(`${editor.innerHTML}<p>Changed</p>`)
-    await fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Done editing block 1, text' }))
     await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
     const saved = (replaceContent.mock.calls[0]![2] as any).content.blocks[0].payload.content
     expect(saved.nodes[0].content.map((item: any) => item.marks)).toEqual([
@@ -94,6 +96,7 @@ describe('AuthoringLessonContentEditor', () => {
     ])
     expect(saved.nodes[1].type).toBe('bullet_list')
     expect(saved.nodes[2].type).toBe('ordered_list')
+    expect(saved.nodes[3]).toEqual({ type: 'code_block', text: 'kubectl get pods\n  kubectl get services' })
   })
 
   it('keeps numbering and full replacement order after moving and removing blocks', async () => {
@@ -113,10 +116,56 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.getByRole('dialog', { name: 'You have unsaved changes' })).toBeTruthy()
   })
 
-  it('does not eagerly mount editors for a large lesson', () => {
-    const blocks = Array.from({ length: 25 }, (_, index) => ({ key: `divider-${index}`, type: 'DIVIDER' as const, payload: {} }))
+  it('switches blocks by retaining the first block’s local changes and mounts only one editor', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'first', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'First', marks: [] }] }] } } },
+      { key: 'second', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second', marks: [] }] }] } } },
+    ] }) } })
+    await edit(1)
+    await replaceEditorHTML('<p>Changed first</p>')
+    await edit(2)
+    expect(screen.queryByRole('textbox', { name: 'Block 1 text' })).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'Block 2 text' })).toBeTruthy()
+    expect(screen.getByText('Changed first')).toBeTruthy()
+    expect(screen.getAllByRole('textbox')).toHaveLength(1)
+  })
+
+  it('saves the active inline editor value and keeps Preview’s dirty warning', async () => {
+    const { emitted } = render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'text', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Before', marks: [] }] }] } } },
+    ] }) } })
+    await edit(1)
+    await replaceEditorHTML('<p>Latest active value</p>')
+    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(screen.getByRole('dialog', { name: 'You have unsaved changes' })).toBeTruthy()
+    expect(screen.getByText('Latest active value')).toBeTruthy()
+    expect(emitted().preview).toBeUndefined()
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    expect((replaceContent.mock.calls[0]![2] as any).content.blocks[0].payload.content.nodes[0].content[0].text).toBe('Latest active value')
+  })
+
+  it('expands asset controls inline and updates the collapsed summary after Done', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: 'image-asset' }, altText: 'Original alternative text', decorative: false, caption: '' } },
+    ] }) } })
+    await edit(1)
+    expect(screen.queryByRole('dialog', { name: /Edit image block/ })).toBeNull()
+    const alt = screen.getByRole('textbox', { name: /Alternative text/ })
+    await fireEvent.update(alt, 'Updated alternative text')
+    await fireEvent.click(screen.getByRole('button', { name: 'Done editing block 1, image' }))
+    expect(screen.getByText('Updated alternative text')).toBeTruthy()
+  })
+
+  it('does not eagerly mount editors for a large lesson', async () => {
+    const blocks: AuthoringLessonContent['blocks'] = [
+      { key: 'text-0', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'First', marks: [] }] }] } } },
+      ...Array.from({ length: 29 }, (_, index) => ({ key: `divider-${index}`, type: 'DIVIDER', payload: {} } as AuthoringLessonContent['blocks'][number])),
+    ]
     render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks }) } })
-    expect(within(screen.getByRole('list', { name: 'Lesson content blocks' })).getAllByRole('separator')).toHaveLength(25)
+    expect(within(screen.getByRole('list', { name: 'Lesson content blocks' })).getAllByRole('listitem')).toHaveLength(30)
+    expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.queryByRole('dialog', { name: /Edit/ })).toBeNull()
+    await edit(1)
+    expect(screen.getAllByRole('textbox')).toHaveLength(1)
   })
 })

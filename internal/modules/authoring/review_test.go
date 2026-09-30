@@ -35,7 +35,7 @@ func reviewSnapshotFixture(t *testing.T) (CourseDraft, []DraftModule, []DraftLes
 	}
 	content := courses.LessonContent{SchemaVersion: 1, Blocks: []courses.Block{
 		{Key: "separator", Type: courses.BlockDivider, Payload: courses.DividerBlockPayload{}},
-		{Key: "rich-text", Type: courses.BlockText, Payload: courses.TextBlockPayload{Content: courses.RichText{Nodes: []courses.RichTextNode{{Type: "paragraph", Content: []courses.RichTextInline{{Type: "text", Text: "Formatted", Marks: []courses.RichTextMark{{Type: "strong"}, {Type: "link", Href: "/reference"}}}}}, {Type: "bullet_list", Items: [][]courses.RichTextInline{{{Type: "text", Text: "Item"}}}}}}}},
+		{Key: "rich-text", Type: courses.BlockText, Payload: courses.TextBlockPayload{Content: courses.RichText{Nodes: []courses.RichTextNode{{Type: "paragraph", Content: []courses.RichTextInline{{Type: "text", Text: "Formatted", Marks: []courses.RichTextMark{{Type: "strong"}, {Type: "link", Href: "/reference"}}}}}, {Type: "bullet_list", Items: [][]courses.RichTextInline{{{Type: "text", Text: "Item"}}}}, {Type: "code_block", Text: "kubectl get pods\nkubectl get services"}}}}},
 	}}
 	lessons := []DraftLesson{
 		{ID: "40000000-0000-4000-8000-000000000001", LessonInput: LessonInput{DraftID: draft.ID, ModuleID: modules[0].ID, StableKey: "introduction", Title: "Introduction", Description: "Introduce the review model.", LearningObjectives: []string{"Describe a review cycle"}, Position: 0, Content: content}},
@@ -68,7 +68,7 @@ func TestReviewSnapshotFreezesCanonicalDraftState(t *testing.T) {
 		t.Fatal("snapshot retained mutable source aliases")
 	}
 	rich := snapshot.Modules[0].Lessons[0].Content.Blocks[1].Payload.(courses.TextBlockPayload).Content
-	if rich.Nodes[0].Content[0].Marks[0].Type != "strong" || rich.Nodes[0].Content[0].Marks[1].Href != "/reference" || rich.Nodes[1].Type != "bullet_list" {
+	if rich.Nodes[0].Content[0].Marks[0].Type != "strong" || rich.Nodes[0].Content[0].Marks[1].Href != "/reference" || rich.Nodes[1].Type != "bullet_list" || rich.Nodes[2].Text != "kubectl get pods\nkubectl get services" {
 		t.Fatalf("review snapshot flattened rich text: %#v", rich)
 	}
 

@@ -7,12 +7,14 @@ const markOrder: RichTextMark['type'][] = ['strong', 'emphasis', 'inline_code', 
 export function richTextToEditorDocument(content: RichText): JSONContent {
   return {
     type: 'doc',
-    content: content.nodes.map((node) => node.type === 'paragraph'
-      ? { type: 'paragraph', content: inlinesToEditor(node.content) }
-      : {
+    content: content.nodes.map((node) => {
+      if (node.type === 'paragraph') return { type: 'paragraph', content: inlinesToEditor(node.content) }
+      if (node.type === 'code_block') return { type: 'codeBlock', content: [{ type: 'text', text: node.text }] }
+      return {
           type: node.type === 'bullet_list' ? 'bulletList' : 'orderedList',
           content: node.items.map((item) => ({ type: 'listItem', content: [{ type: 'paragraph', content: inlinesToEditor(item) }] })),
-        }),
+      }
+    }),
   }
 }
 
@@ -24,6 +26,11 @@ export function editorDocumentToRichText(document: JSONContent): RichText {
       if (content.length) nodes.push({ type: 'paragraph', content })
       continue
     }
+    if (node.type === 'codeBlock') {
+      const text = (node.content ?? []).filter((child) => child.type === 'text').map((child) => child.text ?? '').join('')
+      if (text) nodes.push({ type: 'code_block', text })
+      continue
+    }
     if (node.type !== 'bulletList' && node.type !== 'orderedList') continue
     const items: RichTextInline[][] = []
     for (const item of node.content ?? []) collectListItem(item, items)
@@ -33,7 +40,7 @@ export function editorDocumentToRichText(document: JSONContent): RichText {
 }
 
 export function richTextPlainText(content: RichText): string {
-  return content.nodes.flatMap((node) => node.type === 'paragraph' ? [inlineText(node.content)] : node.items.map(inlineText)).join(' ').replace(/\s+/g, ' ').trim()
+  return content.nodes.flatMap((node) => node.type === 'paragraph' ? [inlineText(node.content)] : node.type === 'code_block' ? [node.text] : node.items.map(inlineText)).join(' ').replace(/\s+/g, ' ').trim()
 }
 
 function inlinesToEditor(inlines: RichTextInline[]): JSONContent[] {

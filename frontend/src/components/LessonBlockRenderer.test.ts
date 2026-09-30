@@ -26,6 +26,7 @@ describe('LessonBlockRenderer', () => {
       ] },
       { type: 'bullet_list', items: [[{ type: 'text', text: 'Bullet', marks: [] }]] },
       { type: 'ordered_list', items: [[{ type: 'text', text: 'First', marks: [] }]] },
+      { type: 'code_block', text: 'kubectl get pods\n  kubectl get services' },
     ] } } })
     const link = screen.getByRole('link', { name: 'Reference' })
     expect(link.getAttribute('href')).toBe('https://example.test')
@@ -35,6 +36,8 @@ describe('LessonBlockRenderer', () => {
     expect(document.querySelector('code')?.textContent).toBe(' code')
     expect(document.querySelectorAll('ul li')).toHaveLength(1)
     expect(document.querySelectorAll('ol li')).toHaveLength(1)
+    expect(document.querySelector('.lesson-rich-text__code')?.textContent).toBe('kubectl get pods\n  kubectl get services')
+    expect(document.querySelector('.lesson-rich-text__code > code')).toBeTruthy()
     cleanup()
     renderBlock({ key: 'heading', type: 'HEADING', payload: { level: 2, content: [{ type: 'text', text: 'A heading', marks: [] }] } })
     expect(screen.getByRole('heading', { level: 2, name: 'A heading' })).toBeTruthy()

@@ -63,7 +63,7 @@ function selectedWidget() {
 </script>
 
 <template>
-  <AuthoringRichTextEditor v-if="block.type === 'TEXT'" :content="block.payload.content" :label="`Block ${position} text`" @update:content="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
+  <AuthoringRichTextEditor v-if="block.type === 'TEXT'" :content="block.payload.content" :label="`Block ${position} text`" code-blocks @update:content="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
   <template v-else-if="block.type === 'HEADING'">
     <BtgFormField label="Heading level" v-slot="{ controlId }">
       <select :id="controlId" :value="block.payload.level" @change="emit('update', { ...block, payload: { ...block.payload, level: Number(($event.target as HTMLSelectElement).value) } })"><option :value="2">Heading 2</option><option :value="3">Heading 3</option><option :value="4">Heading 4</option></select>

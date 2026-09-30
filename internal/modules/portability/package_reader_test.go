@@ -31,7 +31,7 @@ func TestReaderValidatesExportAndBuildsSafePreview(t *testing.T) {
 		t.Fatalf("preview = %#v", preview)
 	}
 	rich := validated.course.Modules[0].Lessons[0].Content.Blocks[0].Payload.(courses.TextBlockPayload).Content
-	if rich.Nodes[0].Content[0].Marks[0].Type != "strong" || rich.Nodes[0].Content[1].Marks[0].Type != "link" || rich.Nodes[1].Type != "ordered_list" {
+	if rich.Nodes[0].Content[0].Marks[0].Type != "strong" || rich.Nodes[0].Content[1].Marks[0].Type != "link" || rich.Nodes[1].Type != "ordered_list" || rich.Nodes[2].Type != "code_block" || rich.Nodes[2].Text != "first\n  second" {
 		t.Fatalf("import reader flattened rich text: %#v", rich)
 	}
 	encoded, _ := json.Marshal(preview)

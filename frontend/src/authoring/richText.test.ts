@@ -15,9 +15,21 @@ describe('rich-text authoring conversion', () => {
       ] },
       { type: 'bullet_list', items: [[{ type: 'text', text: 'Bullet', marks: [] }]] },
       { type: 'ordered_list', items: [[{ type: 'text', text: 'First', marks: [] }], [{ type: 'text', text: 'Second', marks: [] }]] },
+      { type: 'code_block', text: 'kubectl get pods\n  kubectl get services' },
     ] }
     expect(editorDocumentToRichText(richTextToEditorDocument(content))).toEqual(content)
     expect(richTextPlainText(content)).toContain('Plain bold italic code')
+    expect(richTextPlainText(content)).toContain('kubectl get services')
+  })
+
+  it('preserves multiline code text and indentation from the editor document', () => {
+    const converted = editorDocumentToRichText({ type: 'doc', content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'Run this:' }] },
+      { type: 'codeBlock', content: [{ type: 'text', text: 'first line\n  indented line' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Then continue.' }] },
+    ] })
+    expect(converted.nodes[1]).toEqual({ type: 'code_block', text: 'first line\n  indented line' })
+    expect(richTextToEditorDocument(converted).content?.[1]).toEqual({ type: 'codeBlock', content: [{ type: 'text', text: 'first line\n  indented line' }] })
   })
 
   it('normalizes unsupported editor nodes and strips dangerous or cosmetic marks', () => {
