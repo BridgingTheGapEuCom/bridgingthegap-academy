@@ -183,7 +183,7 @@ describe('AuthoringDraftShell', () => {
     await fireEvent.click(save)
     await waitFor(() => expect(updateAuthoringDraftMock).toHaveBeenCalledWith(firstID, { expectedRevision: 3, title: 'Updated foundations' }))
     expect(screen.getByRole('heading', { level: 1, name: 'Updated foundations' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Save changes' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
   })
 
   it('uses structured overview panels, the shared language picker, and ordered objective rows', async () => {
@@ -247,12 +247,13 @@ describe('AuthoringDraftShell', () => {
   it('keeps Save disabled for unchanged or reverted metadata and reports client validation accessibly', async () => {
     await renderShell()
     const title = await screen.findByRole('textbox', { name: /Title/ })
-    const save = screen.getByRole('button', { name: 'Save changes' })
-    expect(save.hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
     await fireEvent.update(title, 'Temporary title')
+    expect(await screen.findByRole('button', { name: 'Save changes' })).toBeTruthy()
     await fireEvent.update(title, 'Integration foundations')
-    expect(save.hasAttribute('disabled')).toBe(true)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull())
     await fireEvent.update(title, '')
+    const save = await screen.findByRole('button', { name: 'Save changes' })
     await fireEvent.click(save)
     expect(await screen.findByText('Enter a title.')).toBeTruthy()
     expect(title.getAttribute('aria-invalid')).toBe('true')

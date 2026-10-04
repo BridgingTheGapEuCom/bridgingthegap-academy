@@ -1020,3 +1020,266 @@
   border-color: var(--btg-color-border);
   box-shadow: 0 -.3rem .8rem rgb(0 0 0 / .035);
 }
+
+/* Lesson details follows the same quiet, document-style rhythm as content: a
+   small amount of context, then three clear editing sections. */
+.authoring-lesson-editor__form {
+  gap: var(--btg-space-5);
+}
+.authoring-lesson-details__panel {
+  display: grid;
+  gap: var(--btg-space-4);
+  border: var(--btg-border-width) solid color-mix(in srgb, var(--btg-color-border) 82%, transparent);
+  border-radius: var(--btg-radius-control);
+  background: var(--btg-color-surface);
+  padding: var(--btg-space-5);
+}
+.authoring-lesson-details__panel > header {
+  display: grid;
+  gap: var(--btg-space-1);
+}
+.authoring-lesson-details__panel h3,
+.authoring-lesson-details__panel p {
+  margin: 0;
+}
+.authoring-lesson-details__panel h3 {
+  font-size: 1.125rem;
+}
+.authoring-lesson-details__panel > header p,
+.authoring-lesson-details__panel-body > .btg-form-field > .btg-form-field__description {
+  color: var(--btg-color-text-secondary);
+}
+.authoring-lesson-details__panel-body {
+  display: grid;
+  gap: var(--btg-space-4);
+  min-width: 0;
+}
+.authoring-lesson-details__panel-body .btg-form-field {
+  gap: var(--btg-space-1);
+}
+.authoring-lesson-details__panel-body textarea {
+  min-height: 9rem;
+}
+.authoring-lesson-details__objectives {
+  display: grid;
+  gap: var(--btg-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.authoring-lesson-details__objectives li {
+  display: grid;
+  position: relative;
+  grid-template-columns: 2.25rem 2.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--btg-space-3);
+  min-width: 0;
+  border-bottom: var(--btg-border-width) solid color-mix(in srgb, var(--btg-color-border) 72%, transparent);
+  padding-block: var(--btg-space-2);
+}
+.authoring-lesson-details__objectives li.is-dragging { opacity: .55; }
+.authoring-lesson-details__objectives li.is-drop-before::before,
+.authoring-lesson-details__objectives li.is-drop-after::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: .15rem;
+  background: var(--btg-color-text);
+  content: '';
+}
+.authoring-lesson-details__objectives li.is-drop-before::before { top: calc(-1 * var(--btg-space-2)); }
+.authoring-lesson-details__objectives li.is-drop-after::after { bottom: calc(-1 * var(--btg-space-2)); }
+.authoring-lesson-details__drag-handle {
+  display: inline-grid;
+  width: 2.25rem;
+  min-height: 2.5rem;
+  place-items: center;
+  border: var(--btg-border-width) solid transparent;
+  border-radius: var(--btg-radius-control);
+  background: transparent;
+  color: var(--btg-color-border-strong);
+  cursor: grab;
+  touch-action: none;
+}
+.authoring-lesson-details__drag-handle:hover,
+.authoring-lesson-details__drag-handle:focus-visible,
+.authoring-lesson-details__drag-handle[aria-pressed='true'] {
+  border-color: var(--btg-color-border-strong);
+  background: var(--btg-color-surface-muted);
+  color: var(--btg-color-text);
+}
+.authoring-lesson-details__drag-handle:active { cursor: grabbing; }
+.authoring-lesson-details__drag-handle svg { width: 1rem; height: 1rem; fill: none; stroke: currentcolor; stroke-linecap: round; stroke-width: 3; }
+.authoring-lesson-details__objectives li:first-child { padding-block-start: 0; }
+.authoring-lesson-details__objectives li:last-child { border-bottom: 0; padding-block-end: 0; }
+.authoring-lesson-details__objective-number {
+  display: grid;
+  width: 2.25rem;
+  min-height: 2.5rem;
+  place-items: center;
+  color: var(--btg-color-text-secondary);
+  font-size: var(--btg-font-size-small);
+  font-weight: var(--btg-font-weight-strong);
+  letter-spacing: .06em;
+}
+.authoring-lesson-details__add-objective {
+  width: fit-content;
+  margin-top: var(--btg-space-1);
+}
+.authoring-lesson-details__panel--timing .authoring-lesson-editor__duration input {
+  width: min(100%, 8rem);
+}
+.authoring-lesson-details__save-bar {
+  position: sticky;
+  bottom: var(--btg-space-3);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--btg-space-3);
+  border: var(--btg-border-width) solid var(--btg-color-border);
+  border-radius: var(--btg-radius-surface);
+  background: var(--btg-color-surface);
+  box-shadow: 0 -.3rem .8rem rgb(0 0 0 / .035);
+  padding: var(--btg-space-3) var(--btg-space-4);
+}
+.authoring-lesson-details__save-bar p,
+.authoring-lesson-details__save-bar > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--btg-space-2);
+  margin: 0;
+}
+.authoring-lesson-details__save-bar p {
+  color: var(--btg-color-text-secondary);
+  font-weight: var(--btg-font-weight-medium);
+}
+.authoring-lesson-details__save-bar p span {
+  width: .55rem;
+  height: .55rem;
+  border-radius: 50%;
+  background: var(--btg-color-text-secondary);
+}
+
+/* Shared Authoring foundation. Draft and Lesson routes use the same canvas,
+   navigation, titles, section rhythm, fields, and lesson-wide action bar. */
+.authoring-shell__content,
+.authoring-workspace-header,
+.authoring-section {
+  gap: var(--authoring-page-gap);
+}
+.authoring-shell__section {
+  width: 100%;
+  max-width: none;
+}
+.authoring-workspace-header,
+.authoring-workspace-header > header {
+  display: grid;
+  gap: var(--btg-space-3);
+  min-width: 0;
+}
+.authoring-workspace-header__back { width: fit-content; }
+.authoring-workspace-header__eyebrow {
+  margin: 0;
+  color: var(--btg-color-text-secondary);
+  font-size: var(--btg-font-size-small);
+  font-weight: var(--btg-font-weight-strong);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.authoring-workspace-header h1 { font-size: clamp(2rem, 4vw, 3rem); }
+.authoring-workspace-header__metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--btg-space-3) var(--btg-space-5);
+  margin: 0;
+}
+.authoring-workspace-header__metadata div { display: grid; gap: var(--btg-space-1); }
+.authoring-workspace-header__metadata dt { color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-medium); }
+.authoring-workspace-header__metadata dd { margin: 0; font-weight: var(--btg-font-weight-strong); }
+.authoring-workspace-header__metadata > div + div { border-inline-start: var(--btg-border-width) solid var(--btg-color-border); padding-inline-start: var(--btg-space-5); }
+.authoring-workspace-header__chips { display: flex; flex-wrap: wrap; gap: var(--btg-space-2); }
+.authoring-workspace-header__chips span { border-radius: var(--btg-radius-control); background: var(--btg-color-surface-muted); color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-strong); padding: .35rem .65rem; }
+.authoring-tabs { border-bottom: var(--btg-border-width) solid var(--btg-color-border); }
+.authoring-tabs ul { display: flex; flex-wrap: wrap; gap: var(--btg-space-4); margin: 0; padding: 0; list-style: none; }
+.authoring-tabs a { position: relative; display: block; padding: var(--btg-space-2) 0; color: var(--btg-color-text-secondary); text-decoration: none; }
+.authoring-tabs a::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: transparent; content: ''; }
+.authoring-tabs a:hover { color: var(--btg-color-text); }
+.authoring-tabs a.router-link-exact-active { color: var(--btg-color-text); font-weight: var(--btg-font-weight-strong); }
+.authoring-tabs a.router-link-exact-active::after { background: var(--btg-color-text); }
+.authoring-page-title { display: grid; gap: var(--btg-space-1); }
+.authoring-page-title h1, .authoring-page-title h2, .authoring-page-title h3 { font-size: var(--authoring-page-title-size); }
+.authoring-page-title p { margin: 0; color: var(--btg-color-text-secondary); }
+.authoring-ui-section {
+  display: grid;
+  gap: var(--btg-space-4);
+  border: var(--btg-border-width) solid var(--authoring-border-subtle);
+  border-radius: var(--btg-radius-control);
+  background: var(--btg-color-surface);
+  padding: var(--authoring-section-padding);
+}
+.authoring-ui-section__header { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--btg-space-3); }
+.authoring-ui-section__header > div, .authoring-ui-section__body { display: grid; gap: var(--btg-space-4); min-width: 0; }
+.authoring-ui-section__header > div { gap: var(--btg-space-1); }
+.authoring-ui-section__header h3 { font-size: var(--authoring-section-title-size); }
+.authoring-ui-section__header p { margin: 0; color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); }
+.authoring-ui-section__number { display: grid; width: 2rem; min-height: 2rem; place-items: center; color: var(--btg-color-text-secondary); font-family: var(--btg-font-mono); font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-strong); }
+.authoring-dirty-bar {
+  position: sticky;
+  bottom: var(--btg-space-3);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--btg-space-3);
+  border: var(--btg-border-width) solid var(--btg-color-border);
+  border-radius: var(--btg-radius-surface);
+  background: color-mix(in srgb, var(--btg-color-surface) 96%, transparent);
+  box-shadow: 0 -.3rem .8rem rgb(0 0 0 / .035);
+  padding: var(--btg-space-3) var(--btg-space-4);
+}
+.authoring-dirty-bar p, .authoring-dirty-bar > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--btg-space-2); margin: 0; }
+.authoring-dirty-bar p { color: var(--btg-color-text-secondary); font-weight: var(--btg-font-weight-medium); }
+.authoring-dirty-bar p span { width: .55rem; height: .55rem; border-radius: 50%; background: var(--btg-color-text-secondary); }
+.authoring-overview { width: 100%; }
+.authoring-overview__form { gap: var(--authoring-section-gap); }
+.authoring-structure-workspace__toolbar, .authoring-content__toolbar { gap: var(--authoring-toolbar-gap); }
+.authoring-structure-outline, .authoring-structure-detail, .authoring-members__add, .authoring-members__current, .authoring-assessments__create, .authoring-review__summary, .authoring-review__history, .authoring-review__submission, .authoring-review__decisions {
+  border-color: var(--authoring-border-subtle);
+  border-radius: var(--btg-radius-control);
+  background: var(--btg-color-surface);
+}
+.btg-form-field { gap: var(--authoring-field-gap); }
+.btg-form-field__description, .btg-form-field__error { margin: 0; }
+.authoring-checkbox-field { display: grid; justify-items: start; gap: var(--btg-space-1); }
+.authoring-checkbox-field label { display: flex; align-items: center; gap: var(--btg-space-2); font-weight: var(--btg-font-weight-medium); }
+.authoring-checkbox-field input[type='checkbox'] { box-sizing: border-box; flex: 0 0 1rem; width: 1rem; min-width: 1rem; height: 1rem; min-height: 1rem; margin: 0; padding: 0; }
+.authoring-checkbox-field p { margin: 0; padding-inline-start: calc(1rem + var(--btg-space-2)); color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); line-height: 1.35; }
+@media (max-width: 42rem) {
+  .authoring-workspace-header__metadata > div + div { border-inline-start: 0; padding-inline-start: 0; }
+  .authoring-ui-section { padding: var(--btg-space-4); }
+  .authoring-dirty-bar { bottom: var(--btg-space-2); align-items: stretch; }
+  .authoring-dirty-bar > div { flex: 1 1 100%; }
+  .authoring-dirty-bar .btg-button { flex: 1 1 12rem; }
+}
+@media (max-width: 34rem) {
+  .authoring-tabs { overflow-x: auto; }
+  .authoring-tabs ul { width: max-content; min-width: 100%; flex-wrap: nowrap; }
+  .authoring-ui-section { padding: var(--btg-space-3); }
+}
+@media (max-width: 42rem) {
+  .authoring-lesson-details__panel { padding: var(--btg-space-4); }
+  .authoring-lesson-details__save-bar { bottom: var(--btg-space-2); align-items: stretch; }
+  .authoring-lesson-details__save-bar > div { flex: 1 1 100%; }
+  .authoring-lesson-details__save-bar .btg-button { flex: 1 1 12rem; }
+}
+@media (max-width: 34rem) {
+  .authoring-lesson-details__panel { padding: var(--btg-space-3); }
+  .authoring-lesson-details__objectives li { grid-template-columns: 2rem 2rem minmax(0, 1fr); gap: var(--btg-space-2); }
+  .authoring-lesson-details__drag-handle { width: 2rem; min-height: 2.25rem; }
+  .authoring-lesson-details__objective-number { width: 2rem; min-height: 2.25rem; }
+  .authoring-lesson-details__objectives li .btg-button { grid-column: 3; justify-self: start; }
+}

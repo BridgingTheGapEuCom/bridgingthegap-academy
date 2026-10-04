@@ -1,9 +1,6 @@
 <template>
   <section class="authoring-section authoring-review" aria-labelledby="authoring-review-title">
-    <header class="authoring-review__header">
-      <h2 id="authoring-review-title" tabindex="-1">Review</h2>
-      <p class="authoring-section__intro">Review cycles evaluate a frozen Draft revision. This page shows cycle metadata only.</p>
-    </header>
+    <AuthoringPageTitle id="authoring-review-title" title="Review" description="Review cycles evaluate a frozen Draft revision. This page shows cycle metadata only." focusable />
 
     <p v-if="state.kind === 'loading'" class="authoring-review__state" role="status">Loading Review information…</p>
     <div v-else-if="state.kind === 'unavailable'" class="authoring-review__state">
@@ -44,6 +41,7 @@ import AuthoringReviewHistory from '../components/AuthoringReviewHistory.vue'
 import AuthoringReviewSubmission from '../components/AuthoringReviewSubmission.vue'
 import AuthoringReviewStatusSummary from '../components/AuthoringReviewStatusSummary.vue'
 import BtgButton from '../components/BtgButton.vue'
+import AuthoringPageTitle from '../components/AuthoringPageTitle.vue'
 
 type State =
   | { kind: 'loading' }

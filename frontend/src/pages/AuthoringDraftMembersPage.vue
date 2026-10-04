@@ -1,9 +1,6 @@
 <template>
   <section class="authoring-section authoring-members" aria-labelledby="authoring-members-title">
-    <header class="authoring-members__header">
-      <h2 id="authoring-members-title" tabindex="-1">Members</h2>
-      <p class="authoring-section__intro">Manage access with opaque user IDs. This Draft does not look up names or email addresses.</p>
-    </header>
+    <AuthoringPageTitle id="authoring-members-title" title="Members" description="Manage access with opaque user IDs. This Draft does not look up names or email addresses." focusable />
 
     <p v-if="state.kind === 'loading'" class="authoring-members__state" role="status">Loading current members…</p>
     <div v-else-if="state.kind === 'unavailable'" class="authoring-members__state">
@@ -73,6 +70,7 @@ import AuthoringMemberItem from '../components/AuthoringMemberItem.vue'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
+import AuthoringPageTitle from '../components/AuthoringPageTitle.vue'
 
 type State = { kind: 'loading' } | { kind: 'ready'; members: AuthoringActiveMember[] } | { kind: 'unavailable' }
 

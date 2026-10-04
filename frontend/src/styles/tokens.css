@@ -80,4 +80,17 @@
   --btg-motion-fast: 120ms;
   --btg-motion-standard: 180ms;
   --btg-ease-standard: ease;
+
+  /* Authoring uses one outer canvas and a small set of editorial primitives.
+     Inner workspaces may choose their own columns without changing these edges. */
+  --authoring-page-gap: var(--btg-space-5);
+  --authoring-section-gap: var(--btg-space-5);
+  --authoring-section-padding: var(--btg-space-5);
+  --authoring-field-gap: var(--btg-space-2);
+  --authoring-toolbar-gap: var(--btg-space-2);
+  --authoring-row-padding: var(--btg-space-3);
+  --authoring-border-subtle: color-mix(in srgb, var(--btg-color-border) 82%, transparent);
+  --authoring-surface-selected: color-mix(in srgb, var(--btg-color-surface-muted) 58%, var(--btg-color-surface));
+  --authoring-page-title-size: clamp(1.75rem, 3vw, 2.25rem);
+  --authoring-section-title-size: 1.125rem;
 }

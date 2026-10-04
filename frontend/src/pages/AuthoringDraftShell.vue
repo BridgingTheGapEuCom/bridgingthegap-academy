@@ -39,36 +39,10 @@
 
     <div v-else class="authoring-shell__content">
       <template v-if="!isLessonWorkspace">
-        <RouterLink class="authoring-shell__back" to="/authoring">Back to Authoring</RouterLink>
-        <div class="authoring-shell__header">
-          <p class="authoring-shell__eyebrow">Authoring Draft</p>
-          <h1 id="authoring-draft-title">{{ state.draft.title }}</h1>
-          <dl class="authoring-shell__metadata">
-            <div><dt>Intended version</dt><dd>{{ state.draft.intended_version }}</dd></div>
-            <div><dt>Status</dt><dd>{{ draftStatus(state.draft.status) }}</dd></div>
-            <div><dt>Source language</dt><dd>{{ languageLabel(state.draft.source_language) }}</dd></div>
-            <div><dt>Last updated</dt><dd>{{ updatedAt(state.draft.updated_at) }}</dd></div>
-          </dl>
-        </div>
-
-        <nav class="authoring-shell__navigation" aria-label="Draft sections">
-          <ul>
-            <li><RouterLink :to="authoringDraftPath(state.draft.id, 'overview')">Overview</RouterLink></li>
-            <li><RouterLink :to="authoringDraftPath(state.draft.id, 'structure')">Structure</RouterLink></li>
-            <li><RouterLink :to="authoringDraftPath(state.draft.id, 'members')">Members</RouterLink></li>
-            <li><RouterLink :to="`/authoring/drafts/${encodeURIComponent(state.draft.id)}/assessments`">Assessments</RouterLink></li>
-            <li><RouterLink :to="authoringDraftPath(state.draft.id, 'review')">Review</RouterLink></li>
-          </ul>
-        </nav>
+        <AuthoringDraftHeader :title="state.draft.title" :metadata="draftMetadata" :tabs="draftTabs" />
       </template>
 
-      <div
-        class="authoring-shell__section"
-        :class="{
-          'authoring-shell__section--overview': route.name === 'authoring-draft-overview' || route.name === 'overview',
-          'authoring-shell__section--structure': route.name === 'authoring-draft-structure' || route.name === 'structure',
-        }"
-      >
+      <div class="authoring-shell__section">
         <RouterView />
       </div>
     </div>
@@ -85,6 +59,7 @@ import { authoringDraftPath, getAuthoringDraft, InvalidAuthoringDraftIDError, ty
 import { authoringDraftContextKey } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import AuthoringDraftHeader from '../components/AuthoringDraftHeader.vue'
 import { languageLabel } from '../i18n/languages'
 
 type State = { kind: 'loading' } | { kind: 'ready'; draft: AuthoringDraft } | { kind: 'not-found' } | { kind: 'unavailable' }
@@ -96,6 +71,19 @@ const state = ref<State>({ kind: 'loading' })
 const draft = ref<AuthoringDraft>()
 const isLessonPreview = computed(() => route.name === 'authoring-draft-lesson-preview')
 const isLessonWorkspace = computed(() => route.name === 'authoring-draft-lesson' || route.name === 'authoring-draft-lesson-content' || route.name === 'authoring-draft-lesson-prerequisites')
+const draftMetadata = computed(() => state.value.kind === 'ready' ? [
+  { label: 'Intended version', value: state.value.draft.intended_version },
+  { label: 'Status', value: draftStatus(state.value.draft.status) },
+  { label: 'Source language', value: languageLabel(state.value.draft.source_language) },
+  { label: 'Last updated', value: updatedAt(state.value.draft.updated_at) },
+] : [])
+const draftTabs = computed(() => state.value.kind === 'ready' ? [
+  { label: 'Overview', to: authoringDraftPath(state.value.draft.id, 'overview') },
+  { label: 'Structure', to: authoringDraftPath(state.value.draft.id, 'structure') },
+  { label: 'Members', to: authoringDraftPath(state.value.draft.id, 'members') },
+  { label: 'Assessments', to: `/authoring/drafts/${encodeURIComponent(state.value.draft.id)}/assessments` },
+  { label: 'Review', to: authoringDraftPath(state.value.draft.id, 'review') },
+] : [])
 
 let requestVersion = 0
 let active = true

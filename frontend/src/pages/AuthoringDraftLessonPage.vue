@@ -1,7 +1,5 @@
 <template>
   <section class="authoring-section authoring-lesson-editor" aria-labelledby="authoring-lesson-title">
-    <RouterLink :to="backToStructure">Back to Structure</RouterLink>
-
     <div v-if="state.kind === 'loading'" class="authoring-lesson-editor__state" role="status">
       <h2 id="authoring-lesson-title">Loading Lesson…</h2>
       <p>One moment while we load this Lesson.</p>
@@ -14,15 +12,10 @@
     </div>
 
     <template v-else-if="state.kind === 'ready'">
-      <header class="authoring-lesson-editor__header">
-        <h1 id="authoring-lesson-title" tabindex="-1">{{ state.lesson.title }}</h1>
-        <div class="authoring-lesson-editor__context" aria-label="Lesson context"><span>Lesson</span><span>Draft</span></div>
-        <dl v-if="currentSection === 'details' || legacyCombined" class="authoring-lesson-editor__metadata"><div><dt>Module</dt><dd>{{ moduleTitle }}</dd></div><div><dt>Estimated duration</dt><dd>{{ durationLabel }}</dd></div></dl>
-      </header>
-      <nav class="authoring-lesson-editor__navigation" aria-label="Lesson sections"><ul><li v-for="section in sections" :key="section.id"><RouterLink :to="sectionPath(section.id)">{{ section.label }}</RouterLink></li></ul></nav>
+      <AuthoringLessonHeader :title="state.lesson.title" :back-to="backToStructure" :tabs="lessonTabs" />
 
       <template v-if="currentSection === 'details' || legacyCombined">
-      <header class="authoring-lesson-editor__subview"><h2 id="authoring-lesson-details-title" tabindex="-1">Lesson details</h2><p>Define the lesson metadata learners and authors use to understand this lesson.</p></header>
+      <AuthoringPageTitle id="authoring-lesson-details-title" title="Lesson details" description="Define the lesson metadata learners and authors use to understand this lesson." focusable />
       <form class="authoring-lesson-editor__form" :aria-busy="saving" novalidate @submit.prevent="save">
         <p v-if="formError" class="authoring-lesson-editor__error" role="alert">{{ formError }}</p>
         <p v-if="saveMessage" class="authoring-lesson-editor__status" role="status">{{ saveMessage }}</p>
@@ -31,44 +24,34 @@
           <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? 'Reloading…' : 'Reload latest Lesson' }}</BtgButton>
         </div>
 
-        <BtgFormField label="Title" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }">
-          <BtgTextInput :id="controlId" v-model="form.title" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
-        </BtgFormField>
-        <BtgFormField label="Description" required :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
-          <textarea :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
-        </BtgFormField>
+        <AuthoringSection heading-id="authoring-lesson-basic-information-title" title="Basic information" description="Give this lesson a clear title and description.">
+            <BtgFormField label="Title" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }">
+              <BtgTextInput :id="controlId" v-model="form.title" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
+            </BtgFormField>
+            <BtgFormField label="Description" required :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
+              <textarea :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
+            </BtgFormField>
+        </AuthoringSection>
 
-        <fieldset class="authoring-lesson-editor__objectives" :aria-describedby="errors.objectives ? 'authoring-lesson-objectives-error' : undefined">
-          <legend>Learning objectives <span aria-hidden="true">*</span><span class="sr-only"> required</span></legend>
-          <p>Describe what a learner should be able to do. The order is kept when you save.</p>
-          <ol>
-            <li v-for="(_objective, index) in form.objectives" :key="`objective-${index}`">
-              <BtgFormField :label="`Learning objective ${index + 1}`" :error="errors[`objective-${index}`]">
-                <template #default="{ controlId, describedBy, invalid }">
-                  <BtgTextInput :id="controlId" v-model="form.objectives[index]" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
-                </template>
-              </BtgFormField>
-              <BtgButton variant="secondary" :disabled="saving || reloading || form.objectives.length === 1" :aria-label="`Remove learning objective ${index + 1}`" @click="removeObjective(index)">Remove</BtgButton>
-            </li>
-          </ol>
-          <p v-if="errors.objectives" id="authoring-lesson-objectives-error" class="btg-form-field__error">{{ errors.objectives }}</p>
-          <BtgButton variant="secondary" :disabled="saving || reloading" @click="addObjective">Add learning objective</BtgButton>
-        </fieldset>
+        <AuthoringSection heading-id="authoring-lesson-objectives-title" title="Learning objectives" description="Describe what learners should be able to do after completing this lesson.">
+          <RepeatableObjectivesEditor v-model="form.objectives" :disabled="saving || reloading" :error="errors.objectives" add-label="+ Add learning objective" remove-label="learning objective" />
+        </AuthoringSection>
 
-        <BtgFormField label="Estimated duration" description="Optional. Enter whole minutes." :error="errors.estimatedDurationMinutes" v-slot="{ controlId, describedBy, invalid }">
-          <div class="authoring-lesson-editor__duration"><BtgTextInput :id="controlId" v-model="form.estimatedDurationMinutes" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" type="number" inputmode="numeric" min="1" max="1440" step="1" /><span>minutes</span></div>
-        </BtgFormField>
+        <AuthoringSection heading-id="authoring-lesson-timing-title" title="Timing" description="Set an estimated duration for this lesson.">
+            <BtgFormField label="Estimated duration" :error="errors.estimatedDurationMinutes" v-slot="{ controlId, describedBy, invalid }">
+              <div class="authoring-lesson-editor__duration"><BtgTextInput :id="controlId" v-model="form.estimatedDurationMinutes" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" type="number" inputmode="numeric" min="1" max="1440" step="1" /><span>minutes</span></div>
+            </BtgFormField>
+        </AuthoringSection>
 
-        <p v-if="dirty" class="authoring-lesson-editor__unsaved" role="status">You have unsaved changes.</p>
-        <div class="authoring-lesson-editor__actions"><BtgButton type="submit" :disabled="!dirty || saving || reloading || conflict">{{ saving ? 'Saving…' : 'Save changes' }}</BtgButton></div>
+        <AuthoringDirtyActionBar :show="dirty" :busy="saving" :disabled="saving || reloading" :save-disabled="conflict" @discard="discardChanges" />
       </form>
       </template>
       <template v-if="currentSection === 'content' || legacyCombined">
-        <header class="authoring-lesson-editor__subview authoring-lesson-editor__subview--content"><h2 id="authoring-lesson-content-title" tabindex="-1">Content</h2><p>Build the material learners will work through in this lesson.</p></header>
+        <AuthoringPageTitle id="authoring-lesson-content-title" title="Content" description="Build the material learners will work through in this lesson." focusable />
         <AuthoringLessonContentEditor :draft-id="draft.id" :lesson="state.lesson" @saved="applyContent" @replace-lesson="replaceLesson" @preview="openPreview" @unavailable="markDraftUnavailable" />
       </template>
       <template v-if="currentSection === 'prerequisites' || legacyCombined">
-        <header class="authoring-lesson-editor__subview"><h2 id="authoring-lesson-prerequisites-title" tabindex="-1">Recommended prerequisites</h2><p>Prerequisites are advisory recommendations. They do not restrict learner access.</p></header>
+        <AuthoringPageTitle id="authoring-lesson-prerequisites-title" title="Recommended prerequisites" description="Prerequisites are advisory recommendations. They do not restrict learner access." focusable />
       <AuthoringLessonPrerequisitesEditor
         :draft-id="draft.id"
         :lesson="state.lesson"
@@ -85,15 +68,19 @@
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
-import { preserveFocusAfterRemoval } from '../authoring/focus'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
-import { authoringDraftPath, getAuthoringLesson, getAuthoringStructure, InvalidAuthoringDraftIDError, updateAuthoringLesson, type AuthoringLessonDetail, type AuthoringLessonMetadataPatch } from '../authoring/authoring'
+import { authoringDraftPath, getAuthoringLesson, InvalidAuthoringDraftIDError, updateAuthoringLesson, type AuthoringLessonDetail, type AuthoringLessonMetadataPatch } from '../authoring/authoring'
 import { useAuthoringDraftContext } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
 import AuthoringLessonPrerequisitesEditor from '../components/AuthoringLessonPrerequisitesEditor.vue'
 import AuthoringLessonContentEditor from '../components/AuthoringLessonContentEditor.vue'
+import AuthoringDirtyActionBar from '../components/AuthoringDirtyActionBar.vue'
+import AuthoringLessonHeader from '../components/AuthoringLessonHeader.vue'
+import AuthoringPageTitle from '../components/AuthoringPageTitle.vue'
+import AuthoringSection from '../components/AuthoringSection.vue'
+import RepeatableObjectivesEditor from '../components/RepeatableObjectivesEditor.vue'
 
 type Form = { title: string; description: string; objectives: string[]; estimatedDurationMinutes: string }
 type State = { kind: 'loading' } | { kind: 'ready'; lesson: AuthoringLessonDetail } | { kind: 'unavailable' }
@@ -111,15 +98,14 @@ const saving = ref(false)
 const reloading = ref(false)
 const conflict = ref(false)
 const dirty = computed(() => original.value !== undefined && JSON.stringify(normalized(form)) !== JSON.stringify(normalized(original.value)))
-const moduleTitle = ref('Current module')
 const sections = [{ id: 'details', label: 'Details' }, { id: 'content', label: 'Content' }, { id: 'prerequisites', label: 'Prerequisites' }] as const
 type Section = typeof sections[number]['id']
 const currentSection = computed<Section>(() => route.name === 'authoring-draft-lesson-content' ? 'content' : route.name === 'authoring-draft-lesson-prerequisites' ? 'prerequisites' : 'details')
 const legacyCombined = computed(() => route.name === undefined)
-const durationLabel = computed(() => state.value.kind === 'ready' && state.value.lesson.estimated_duration_minutes !== null ? `${state.value.lesson.estimated_duration_minutes} minutes` : 'Not set')
 const backToStructure = computed(() => route.query.from === 'structure'
   ? { path: authoringDraftPath(draft.value.id, 'structure'), query: { lesson: lessonID(), search: typeof route.query.search === 'string' ? route.query.search : undefined } }
   : authoringDraftPath(draft.value.id, 'structure'))
+const lessonTabs = computed(() => sections.map((section) => ({ label: section.label, to: sectionPath(section.id) })))
 
 let requestVersion = 0
 let active = true
@@ -152,12 +138,12 @@ function normalized(value: Form) {
 }
 function replaceForm(next: Form) { Object.assign(form, { ...next, objectives: [...next.objectives] }) }
 function clearErrors() { for (const key of Object.keys(errors)) delete errors[key]; formError.value = undefined }
-function addObjective() { if (!saving.value && !reloading.value) form.objectives.push('') }
-function removeObjective(index: number) {
-  if (saving.value || reloading.value || form.objectives.length <= 1) return
-  const restoreFocus = preserveFocusAfterRemoval(() => document.querySelector<HTMLElement>('.authoring-lesson-editor__objectives > button'))
-  form.objectives.splice(index, 1)
-  void restoreFocus()
+function discardChanges() {
+  if (saving.value || reloading.value || !original.value) return
+  replaceForm(original.value)
+  clearErrors()
+  saveMessage.value = undefined
+  conflict.value = false
 }
 
 function validate(): boolean {
@@ -199,7 +185,6 @@ async function load() {
     if (!active || generation !== requestVersion) return
     const nextForm = toForm(lesson)
     state.value = { kind: 'ready', lesson }
-    if (!legacyCombined.value) void loadModuleTitle(lesson.module_id, generation)
     original.value = nextForm
     replaceForm(nextForm)
   } catch (error) {
@@ -211,14 +196,6 @@ async function load() {
     }
     state.value = { kind: 'unavailable' }
   }
-}
-
-async function loadModuleTitle(moduleID: string, generation: number) {
-  try {
-    const structure = await getAuthoringStructure(draft.value.id)
-    if (!active || generation !== requestVersion || state.value.kind !== 'ready' || state.value.lesson.module_id !== moduleID) return
-    moduleTitle.value = structure.modules.find((module) => module.id === moduleID)?.title ?? 'Current module'
-  } catch { if (active && generation === requestVersion) moduleTitle.value = 'Current module' }
 }
 
 async function save() {

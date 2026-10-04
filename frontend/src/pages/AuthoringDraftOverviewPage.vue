@@ -1,9 +1,6 @@
 <template>
   <section class="authoring-section authoring-overview" aria-labelledby="authoring-overview-title">
-    <header class="authoring-overview__heading">
-      <h2 id="authoring-overview-title">Overview</h2>
-      <p class="authoring-section__intro">Update the core course metadata, learning information, and licensing details for this Draft.</p>
-    </header>
+    <AuthoringPageTitle id="authoring-overview-title" title="Overview" description="Update the core course metadata, learning information, and licensing details for this Draft." />
     <form class="authoring-overview__form" :aria-busy="saving || undefined" novalidate @submit.prevent="save">
       <p v-if="formError" class="authoring-metadata-form__error" role="alert">{{ formError }}</p>
       <div v-if="conflict" class="authoring-metadata-form__conflict" role="status">
@@ -11,12 +8,7 @@
         <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? 'Reloading…' : 'Reload latest Draft' }}</BtgButton>
       </div>
 
-      <section class="authoring-overview__panel" aria-labelledby="overview-course-basics-title">
-        <header class="authoring-overview__panel-header">
-          <h3 id="overview-course-basics-title"><span aria-hidden="true">01</span> Course basics</h3>
-          <p>Basic information about this course Draft.</p>
-        </header>
-        <div class="authoring-overview__panel-body">
+      <AuthoringSection heading-id="overview-course-basics-title" number="01" title="Course basics" description="Basic information about this course Draft.">
           <BtgFormField label="Title" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }">
             <BtgTextInput :id="controlId" v-model="form.title" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
           </BtgFormField>
@@ -28,40 +20,22 @@
               <LanguagePicker :id="controlId" v-model="form.sourceLanguage" :disabled="saving || reloading" :described-by="describedBy" :invalid="invalid" />
             </BtgFormField>
           </div>
-        </div>
-      </section>
+      </AuthoringSection>
 
-      <section class="authoring-overview__panel" aria-labelledby="overview-learning-title">
-        <header class="authoring-overview__panel-header">
-          <h3 id="overview-learning-title"><span aria-hidden="true">02</span> Learning overview</h3>
-          <p>Describe what the course is about and what learners will be able to do.</p>
-        </header>
-        <div class="authoring-overview__panel-body">
+      <AuthoringSection heading-id="overview-learning-title" number="02" title="Learning overview" description="Describe what the course is about and what learners will be able to do.">
           <BtgFormField label="Description" required description="Summarize the purpose, scope, and audience for this course." :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
             <textarea class="authoring-overview__description" :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
           </BtgFormField>
           <RepeatableObjectivesEditor v-model="form.objectives" :disabled="saving || reloading" :error="errors.objectives" description="Add the learning outcomes learners should achieve." />
-        </div>
-      </section>
+      </AuthoringSection>
 
-      <section class="authoring-overview__panel" aria-labelledby="overview-release-notes-title">
-        <header class="authoring-overview__panel-header">
-          <h3 id="overview-release-notes-title"><span aria-hidden="true">03</span> Release notes</h3>
-          <p>Document the changes in this Draft version.</p>
-        </header>
-        <div class="authoring-overview__panel-body">
+      <AuthoringSection heading-id="overview-release-notes-title" number="03" title="Release notes" description="Document the changes in this Draft version.">
           <BtgFormField label="Changelog" required description="Describe the changes in this version." :error="errors.changelog" v-slot="{ controlId, describedBy, invalid }">
             <textarea class="authoring-overview__changelog" :id="controlId" v-model="form.changelog" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
           </BtgFormField>
-        </div>
-      </section>
+      </AuthoringSection>
 
-      <section class="authoring-overview__panel" aria-labelledby="overview-license-title">
-        <header class="authoring-overview__panel-header">
-          <h3 id="overview-license-title"><span aria-hidden="true">04</span> Content licensing</h3>
-          <p>Specify the content license for this course.</p>
-        </header>
-        <div class="authoring-overview__panel-body">
+      <AuthoringSection heading-id="overview-license-title" number="04" title="Content licensing" description="Specify the content license for this course.">
           <div class="authoring-overview__two-column">
             <BtgFormField label="License type" required description="Choose the content license type." :error="errors.license" v-slot="{ controlId, describedBy, invalid }">
               <select :id="controlId" v-model="form.license.kind" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required><option value="STANDARD">Standard license</option><option value="ALL_RIGHTS_RESERVED">All rights reserved</option><option value="CUSTOM">Custom license</option></select>
@@ -81,14 +55,9 @@
           <BtgFormField label="Custom license text" description="Provide the full license text if required for this license." v-slot="{ controlId, describedBy }">
             <textarea class="authoring-overview__license-text" :id="controlId" v-model="form.license.custom_text" :disabled="saving || reloading" :aria-describedby="describedBy" />
           </BtgFormField>
-        </div>
-      </section>
+      </AuthoringSection>
 
-      <p v-if="dirty" class="authoring-metadata-form__unsaved" role="status">You have unsaved changes.</p>
-      <div class="authoring-overview__actions">
-        <BtgButton type="button" variant="secondary" :disabled="!dirty || saving || reloading || conflict" @click="discardChanges">Discard changes</BtgButton>
-        <BtgButton type="submit" :disabled="!dirty || saving || reloading || conflict">{{ saving ? 'Saving…' : 'Save changes' }}</BtgButton>
-      </div>
+      <AuthoringDirtyActionBar :show="dirty" :busy="saving" :disabled="saving || reloading" :save-disabled="conflict" @discard="discardChanges" />
     </form>
   </section>
 </template>
@@ -104,6 +73,9 @@ import BtgFormField from '../components/BtgFormField.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
 import LanguagePicker from '../components/LanguagePicker.vue'
 import RepeatableObjectivesEditor from '../components/RepeatableObjectivesEditor.vue'
+import AuthoringDirtyActionBar from '../components/AuthoringDirtyActionBar.vue'
+import AuthoringPageTitle from '../components/AuthoringPageTitle.vue'
+import AuthoringSection from '../components/AuthoringSection.vue'
 
 type Form = { intendedVersion: string; sourceLanguage: string; title: string; description: string; objectives: string[]; changelog: string; license: AuthoringContentLicense }
 const { draft, replaceDraft, markDraftUnavailable } = useAuthoringDraftContext()

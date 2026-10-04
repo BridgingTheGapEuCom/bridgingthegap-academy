@@ -7,6 +7,7 @@ import { authoringDraftAssessmentPath, createAuthoringAssessment, listAuthoringD
 import { useAuthoringDraftContext } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
+import AuthoringPageTitle from '../components/AuthoringPageTitle.vue'
 
 type State = { kind: 'loading' } | { kind: 'ready'; page: AuthoringAssessmentList } | { kind: 'unavailable' }
 const { draft, markDraftUnavailable } = useAuthoringDraftContext()
@@ -56,7 +57,7 @@ async function create() {
 
 <template>
   <section class="authoring-section authoring-assessments" aria-labelledby="authoring-assessments-title">
-    <header><h2 id="authoring-assessments-title">Assessments</h2><p class="authoring-section__intro">Create and edit the deterministic knowledge checks available in this Draft.</p></header>
+    <AuthoringPageTitle id="authoring-assessments-title" title="Assessments" description="Create and edit the deterministic knowledge checks available in this Draft." />
     <form class="authoring-assessments__create" :aria-busy="creating" @submit.prevent="create">
       <h3>Create Assessment</h3>
       <BtgFormField label="Assessment title" required :error="createError" v-slot="{ controlId, describedBy, invalid }"><input :id="controlId" v-model="title" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="240" required /></BtgFormField>

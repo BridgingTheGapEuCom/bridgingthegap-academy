@@ -137,6 +137,41 @@ async function serveApprovedReviewSnapshot(page: Page) {
   }))
 }
 
+test('Authoring Draft and Lesson workspaces share one canonical page grid', async ({ page }) => {
+  await serveDraft(page)
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(lesson),
+  }))
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const routes = [
+    { path: `/authoring/drafts/${draftID}/overview`, heading: 'Overview' },
+    { path: `/authoring/drafts/${draftID}/structure`, heading: 'Structure' },
+    { path: `/authoring/drafts/${draftID}/lessons/${lesson.id}/content`, heading: 'Content' },
+    { path: `/authoring/drafts/${draftID}/lessons/${lesson.id}/details`, heading: 'Lesson details' },
+  ]
+  let reference: { left: number; right: number; width: number; tabsLeft: number; tabsRight: number } | undefined
+
+  for (const route of routes) {
+    await page.goto(route.path)
+    await expect(page.getByRole('heading', { level: 2, name: route.heading })).toBeVisible()
+    const geometry = await page.evaluate(() => {
+      const pageBox = document.querySelector('.authoring-shell')!.getBoundingClientRect()
+      const tabsBox = document.querySelector('.authoring-tabs')!.getBoundingClientRect()
+      return { left: pageBox.left, right: pageBox.right, width: pageBox.width, tabsLeft: tabsBox.left, tabsRight: tabsBox.right }
+    })
+    if (reference) {
+      expect(geometry.left).toBeCloseTo(reference.left, 1)
+      expect(geometry.right).toBeCloseTo(reference.right, 1)
+      expect(geometry.width).toBeCloseTo(reference.width, 1)
+      expect(geometry.tabsLeft).toBeCloseTo(reference.tabsLeft, 1)
+      expect(geometry.tabsRight).toBeCloseTo(reference.tabsRight, 1)
+    } else reference = geometry
+  }
+})
+
 test('Authoring discovery is reachable from main navigation and opens an accessible Draft workspace', async ({ page }) => {
   await serveDraft(page)
   await page.route('**/api/authoring/drafts', (route) => route.fulfill({
@@ -1108,12 +1143,19 @@ test('Authoring Lesson metadata editor saves with the Lesson revision and remain
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`/authoring/drafts/${draftID}/lessons/${lesson.id}`)
   await expect(page.getByRole('heading', { level: 2, name: 'Lesson details' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Basic information' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: /Learning objectives/ })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Timing' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0)
   await expect(page.getByText('what-is-eai')).toHaveCount(0)
   const title = page.getByRole('textbox', { name: /^Title\b/ })
   await title.fill('Updated Lesson')
+  await expect(page.getByText('Unsaved changes')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Discard changes' })).toBeVisible()
   await page.getByRole('button', { name: 'Save changes' }).click()
 
   await expect(page.getByText('Lesson metadata saved.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0)
   expect(patchBody).toEqual({ expectedLessonRevision: 2, title: 'Updated Lesson' })
   await page.getByRole('link', { name: 'Back to structure' }).focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)

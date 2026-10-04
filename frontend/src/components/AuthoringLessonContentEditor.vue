@@ -9,6 +9,7 @@ import { richTextPlainText } from '../authoring/richText'
 import { decodeLessonContent } from '../lesson/content'
 import { draftAssetURL } from '../lesson/assets'
 import AuthoringContentBlock from './AuthoringContentBlock.vue'
+import AuthoringDirtyActionBar from './AuthoringDirtyActionBar.vue'
 import BtgButton from './BtgButton.vue'
 
 const props = defineProps<{ draftId: string; lesson: AuthoringLessonDetail }>()
@@ -407,10 +408,7 @@ async function reloadLatest() {
         </ol>
         <div v-else class="authoring-content__empty"><p><strong>No lesson content yet.</strong></p><p>Add text, media, code, callouts, and other learning material.</p><BtgButton @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
       </fieldset>
-      <footer v-if="dirty" class="authoring-content__save-bar" aria-label="Unsaved content actions">
-        <p role="status"><span aria-hidden="true"></span>Unsaved changes</p>
-        <div><BtgButton variant="secondary" :disabled="saving || reloading" @click="discardChanges">Discard changes</BtgButton><BtgButton type="submit" :disabled="saving || reloading || conflict">{{ saving ? 'Saving content…' : 'Save content' }}</BtgButton></div>
-      </footer>
+      <AuthoringDirtyActionBar :show="dirty" :busy="saving" busy-label="Saving content…" save-label="Save content" :disabled="saving || reloading" :save-disabled="conflict" @discard="discardChanges" />
     </form>
   </section>
   <dialog ref="picker" class="authoring-content__picker" aria-labelledby="authoring-content-picker-title" @close="onPickerClosed">

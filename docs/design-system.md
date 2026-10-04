@@ -34,6 +34,16 @@ Every form control needs a persistent visible label. `BtgFormField` supplies lab
 
 `BtgButton` has only `primary`, `secondary`, `quiet`, and `destructive` variants. New variants need a semantic reason. Bordered surfaces are preferred over cards and shadows; use elevation only where layer separation is necessary.
 
+## Authoring workspaces
+
+All Draft and Lesson authoring routes use the canonical 74rem Academy page canvas through `BtgPageContainer`; page-specific layouts fill that inner canvas instead of changing its outer width. Structure may divide the canvas into outline and detail panes, Overview may keep readable form groups inside sections, and Lesson Content may use its ordered document list, but their left and right page edges remain aligned.
+
+Authoring has two header patterns. Draft pages show Back to Authoring, the `AUTHORING DRAFT` eyebrow, course title, the shared metadata strip, and Draft tabs. Lesson pages show Back to Structure, the Lesson title, neutral Lesson and Draft context chips, and Lesson tabs. Both use `AuthoringTabs`, with ordinary text links and an active underline. Tab content starts with `AuthoringPageTitle`: one page title followed by one short sentence.
+
+Metadata forms use `AuthoringSection` for a quiet surface with a thin neutral border, compact radius, consistent padding, and an optional section number. Fields always follow Label, Control, Helper or Error order. Checkbox help is indented beneath its label through `AuthoringCheckboxField`. Draft Overview and Lesson Details share `RepeatableObjectivesEditor`, including numbering, reorder handles, input rows, removal, and announcements.
+
+Authoring actions use the existing button hierarchy: dark primary for the page's main commit, outlined secondary for cancel, preview, discard, and local edits, quiet buttons for low-emphasis utilities, and destructive styling only for destructive outcomes. Editable batch-save pages share `AuthoringDirtyActionBar`; it is absent while clean and appears near the bottom of the workspace while dirty. It announces the unsaved state and keeps Discard and Save together without changing each page's persistence semantics. Toolbars wrap in document order, and all shared headers, tabs, sections, objective rows, and dirty bars must reflow without page-level horizontal scrolling at 320px or 200% text.
+
 ## Authentication forms
 
 Authentication forms keep credentials and field errors in component-local state. Use `BtgFormField` for persistent labels and field-level validation; on failed client validation, focus the first invalid native control. Authentication outcomes use one visible, focusable form-level error that is focused once after the result is available, avoiding duplicate live-region announcements. The page owns its wording and focus behavior; the frontend auth service owns transport, session state, and memory-only CSRF state.
