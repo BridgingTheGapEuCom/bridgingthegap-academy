@@ -62,8 +62,22 @@ describe('AuthoringLessonContentEditor', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Cancel changes for block 1, text' }))
     expect(screen.getByText('Applied text')).toBeTruthy()
     expect(replaceContent).not.toHaveBeenCalled()
-    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
     expect((replaceContent.mock.calls[0]![2] as any).content.blocks[0].payload.content.nodes[0].content[0].text).toBe('Applied text')
+  })
+
+  it('shows the lesson-level save bar only for dirty content and discards back to the saved document', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson() } })
+    expect(screen.queryByRole('status', { name: /unsaved content/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Discard changes' })).toBeNull()
+    await add('Divider')
+    expect(screen.getByText('Unsaved changes')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Discard changes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save content' })).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
+    expect(screen.getByText('No lesson content yet.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Discard changes' })).toBeNull()
+    expect(replaceContent).not.toHaveBeenCalled()
   })
 
   it('preserves rich marks and lists in the full replacement save payload', async () => {
@@ -89,7 +103,7 @@ describe('AuthoringLessonContentEditor', () => {
     expect(editor.querySelector('ol')).toBeTruthy()
     await replaceEditorHTML(`${editor.innerHTML}<p>Changed</p>`)
     await fireEvent.click(screen.getByRole('button', { name: 'Done editing block 1, text' }))
-    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
     const saved = (replaceContent.mock.calls[0]![2] as any).content.blocks[0].payload.content
     expect(saved.nodes[0].content.map((item: any) => item.marks)).toEqual([
       [{ type: 'strong' }], [{ type: 'emphasis' }], [{ type: 'inline_code' }], [{ type: 'link', href: 'https://example.test/read' }],
@@ -105,8 +119,69 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.getAllByText(/0[12]/)).toHaveLength(2)
     await fireEvent.click(screen.getByRole('button', { name: 'Actions for block 2, heading' })); await fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }))
     await fireEvent.click(screen.getByRole('button', { name: 'Actions for block 2, text' })); await fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
-    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
     expect((replaceContent.mock.calls[0]![2] as any).content.blocks.map((block: any) => block.type)).toEqual(['HEADING'])
+  })
+
+  it('dismisses an open block actions menu when a pointer lands outside it', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'text', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Text', marks: [] }] }] } } },
+    ] }) } })
+    await fireEvent.click(screen.getByRole('button', { name: 'Actions for block 1, text' }))
+    expect(screen.getByRole('menu')).toBeTruthy()
+    await fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('reorders locally from the dedicated drag handle, announces the move, and saves the complete order', async () => {
+    const { container } = render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'heading', type: 'HEADING', payload: { level: 2, content: [{ type: 'text', text: 'Heading', marks: [] }] } },
+      { key: 'divider', type: 'DIVIDER', payload: {} },
+      { key: 'text', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Text', marks: [] }] }] } } },
+    ] }) } })
+    const target = container.querySelector<HTMLElement>('[data-content-block-key="heading"]')!
+    Object.defineProperty(target, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 100, height: 100 }) })
+    const originalElementFromPoint = globalThis.document.elementFromPoint
+    Object.defineProperty(globalThis.document, 'elementFromPoint', { configurable: true, value: vi.fn(() => target) })
+    try {
+      const handle = screen.getByRole('button', { name: 'Reorder block 3, text' })
+      await fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 10, clientY: 200 })
+      await fireEvent.pointerMove(globalThis.document, { pointerId: 1, clientX: 10, clientY: 110 })
+      await fireEvent.pointerUp(globalThis.document, { pointerId: 1, clientX: 10, clientY: 110 })
+      expect(screen.getByText('Text block moved to position 1 of 3.')).toBeTruthy()
+      await new Promise((resolve) => setTimeout(resolve))
+      expect(globalThis.document.activeElement).toBe(screen.getByRole('button', { name: 'Reorder block 1, text' }))
+      expect(replaceContent).not.toHaveBeenCalled()
+      await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
+      expect((replaceContent.mock.calls[0]![2] as any).content.blocks.map((block: any) => block.type)).toEqual(['TEXT', 'HEADING', 'DIVIDER'])
+    } finally {
+      Object.defineProperty(globalThis.document, 'elementFromPoint', { configurable: true, value: originalElementFromPoint })
+    }
+  })
+
+  it('commits an expanded editor locally before another block begins dragging', async () => {
+    const { container } = render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'text', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Before', marks: [] }] }] } } },
+      { key: 'heading', type: 'HEADING', payload: { level: 2, content: [{ type: 'text', text: 'Heading', marks: [] }] } },
+    ] }) } })
+    await edit(1)
+    await replaceEditorHTML('<p>Local text</p>')
+    const target = container.querySelector<HTMLElement>('[data-content-block-key="text"]')!
+    Object.defineProperty(target, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 100, height: 100 }) })
+    const originalElementFromPoint = globalThis.document.elementFromPoint
+    Object.defineProperty(globalThis.document, 'elementFromPoint', { configurable: true, value: vi.fn(() => target) })
+    try {
+      await fireEvent.pointerDown(screen.getByRole('button', { name: 'Reorder block 2, heading' }), { button: 0, pointerId: 1, clientX: 10, clientY: 200 })
+      await fireEvent.pointerMove(globalThis.document, { pointerId: 1, clientX: 10, clientY: 110 })
+      await fireEvent.pointerUp(globalThis.document, { pointerId: 1, clientX: 10, clientY: 110 })
+      expect(screen.queryByRole('textbox', { name: 'Block 1 text' })).toBeNull()
+      expect(screen.getByText('Local text')).toBeTruthy()
+      await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
+      expect((replaceContent.mock.calls[0]![2] as any).content.blocks.map((block: any) => block.type)).toEqual(['HEADING', 'TEXT'])
+      expect((replaceContent.mock.calls[0]![2] as any).content.blocks[1].payload.content.nodes[0].content[0].text).toBe('Local text')
+    } finally {
+      Object.defineProperty(globalThis.document, 'elementFromPoint', { configurable: true, value: originalElementFromPoint })
+    }
   })
 
   it('keeps picker and preview dirty warning available', async () => {
@@ -140,7 +215,7 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.getByRole('dialog', { name: 'You have unsaved changes' })).toBeTruthy()
     expect(screen.getByText('Latest active value')).toBeTruthy()
     expect(emitted().preview).toBeUndefined()
-    await fireEvent.click(screen.getByRole('button', { name: 'Save Lesson content' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
     expect((replaceContent.mock.calls[0]![2] as any).content.blocks[0].payload.content.nodes[0].content[0].text).toBe('Latest active value')
   })
 

@@ -1,5 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="authoring-shell" aria-labelledby="authoring-draft-title">
+  <BtgPageContainer as="section" class="authoring-shell" :aria-labelledby="isLessonWorkspace ? undefined : 'authoring-draft-title'">
     <div v-if="auth.state.value.status === 'bootstrapping'" class="authoring-shell__state" role="status">
       <h1 id="authoring-draft-title">Checking your session</h1>
       <p>One moment while we check whether you are signed in.</p>
@@ -38,27 +38,29 @@
     </div>
 
     <div v-else class="authoring-shell__content">
-      <RouterLink class="authoring-shell__back" to="/authoring">Back to Authoring</RouterLink>
-      <div class="authoring-shell__header">
-        <p class="authoring-shell__eyebrow">Authoring Draft</p>
-        <h1 id="authoring-draft-title">{{ state.draft.title }}</h1>
-        <dl class="authoring-shell__metadata">
-          <div><dt>Intended version</dt><dd>{{ state.draft.intended_version }}</dd></div>
-          <div><dt>Status</dt><dd>{{ draftStatus(state.draft.status) }}</dd></div>
-          <div><dt>Source language</dt><dd>{{ languageLabel(state.draft.source_language) }}</dd></div>
-          <div><dt>Last updated</dt><dd>{{ updatedAt(state.draft.updated_at) }}</dd></div>
-        </dl>
-      </div>
+      <template v-if="!isLessonWorkspace">
+        <RouterLink class="authoring-shell__back" to="/authoring">Back to Authoring</RouterLink>
+        <div class="authoring-shell__header">
+          <p class="authoring-shell__eyebrow">Authoring Draft</p>
+          <h1 id="authoring-draft-title">{{ state.draft.title }}</h1>
+          <dl class="authoring-shell__metadata">
+            <div><dt>Intended version</dt><dd>{{ state.draft.intended_version }}</dd></div>
+            <div><dt>Status</dt><dd>{{ draftStatus(state.draft.status) }}</dd></div>
+            <div><dt>Source language</dt><dd>{{ languageLabel(state.draft.source_language) }}</dd></div>
+            <div><dt>Last updated</dt><dd>{{ updatedAt(state.draft.updated_at) }}</dd></div>
+          </dl>
+        </div>
 
-      <nav class="authoring-shell__navigation" aria-label="Draft sections">
-        <ul>
-          <li><RouterLink :to="authoringDraftPath(state.draft.id, 'overview')">Overview</RouterLink></li>
-          <li><RouterLink :to="authoringDraftPath(state.draft.id, 'structure')">Structure</RouterLink></li>
-          <li><RouterLink :to="authoringDraftPath(state.draft.id, 'members')">Members</RouterLink></li>
-          <li><RouterLink :to="`/authoring/drafts/${encodeURIComponent(state.draft.id)}/assessments`">Assessments</RouterLink></li>
-          <li><RouterLink :to="authoringDraftPath(state.draft.id, 'review')">Review</RouterLink></li>
-        </ul>
-      </nav>
+        <nav class="authoring-shell__navigation" aria-label="Draft sections">
+          <ul>
+            <li><RouterLink :to="authoringDraftPath(state.draft.id, 'overview')">Overview</RouterLink></li>
+            <li><RouterLink :to="authoringDraftPath(state.draft.id, 'structure')">Structure</RouterLink></li>
+            <li><RouterLink :to="authoringDraftPath(state.draft.id, 'members')">Members</RouterLink></li>
+            <li><RouterLink :to="`/authoring/drafts/${encodeURIComponent(state.draft.id)}/assessments`">Assessments</RouterLink></li>
+            <li><RouterLink :to="authoringDraftPath(state.draft.id, 'review')">Review</RouterLink></li>
+          </ul>
+        </nav>
+      </template>
 
       <div
         class="authoring-shell__section"
@@ -93,6 +95,7 @@ const router = useRouter()
 const state = ref<State>({ kind: 'loading' })
 const draft = ref<AuthoringDraft>()
 const isLessonPreview = computed(() => route.name === 'authoring-draft-lesson-preview')
+const isLessonWorkspace = computed(() => route.name === 'authoring-draft-lesson' || route.name === 'authoring-draft-lesson-content' || route.name === 'authoring-draft-lesson-prerequisites')
 
 let requestVersion = 0
 let active = true

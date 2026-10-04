@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { APIProblemError } from '../api/client'
 import { acceptsUploadedMedia, assetAcceptHint, assetTypeLabel, formatAssetByteSize, type AssetAttachmentType } from '../authoring/assets'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { listAuthoringDraftAssets, uploadAuthoringAsset, type AuthoringAsset, type AuthoringAssetSummary } from '../authoring/authoring'
+import { draftAssetURL } from '../lesson/assets'
 import BtgButton from './BtgButton.vue'
 import BtgFormField from './BtgFormField.vue'
 
@@ -22,6 +23,8 @@ const uploading = ref(false)
 const error = ref<string>()
 const message = ref<string>()
 const fileInput = ref<HTMLInputElement>()
+const picker = ref<HTMLDialogElement>()
+const pickerTrigger = ref<HTMLElement>()
 const listed = ref<AuthoringAssetSummary[]>([])
 const listLimit = ref(20); const listOffset = ref(0); const listTotal = ref(0)
 const listing = ref(false); const listError = ref<string>()
@@ -53,6 +56,18 @@ function chooseFile(event: Event) {
   message.value = undefined
 }
 
+function openPicker(event: Event) {
+  pickerTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined
+  if (picker.value?.showModal) picker.value.showModal()
+  else picker.value?.setAttribute('open', '')
+}
+
+function closePicker() {
+  if (picker.value?.open && typeof picker.value.close === 'function') picker.value.close()
+  else picker.value?.removeAttribute('open')
+  void nextTick(() => pickerTrigger.value?.focus())
+}
+
 function clearSelectedFile() {
   selected.value = undefined
   if (fileInput.value) fileInput.value.value = ''
@@ -76,8 +91,9 @@ async function upload() {
     uploaded.value = asset
     emit('attached', asset)
     clearSelectedFile()
-    message.value = `${asset.filename} uploaded and attached. Save Lesson content to keep this reference.`
+    message.value = `${asset.filename} uploaded and attached. Save content to keep this reference.`
     refreshAssets()
+    closePicker()
   } catch (reason) {
     if (!isCurrent() || !active || generation !== uploadVersion) return
     if (reason instanceof APIProblemError && reason.status === 404) {
@@ -94,6 +110,10 @@ async function upload() {
 }
 
 const compatibleAssets = computed(() => listed.value.filter((asset) => acceptsUploadedMedia(props.type, asset.mediaType)))
+const currentAsset = computed(() => listed.value.find((asset) => asset.assetKey === props.currentAssetKey))
+const currentImageURL = computed(() => props.type === 'IMAGE' && props.currentAssetKey
+  ? draftAssetURL({ draftID: props.draftId }, { assetKey: props.currentAssetKey })
+  : undefined)
 async function loadAssets(offset = listOffset.value) {
   if (listing.value) return
   const isCurrent = captureScope(); const generation = ++listVersion; listing.value = true; listError.value = undefined
@@ -116,7 +136,8 @@ function refreshAssets() { if (listing.value) { listRefreshRequested = true; ret
 function selectExisting(asset: AuthoringAssetSummary) {
   if (!acceptsUploadedMedia(props.type, asset.mediaType)) return
   emit('attached', { ...asset, status: 'AVAILABLE' })
-  message.value = `${asset.filename} attached. Save Lesson content to keep this reference.`
+  message.value = `${asset.filename} attached. Save content to keep this reference.`
+  closePicker()
 }
 
 function uploadError(reason: unknown): string {
@@ -130,23 +151,39 @@ function uploadError(reason: unknown): string {
 </script>
 
 <template>
-  <section class="authoring-asset-attachment" :aria-busy="uploading" :aria-label="`${label} attachment`">
-    <p v-if="currentAssetKey" class="authoring-asset-attachment__current">An asset is attached.</p>
-    <BtgFormField :label="`${label} file`" :description="`Choose a file to upload for this ${assetTypeLabel(type)} block.`" v-slot="{ controlId, describedBy }">
-      <input :id="controlId" ref="fileInput" type="file" :accept="assetAcceptHint(type)" :aria-describedby="describedBy" :disabled="uploading" @change="chooseFile" />
-    </BtgFormField>
-    <p v-if="selected" class="authoring-asset-attachment__selection">Selected: {{ selected.name }}</p>
-    <BtgButton variant="secondary" :disabled="!selected || uploading" @click="upload">{{ uploading ? 'Uploading…' : currentAssetKey ? 'Upload replacement' : 'Upload file' }}</BtgButton>
-    <p v-if="uploaded" class="authoring-asset-attachment__metadata">Attached: {{ uploaded.filename }} · {{ uploaded.mediaType }} · {{ formatAssetByteSize(uploaded.byteSize) }}</p>
-    <p v-if="error" class="authoring-asset-attachment__error" role="alert">{{ error }}</p>
-    <p v-if="message" class="authoring-asset-attachment__status" role="status">{{ message }}</p>
-    <details class="authoring-asset-attachment__existing">
-      <summary>Choose an uploaded asset</summary>
+  <section class="authoring-asset-attachment" :class="{ 'authoring-asset-attachment--image': type === 'IMAGE' }" :aria-busy="uploading" :aria-label="`${label} attachment`">
+    <div v-if="currentAssetKey" class="authoring-asset-attachment__current">
+      <img v-if="currentImageURL" :src="currentImageURL" alt="" />
+      <div class="authoring-asset-attachment__field">
+        <p class="authoring-asset-attachment__label">{{ label }}</p>
+        <div class="authoring-asset-attachment__summary">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM6 16l4-4 3 3 2-2 3 3M8.5 9.5h.01" /></svg>
+          <div><strong>{{ currentAsset?.filename ?? uploaded?.filename ?? 'Attached asset' }}</strong><small v-if="currentAsset">{{ currentAsset.mediaType }} · {{ formatAssetByteSize(currentAsset.byteSize) }}</small></div>
+          <BtgButton variant="secondary" @click="openPicker">Change {{ label.toLowerCase() }}</BtgButton>
+        </div>
+      </div>
+    </div>
+    <BtgButton v-else variant="secondary" @click="openPicker">Choose {{ label.toLowerCase() }}</BtgButton>
+    <slot />
+    <dialog ref="picker" class="authoring-asset-attachment__picker" :aria-labelledby="`asset-picker-${blockKey}`">
+      <form method="dialog" @submit.prevent="closePicker">
+      <header><h3 :id="`asset-picker-${blockKey}`">Change {{ label.toLowerCase() }}</h3><p>Choose an existing {{ assetTypeLabel(type) }} asset or upload a new one.</p></header>
+      <BtgFormField :label="`Upload new ${label.toLowerCase()}`" :description="`Choose a file to upload for this ${assetTypeLabel(type)} block.`" v-slot="{ controlId, describedBy }">
+        <input :id="controlId" ref="fileInput" type="file" :accept="assetAcceptHint(type)" :aria-describedby="describedBy" :disabled="uploading" @change="chooseFile" />
+      </BtgFormField>
+      <div class="authoring-asset-attachment__upload"><p v-if="selected" class="authoring-asset-attachment__selection">Selected: {{ selected.name }}</p><BtgButton :disabled="!selected || uploading" @click="upload">{{ uploading ? 'Uploading…' : 'Upload and use' }}</BtgButton></div>
+      <p v-if="error" class="authoring-asset-attachment__error" role="alert">{{ error }}</p>
+      <section class="authoring-asset-attachment__existing" aria-labelledby="`asset-picker-existing-${blockKey}`">
+      <h4 :id="`asset-picker-existing-${blockKey}`">Existing {{ type === 'IMAGE' ? 'images' : 'assets' }}</h4>
       <p v-if="listing" role="status">Loading uploaded assets…</p>
       <p v-else-if="listError" role="alert">{{ listError }} <BtgButton variant="secondary" @click="refreshAssets">Retry</BtgButton></p>
       <p v-else-if="!compatibleAssets.length">No uploaded assets yet.</p>
-      <ul v-else class="authoring-asset-attachment__list" aria-label="Available uploaded assets"><li v-for="asset in compatibleAssets" :key="asset.assetKey"><BtgButton variant="secondary" @click="selectExisting(asset)">Use {{ asset.filename }}</BtgButton><span>{{ asset.mediaType }} · {{ formatAssetByteSize(asset.byteSize) }} · {{ new Date(asset.createdAt).toLocaleDateString() }}</span></li></ul>
+      <ul v-else class="authoring-asset-attachment__list" aria-label="Available uploaded assets"><li v-for="asset in compatibleAssets" :key="asset.assetKey"><button type="button" :aria-label="`Use ${asset.filename}`" @click="selectExisting(asset)"><img v-if="type === 'IMAGE'" :src="draftAssetURL({ draftID: draftId }, { assetKey: asset.assetKey })" alt="" /><span><strong>{{ asset.filename }}</strong><small>{{ asset.mediaType }} · {{ formatAssetByteSize(asset.byteSize) }}</small></span></button></li></ul>
       <p v-if="listTotal > listLimit"><BtgButton variant="secondary" :disabled="listOffset === 0 || listing" @click="loadAssets(Math.max(0, listOffset - listLimit))">Previous</BtgButton><BtgButton variant="secondary" :disabled="listOffset + listLimit >= listTotal || listing" @click="loadAssets(listOffset + listLimit)">Next</BtgButton></p>
-    </details>
+      </section>
+      <footer><BtgButton variant="secondary" @click="closePicker">Cancel</BtgButton></footer>
+      </form>
+    </dialog>
+    <p v-if="message" class="authoring-asset-attachment__status" role="status">{{ message }}</p>
   </section>
 </template>

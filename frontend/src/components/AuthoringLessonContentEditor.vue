@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { APIProblemError } from '../api/client'
 import { preserveFocusAfterRemoval } from '../authoring/focus'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
@@ -7,6 +7,7 @@ import { getAuthoringLesson, listAuthoringCourseWidgets, replaceAuthoringLessonC
 import { contentEditorError, contentEditorLimits, contentFingerprint, copyContent, createContentBlock, editableBlockTypes, type CanonicalBlock, type EditableBlockType } from '../authoring/contentEditor'
 import { richTextPlainText } from '../authoring/richText'
 import { decodeLessonContent } from '../lesson/content'
+import { draftAssetURL } from '../lesson/assets'
 import AuthoringContentBlock from './AuthoringContentBlock.vue'
 import BtgButton from './BtgButton.vue'
 
@@ -14,6 +15,7 @@ const props = defineProps<{ draftId: string; lesson: AuthoringLessonDetail }>()
 const emit = defineEmits<{ saved: [result: AuthoringLessonContentMutation]; replaceLesson: [lesson: AuthoringLessonDetail]; preview: []; unavailable: [] }>()
 const document = ref<AuthoringLessonContent>(copyContent(props.lesson.content))
 const baseline = ref(contentFingerprint(props.lesson.content))
+const savedContent = ref<AuthoringLessonContent>(copyContent(props.lesson.content))
 const supported = ref(false)
 const picker = ref<HTMLDialogElement>()
 const previewWarning = ref<HTMLDialogElement>()
@@ -22,6 +24,10 @@ const editingBlock = ref<CanonicalBlock>()
 const editingOriginal = ref<CanonicalBlock>()
 const actionsIndex = ref<number>()
 const pickerTrigger = ref<HTMLElement>()
+const draggingKey = ref<string>()
+const insertionIndex = ref<number>()
+const keyboardReorderKey = ref<string>()
+const reorderAnnouncement = ref('')
 const saving = ref(false)
 const reloading = ref(false)
 const conflict = ref(false)
@@ -51,6 +57,8 @@ const pickerOptions = computed(() => new Map(editableBlockTypes.map((entry) => [
 let loadedLessonID = ''
 let requestVersion = 0
 let active = true
+let dragPointerID: number | undefined
+let dragSourceIndex = -1
 
 async function loadCourseWidgets() {
   const generation = requestVersion
@@ -65,6 +73,7 @@ async function loadCourseWidgets() {
 
 function initialize(content: AuthoringLessonContent) {
   document.value = copyContent(content)
+  savedContent.value = copyContent(content)
   baseline.value = contentFingerprint(content)
   const decoded = decodeLessonContent(content)
   supported.value = decoded.kind === 'ready' && decoded.blocks.every((block) => block.type !== 'UNSUPPORTED')
@@ -74,6 +83,10 @@ function initialize(content: AuthoringLessonContent) {
   editingKey.value = undefined
   editingBlock.value = undefined
   editingOriginal.value = undefined
+  draggingKey.value = undefined
+  insertionIndex.value = undefined
+  keyboardReorderKey.value = undefined
+  reorderAnnouncement.value = ''
 }
 const captureScope = useAuthoringAsyncScope(() => `${props.draftId}/${props.lesson.id}`)
 
@@ -90,9 +103,15 @@ watch(() => [props.lesson.id, contentFingerprint(props.lesson.content)], () => {
     else initialize(props.lesson.content)
   }
 }, { immediate: true })
-onBeforeUnmount(() => { active = false })
+onMounted(() => globalThis.document.addEventListener('pointerdown', closeActionsOnOutsidePointer, true))
+onBeforeUnmount(() => {
+  active = false
+  clearPointerReorder()
+  globalThis.document.removeEventListener('pointerdown', closeActionsOnOutsidePointer, true)
+})
 
 function label(type: string) { return (editableBlockTypes.find((entry) => entry.type === type)?.label ?? type).toLowerCase().replaceAll('_', ' ') }
+function displayLabel(type: string) { return editableBlockTypes.find((entry) => entry.type === type)?.label ?? type.replaceAll('_', ' ') }
 function openPicker(event: Event) { pickerTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined; if (picker.value?.showModal) picker.value.showModal(); else picker.value?.setAttribute('open', '') }
 function preview() { commitEditing(false); if (dirty.value) { if (previewWarning.value?.showModal) previewWarning.value.showModal(); else previewWarning.value?.setAttribute('open', ''); return }; emit('preview') }
 function closePreviewWarning() { if (previewWarning.value && typeof previewWarning.value.close === 'function' && previewWarning.value.open) previewWarning.value.close(); else previewWarning.value?.removeAttribute('open') }
@@ -113,6 +132,10 @@ function addBlock(blockType: EditableBlockType) {
   })
 }
 function blockSummary(block: CanonicalBlock): string { const p: any = block.payload; if (block.type === 'TEXT') return richTextPlainText(p.content).slice(0, 140) || 'Written content'; if (block.type === 'HEADING') return p.content.map((i: any) => i.text).join(' '); if (block.type === 'IMAGE') return p.caption || p.altText || 'Image asset'; if (block.type === 'VIDEO' || block.type === 'AUDIO') return p.title; if (block.type === 'DOWNLOAD') return p.label; if (block.type === 'CODE') return [p.language, p.code.split('\n')[0]].filter(Boolean).join(' · '); if (block.type === 'QUOTE') return p.text.slice(0,140); if (block.type === 'CALLOUT') return p.title || 'Callout'; if (block.type === 'KNOWLEDGE_CHECK') return 'Inline learner assessment'; if (block.type === 'PLUGIN_WIDGET') return 'Course widget'; return '' }
+function blockIcon(type: string) { return pickerDetails[type as EditableBlockType]?.icon ?? '' }
+function imageURL(block: CanonicalBlock): string | undefined {
+  return block.type === 'IMAGE' ? draftAssetURL({ draftID: props.draftId }, block.payload.asset) : undefined
+}
 function copyBlock(block: CanonicalBlock) { return JSON.parse(JSON.stringify(block)) as CanonicalBlock }
 function isEditing(block: CanonicalBlock) { return editingKey.value === block.key }
 function focusEditor(key: string) {
@@ -152,6 +175,12 @@ function cancelEditing() {
 }
 function toggleActions(index: number) { actionsIndex.value = actionsIndex.value === index ? undefined : index }
 function closeActions() { actionsIndex.value = undefined }
+function closeActionsOnOutsidePointer(event: PointerEvent) {
+  if (actionsIndex.value === undefined) return
+  const target = event.target
+  if (target instanceof Element && target.closest('.authoring-content__menu')) return
+  closeActions()
+}
 function updateBlock(key: string, block: CanonicalBlock) {
   if (saving.value) return
   const index = document.value.blocks.findIndex((current) => current.key === key && current.type === block.type)
@@ -161,17 +190,110 @@ function updateBlock(key: string, block: CanonicalBlock) {
   document.value = { ...document.value, blocks }
   message.value = undefined
 }
-function move(index: number, direction: -1 | 1) {
-  if (saving.value) return
+function discardChanges() {
+  if (saving.value || reloading.value) return
+  document.value = copyContent(savedContent.value)
+  baseline.value = contentFingerprint(savedContent.value)
+  conflict.value = false
+  formError.value = undefined
+  finishEditing(false)
+  closeActions()
+  message.value = 'Unsaved content changes discarded.'
+}
+function focusReorderHandle(key: string) { globalThis.document.getElementById(`authoring-content-reorder-${key}`)?.focus() }
+function moveBlock(fromIndex: number, toIndex: number, focus = false): boolean {
+  if (saving.value || fromIndex < 0 || toIndex < 0 || fromIndex >= document.value.blocks.length || toIndex >= document.value.blocks.length || fromIndex === toIndex) return false
   commitEditing(false)
-  const destination = index + direction
-  if (destination < 0 || destination >= document.value.blocks.length) return
   const blocks = [...document.value.blocks]
-  const [block] = blocks.splice(index, 1)
-  blocks.splice(destination, 0, block!)
+  const [block] = blocks.splice(fromIndex, 1)
+  if (!block) return false
+  blocks.splice(toIndex, 0, block)
   document.value = { ...document.value, blocks }
   closeActions()
   message.value = undefined
+  reorderAnnouncement.value = `${displayLabel(block.type)} block moved to position ${toIndex + 1} of ${blocks.length}.`
+  if (focus) void nextTick(() => focusReorderHandle(block.key))
+  return true
+}
+function move(index: number, direction: -1 | 1) {
+  moveBlock(index, index + direction)
+}
+function clearPointerReorder() {
+  globalThis.document.removeEventListener('pointermove', updatePointerReorder)
+  globalThis.document.removeEventListener('pointerup', finishPointerReorder)
+  globalThis.document.removeEventListener('pointercancel', cancelPointerReorder)
+  dragPointerID = undefined
+  dragSourceIndex = -1
+  draggingKey.value = undefined
+  insertionIndex.value = undefined
+}
+function startPointerReorder(event: PointerEvent, index: number) {
+  if (saving.value || event.button !== 0) return
+  const block = document.value.blocks[index]
+  if (!block) return
+  event.preventDefault()
+  commitEditing(false)
+  closeActions()
+  keyboardReorderKey.value = undefined
+  dragPointerID = event.pointerId
+  dragSourceIndex = index
+  draggingKey.value = block.key
+  insertionIndex.value = index
+  globalThis.document.addEventListener('pointermove', updatePointerReorder)
+  globalThis.document.addEventListener('pointerup', finishPointerReorder)
+  globalThis.document.addEventListener('pointercancel', cancelPointerReorder)
+}
+function updatePointerReorder(event: PointerEvent) {
+  if (event.pointerId !== dragPointerID || draggingKey.value === undefined) return
+  const row = globalThis.document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-content-block-key]')
+  if (row?.dataset.contentBlockKey) {
+    const target = document.value.blocks.findIndex((block) => block.key === row.dataset.contentBlockKey)
+    if (target >= 0) {
+      const bounds = row.getBoundingClientRect()
+      insertionIndex.value = event.clientY < bounds.top + bounds.height / 2 ? target : target + 1
+    }
+  }
+  const edge = 3 * 16
+  if (event.clientY < edge) globalThis.scrollBy({ top: -16, behavior: 'auto' })
+  else if (event.clientY > globalThis.innerHeight - edge) globalThis.scrollBy({ top: 16, behavior: 'auto' })
+}
+function finishPointerReorder(event: PointerEvent) {
+  if (event.pointerId !== dragPointerID) return
+  const key = draggingKey.value
+  const source = dragSourceIndex
+  const insertion = insertionIndex.value ?? source
+  clearPointerReorder()
+  if (!key || source < 0) return
+  const destination = insertion > source ? insertion - 1 : insertion
+  moveBlock(source, destination, true)
+}
+function cancelPointerReorder(event: PointerEvent) {
+  if (event.pointerId !== dragPointerID) return
+  const key = draggingKey.value
+  clearPointerReorder()
+  if (key) void nextTick(() => focusReorderHandle(key))
+}
+function keyboardReorder(event: KeyboardEvent, index: number) {
+  const block = document.value.blocks[index]
+  if (!block || saving.value) return
+  if (event.key === ' ' || event.key === 'Enter') {
+    event.preventDefault()
+    keyboardReorderKey.value = keyboardReorderKey.value === block.key ? undefined : block.key
+    reorderAnnouncement.value = keyboardReorderKey.value === block.key
+      ? `Reordering ${displayLabel(block.type)} block. Use the arrow keys to move it, or Escape to finish.`
+      : `Finished reordering ${displayLabel(block.type)} block.`
+    return
+  }
+  if (event.key === 'Escape' && keyboardReorderKey.value === block.key) {
+    event.preventDefault()
+    keyboardReorderKey.value = undefined
+    reorderAnnouncement.value = `Finished reordering ${displayLabel(block.type)} block.`
+    return
+  }
+  if (keyboardReorderKey.value !== block.key || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
+  event.preventDefault()
+  const current = document.value.blocks.findIndex((entry) => entry.key === block.key)
+  moveBlock(current, current + (event.key === 'ArrowUp' ? -1 : 1), true)
 }
 function removeBlock(index: number) {
   if (saving.value) return
@@ -231,40 +353,45 @@ async function reloadLatest() {
 </script>
 
 <template>
-  <section class="authoring-content" aria-labelledby="authoring-content-title">
-    <h3 id="authoring-content-title">Lesson content</h3>
-    <p>Build the material learners will work through in this lesson.</p>
+  <section class="authoring-content" aria-label="Lesson content editor">
     <p v-if="!supported" role="alert">This content format cannot be edited safely by this version of the Academy.</p>
     <form v-else :aria-busy="saving" novalidate @submit.prevent="save">
       <p v-if="formError" class="authoring-content__error" role="alert">{{ formError }}</p>
       <p v-if="message" class="authoring-content__status" role="status">{{ message }}</p>
+      <p class="sr-only" role="status" aria-live="polite">{{ reorderAnnouncement }}</p>
       <div v-if="conflict" class="authoring-content__conflict" role="status">
         <p>Lesson content changed elsewhere. Your unsaved blocks are still here. Reload the latest content before saving again.</p>
         <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? 'Reloading…' : 'Reload latest content' }}</BtgButton>
       </div>
       <fieldset class="authoring-content__controls" :disabled="saving || reloading">
         <legend class="sr-only">Content blocks</legend>
-        <div v-if="document.blocks.length" class="authoring-content__add"><BtgButton variant="secondary" :disabled="document.blocks.length >= contentEditorLimits.blocks" @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
+        <div v-if="document.blocks.length" class="authoring-content__toolbar"><BtgButton :disabled="document.blocks.length >= contentEditorLimits.blocks" @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
         <p v-if="document.blocks.length >= contentEditorLimits.blocks">The Lesson has reached the 200-block limit.</p>
+        <p id="authoring-content-reorder-help" class="sr-only">Drag this handle with a mouse or touch to reorder the block. Press Space or Enter, then use the arrow keys to reorder with the keyboard. Move up and Move down are also available in Actions.</p>
         <ol v-if="document.blocks.length" class="authoring-content__blocks" aria-label="Lesson content blocks">
-          <li v-for="(block, index) in document.blocks" :id="`authoring-content-block-${block.key}`" :key="block.key" :class="['authoring-content__row', { 'is-expanded': isEditing(block) }]" tabindex="-1">
+          <li v-for="(block, index) in document.blocks" :id="`authoring-content-block-${block.key}`" :key="block.key" :data-content-block-key="block.key" :class="['authoring-content__row', { 'is-expanded': isEditing(block), 'is-menu-open': actionsIndex === index, 'is-dragging': draggingKey === block.key, 'is-drop-before': draggingKey !== block.key && insertionIndex === index, 'is-drop-after': draggingKey !== block.key && insertionIndex === document.blocks.length && index === document.blocks.length - 1 }]" tabindex="-1">
             <div class="authoring-content__row-header">
+              <button :id="`authoring-content-reorder-${block.key}`" class="authoring-content__drag-handle" type="button" :aria-label="`Reorder block ${index + 1}, ${label(block.type)}`" :aria-pressed="keyboardReorderKey === block.key" aria-describedby="authoring-content-reorder-help" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg></button>
               <span class="authoring-content__number">{{ String(index + 1).padStart(2, '0') }}</span>
+              <span class="authoring-content__type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path :d="blockIcon(block.type)" /></svg></span>
               <div class="authoring-content__summary">
-                <p>{{ label(block.type) }}</p>
-                <strong v-if="block.type !== 'DIVIDER'">{{ blockSummary(block) }}</strong>
-                <hr v-else />
+                <img v-if="imageURL(block)" class="authoring-content__image-preview" :src="imageURL(block)" alt="" />
+                <div>
+                  <p>{{ label(block.type) }}</p>
+                  <strong v-if="block.type !== 'DIVIDER'">{{ blockSummary(block) }}</strong>
+                  <hr v-else />
+                </div>
               </div>
               <div class="authoring-content__row-actions">
                 <template v-if="block.type !== 'DIVIDER'">
                   <BtgButton v-if="!isEditing(block)" :id="`authoring-content-edit-${block.key}`" variant="secondary" :aria-controls="`authoring-content-editor-${block.key}`" :aria-expanded="false" :aria-label="`Edit block ${index + 1}, ${label(block.type)}`" @click="startEditing(index)">Edit</BtgButton>
                   <template v-else>
-                    <BtgButton variant="secondary" :aria-label="`Cancel changes for block ${index + 1}, ${label(block.type)}`" @click="cancelEditing">Cancel changes</BtgButton>
+                    <BtgButton variant="secondary" :aria-label="`Cancel changes for block ${index + 1}, ${label(block.type)}`" @click="cancelEditing">Cancel</BtgButton>
                     <BtgButton :id="`authoring-content-edit-${block.key}`" :aria-controls="`authoring-content-editor-${block.key}`" :aria-expanded="true" :aria-label="`Done editing block ${index + 1}, ${label(block.type)}`" @click="doneEditing">Done</BtgButton>
                   </template>
                 </template>
                 <div class="authoring-content__menu">
-                  <BtgButton variant="secondary" :aria-expanded="actionsIndex === index" :aria-label="`Actions for block ${index + 1}, ${label(block.type)}`" @click="toggleActions(index)">Actions</BtgButton>
+                  <BtgButton variant="secondary" :aria-expanded="actionsIndex === index" :aria-label="`Actions for block ${index + 1}, ${label(block.type)}`" @click="toggleActions(index)"><span aria-hidden="true">…</span></BtgButton>
                   <div v-if="actionsIndex === index" role="menu" class="authoring-content__menu-items" @keydown.esc="closeActions">
                     <BtgButton role="menuitem" variant="secondary" :disabled="index === 0" @click="move(index, -1)">Move up</BtgButton>
                     <BtgButton role="menuitem" variant="secondary" :disabled="index === document.blocks.length - 1" @click="move(index, 1)">Move down</BtgButton>
@@ -274,15 +401,16 @@ async function reloadLatest() {
               </div>
             </div>
             <section v-if="isEditing(block) && editingBlock" :id="`authoring-content-editor-${block.key}`" class="authoring-content__inline-editor" :aria-label="`Editing block ${index + 1}, ${label(block.type)}`">
-              <h4>Editing {{ label(block.type) }}</h4>
               <AuthoringContentBlock :block="editingBlock" :position="index + 1" :draft-id="draftId" :lesson-id="lesson.id" :course-widgets="courseWidgets" @update="updateEditing" @unavailable="emit('unavailable')" />
             </section>
           </li>
         </ol>
         <div v-else class="authoring-content__empty"><p><strong>No lesson content yet.</strong></p><p>Add text, media, code, callouts, and other learning material.</p><BtgButton @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
       </fieldset>
-      <p v-if="dirty" role="status">You have unsaved content changes.</p>
-      <div class="authoring-content__actions"><BtgButton type="submit" :disabled="!dirty || saving || reloading || conflict">{{ saving ? 'Saving content…' : 'Save Lesson content' }}</BtgButton></div>
+      <footer v-if="dirty" class="authoring-content__save-bar" aria-label="Unsaved content actions">
+        <p role="status"><span aria-hidden="true"></span>Unsaved changes</p>
+        <div><BtgButton variant="secondary" :disabled="saving || reloading" @click="discardChanges">Discard changes</BtgButton><BtgButton type="submit" :disabled="saving || reloading || conflict">{{ saving ? 'Saving content…' : 'Save content' }}</BtgButton></div>
+      </footer>
     </form>
   </section>
   <dialog ref="picker" class="authoring-content__picker" aria-labelledby="authoring-content-picker-title" @close="onPickerClosed">

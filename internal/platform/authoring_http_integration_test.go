@@ -735,7 +735,7 @@ func testAuthoringLessonContentMutation(t *testing.T, ctx context.Context, pool 
 	cookie := &http.Cookie{Name: sessionCookieName, Value: session.Token.Value()}
 	csrf := authTestCSRFToken().Value()
 	path := "/api/authoring/drafts/" + string(draft.ID) + "/lessons/" + string(lesson.ID) + "/content"
-	validContent := `{"schemaVersion":1,"blocks":[{"key":"divider","type":"DIVIDER","payload":{}}]}`
+	validContent := `{"schemaVersion":1,"blocks":[{"key":"rich-text","type":"TEXT","payload":{"content":{"nodes":[{"type":"paragraph","content":[{"type":"text","text":"Run this:"}]},{"type":"code_block","text":"kubectl get pods\n  kubectl get services"},{"type":"paragraph","content":[{"type":"text","text":"Then continue."}]}]}}},{"key":"divider","type":"DIVIDER","payload":{}}]}`
 	body := `{"expectedLessonRevision":1,"content":` + validContent + `}`
 	if response := authRequest(router, http.MethodPut, path, body, nil, csrf); response.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated content replacement = %d", response.Code)
@@ -770,8 +770,12 @@ func testAuthoringLessonContentMutation(t *testing.T, ctx context.Context, pool 
 		t.Fatalf("content replacement = %d: %s", response.Code, response.Body.String())
 	}
 	updated, err := repository.GetLesson(ctx, lesson.ID)
-	if err != nil || updated.Revision != 2 || len(updated.Content.Blocks) != 1 || updated.Content.Blocks[0].Key != "divider" {
+	if err != nil || updated.Revision != 2 || len(updated.Content.Blocks) != 2 || updated.Content.Blocks[0].Key != "rich-text" || updated.Content.Blocks[1].Key != "divider" {
 		t.Fatalf("content did not persist canonically: %v %#v", err, updated)
+	}
+	richText, ok := updated.Content.Blocks[0].Payload.(courses.TextBlockPayload)
+	if !ok || len(richText.Content.Nodes) != 3 || richText.Content.Nodes[1].Type != "code_block" || richText.Content.Nodes[1].Text != "kubectl get pods\n  kubectl get services" {
+		t.Fatalf("rich text code block did not persist through HTTP: %#v", updated.Content.Blocks[0].Payload)
 	}
 	nonmember, err := identityRepository.CreateUser(ctx, identity.UserActive)
 	if err != nil {
@@ -806,7 +810,7 @@ func testAuthoringLessonContentMutation(t *testing.T, ctx context.Context, pool 
 		t.Fatalf("stale content replacement = %d", response.Code)
 	}
 	unchanged, err := repository.GetLesson(ctx, lesson.ID)
-	if err != nil || unchanged.Revision != 2 || unchanged.Content.Blocks[0].Key != "divider" {
+	if err != nil || unchanged.Revision != 2 || len(unchanged.Content.Blocks) != 2 || unchanged.Content.Blocks[0].Key != "rich-text" || unchanged.Content.Blocks[1].Key != "divider" {
 		t.Fatalf("stale update overwrote content: %v %#v", err, unchanged)
 	}
 

@@ -15,9 +15,9 @@
 
     <template v-else-if="state.kind === 'ready'">
       <header class="authoring-lesson-editor__header">
-        <p class="authoring-shell__eyebrow">Lesson</p>
-        <h2 id="authoring-lesson-title" tabindex="-1">{{ state.lesson.title }}</h2>
-        <dl class="authoring-lesson-editor__metadata"><div><dt>Module</dt><dd>{{ moduleTitle }}</dd></div><div><dt>Estimated duration</dt><dd>{{ durationLabel }}</dd></div></dl>
+        <h1 id="authoring-lesson-title" tabindex="-1">{{ state.lesson.title }}</h1>
+        <div class="authoring-lesson-editor__context" aria-label="Lesson context"><span>Lesson</span><span>Draft</span></div>
+        <dl v-if="currentSection === 'details' || legacyCombined" class="authoring-lesson-editor__metadata"><div><dt>Module</dt><dd>{{ moduleTitle }}</dd></div><div><dt>Estimated duration</dt><dd>{{ durationLabel }}</dd></div></dl>
       </header>
       <nav class="authoring-lesson-editor__navigation" aria-label="Lesson sections"><ul><li v-for="section in sections" :key="section.id"><RouterLink :to="sectionPath(section.id)">{{ section.label }}</RouterLink></li></ul></nav>
 
@@ -64,7 +64,7 @@
       </form>
       </template>
       <template v-if="currentSection === 'content' || legacyCombined">
-        <header class="authoring-lesson-editor__subview"><h2 id="authoring-lesson-content-title" tabindex="-1">Lesson content</h2><p>Build the material learners will work through in this lesson.</p></header>
+        <header class="authoring-lesson-editor__subview authoring-lesson-editor__subview--content"><h2 id="authoring-lesson-content-title" tabindex="-1">Content</h2><p>Build the material learners will work through in this lesson.</p></header>
         <AuthoringLessonContentEditor :draft-id="draft.id" :lesson="state.lesson" @saved="applyContent" @replace-lesson="replaceLesson" @preview="openPreview" @unavailable="markDraftUnavailable" />
       </template>
       <template v-if="currentSection === 'prerequisites' || legacyCombined">
