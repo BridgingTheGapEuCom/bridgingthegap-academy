@@ -1127,16 +1127,25 @@ test('Authoring creates Lessons through the focused dialog with structured objec
 })
 
 test('Authoring Lesson metadata editor saves with the Lesson revision and remains usable at a narrow width', async ({ page }) => {
-  let patchBody: unknown
+  let patchBody: Record<string, unknown> | undefined
+  let currentLesson = { ...lesson }
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}/plugins/course-widgets`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ widgets: [] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/structure**`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}`, (route) => {
     if (route.request().method() === 'PATCH') {
       patchBody = route.request().postDataJSON()
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lesson, title: 'Updated Lesson', revision: 3, draftRevision: 4 }) })
+      currentLesson = {
+        ...currentLesson,
+        ...(typeof patchBody.title === 'string' ? { title: patchBody.title } : {}),
+        ...(typeof patchBody.description === 'string' ? { description: patchBody.description } : {}),
+        ...(Array.isArray(patchBody.objectives) ? { objectives: patchBody.objectives as string[] } : {}),
+        ...(typeof patchBody.estimatedDurationMinutes === 'number' ? { estimated_duration_minutes: patchBody.estimatedDurationMinutes } : {}),
+        revision: 3,
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...currentLesson, draftRevision: 4 }) })
     }
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lesson) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(currentLesson) })
   })
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
 
@@ -1148,15 +1157,42 @@ test('Authoring Lesson metadata editor saves with the Lesson revision and remain
   await expect(page.getByRole('heading', { level: 3, name: 'Timing' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0)
   await expect(page.getByText('what-is-eai')).toHaveCount(0)
+  await expect(page.getByLabel('Lesson context')).toHaveText(/Lesson.*Draft/)
   const title = page.getByRole('textbox', { name: /^Title\b/ })
   await title.fill('Updated Lesson')
+  await page.getByRole('textbox', { name: /^Description\b/ }).fill('A focused introduction to enterprise application integration.')
+  await page.getByRole('spinbutton', { name: 'Estimated duration' }).fill('20')
+  await page.getByRole('button', { name: '+ Add learning objective' }).click()
+  await page.getByRole('textbox', { name: 'Learning objective 2' }).fill('Apply integration patterns')
+  const firstObjectiveHandle = page.getByRole('button', { name: /Reorder learning objective 1/i })
+  await firstObjectiveHandle.press('Space')
+  await firstObjectiveHandle.press('ArrowDown')
+  await page.getByRole('button', { name: '+ Add learning objective' }).click()
+  await page.getByRole('textbox', { name: 'Learning objective 3' }).fill('Remove this objective')
+  await page.getByRole('button', { name: 'Remove learning objective 3' }).click()
   await expect(page.getByText('Unsaved changes')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Discard changes' })).toBeVisible()
   await page.getByRole('button', { name: 'Save changes' }).click()
 
   await expect(page.getByText('Lesson metadata saved.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0)
-  expect(patchBody).toEqual({ expectedLessonRevision: 2, title: 'Updated Lesson' })
+  expect(patchBody).toEqual({
+    expectedLessonRevision: 2,
+    title: 'Updated Lesson',
+    description: 'A focused introduction to enterprise application integration.',
+    objectives: ['Apply integration patterns', 'Explain EAI'],
+    estimatedDurationMinutes: 20,
+  })
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: /^Title\b/ })).toHaveValue('Updated Lesson')
+  await expect(page.getByRole('textbox', { name: /^Description\b/ })).toHaveValue('A focused introduction to enterprise application integration.')
+  await expect(page.getByRole('textbox', { name: 'Learning objective 1' })).toHaveValue('Apply integration patterns')
+  await expect(page.getByRole('spinbutton', { name: 'Estimated duration' })).toHaveValue('20')
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '' })
   await page.getByRole('link', { name: 'Back to structure' }).focus()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
