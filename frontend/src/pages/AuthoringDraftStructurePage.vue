@@ -301,7 +301,7 @@
 						:aria-describedby="p.describedBy"
 					/>
 				</BtgFormField>
-				<div class="authoring-structure-dialog__actions">
+				<div class="btg-dialog__footer">
 					<BtgButton
 						variant="secondary"
 						@click.prevent="moduleDialogOpen = false"
@@ -355,7 +355,7 @@
 					:error="lessonErrors.objectives"
 					:disabled="busy"
 				/>
-				<div class="authoring-structure-dialog__actions">
+				<div class="btg-dialog__footer">
 					<BtgButton
 						variant="secondary"
 						@click.prevent="lessonDialogOpen = false"
@@ -402,7 +402,7 @@
 						</option>
 					</BtgSelect></BtgFormField
 				>
-				<div class="authoring-structure-dialog__actions">
+				<div class="btg-dialog__footer">
 					<BtgButton
 						variant="secondary"
 						@click.prevent="moveDialogOpen = false"

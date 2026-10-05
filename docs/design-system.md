@@ -372,6 +372,12 @@ Adopt Stylelint only after the CSS is divided into ownership boundaries; otherwi
 - Migrate Structure without changing selection, reordering, persistence, navigation, or responsive behavior.
 - Use it to validate buttons, icons, search, panels, menus, ordered rows, metadata, inspector sections, destructive actions, and split layout.
 
+### Reference migration: Draft Structure
+
+Draft Structure composes `BtgToolbar`, `BtgSearchField`, `BtgSplitWorkspace`, `BtgPanel`, `BtgDisclosure`, `BtgOrderedRow`, `BtgDragHandle`, `BtgMetadataStrip`, `AuthoringInspectorSection`, and `BtgPreviousNextNavigation`. Buttons, icons, surfaces, selected rows, metadata, and responsive control treatment come from those primitives; feature code must not restyle them.
+
+Structure retains only feature ownership: outline hierarchy, the module/lesson column arrangement, insertion indicators during reordering, inspector identity arrangement, empty-state placement, and destructive-action separation. It owns reorder persistence, selection, search filtering, and localized messages; it does not own visual identity. Future migrations should follow this composition-first pattern and add local CSS only for equivalent domain-specific layout or state.
+
 ### M-UI.5 — Lesson authoring
 
 - Migrate Details, Content, and Prerequisites.

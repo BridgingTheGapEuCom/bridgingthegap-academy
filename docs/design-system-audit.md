@@ -176,7 +176,7 @@ Recommendation:
 
 ### Draft Structure
 
-Structure already uses `BtgButton`, `BtgIcon`, the canonical page container, and shared Authoring headers. It still owns search composition, toolbar, two panels, hierarchical rows, drag state, menu/dialog presentation, metadata strip, chips, inspector sections, and destructive grouping. Its CSS also reflects several rounds of local refinement and override.
+Structure is now the reference migration. Its standard controls, icons, panels, metadata, inspector sections, rows, drag handle, toolbar, and split workspace use shared primitives. Legacy control, search, icon, metadata, selection, dialog, and button overrides were removed; remaining CSS is limited to outline hierarchy, drag insertion state, inspector identity layout, and destructive grouping.
 
 The proposed system replaces visual mechanics while leaving module disclosure, search, selection, reordering, revision persistence, rollback, previous/next navigation, and edit flows in the feature. Because it exercises nearly every proposed layer, it is the best reference migration.
 
