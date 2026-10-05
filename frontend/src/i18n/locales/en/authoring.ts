@@ -62,6 +62,12 @@ export default {
     removeObjective: 'Remove learning objective {position}',
     remove: 'Remove',
   },
+  content: {
+    title: 'Content',
+    description: 'Build the material learners will work through in this lesson.',
+    add: 'Add content',
+    preview: 'Preview',
+  },
   structure: {
     title: 'Structure',
     description: 'Arrange modules and lessons in the order learners will encounter them.',

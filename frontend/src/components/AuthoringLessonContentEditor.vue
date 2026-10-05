@@ -11,6 +11,11 @@ import { draftAssetURL } from '../lesson/assets'
 import AuthoringContentBlock from './AuthoringContentBlock.vue'
 import AuthoringDirtyActionBar from './AuthoringDirtyActionBar.vue'
 import BtgButton from './BtgButton.vue'
+import BtgDragHandle from './BtgDragHandle.vue'
+import BtgIcon from './BtgIcon.vue'
+import BtgIconButton from './BtgIconButton.vue'
+import BtgToolbar from './BtgToolbar.vue'
+import type { BtgIconName } from './btg-icon-names'
 
 const props = defineProps<{ draftId: string; lesson: AuthoringLessonDetail }>()
 const emit = defineEmits<{ saved: [result: AuthoringLessonContentMutation]; replaceLesson: [lesson: AuthoringLessonDetail]; preview: []; unavailable: [] }>()
@@ -133,7 +138,9 @@ function addBlock(blockType: EditableBlockType) {
   })
 }
 function blockSummary(block: CanonicalBlock): string { const p: any = block.payload; if (block.type === 'TEXT') return richTextPlainText(p.content).slice(0, 140) || 'Written content'; if (block.type === 'HEADING') return p.content.map((i: any) => i.text).join(' '); if (block.type === 'IMAGE') return p.caption || p.altText || 'Image asset'; if (block.type === 'VIDEO' || block.type === 'AUDIO') return p.title; if (block.type === 'DOWNLOAD') return p.label; if (block.type === 'CODE') return [p.language, p.code.split('\n')[0]].filter(Boolean).join(' · '); if (block.type === 'QUOTE') return p.text.slice(0,140); if (block.type === 'CALLOUT') return p.title || 'Callout'; if (block.type === 'KNOWLEDGE_CHECK') return 'Inline learner assessment'; if (block.type === 'PLUGIN_WIDGET') return 'Course widget'; return '' }
-function blockIcon(type: string) { return pickerDetails[type as EditableBlockType]?.icon ?? '' }
+function contentIcon(type: string): BtgIconName {
+  return ({ TEXT: 'text', HEADING: 'text', IMAGE: 'image', VIDEO: 'content', AUDIO: 'content', DOWNLOAD: 'document', CODE: 'document', CALLOUT: 'callout', QUOTE: 'document', DIVIDER: 'divider', KNOWLEDGE_CHECK: 'objective', PLUGIN_WIDGET: 'settings' } as Record<string, BtgIconName>)[type] ?? 'content'
+}
 function imageURL(block: CanonicalBlock): string | undefined {
   return block.type === 'IMAGE' ? draftAssetURL({ draftID: props.draftId }, block.payload.asset) : undefined
 }
@@ -366,15 +373,15 @@ async function reloadLatest() {
       </div>
       <fieldset class="authoring-content__controls" :disabled="saving || reloading">
         <legend class="sr-only">Content blocks</legend>
-        <div v-if="document.blocks.length" class="authoring-content__toolbar"><BtgButton :disabled="document.blocks.length >= contentEditorLimits.blocks" @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
+        <BtgToolbar v-if="document.blocks.length" class="authoring-content__toolbar"><template #actions><BtgButton leading-icon="plus" :disabled="document.blocks.length >= contentEditorLimits.blocks" @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" leading-icon="content" @click="preview">Preview</BtgButton></template></BtgToolbar>
         <p v-if="document.blocks.length >= contentEditorLimits.blocks">The Lesson has reached the 200-block limit.</p>
         <p id="authoring-content-reorder-help" class="sr-only">Drag this handle with a mouse or touch to reorder the block. Press Space or Enter, then use the arrow keys to reorder with the keyboard. Move up and Move down are also available in Actions.</p>
         <ol v-if="document.blocks.length" class="authoring-content__blocks" aria-label="Lesson content blocks">
           <li v-for="(block, index) in document.blocks" :id="`authoring-content-block-${block.key}`" :key="block.key" :data-content-block-key="block.key" :class="['authoring-content__row', { 'is-expanded': isEditing(block), 'is-menu-open': actionsIndex === index, 'is-dragging': draggingKey === block.key, 'is-drop-before': draggingKey !== block.key && insertionIndex === index, 'is-drop-after': draggingKey !== block.key && insertionIndex === document.blocks.length && index === document.blocks.length - 1 }]" tabindex="-1">
             <div class="authoring-content__row-header">
-              <button :id="`authoring-content-reorder-${block.key}`" class="authoring-content__drag-handle" type="button" :aria-label="`Reorder block ${index + 1}, ${label(block.type)}`" :aria-pressed="keyboardReorderKey === block.key" aria-describedby="authoring-content-reorder-help" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg></button>
+              <BtgDragHandle :id="`authoring-content-reorder-${block.key}`" :label="`Reorder block ${index + 1}, ${label(block.type)}`" :aria-pressed="keyboardReorderKey === block.key" aria-describedby="authoring-content-reorder-help" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)" />
               <span class="authoring-content__number">{{ String(index + 1).padStart(2, '0') }}</span>
-              <span class="authoring-content__type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path :d="blockIcon(block.type)" /></svg></span>
+              <span class="authoring-content__type-icon"><BtgIcon :name="contentIcon(block.type)" decorative /></span>
               <div class="authoring-content__summary">
                 <img v-if="imageURL(block)" class="authoring-content__image-preview" :src="imageURL(block)" alt="" />
                 <div>
@@ -392,7 +399,7 @@ async function reloadLatest() {
                   </template>
                 </template>
                 <div class="authoring-content__menu">
-                  <BtgButton variant="secondary" :aria-expanded="actionsIndex === index" :aria-label="`Actions for block ${index + 1}, ${label(block.type)}`" @click="toggleActions(index)"><span aria-hidden="true">…</span></BtgButton>
+                  <BtgIconButton icon="overflow" :aria-expanded="actionsIndex === index" :label="`Actions for block ${index + 1}, ${label(block.type)}`" @click="toggleActions(index)" />
                   <div v-if="actionsIndex === index" role="menu" class="authoring-content__menu-items" @keydown.esc="closeActions">
                     <BtgButton role="menuitem" variant="secondary" :disabled="index === 0" @click="move(index, -1)">Move up</BtgButton>
                     <BtgButton role="menuitem" variant="secondary" :disabled="index === document.blocks.length - 1" @click="move(index, 1)">Move down</BtgButton>
@@ -418,7 +425,7 @@ async function reloadLatest() {
         <h4 :id="`authoring-content-picker-${group.id}`">{{ group.label }}</h4>
         <div class="authoring-content__picker-options">
           <button v-for="type in group.types" :key="type" type="button" :aria-label="pickerOptions.get(type)?.label" :aria-describedby="`authoring-content-picker-${type}`" @click="addBlock(type)">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path :d="pickerOptions.get(type)?.icon" /></svg>
+            <BtgIcon :name="contentIcon(type)" decorative />
             <span><strong>{{ pickerOptions.get(type)?.label }}</strong><small :id="`authoring-content-picker-${type}`">{{ pickerOptions.get(type)?.description }}</small></span>
           </button>
         </div>

@@ -47,7 +47,7 @@
       </form>
       </template>
       <template v-if="currentSection === 'content' || legacyCombined">
-        <AuthoringPageTitle id="authoring-lesson-content-title" title="Content" description="Build the material learners will work through in this lesson." focusable />
+        <AuthoringPageTitle id="authoring-lesson-content-title" :title="t('authoring.content.title')" :description="t('authoring.content.description')" focusable />
         <AuthoringLessonContentEditor :draft-id="draft.id" :lesson="state.lesson" @saved="applyContent" @replace-lesson="replaceLesson" @preview="openPreview" @unavailable="markDraftUnavailable" />
       </template>
       <template v-if="currentSection === 'prerequisites' || legacyCombined">
