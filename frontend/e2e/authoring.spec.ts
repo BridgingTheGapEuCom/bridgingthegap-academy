@@ -159,7 +159,7 @@ test('Authoring Draft and Lesson workspaces share one canonical page grid', asyn
     await expect(page.getByRole('heading', { level: 2, name: route.heading })).toBeVisible()
     const geometry = await page.evaluate(() => {
       const pageBox = document.querySelector('.authoring-shell')!.getBoundingClientRect()
-      const tabsBox = document.querySelector('.authoring-tabs')!.getBoundingClientRect()
+      const tabsBox = document.querySelector('.btg-page-tabs')!.getBoundingClientRect()
       return { left: pageBox.left, right: pageBox.right, width: pageBox.width, tabsLeft: tabsBox.left, tabsRight: tabsBox.right }
     })
     if (reference) {
@@ -1005,48 +1005,107 @@ test('Authoring Structure uses the responsive outline workspace and preserves ke
   expect(workspaceWidth).toBeGreaterThan(960)
   await outline.getByRole('button', { name: 'Expand Foundations' }).click()
   await outline.locator('.authoring-structure-outline__select').first().click()
-  await expect(page.locator('.authoring-structure-workspace > .authoring-structure-detail')).toBeVisible()
+  await expect(page.locator('.authoring-structure-detail')).toBeVisible()
   const geometry = await page.evaluate(() => {
-    const canvas = document.querySelector('.authoring-shell__content')?.getBoundingClientRect()
-    const workspace = document.querySelector('.authoring-structure-workspace-shell')?.getBoundingClientRect()
+    const authoring = document.querySelector('.authoring-shell')?.getBoundingClientRect()
+    const heading = document.querySelector('.authoring-page-title')?.getBoundingClientRect()
+    const toolbar = document.querySelector('.authoring-structure-workspace__toolbar')?.getBoundingClientRect()
+    const workspace = document.querySelector('.authoring-structure-workspace')?.getBoundingClientRect()
     const outline = document.querySelector('.authoring-structure-outline')?.getBoundingClientRect()
-    const detail = document.querySelector('.authoring-structure-workspace > .authoring-structure-detail')?.getBoundingClientRect()
-    return { canvas, workspace, outline, detail }
+    const detail = document.querySelector('.authoring-structure-detail')?.getBoundingClientRect()
+    return { authoring, heading, toolbar, workspace, outline, detail }
   })
-  expect(geometry.workspace?.width).toBeCloseTo(geometry.canvas?.width ?? 0, 3)
-  expect(geometry.workspace?.left).toBeCloseTo(geometry.canvas?.left ?? 0, 3)
-  expect(geometry.workspace?.right).toBeCloseTo(geometry.canvas?.right ?? 0, 3)
+  expect(geometry.heading?.left).toBeCloseTo(geometry.authoring?.left ?? 0, 3)
+  expect(geometry.toolbar?.left).toBeCloseTo(geometry.authoring?.left ?? 0, 3)
+  expect(geometry.toolbar?.right).toBeCloseTo(geometry.authoring?.right ?? 0, 3)
+  expect(geometry.workspace?.left).toBeCloseTo(geometry.authoring?.left ?? 0, 3)
+  expect(geometry.workspace?.right).toBeCloseTo(geometry.authoring?.right ?? 0, 3)
   expect(geometry.outline?.right).toBeLessThan(geometry.detail?.right ?? 0)
   expect(geometry.detail?.right).toBeCloseTo(geometry.workspace?.right ?? 0, 3)
   expect(geometry.detail?.width).toBeGreaterThan(geometry.outline?.width ?? 0)
+  expect((geometry.outline?.width ?? 0) / (geometry.workspace?.width ?? 1)).toBeGreaterThanOrEqual(.35)
+  expect((geometry.outline?.width ?? 0) / (geometry.workspace?.width ?? 1)).toBeLessThanOrEqual(.4)
+  expect((geometry.detail?.width ?? 0) / (geometry.workspace?.width ?? 1)).toBeGreaterThanOrEqual(.6)
+  expect((geometry.detail?.width ?? 0) / (geometry.workspace?.width ?? 1)).toBeLessThanOrEqual(.65)
+  expect(geometry.outline?.top).toBeCloseTo(geometry.detail?.top ?? 0, 1)
+  expect(geometry.outline?.bottom).toBeCloseTo(geometry.detail?.bottom ?? 0, 1)
   await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.evaluate(() => { document.documentElement.style.fontSize = '' })
-  const move = page.locator('.authoring-structure-workspace > .authoring-structure-detail').getByRole('button', { name: 'Move down' })
+  const move = page.locator('.authoring-structure-detail').getByRole('button', { name: 'Move down' })
   await move.focus()
   await page.keyboard.press('Enter')
   await expect(page.getByText('Module order updated.')).toBeVisible()
   expect(orderBody).toEqual({ expectedDraftRevision: 3, moduleIds: [structure.modules[1]?.id, structure.modules[0]?.id] })
 
   await page.getByRole('searchbox', { name: 'Search structure' }).fill('advanced')
-  await expect(outline.getByText('Advanced')).toBeVisible()
+  await expect(outline.getByText('Advanced', { exact: true }).last()).toBeVisible()
   await expect(outline.getByText('What is EAI?')).toHaveCount(0)
+  const filteredGeometry = await page.evaluate(() => ({ outline: document.querySelector('.authoring-structure-outline')?.getBoundingClientRect(), detail: document.querySelector('.authoring-structure-detail')?.getBoundingClientRect() }))
+  expect(filteredGeometry.outline?.bottom).toBeCloseTo(filteredGeometry.detail?.bottom ?? 0, 1)
 
   await page.getByRole('searchbox', { name: 'Search structure' }).fill('')
+  await page.getByRole('button', { name: 'Collapse all' }).click()
+  const collapsedGeometry = await page.evaluate(() => ({ outline: document.querySelector('.authoring-structure-outline')?.getBoundingClientRect(), detail: document.querySelector('.authoring-structure-detail')?.getBoundingClientRect() }))
+  expect(collapsedGeometry.outline?.bottom).toBeCloseTo(collapsedGeometry.detail?.bottom ?? 0, 1)
   await page.setViewportSize({ width: 900, height: 844 })
-  await expect(page.locator('.authoring-structure-workspace > .authoring-structure-detail')).toHaveCount(0)
-  await expect(outline.locator('.authoring-structure-detail-panel')).toBeVisible()
+  await expect(page.locator('.authoring-structure-detail')).toBeVisible()
+  await expect(outline.locator('.authoring-structure-detail-panel')).toHaveCount(0)
 
   await page.setViewportSize({ width: 320, height: 844 })
-  await expect(page.getByRole('button', { name: '← Back to structure' })).toBeVisible()
-  await page.getByRole('button', { name: '← Back to structure' }).click()
   const foundationsDisclosure = outline.getByRole('button', { name: /(?:Expand|Collapse) Foundations/ })
   if ((await foundationsDisclosure.getAttribute('aria-expanded')) !== 'true') await foundationsDisclosure.click()
   await outline.getByRole('button', { name: /What is EAI/ }).click()
-  await expect(page.getByRole('button', { name: '← Back to structure' })).toBeVisible()
-  await page.getByRole('button', { name: '← Back to structure' }).click()
   await expect(outline).toBeVisible()
+  await expect(page.getByRole('article', { name: 'Selected item inspector' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring Structure reorders lessons from their drag handles and preserves selected inspector state', async ({ page }) => {
+  const lessons = ['First lesson', 'Second lesson', 'Third lesson'].map((title, position) => ({ ...lesson, id: `44444444-4444-4444-8444-44444444444${position + 1}`, stable_key: title.toLowerCase().replace(' ', '-'), title, position }))
+  let persisted = { modules: [{ ...structure.modules[0], lessons }, structure.modules[1]] }
+  const lessonByID = new Map(lessons.map((entry) => [entry.id, entry]))
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(persisted) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/lessons/order`, (route) => {
+    const body = route.request().postDataJSON() as { modules: Array<{ moduleId: string; lessonIds: string[] }> }
+    const ids = body.modules.find((entry) => entry.moduleId === structure.modules[0].id)?.lessonIds ?? []
+    persisted = { modules: [{ ...persisted.modules[0], lessons: ids.map((id, position) => ({ ...lessonByID.get(id)!, position })) }, persisted.modules[1]] }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draftRevision: 4 }) })
+  })
+  for (const entry of lessons) await page.route(`**/api/authoring/drafts/${draftID}/lessons/${entry.id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...entry, draft_id: draftID, module_id: structure.modules[0].id, content: { schemaVersion: 1, blocks: [] }, created_at: draft.created_at, updated_at: draft.updated_at }) }))
+
+  await page.goto(`/authoring/drafts/${draftID}/structure`)
+  const outline = page.getByRole('complementary', { name: 'Course structure' })
+  await outline.getByRole('button', { name: 'Expand Foundations' }).click()
+  const rows = outline.locator(`[data-structure-module-id="${structure.modules[0].id}"]`)
+  await rows.nth(1).getByRole('button', { name: /Second lesson/ }).click()
+  await rows.nth(2).getByRole('button', { name: /Third lesson/ }).click()
+  await expect(page.locator('.authoring-structure-detail').getByRole('heading', { name: 'Third lesson' })).toBeVisible()
+  await rows.nth(1).getByRole('button', { name: /Second lesson/ }).click()
+  await rows.nth(0).scrollIntoViewIfNeeded()
+  const source = await rows.nth(1).getByRole('button', { name: 'Reorder lesson 02' }).boundingBox()
+  const target = await rows.nth(0).getByRole('button', { name: /First lesson/ }).boundingBox()
+  if (!source || !target) throw new Error('Lesson drag targets were not rendered')
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2)
+  await page.mouse.down()
+  await expect(rows.nth(1)).toHaveClass(/is-dragging/)
+  await page.mouse.move(target.x + target.width / 2, target.y + 2, { steps: 4 })
+  await expect(rows.nth(0)).toHaveClass(/is-drop-before/)
+  await page.mouse.up()
+
+  await expect.poll(() => persisted.modules[0].lessons.map((entry) => entry.title)).toEqual(['Second lesson', 'First lesson', 'Third lesson'])
+  await expect(page.locator('.authoring-structure-detail').getByRole('heading', { name: 'Second lesson' })).toBeVisible()
+  await expect(page.getByText('1 of 3', { exact: true })).toBeVisible()
+  await page.reload()
+  await outline.getByRole('button', { name: 'Expand Foundations' }).click()
+  await expect(rows.nth(0).getByRole('button', { name: /Second lesson/ })).toBeVisible()
+  await rows.nth(0).getByRole('button', { name: /Second lesson/ }).click()
+  await expect(page.getByRole('button', { name: 'Previous' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Next' }).click()
+  await expect(page.locator('.authoring-structure-detail').getByRole('heading', { name: 'First lesson' })).toBeVisible()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
@@ -1069,7 +1128,7 @@ test('Authoring Structure surfaces selected lesson content through the focused e
   await outline.getByRole('button', { name: /What is EAI/ }).click()
   await expect(page.getByText('No lesson content yet.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Edit lesson' })).toHaveCount(0)
-  await page.getByRole('button', { name: '+ Add content' }).click()
+  await page.getByRole('button', { name: 'Edit content' }).click()
   await expect(page).toHaveURL(new RegExp(`/authoring/drafts/${draftID}/lessons/${lesson.id}/content\\?from=structure`))
   await page.getByRole('button', { name: '+ Add content' }).click()
   await page.getByRole('button', { name: 'Text' }).click()
@@ -1107,7 +1166,7 @@ test('Authoring creates Lessons through the focused dialog with structured objec
   await page.goto(`/authoring/drafts/${draftID}/structure`)
   const outline = page.getByRole('complementary', { name: 'Course structure' })
   await outline.getByRole('button', { name: 'Expand Foundations' }).click()
-  await outline.getByRole('button', { name: '+ Add lesson' }).click()
+  await outline.getByRole('button', { name: 'Add lesson' }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('textbox', { name: /Lesson stable key/ })).toHaveCount(0)
   await expect(dialog.getByText('Enter one objective per line.')).toHaveCount(0)
@@ -1198,19 +1257,25 @@ test('Authoring Lesson metadata editor saves with the Lesson revision and remain
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
-test('Authoring Lesson prerequisites remain advisory, ordered, keyboard-operable, and responsive', async ({ page }) => {
+test('Authoring Lesson prerequisites support grouped search, selection, ordered advisory recommendations, and responsive reflow', async ({ page }) => {
   let prerequisiteBody: unknown
   const prerequisiteStructure = {
-    modules: [{
-      ...structure.modules[0],
-      lessons: [
-        structure.modules[0].lessons[0],
-        { id: '66666666-6666-4666-8666-666666666666', stable_key: 'intro-to-eai', title: 'Introduction to EAI', description: 'Begin here.', objectives: ['Recognise EAI'], estimated_duration_minutes: 10, position: 1, revision: 2, recommended_prerequisite_keys: [] },
-        { id: '77777777-7777-4777-8777-777777777777', stable_key: 'routing', title: 'Message routing', description: 'Route safely.', objectives: ['Route messages'], estimated_duration_minutes: 20, position: 2, revision: 2, recommended_prerequisite_keys: [] },
-      ],
-    }],
+    modules: [
+      {
+        ...structure.modules[0],
+        lessons: [
+          structure.modules[0].lessons[0],
+          { id: '66666666-6666-4666-8666-666666666666', stable_key: 'intro-to-eai', title: 'Introduction to EAI', description: 'Begin here.', objectives: ['Recognise EAI'], estimated_duration_minutes: 10, position: 1, revision: 2, recommended_prerequisite_keys: [] },
+          { id: '77777777-7777-4777-8777-777777777777', stable_key: 'routing', title: 'Message routing', description: 'Route safely.', objectives: ['Route messages'], estimated_duration_minutes: 20, position: 2, revision: 2, recommended_prerequisite_keys: [] },
+        ],
+      },
+      {
+        id: '88888888-8888-4888-8888-888888888888', stable_key: 'events', title: 'Event-driven architecture', description: 'Events.', position: 1, revision: 2,
+        lessons: [{ id: '99999999-9999-4999-8999-999999999999', stable_key: 'event-contracts', title: 'Event contracts', description: 'Design event contracts.', objectives: ['Design events'], estimated_duration_minutes: 20, position: 0, revision: 2, recommended_prerequisite_keys: [] }],
+      },
+    ],
   }
-  const lessonWithPrerequisite = { ...lesson, recommended_prerequisite_keys: ['routing'] }
+  let lessonWithPrerequisite = { ...lesson, recommended_prerequisite_keys: [] as string[], revision: 2 }
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
   await page.route(`**/api/authoring/drafts/${draftID}/plugins/course-widgets`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ widgets: [] }) }))
   await page.route(`**/api/authoring/drafts/${draftID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(draft) }))
@@ -1218,23 +1283,50 @@ test('Authoring Lesson prerequisites remain advisory, ordered, keyboard-operable
   await page.route(`**/api/authoring/drafts/${draftID}/lessons/${lesson.id}**`, (route) => {
     if (route.request().method() === 'PUT') {
       prerequisiteBody = route.request().postDataJSON()
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lessonWithPrerequisite, revision: 3, draftRevision: 4 }) })
+      lessonWithPrerequisite = { ...lessonWithPrerequisite, recommended_prerequisite_keys: (prerequisiteBody as { prerequisiteLessonKeys: string[] }).prerequisiteLessonKeys, revision: 3 }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...lessonWithPrerequisite, draftRevision: 4 }) })
     }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lessonWithPrerequisite) })
   })
-  await page.setViewportSize({ width: 390, height: 844 })
+  await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto(`/authoring/drafts/${draftID}/lessons/${lesson.id}/prerequisites`)
-  await expect(page.getByRole('heading', { level: 2, name: 'Recommended prerequisites' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Prerequisites' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Available lessons' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Selected prerequisites' })).toBeVisible()
   await expect(page.getByText(/do not restrict access/)).toBeVisible()
-  await page.getByRole('button', { name: 'Add Introduction to EAI' }).click()
-  const move = page.getByRole('button', { name: 'Move Introduction to EAI up' })
-  await move.focus()
-  await page.keyboard.press('Enter')
-  await page.getByRole('button', { name: 'Save recommended prerequisites' }).click()
+  await expect(page.getByRole('checkbox', { name: 'Select What is EAI? as a prerequisite' })).toHaveCount(0)
+  const search = page.getByRole('searchbox', { name: 'Search lessons' })
+  await search.fill('Event-driven architecture')
+  await expect(page.getByRole('checkbox', { name: 'Select Event contracts as a prerequisite' })).toBeVisible()
+  await search.fill('')
+  const foundations = page.getByRole('button', { name: /Foundations/ })
+  await foundations.click()
+  await expect(page.getByRole('checkbox', { name: 'Select Introduction to EAI as a prerequisite' })).toHaveCount(0)
+  await foundations.click()
+  await page.getByRole('checkbox', { name: 'Select Introduction to EAI as a prerequisite' }).check()
+  await page.getByRole('checkbox', { name: 'Select Event contracts as a prerequisite' }).check()
+  await expect(page.getByRole('list', { name: 'Ordered recommended prerequisites' })).toContainText('Introduction to EAI')
+  await expect(page.getByRole('list', { name: 'Ordered recommended prerequisites' })).toContainText('Event contracts')
+  const reorder = page.getByRole('button', { name: 'Reorder prerequisite 1, Introduction to EAI' })
+  await reorder.focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('ArrowDown')
+  await expect(page.getByText('Introduction to EAI moved to position 2 of 2.')).toBeVisible()
+  await page.getByRole('button', { name: 'Remove Introduction to EAI' }).click()
+  await expect(page.getByRole('checkbox', { name: 'Select Introduction to EAI as a prerequisite' })).not.toBeChecked()
+  await expect(page.getByText('Unsaved changes')).toBeVisible()
+  await page.getByRole('button', { name: 'Save changes' }).click()
 
-  await expect(page.getByText('Recommended prerequisites saved.')).toBeVisible()
-  expect(prerequisiteBody).toEqual({ expectedLessonRevision: 2, prerequisiteLessonKeys: ['intro-to-eai', 'routing'] })
+  await expect(page.getByText('Prerequisites saved.')).toBeVisible()
+  expect(prerequisiteBody).toEqual({ expectedLessonRevision: 2, prerequisiteLessonKeys: ['event-contracts'] })
+  await page.reload()
+  await expect(page.getByRole('list', { name: 'Ordered recommended prerequisites' })).toContainText('Event contracts')
+  await expect(page.getByRole('checkbox', { name: 'Select Event contracts as a prerequisite' })).toBeChecked()
+  await page.setViewportSize({ width: 320, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '' })
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 

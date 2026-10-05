@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { reactive, ref } from 'vue'
 import { authoringDraftContextKey } from '../authoring/draftContext'
+import { renderWithI18n } from '../test/i18n'
+import { pseudoLocalize } from '../i18n/pseudo'
+import type { ApplicationLocale } from '../i18n/registry'
 
 const mocks = vi.hoisted(() => ({
   getStructure: vi.fn(), getDraft: vi.fn(), createModule: vi.fn(), updateModule: vi.fn(),
@@ -47,15 +50,28 @@ const structure = () => ({ modules: [
   { id: '55555555-5555-4555-8555-555555555555', stable_key: 'advanced', title: 'Advanced', description: '', position: 1, revision: 2, lessons: [] },
 ] })
 
-function mount() {
+function structureWithLessons() {
+  const result = structure()
+  const first = result.modules[0]!.lessons[0]!
+  result.modules[0]!.lessons = ['First lesson', 'Second lesson', 'Third lesson'].map((title, position) => ({ ...first, id: `44444444-4444-4444-8444-44444444444${position + 1}`, stable_key: title.toLowerCase().replace(' ', '-'), title, position }))
+  result.modules[1]!.lessons = [{ ...first, id: '77777777-7777-4777-8777-777777777777', stable_key: 'other-lesson', title: 'Other lesson', position: 0 }]
+  return result
+}
+
+function reorderStructure(value: ReturnType<typeof structure>, order: Array<{ moduleId: string; lessonIds: string[] }>) {
+  const lessons = new Map(value.modules.flatMap((module) => module.lessons.map((lesson) => [lesson.id, lesson])))
+  return { modules: value.modules.map((module) => ({ ...module, lessons: (order.find((entry) => entry.moduleId === module.id)?.lessonIds ?? []).map((id, position) => ({ ...lessons.get(id)!, position })) })) }
+}
+
+function mount(locale: ApplicationLocale = 'en') {
   const current = ref(draft)
-  return render(Page, { global: { provide: { [authoringDraftContextKey as symbol]: {
+  return renderWithI18n(Page, { global: { provide: { [authoringDraftContextKey as symbol]: {
     draft: current, replaceDraft: (value: typeof draft) => { current.value = value }, markDraftUnavailable: vi.fn(),
-  } } } })
+  } } } }, locale)
 }
 
 function openDialog() {
-  return document.querySelector('dialog[open]') as HTMLDialogElement
+  return document.querySelector('[role="dialog"]') as HTMLElement
 }
 
 describe('AuthoringDraftStructurePage', () => {
@@ -79,7 +95,7 @@ describe('AuthoringDraftStructurePage', () => {
     mount()
     const outline = await screen.findByRole('complementary', { name: 'Course structure' })
 
-    expect(document.querySelector('dialog[open]')).toBeNull()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
     expect(within(outline).getByRole('button', { name: 'Expand Foundations' })).toBeTruthy()
     expect(within(outline).getByText('1 lesson')).toBeTruthy()
 
@@ -91,13 +107,26 @@ describe('AuthoringDraftStructurePage', () => {
     expect(within(outline).getByText('Advanced')).toBeTruthy()
   })
 
+  it('renders Structure controls through the pseudo-locale without hardcoded page copy', async () => {
+    mount('en-XA')
+    expect(await screen.findByRole('heading', { name: pseudoLocalize('Structure') })).toBeTruthy()
+    expect(screen.getByRole('searchbox', { name: pseudoLocalize('Search structure') })).toBeTruthy()
+    expect(screen.getByRole('button', { name: pseudoLocalize('Expand all') })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Add module' })).toBeNull()
+    const outline = screen.getByRole('complementary', { name: pseudoLocalize('Course structure') })
+    await fireEvent.click(within(outline).getAllByRole('button', { name: /Foundations/ })[0]!)
+    await fireEvent.click(within(outline).getByRole('button', { name: /What is EAI/ }))
+    expect(await screen.findByRole('heading', { name: pseudoLocalize('Description') })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Edit content' })).toBeNull()
+  })
+
   it('creates modules and lessons through focused dialogs without stable-key inputs', async () => {
     mocks.createModule.mockResolvedValue({ draftRevision: 4 })
     mocks.createLesson.mockResolvedValue({ draftRevision: 4 })
     mount()
     const outline = await screen.findByRole('complementary', { name: 'Course structure' })
 
-    await fireEvent.click(screen.getByRole('button', { name: '+ Add module' }))
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Add module' })[0]!)
     const moduleDialog = openDialog()
     expect(within(moduleDialog).queryByLabelText(/stable key/i)).toBeNull()
     await fireEvent.update(within(moduleDialog).getByRole('textbox', { name: /Module title/ }), 'Messaging')
@@ -105,9 +134,10 @@ describe('AuthoringDraftStructurePage', () => {
     await waitFor(() => expect(mocks.createModule).toHaveBeenCalledWith(draft.id, {
       expectedDraftRevision: 3, title: 'Messaging',
     }))
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
 
     await fireEvent.click(within(outline).getByRole('button', { name: 'Expand Foundations' }))
-    await fireEvent.click(within(outline).getByRole('button', { name: '+ Add lesson' }))
+    await fireEvent.click(within(outline).getByRole('button', { name: 'Add lesson' }))
     const lessonDialog = openDialog()
     expect(within(lessonDialog).queryByLabelText(/stable key/i)).toBeNull()
     await fireEvent.update(within(lessonDialog).getByRole('textbox', { name: /Lesson title/ }), 'Routing')
@@ -117,6 +147,7 @@ describe('AuthoringDraftStructurePage', () => {
     await waitFor(() => expect(mocks.createLesson).toHaveBeenCalledWith(draft.id, '33333333-3333-4333-8333-333333333333', {
       expectedDraftRevision: 4, title: 'Routing', description: 'Route safely', objectives: ['Explain routing'],
     }))
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
   })
 
   it('moves a selected lesson with the authoritative full structure map', async () => {
@@ -138,17 +169,70 @@ describe('AuthoringDraftStructurePage', () => {
     ]))
   })
 
+  it('reorders a selected lesson from its keyboard drag handle without changing another module', async () => {
+    let current = structureWithLessons()
+    mocks.getStructure.mockImplementation(() => Promise.resolve(current))
+    mocks.reorderLessons.mockImplementation(async (_draftID, _revision, order) => {
+      current = reorderStructure(current, order)
+      return { draftRevision: 4 }
+    })
+    mount()
+    const outline = await screen.findByRole('complementary', { name: 'Course structure' })
+    await fireEvent.click(within(outline).getByRole('button', { name: 'Expand Foundations' }))
+    await fireEvent.click(within(outline).getByRole('button', { name: /Second lesson/ }))
+    const handle = within(outline).getByRole('button', { name: 'Reorder lesson 02' })
+    await fireEvent.keyDown(handle, { key: ' ' })
+    await fireEvent.keyDown(handle, { key: 'ArrowUp' })
+    await waitFor(() => expect(mocks.reorderLessons).toHaveBeenCalledWith(draft.id, 3, [
+      { moduleId: '33333333-3333-4333-8333-333333333333', lessonIds: ['44444444-4444-4444-8444-444444444442', '44444444-4444-4444-8444-444444444441', '44444444-4444-4444-8444-444444444443'] },
+      { moduleId: '55555555-5555-4555-8555-555555555555', lessonIds: ['77777777-7777-4777-8777-777777777777'] },
+    ]))
+    expect(mocks.getStructure).toHaveBeenCalledTimes(1)
+    expect(within(outline).getByRole('button', { name: /Second lesson/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('1 of 3')).toBeTruthy()
+  })
+
+  it('does not persist a same-position drop and disables drag handles while search filters the outline', async () => {
+    mocks.getStructure.mockResolvedValue(structureWithLessons())
+    mount()
+    const outline = await screen.findByRole('complementary', { name: 'Course structure' })
+    await fireEvent.click(within(outline).getByRole('button', { name: 'Expand Foundations' }))
+    const handle = within(outline).getByRole('button', { name: 'Reorder lesson 02' })
+    await fireEvent.pointerDown(handle, { pointerId: 1, button: 0 })
+    await fireEvent.pointerUp(document, { pointerId: 1 })
+    expect(mocks.reorderLessons).not.toHaveBeenCalled()
+    await fireEvent.update(screen.getByRole('searchbox', { name: 'Search structure' }), 'second')
+    expect(within(outline).getByRole('button', { name: 'Reorder lesson 02' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('Clear search to reorder lessons.')).toBeTruthy()
+  })
+
+  it('keeps the selected lesson and authoritative order when reorder persistence fails', async () => {
+    const current = structureWithLessons()
+    mocks.getStructure.mockResolvedValue(current)
+    mocks.reorderLessons.mockRejectedValue(new Error('offline'))
+    mount()
+    const outline = await screen.findByRole('complementary', { name: 'Course structure' })
+    await fireEvent.click(within(outline).getByRole('button', { name: 'Expand Foundations' }))
+    await fireEvent.click(within(outline).getByRole('button', { name: /Second lesson/ }))
+    const handle = within(outline).getByRole('button', { name: 'Reorder lesson 02' })
+    await fireEvent.keyDown(handle, { key: ' ' })
+    await fireEvent.keyDown(handle, { key: 'ArrowUp' })
+    expect((await screen.findByRole('alert')).textContent).toContain('We couldn’t save this structure right now. Please try again.')
+    expect(within(outline).getByRole('button', { name: /Second lesson/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(Array.from(outline.querySelectorAll('[data-structure-module-id="33333333-3333-4333-8333-333333333333"]')).map((row) => row.getAttribute('data-structure-lesson-id'))).toEqual(['44444444-4444-4444-8444-444444444441', '44444444-4444-4444-8444-444444444442', '44444444-4444-4444-8444-444444444443'])
+  })
+
   it('surfaces selected lesson content without loading the rest of the outline', async () => {
     mount()
     const outline = await screen.findByRole('complementary', { name: 'Course structure' })
     await fireEvent.click(within(outline).getByRole('button', { name: 'Expand Foundations' }))
     await fireEvent.click(within(outline).getByRole('button', { name: /What is EAI/ }))
     expect(await screen.findByText('No lesson content yet.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '+ Add content' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Edit content' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Edit lesson' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Edit details' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Edit details' })).toHaveLength(2)
     expect(mocks.getLesson).toHaveBeenCalledWith(draft.id, '44444444-4444-4444-8444-444444444444')
-    await fireEvent.click(screen.getByRole('button', { name: '+ Add content' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit content' }))
     expect(mocks.push).toHaveBeenCalledWith(expect.objectContaining({
       name: 'authoring-draft-lesson-content',
       params: { draftId: draft.id, lessonId: '44444444-4444-4444-8444-444444444444' },
@@ -165,7 +249,8 @@ describe('AuthoringDraftStructurePage', () => {
     await fireEvent.click(within(outline).getByRole('button', { name: 'Expand Foundations' }))
     await fireEvent.click(within(outline).getByRole('button', { name: /What is EAI/ }))
     expect(await screen.findByText('2 blocks')).toBeTruthy()
-    expect(screen.getByText('Text · Callout')).toBeTruthy()
+    expect(screen.getByText('Text')).toBeTruthy()
+    expect(screen.getByText('Callout')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Edit content' })).toBeTruthy()
   })
 
@@ -184,6 +269,8 @@ describe('AuthoringDraftStructurePage', () => {
     await fireEvent.click(within(outline).getByRole('button', { name: /What is EAI/ }))
     await fireEvent.click(within(outline).getByRole('button', { name: /Second lesson/ }))
     expect(await screen.findByText('Video')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Next' }).hasAttribute('disabled')).toBe(true)
     resolveFirst?.({ ...next.modules[0]!.lessons[0], draft_id: draft.id, module_id: next.modules[0]!.id, content: { schemaVersion: 1, blocks: [{ key: 'text', type: 'TEXT', payload: {} }] }, created_at: '', updated_at: '' })
     await waitFor(() => expect(screen.queryByText('Text')).toBeNull())
     expect(screen.getByText('Video')).toBeTruthy()

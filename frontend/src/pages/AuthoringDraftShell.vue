@@ -92,8 +92,7 @@ provide(authoringDraftContextKey, {
   draft,
   replaceDraft: (nextDraft) => {
     if (!active || !draft.value || nextDraft.id !== draft.value.id || nextDraft.revision < draft.value.revision) return
-    draft.value = nextDraft
-    state.value = { kind: 'ready', draft: nextDraft }
+    Object.assign(draft.value, nextDraft)
   },
   markDraftUnavailable: () => {
     requestVersion += 1

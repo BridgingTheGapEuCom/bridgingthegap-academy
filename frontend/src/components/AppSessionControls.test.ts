@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { shallowRef } from 'vue'
+import { renderWithI18n } from '../test/i18n'
 
 type AuthenticationState =
   | { status: 'bootstrapping' }
@@ -25,7 +26,7 @@ async function renderControls() {
   const router = routerFor()
   await router.push('/')
   await router.isReady()
-  return { ...render(AppSessionControls, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n(AppSessionControls, { global: { plugins: [router] } }), router }
 }
 
 describe('AppSessionControls', () => {

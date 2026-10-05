@@ -1,67 +1,435 @@
-# Academy visual foundation
+# Academy frontend design system
 
-The Academy is the structured-learning counterpart to BridgingTheGap.eu.com. It keeps the public site's typography-led hierarchy, near-neutral surfaces, thin dividers, compact corners, and restrained decoration. It does not copy the editorial layout or turn learning into a dashboard or game.
+This document is the practical contract for Academy presentation code. It defines how tokens, shared components, feature patterns, and pages relate. It does not prescribe a new visual design or change product behavior.
 
-The public homepage uses a deliberately grayscale, editorial treatment: charcoal text and controls, neutral surfaces, thin gray dividers, and hierarchy through type and spacing rather than chromatic accents. Its only card-like surfaces are the featured-course summaries and the final call to action; topic and learning-principle sections remain lightweight content blocks.
+## Architecture
 
-The Dashboard follows the same grayscale language while retaining application
-semantics. Its default view prioritizes widget content in a responsive panel
-grid; installation-wide controls appear only in a distinct management mode.
-Widget discovery uses cards and Academy-rendered declarative forms. Plugin code
-never supplies configuration markup, and raw configuration JSON is not a user
-interface.
+Academy uses five layers. Dependencies flow downward only.
 
-## Tokens and layout
+```text
+foundation values
+  -> semantic theme tokens
+    -> generic UI primitives
+      -> layout and feature compositions
+        -> routed pages
+```
 
-`frontend/src/styles/tokens.css` is the single presentation-token layer. It defines semantic colour, type, spacing, layout, shape, and motion values. Components consume token names such as `--btg-color-text` and `--btg-color-border`; they must not introduce arbitrary hard-coded component colours. Future declarative instance themes may override presentation tokens, but never component semantics or accessibility behaviour.
+1. **Foundation values** are private scales: neutral palette steps, spacing, type metrics, radii, shadows, icon sizes, motion, and layer order. Feature code must not consume palette steps directly.
+2. **Semantic tokens** express intent, such as page surface, muted text, primary action, or danger border. Themes replace this layer.
+3. **UI primitives** own recurring appearance and interaction: buttons, fields, icons, dialogs, menus, messages, chips, and disclosures.
+4. **Compositions** arrange primitives. Generic compositions include page headers, toolbars, panels, split workspaces, metadata strips, and ordered lists. Authoring compositions add Draft and Lesson semantics.
+5. **Pages** own product data, workflows, routing, and genuinely unique layout. They should not recreate primitive appearance.
 
-The type and layout tokens preserve user scaling and define one Academy page canvas: `--academy-page-max-width` is 74rem (1184px), with responsive 16–32px gutters and shared page block padding. `BtgPageContainer` is the shared outer-layout primitive for every routed page; it has no narrow or wide outer-width variants. Full-width bands own only their background and place a section-spaced canonical container inside. Reading and form measures remain inner component constraints when they are needed for prose or a control group. Content uses natural text alignment and readable line height. Do not use justified paragraphs, text-only uppercase blocks, tiny essential text, or fixed layouts that prevent future learner font-size and reading-width preferences.
+The existing `Btg` prefix remains the generic component namespace. Components tied to the authoring domain retain the `Authoring` prefix. A generic primitive must not import an Authoring component or feature service.
 
-Accessibility precedence is:
+## Internationalization contract
 
-1. architectural accessibility requirement
-2. learner accessibility preference
-3. theme/design token
-4. instance branding
+Application interface text follows [the Academy i18n guide](./i18n.md). Application locale is independent from course/source language. Feature components translate complete product messages and pass translated visible and accessible labels into generic Btg primitives. Generic primitives must not hardcode English product text or import feature message namespaces.
 
-The built-in theme must remain usable if a future branding override has poor contrast.
+Reusable controls own semantics and layout, while callers own domain wording. Dialog trigger/dismiss labels, menu labels, icon-button names, search labels/placeholders, drag-handle names, and previous/next navigation labels must be explicit. Application-level compositions may consume the small `common` namespace for genuinely shared interface wording.
 
-## Component principles
+Component tests use the shared i18n bootstrap rather than defining local message objects. Migrated reference surfaces require pseudo-locale coverage. CSS in new primitives should prefer logical inline properties so localization does not deepen left/right assumptions.
 
-The Academy owns `BtgButton`, `BtgFormField`, `BtgTextInput`, and `BtgPageContainer`. Prefer native semantic HTML for simple controls: native buttons, inputs, and labels carry their normal browser and assistive-technology behaviour. Use Reka UI only for behaviour that native HTML cannot provide well, such as the existing dialog primitive.
+## Proposed source layout
 
-Every form control needs a persistent visible label. `BtgFormField` supplies label, optional help, and error associations through its slot props. Required state includes both a visible marker and screen-reader text; errors use `aria-describedby` and `aria-invalid`, never colour alone. On submission errors, focus the first invalid control so its associated error is announced once.
+Migration should converge on this shape without a big-bang file move:
 
-`BtgButton` has only `primary`, `secondary`, `quiet`, and `destructive` variants. New variants need a semantic reason. Bordered surfaces are preferred over cards and shadows; use elevation only where layer separation is necessary.
+```text
+frontend/src/
+  styles/
+    foundation.css
+    semantic.css
+    themes/
+      academy-default.css
+    base.css
+  components/
+    ui/                 # BtgButton, BtgIcon, fields, dialog, menu, etc.
+    layout/             # page, toolbar, surface, split workspace, metadata
+    authoring/          # Authoring-specific compositions
+  features/             # feature components and their local layout styles
+  pages/                # routed composition and orchestration
+```
 
-## Authoring workspaces
+During migration, compatibility aliases may remain in `tokens.css`; new components should use the target semantic contract. Academy should continue using plain CSS and Vue single-file components. Do not add a utility framework or a second component framework.
 
-All Draft and Lesson authoring routes use the canonical 74rem Academy page canvas through `BtgPageContainer`; page-specific layouts fill that inner canvas instead of changing its outer width. Structure may divide the canvas into outline and detail panes, Overview may keep readable form groups inside sections, and Lesson Content may use its ordered document list, but their left and right page edges remain aligned.
+## Tokens
 
-Authoring has two header patterns. Draft pages show Back to Authoring, the `AUTHORING DRAFT` eyebrow, course title, the shared metadata strip, and Draft tabs. Lesson pages show Back to Structure, the Lesson title, neutral Lesson and Draft context chips, and Lesson tabs. Both use `AuthoringTabs`, with ordinary text links and an active underline. Tab content starts with `AuthoringPageTitle`: one page title followed by one short sentence.
+### Foundation scales
 
-Metadata forms use `AuthoringSection` for a quiet surface with a thin neutral border, compact radius, consistent padding, and an optional section number. Fields always follow Label, Control, Helper or Error order. Checkbox help is indented beneath its label through `AuthoringCheckboxField`. Draft Overview and Lesson Details share `RepeatableObjectivesEditor`, including numbering, reorder handles, input rows, removal, and announcements.
+Foundation tokens describe available values, not their meaning. Keep them private to token and primitive implementation where possible.
 
-Authoring actions use the existing button hierarchy: dark primary for the page's main commit, outlined secondary for cancel, preview, discard, and local edits, quiet buttons for low-emphasis utilities, and destructive styling only for destructive outcomes. Editable batch-save pages share `AuthoringDirtyActionBar`; it is absent while clean and appears near the bottom of the workspace while dirty. It announces the unsaved state and keeps Discard and Save together without changing each page's persistence semantics. Toolbars wrap in document order, and all shared headers, tabs, sections, objective rows, and dirty bars must reflow without page-level horizontal scrolling at 320px or 200% text.
+| Scale | Proposed values |
+| --- | --- |
+| Neutral palette | 0, 50, 100, 200, 300, 500, 700, 900, 1000 |
+| Spacing | 0, 0.25rem, 0.5rem, 0.75rem, 1rem, 1.5rem, 2rem, 3rem, 4.5rem |
+| Type size | 0.75rem, 0.875rem, 1rem, 1.125rem, 1.25rem, 1.625rem, responsive display sizes |
+| Type weight | 400, 500, 700 |
+| Radius | 0, 0.25rem, 0.375rem, 999px |
+| Border | 1px, 2px |
+| Control height | 2.25rem compact, 2.75rem standard; icon-only touch targets remain at least 2.75rem |
+| Icon size | 1rem, 1.125rem, 1.25rem, 1.5rem |
+| Elevation | none, floating menu, modal |
+| Motion | 120ms fast, 180ms standard; standard ease |
+| Layer | base 0, sticky 10, dropdown 20, overlay 40, modal 50, toast 60 |
 
-## Authentication forms
+The existing spacing scale is sound and should be retained. Add a foundation value only when at least two reusable patterns need it. Reading widths, editor dimensions, illustration geometry, and split-pane ratios may remain documented composition values rather than tokens.
 
-Authentication forms keep credentials and field errors in component-local state. Use `BtgFormField` for persistent labels and field-level validation; on failed client validation, focus the first invalid native control. Authentication outcomes use one visible, focusable form-level error that is focused once after the result is available, avoiding duplicate live-region announcements. The page owns its wording and focus behavior; the frontend auth service owns transport, session state, and memory-only CSRF state.
+Breakpoints are not theme values. Use a small shared set for page gutters and global navigation, and prefer component/container queries for reusable compositions. Current repeated thresholds should converge on small reflow near 34rem, general composition reflow near 48rem, and feature-specific thresholds only when content requires them.
 
-Authenticated-route UI uses backend-authoritative checks for authorization. Protected API calls go through `useAuth().request` so session invalidation and memory-only CSRF attachment remain consistent; the standalone API client currently serves liveness only. A `401` moves the frontend to its unauthenticated flow; a `403` leaves the authenticated session intact and presents access denied. Never cache roles or capabilities as frontend truth: route states may be local and short-lived, but every protected capability check remains a backend request. The app router centrally protects Authoring and Administration routes, sends an unauthenticated visitor to the existing login page with only a validated internal return path, and leaves public Courses available without a session. `AppShell` owns the persistent skip link, global header, auth-aware navigation, session controls, and one `main` landmark around `RouterView`; routed pages own their own loading and operational-error states. Academy destinations use Vue Router links, so only routed content changes during normal navigation. The router scrolls normal route changes to the top and focuses the main landmark without scrolling it again; in-reader lesson changes remain in-page navigation. The shell exposes neutral session loading and existing sign-in/sign-out controls without displaying opaque user IDs or session secrets.
+### Semantic tokens
 
-Authoring routes are Draft-scoped below `/authoring/drafts/:draftId`. The shell reads only Draft metadata through the authenticated request boundary, then provides temporary route-local context to Overview, Structure, Members, and Review sections. The Overview editor saves changed metadata manually with the current Draft revision; a revision conflict preserves local form values until the user explicitly reloads the server version. Lesson metadata is edited through its Draft-scoped Lesson route with the same manual-save and explicit-reload conflict behavior; stable keys and structure remain read-only there. Its separate Recommended prerequisites form uses the ordered same-Draft stable-key list, explicit keyboard move controls, and its own revision-checked save; recommendations never imply an access restriction. Structure editing uses explicit keyboard-operable move controls rather than mandatory drag and drop. Every structure mutation uses the latest Draft revision and reloads its ordered server representation after success. The Review overview derives active, latest, and history presentation from one newest-first exact-Draft history response, avoiding mixed state from separate reads around a concurrent revocation or workflow transition. With no active cycle, it may submit the shared authoritative Draft revision and then reload that authoritative history. Submission freezes that revision only; it neither locks the mutable Draft nor publishes it. Each history entry links to its exact snapshot route, which renders only the stored historical snapshot as read-only content and never substitutes current Draft data. An in-review snapshot has explicit Approve and Request changes actions that send only its current Review revision. The backend remains responsible for `review.decide` authorization and independent-review policy; its `independent_reviewer_required` response is distinct from a generic state conflict and never retried automatically. Both decisions are terminal for that cycle, preserve the frozen snapshot, and Approval remains distinct from publication. Route/session-scoped response guards prevent late reads, reloads, submissions, and decisions from replacing a newly selected Draft or Review; when a successful action removes the focused control, focus returns to the page heading. Canonical blocks use the shared safe renderer; unresolved media and assessments remain explanatory placeholders without fabricated URLs. The backend’s opaque `404` remains one neutral Draft-unavailable state; the frontend does not infer Authoring roles or persist private Draft data. Draft section navigation uses text links in a labelled navigation landmark and preserves standard router `aria-current` semantics.
+Public component and feature CSS should consume semantic tokens. The proposed prefix avoids global ambiguity:
 
-The separate Lesson content editor retains canonical schema-versioned LessonContent as its save format; UI state is ephemeral. It presents an ordered compact block list and expands exactly one selected block inline. Applying an inline block edit changes local content only; the lesson-level Save content action sends the complete canonical document with the current Lesson revision. TEXT blocks use a constrained WYSIWYG editor for paragraphs, bold, italic, safe links, bullet and numbered lists, hard breaks, inline code, and small multiline code blocks. The editor serializes directly to the canonical rich-text tree, normalizes pasted content to that schema, and never persists HTML or editor state. Lesson-level headings remain separate HEADING blocks, while the dedicated CODE content block remains available for larger standalone examples and code-specific metadata. Asset, assessment, and widget selection may use focused pickers, and widget configuration remains Academy-rendered data fields. Blocks support explicit keyboard movement and removal with stable keys independent of position. Metadata, prerequisites, and content have separate manual Save actions using one shared server-authoritative Lesson revision. Conflicts retain unsaved values until an explicit reload; unknown formats are not editable.
+```css
+/* Surfaces */
+--academy-surface-page
+--academy-surface-default
+--academy-surface-elevated
+--academy-surface-subtle
+--academy-surface-selected
+--academy-surface-danger-subtle
 
-## Interaction and responsiveness
+/* Text */
+--academy-text-primary
+--academy-text-secondary
+--academy-text-muted
+--academy-text-link
+--academy-text-danger
+--academy-text-on-primary
 
-Focus uses one high-contrast 3px outline with an offset across native and custom controls. Do not remove it. Motion is short and nonessential, and the reduced-motion query suppresses it. Page gutters scale down at small widths; controls retain a 44px minimum target size and layouts must not introduce horizontal scrolling. The document body has no minimum viewport width, and Authoring grid/flex descendants may shrink below their intrinsic content size; representative Review routes are checked at 320px and 390px with enlarged text.
+/* Borders */
+--academy-border-default
+--academy-border-subtle
+--academy-border-strong
+--academy-border-danger
 
-## Learner course pages
+/* Actions */
+--academy-action-primary-bg
+--academy-action-primary-bg-hover
+--academy-action-primary-text
+--academy-action-secondary-bg
+--academy-action-secondary-border
+--academy-action-danger-bg
+--academy-action-danger-border
+--academy-action-danger-text
 
-Course discovery is an ordered editorial list, not a dashboard. Course overviews use one page H1, then metadata, learning objectives as a real list, the fully visible ordered outline, and quiet attribution/license details. Modules and lessons use nested headings and actual ordered lists; lesson titles are links, while recommended prerequisites stay plain advisory text and never become locks, completion indicators, or progress controls. Course license labels must say they apply to course content. Render all API metadata as text and never use `v-html` for course data.
+/* State */
+--academy-focus-ring
+--academy-status-success
+--academy-status-warning
+--academy-status-danger
+```
 
-Lessons use one semantic block-renderer boundary for both Continuous and Focus reading modes. Continuous mode is ordinary document flow; Focus mode exposes one block, an explicit `Block N of M` position, and native previous/next controls. It is view-local navigation, never learner progress. Content block data is rendered as escaped semantic DOM only: no `v-html`, dynamic content components, editor state, or executable payloads. Asset keys remain unresolved until a published-asset delivery boundary exists, and knowledge checks stay visible placeholders until Assessments exists.
+Existing `--btg-color-*` variables become compatibility aliases during migration. Component-specific custom properties are acceptable for structural values such as a split ratio, but not as private copies of colors, focus rings, button fills, or common spacing.
 
-No dark mode, theme selector, Storybook, or learner-progress UI is part of this foundation. Future state-changing authenticated screens will continue to use the existing browser-security transport independently of these presentation tokens.
+### Theme architecture
+
+`foundation.css` defines stable scales. `semantic.css` declares the required semantic contract and safe fallbacks. `themes/academy-default.css` maps that contract to foundation values under `:root` or `[data-theme="academy-default"]`.
+
+Future dark, high-contrast, or branded themes override semantic tokens only. Component selectors must not be duplicated inside theme files. Themes cannot change semantics, DOM order, accessible names, target sizes, focus visibility, or product behavior. User accessibility settings take precedence over brand choices.
+
+The current homepage palette should become a named semantic theme or a documented editorial exception; it should not remain an unrelated set of page-specific color variables mixed into the foundation layer.
+
+## Typography
+
+Equivalent content uses semantic roles rather than page-owned font combinations.
+
+| Role | Use |
+| --- | --- |
+| Display | Rare editorial hero text |
+| Page title | One routed-page `h1` |
+| Section title | Major `h2` within a page |
+| Subsection title | Panel and inspector `h3` headings |
+| Body | Default prose and controls |
+| Body small | Secondary compact content |
+| Label | Form and metadata labels |
+| Helper | Field guidance and supporting copy |
+| Metadata | Dates, positions, identifiers, context |
+| Eyebrow | Short contextual label; uppercase is optional presentation |
+| Code | Source code and technical identifiers |
+
+Heading level remains a semantic HTML decision; a visual role does not select a heading level. Components should expose roles through shared classes or tokens rather than setting a unique `font-size` and `font-weight` pair per page.
+
+## Spacing
+
+Use the shared spacing scale by purpose:
+
+| Purpose | Normal range |
+| --- | --- |
+| Icon-to-label and tight inline gap | space 1–2 |
+| Related controls and field internals | space 2–3 |
+| Field stack and row padding | space 3–4 |
+| Panel padding and toolbar gap | space 4–5 |
+| Section gap | space 5–6 |
+| Page block spacing | space 6–8 |
+
+A component may choose one value within a range, then owns it for every consumer. Pages must not override primitive padding to create locally compact or oversized variants.
+
+## Core primitives
+
+| Primitive | Responsibility and variants | Accessibility ownership | Feature code must not |
+| --- | --- | --- | --- |
+| `BtgButton` | `primary`, `secondary`, `tertiary`, `danger`, `danger-secondary`; small/medium; leading/trailing icon; loading/disabled | Native button semantics, disabled/loading state, focus, target size | Recreate fills, borders, radii, or icon spacing |
+| `BtgIcon` | Semantic name to canonical library icon; small/medium/large | Decorative by default; hidden from AT unless explicitly meaningful | Import library icons or SVG paths directly |
+| `BtgIconButton` | Compact icon-only action with shared tooltip pattern | Requires accessible label; target and focus behavior | Rely on tooltip or icon shape as the name |
+| `BtgTextInput` | Text-like controls and invalid state | Attribute forwarding, focus, described-by support | Restyle control borders/focus locally |
+| `BtgTextarea` | Multiline text control | Same field contract and resize behavior | Create page-specific textarea chrome |
+| `BtgSelect` | Native select presentation | Label/error association and disabled state | Replace with a custom listbox without need |
+| `BtgCheckbox` | Checkbox, label, helper, error | Enlarged hit target and associations | Separate the input from its visible label |
+| `BtgRadioGroup` | Radios or a deliberate segmented variant | Group label, keyboard/native semantics | Use buttons without selection semantics |
+| `BtgSearchField` | Search input with leading search icon and clear action where needed | Persistent or accessible label, native search semantics | Hand-position an icon over an input |
+| `BtgBadge` | Read-only status/category label | Text conveys state, not color alone | Use it as an interactive control |
+| `BtgChip` | Compact content/type value; optional removable variant | Removal has an explicit name | Create arbitrary badge dimensions |
+| `BtgTabs` | In-panel tab interface only | Tab roles, roving focus, arrows, selected state | Use for route navigation |
+| `BtgPageTabs` | Router-based section navigation | Landmark label and `aria-current` | Add ARIA tab roles to page links |
+| `BtgSurface` | Border, background, radius, padding variants | Preserves semantic child structure | Become a generic nested-card default |
+| `BtgSection` | Heading/action/body composition | Heading association and hierarchy hook | Restyle action buttons |
+| `BtgToolbar` | Ordered controls, flexible slot, wrapping | Logical DOM/tab order | Reorder controls visually against DOM order |
+| `BtgDialog` | Modal shell built on the existing Reka dependency | Focus trap, modal labeling, Escape, return focus | Reimplement modal focus behavior |
+| `BtgMenu` | Trigger and action menu | Arrow/Escape navigation, focus return, labels | Build ad hoc `role="menu"` behavior |
+| `BtgDisclosure` | Expand/collapse trigger and region | `aria-expanded`, controls relationship, keyboard activation | Make a decorative chevron the only target |
+| `BtgEmptyState` | Consistent empty title, explanation, optional action | Heading and action semantics | Encode state only with an illustration |
+| `BtgStatusMessage` | Info/success/warning/error/conflict variants | Appropriate live-region behavior without duplicate announcements | Add arbitrary alert roles to static text |
+
+`quiet` may remain as a deprecated alias for `tertiary` while callers migrate. New variants require a distinct semantic purpose, not a page name.
+
+## Button contract
+
+Buttons express action hierarchy, not location:
+
+```vue
+<BtgButton variant="primary" leading-icon="add">
+  Add module
+</BtgButton>
+<BtgButton variant="secondary" leading-icon="edit">
+  Edit details
+</BtgButton>
+<BtgButton variant="danger-secondary" leading-icon="delete">
+  Delete lesson
+</BtgButton>
+```
+
+There should normally be one primary action per local action group. Links remain links when navigation is the outcome. Icon placement, loading indicator, height, padding, focus, and disabled presentation belong to `BtgButton`.
+
+## Icon contract
+
+Lucide via `@lucide/vue` is the canonical Academy icon family. All application UI accesses it through `BtgIcon`, using product-semantic names such as `search`, `module`, `lesson`, `edit`, and `delete`. The mapping layer owns library choice, aliases, default stroke width, sizes, alignment, and decorative semantics.
+
+Feature components must not handcraft SVG path data, use Unicode characters or emoji as pseudo-icons, or import Lucide components directly. Bespoke brand marks, data visualizations, and editorial illustrations are allowed when they are not controls or substitutes for common UI icons; document those exceptions beside the component.
+
+## Forms
+
+The shared field composition is always:
+
+```text
+Label and required indicator
+Control
+Helper or error message
+```
+
+`BtgFormField` owns IDs and associations between those pieces. Shared controls own normal, hover, focus, invalid, and disabled appearance. Feature code owns field wording, value, validation rules, and when validation runs. Required state must be visible and announced. Submission errors focus the first invalid control when appropriate.
+
+Specialized editors may wrap this contract but may not replace its labels, errors, or focus rules. Checkbox helper placement and repeatable-field row layout belong to shared form compositions.
+
+## Layout and composition primitives
+
+Extract these only where repeated use is established:
+
+| Composition | Responsibility |
+| --- | --- |
+| `BtgPageContainer` | Canonical page max width, gutters, and shrink behavior |
+| `BtgPageHeader` | Eyebrow, title, context, metadata, and route-navigation slots; pages provide wording and destinations |
+| `BtgPageTabs` | Route-section navigation aligned to the page canvas |
+| `BtgToolbar` | Flexible leading/content/action groups with logical wrapping; it does not assign action hierarchy |
+| `BtgSurface` / `BtgSection` | Standard surface and section framing |
+| `BtgMetadataStrip` | Label/value groups, optional icons, separators, and responsive wrapping |
+| `BtgDialog` / `BtgMenu` | Reka-backed overlay/menu behavior, focus return, keyboard dismissal, and shared surfaces |
+| `BtgDisclosure` | Chevron, expanded state, controlled region, and content spacing |
+| `BtgSplitWorkspace` | Responsive two-pane grid, equal-height desktop regions, and content-driven stacking; `balanced` and `outline-inspector` are the only current variants |
+| `BtgPreviousNextNavigation` | Compact adjacent-item navigation; pages supply selection behavior |
+| `BtgOrderedList` / `BtgOrderedRow` | Ordered row rhythm, index/handle/content/action slots, and calm selected state |
+| `BtgDragHandle` | Named pointer/keyboard handle surface; the feature owns gesture handling, persistence, and announcements |
+| `AuthoringInspectorSection` | Authoring-specific icon/title/action/body section with shared separators |
+| `AuthoringDirtyActionBar` | Authoring wording and discard/save grouping; persistence and dirty state remain feature-owned |
+
+Split proportions and reflow thresholds are composition inputs. `BtgSplitWorkspace` must not know Course, Lesson, or Draft data. Ordered-list persistence remains a feature responsibility.
+
+`BtgDragHandle` deliberately does not implement a reorder operation. The feature supplies pointer and keyboard listeners, stable IDs, movement constraints, persistence, rollback, and live announcements. The primitive owns the target size, icon, disabled state, focus treatment, and required accessible name.
+
+## Authoring patterns
+
+These patterns sit above generic primitives because they encode Academy Authoring semantics:
+
+- `AuthoringDraftHeader` and `AuthoringLessonHeader`: route context and metadata.
+- `AuthoringPageTitle` and `AuthoringTabs`: Authoring page identity and section navigation.
+- `AuthoringSection`: numbered/editorial authoring section composition; may eventually delegate its surface to `BtgSection`.
+- `AuthoringDirtyActionBar`: Authoring wording and save/discard workflow.
+- `RepeatableObjectivesEditor`: objective identity, validation, and reordering.
+- `CourseOutline`: Module/Lesson hierarchy, selection, disclosures, and feature actions.
+- `InspectorSection`: repeated selected-item section composition when confirmed across Authoring inspectors.
+- `AuthoringContentBlockList`: canonical content-block selection and reordering.
+
+Feature patterns own domain labels, data, ordering rules, permissions, and persistence. They compose generic controls and surfaces rather than redefining them.
+
+## Ownership rules
+
+Feature components should own:
+
+- product semantics, state, permissions, and API calls;
+- stable identities and domain-specific ordering rules;
+- route behavior and feature-specific error recovery;
+- unique layout that has no credible second consumer.
+
+Feature components should not normally own:
+
+- button, field, chip, dialog, or menu appearance;
+- standard borders, radii, shadows, focus rings, or surface colors;
+- common typography roles or icon styling;
+- duplicated empty, status, metadata, toolbar, or action-bar treatments.
+
+Exceptions include content-driven colors, rich-text document output, diagrams, editorial illustrations, and genuinely unique geometry. Exceptions must use semantic surrounding surfaces, remain accessible, and include a short code comment when the reason is not obvious.
+
+## CSS strategy and naming
+
+- Global CSS contains token imports, reset/base rules, typography roles, and intentional cross-component utilities only.
+- A primitive owns its styles in a colocated scoped block or a clearly named component stylesheet.
+- Feature styles are scoped or namespaced to their feature and focus on composition.
+- Responsive rules live with the component whose content causes the reflow. Page gutters and shell navigation remain global.
+- Prefer component props and semantic modifiers to consumer overrides.
+- Use semantic class names such as `.course-outline__row` and modifiers such as `.btg-button--danger`; avoid `.black-button`, `.gray-card`, or page-specific classes whose only job is restyling a primitive.
+- Use ARIA attributes or `data-state` for state styling where they already express the state; do not maintain a duplicate visual-state class unnecessarily.
+- Avoid descendant selectors that reach into another component's internal markup.
+
+## Theme safety
+
+Feature CSS must not use raw palette colors, hardcoded focus colors, replicated action backgrounds, direct icon SVG paths, or private theme selectors. It may use raw values for documented one-off geometry that is not a reusable design decision.
+
+Every semantic foreground/background and border/background pairing must meet contrast requirements in each supported theme. High-contrast and reduced-motion preferences must not depend on a selected visual theme.
+
+## Accessibility ownership
+
+Recurring accessibility behavior belongs in shared primitives:
+
+- buttons own disabled, loading, focus, and native activation semantics;
+- icon-only buttons require an accessible label;
+- fields own label/helper/error association;
+- dialogs own focus trapping, modal labeling, Escape, and return focus;
+- menus own composite keyboard interaction;
+- interactive tabs own roving focus, while page tabs remain ordinary links;
+- disclosures own expanded state and controlled-region association;
+- ordered lists and drag handles own keyboard instructions and movement announcements;
+- status messages own appropriate announcement behavior.
+
+Pages remain responsible for meaningful heading order, landmark labels, operation-specific messages, post-navigation focus, and restoring focus when feature state removes a control. Information and selection must never rely on color or icons alone.
+
+## Responsive ownership
+
+Shared layers own page gutters, standard target sizes, field reflow, toolbar wrapping, metadata wrapping, and generic split-workspace stacking. Features own reflow driven by unique content, such as the Structure workspace threshold or Content block editor layout.
+
+At 320 CSS pixels and at 200% text zoom, content must reflow without page-level horizontal scrolling, clipping, or loss of actions. Do not preserve columns by shrinking text and controls below the shared scale. Prefer natural page scrolling over independent pane scrolling.
+
+## Testing
+
+Primitive tests should cover:
+
+- all semantic variants and slots/props;
+- accessible names and field associations;
+- disabled and loading behavior;
+- keyboard interaction and focus restoration for composite widgets;
+- focus-visible state through computed-style or focused screenshot coverage where useful;
+- wrapping/reflow for toolbar, metadata, and split compositions.
+
+Feature tests should focus on workflow and domain behavior rather than retesting primitive appearance. Keep a small Playwright visual-regression set for reference surfaces: Draft Structure desktop, an Authoring form at 320px and 200% text, Dashboard, and one dialog/menu state. Commit stable local screenshots only if the repository adopts snapshot review; until then, prefer geometry assertions plus a few targeted screenshots in CI artifacts.
+
+## Enforcement
+
+Start with small, explainable checks:
+
+1. CI grep/check script rejects new raw hex/rgb/hsl colors outside token/theme and documented illustration files.
+2. CI rejects new inline UI SVG paths and direct `@lucide/vue` imports outside `BtgIcon`.
+3. ESLint prevents direct imports across the generic-to-feature dependency boundary.
+4. A PR checklist asks whether an existing primitive fits, whether tokens are semantic, and whether 320px, 200% text, keyboard, and focus were checked.
+5. Component tests and a lightweight in-app design-system examples route document supported variants during development; it need not ship publicly.
+
+Adopt Stylelint only after the CSS is divided into ownership boundaries; otherwise its initial noise will obscure the rules that matter. Baseline existing violations, reject new ones, and burn down the baseline during migration.
+
+## Migration plan
+
+### M-UI.2 — tokens, icons, and core controls
+
+- Split foundation, semantic, and default-theme layers with compatibility aliases.
+- Complete the `BtgIcon` semantic map and remove direct UI-icon implementations as components migrate.
+- Extend `BtgButton`; add icon button, search field, textarea/select/checkbox, badge/chip, tabs, panel, and generic section primitives.
+- Consolidate focus, control height, and field-state behavior.
+
+### M-UI.3 — remaining composition primitives
+
+- Add toolbar, page header, metadata strip, dialog/menu, disclosure, split workspace, ordered list, and drag handle where repeated usage proves the contract.
+- Move owned CSS out of the global stylesheet incrementally.
+
+### M-UI.4 — Draft Structure reference migration
+
+- Migrate Structure without changing selection, reordering, persistence, navigation, or responsive behavior.
+- Use it to validate buttons, icons, search, panels, menus, ordered rows, metadata, inspector sections, destructive actions, and split layout.
+
+### M-UI.5 — Lesson authoring
+
+- Migrate Details, Content, and Prerequisites.
+- Consolidate fields, status/conflict messages, dialogs, ordered lists, drag handles, and dirty bars.
+
+### M-UI.6 — Draft authoring
+
+- Migrate Overview, Members, Assessments, and Review.
+- Consolidate headers, metadata, sections, tables/lists, empty states, and workflow messages.
+
+### M-UI.7 — remaining Academy pages
+
+- Migrate Dashboard, Courses, Home, authentication, Administration, Community, and Translation.
+- Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
+
+### M-UI.8 — cleanup and enforcement
+
+- Remove compatibility aliases, obsolete global selectors, custom UI SVGs, and baseline exceptions.
+- Enable CI checks and publish the examples/gallery route for contributors.
+
+Draft Structure is the recommended first reference migration. It exercises the widest useful cross-section of primitives and interaction states without requiring a new product workflow. Dashboard should be the first non-Authoring validation to ensure the system does not become Authoring-specific.
+
+## Usage examples
+
+Prefer semantic composition:
+
+```vue
+<BtgSection>
+  <template #heading>Content</template>
+  <template #action>
+    <BtgButton variant="primary" leading-icon="edit">Edit content</BtgButton>
+  </template>
+  <BtgChip icon="image">Image</BtgChip>
+</BtgSection>
+```
+
+Use compositions to arrange primitives without moving feature behavior into them:
+
+```vue
+<BtgToolbar>
+  <template #leading><BtgSearchField v-model="query" label="Search lessons" /></template>
+  <template #actions><BtgButton leading-icon="plus">Add lesson</BtgButton></template>
+</BtgToolbar>
+
+<BtgSplitWorkspace variant="outline-inspector" primary-label="Course structure" secondary-label="Lesson inspector">
+  <template #primary><CourseOutline /></template>
+  <template #secondary><LessonInspector /></template>
+</BtgSplitWorkspace>
+```
+
+Avoid page-owned primitive appearance:
+
+```vue
+<!-- Do not add structure-edit-button CSS or inline SVG path data. -->
+<button class="structure-edit-button">
+  <svg><!-- custom pencil --></svg>
+  Edit content
+</button>
+```
+
+Before creating a new visual pattern, check the primitive catalog, state the missing semantic requirement, and extend the narrowest appropriate shared layer. Do not add a variant named after a page or feature.

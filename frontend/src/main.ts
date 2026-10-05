@@ -1,5 +1,4 @@
 import { createApp, nextTick } from 'vue'
-import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import { auth } from './auth/auth'
@@ -34,13 +33,8 @@ import AuthoringDraftAssessmentsPage from './pages/AuthoringDraftAssessmentsPage
 import AuthoringDraftAssessmentPage from './pages/AuthoringDraftAssessmentPage.vue'
 import TranslationListPage from './pages/TranslationListPage.vue'
 import TranslationWorkspacePage from './pages/TranslationWorkspacePage.vue'
+import { createApplicationI18n } from './i18n/application'
 import './style.css'
-
-const i18n = createI18n({
-  legacy: false,
-  locale: 'en',
-  messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home', dashboard: 'Dashboard', courses: 'Courses', authoring: 'Authoring' } },
-})
 
 const router = createRouter({
   history: createWebHistory(),
@@ -121,6 +115,10 @@ router.afterEach((to, from) => {
   void nextTick(() => document.getElementById('main')?.focus({ preventScroll: true }))
 })
 
-createApp(App).use(router).use(i18n).mount('#app')
+async function startApplication() {
+  const i18n = await createApplicationI18n()
+  createApp(App).use(router).use(i18n).mount('#app')
+  void auth.bootstrapSession()
+}
 
-void auth.bootstrapSession()
+void startApplication()

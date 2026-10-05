@@ -211,6 +211,13 @@ label { font-weight: var(--btg-font-weight-strong); }
 }
 .btg-button--destructive:hover:not(:disabled) { background: var(--btg-color-danger-hover); }
 
+.btg-button--destructive-secondary {
+  border-color: var(--btg-color-danger);
+  background: color-mix(in srgb, var(--btg-color-danger) 7%, var(--btg-color-surface));
+  color: var(--btg-color-danger);
+}
+.btg-button--destructive-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--btg-color-danger) 12%, var(--btg-color-surface)); }
+
 .btg-form-field { display: grid; min-width: 0; gap: var(--btg-space-2); }
 .btg-form-field__description { color: var(--btg-color-text-secondary); font-size: var(--btg-font-size-small); }
 .btg-form-field__required { color: var(--btg-color-danger); }

@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick, shallowRef } from 'vue'
 import { APIProblemError } from '../api/client'
+import { renderWithI18n } from '../test/i18n'
 
 type AuthenticationState =
   | { status: 'bootstrapping' }
@@ -76,7 +77,7 @@ async function renderShell(path = `/authoring/drafts/${firstID}`) {
   const router = routerFor()
   await router.push(path)
   await router.isReady()
-  return { ...render({ template: '<RouterView />' }, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n({ template: '<RouterView />' }, { global: { plugins: [router] } }), router }
 }
 
 describe('AuthoringDraftShell', () => {
@@ -318,8 +319,8 @@ describe('AuthoringDraftShell', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await screen.findByRole('heading', { level: 1, name: 'Saved Draft' })
     await router.push(`/authoring/drafts/${firstID}/structure`)
-    await fireEvent.click(await screen.findByRole('button', { name: '+ Add module' }))
-    const dialog = document.querySelector('dialog[open]') as HTMLDialogElement
+    await fireEvent.click((await screen.findAllByRole('button', { name: 'Add module' }))[0]!)
+    const dialog = document.querySelector('[role="dialog"]') as HTMLElement
     await fireEvent.update(within(dialog).getByRole('textbox', { name: /Module title/ }), 'New Module')
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Create module' }))
     await screen.findByText('Module created.')

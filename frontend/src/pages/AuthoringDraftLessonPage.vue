@@ -51,7 +51,7 @@
         <AuthoringLessonContentEditor :draft-id="draft.id" :lesson="state.lesson" @saved="applyContent" @replace-lesson="replaceLesson" @preview="openPreview" @unavailable="markDraftUnavailable" />
       </template>
       <template v-if="currentSection === 'prerequisites' || legacyCombined">
-        <AuthoringPageTitle id="authoring-lesson-prerequisites-title" title="Recommended prerequisites" description="Prerequisites are advisory recommendations. They do not restrict learner access." focusable />
+        <AuthoringPageTitle id="authoring-lesson-prerequisites-title" title="Prerequisites" description="Choose lessons learners should complete before this lesson." focusable />
       <AuthoringLessonPrerequisitesEditor
         :draft-id="draft.id"
         :lesson="state.lesson"

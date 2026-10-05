@@ -1,0 +1,38 @@
+:root {
+  --academy-surface-page: var(--academy-foundation-neutral-50);
+  --academy-surface-default: var(--academy-foundation-neutral-0);
+  --academy-surface-elevated: var(--academy-foundation-neutral-0);
+  --academy-surface-subtle: var(--academy-foundation-neutral-100);
+  --academy-surface-selected: color-mix(in srgb, var(--academy-foundation-neutral-100) 58%, var(--academy-foundation-neutral-0));
+  --academy-surface-danger-subtle: color-mix(in srgb, var(--academy-foundation-red-700) 7%, var(--academy-foundation-neutral-0));
+  --academy-surface-code: var(--academy-foundation-neutral-200);
+  --academy-surface-overlay: rgb(0 0 0 / 55%);
+  --academy-text-primary: var(--academy-foundation-neutral-950);
+  --academy-text-secondary: var(--academy-foundation-neutral-700);
+  --academy-text-muted: var(--academy-foundation-neutral-500);
+  --academy-text-link: var(--academy-foundation-blue-700);
+  --academy-text-link-hover: var(--academy-foundation-blue-800);
+  --academy-text-danger: var(--academy-foundation-red-700);
+  --academy-text-on-primary: var(--academy-foundation-neutral-0);
+  --academy-border-default: var(--academy-foundation-neutral-300);
+  --academy-border-subtle: color-mix(in srgb, var(--academy-foundation-neutral-300) 82%, transparent);
+  --academy-border-strong: var(--academy-foundation-neutral-500);
+  --academy-border-danger: var(--academy-foundation-red-700);
+  --academy-action-primary-bg: var(--academy-foundation-neutral-900);
+  --academy-action-primary-bg-hover: var(--academy-foundation-neutral-800);
+  --academy-action-primary-text: var(--academy-foundation-neutral-0);
+  --academy-action-secondary-bg: var(--academy-foundation-neutral-0);
+  --academy-action-secondary-bg-hover: var(--academy-foundation-neutral-100);
+  --academy-action-secondary-border: var(--academy-foundation-neutral-500);
+  --academy-action-danger-bg: var(--academy-foundation-red-700);
+  --academy-action-danger-bg-hover: var(--academy-foundation-red-800);
+  --academy-action-danger-border: var(--academy-foundation-red-700);
+  --academy-action-danger-text: var(--academy-foundation-red-700);
+  --academy-focus-ring: var(--academy-foundation-blue-600);
+  --academy-control-disabled-opacity: 0.62;
+  --academy-status-success: var(--academy-foundation-green-700);
+  --academy-status-warning: var(--academy-foundation-amber-800);
+  --academy-status-danger: var(--academy-foundation-red-700);
+  --academy-text-helper: var(--academy-text-secondary);
+  --academy-text-error: var(--academy-text-danger);
+}

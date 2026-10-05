@@ -65,6 +65,7 @@ describe('Authoring visual-system components', () => {
     const view = render(AuthoringDirtyActionBar, { props: { show: false, onDiscard: discard } })
     expect(screen.queryByLabelText('Unsaved changes')).toBeNull()
     await view.rerender({ show: true, onDiscard: discard })
+    expect(document.querySelector('.authoring-dirty-bar .btg-toolbar')).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
     expect(discard).toHaveBeenCalledOnce()
   })

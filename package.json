@@ -12,6 +12,7 @@
     "api:types": "openapi-typescript api/openapi.yaml -o frontend/src/api/generated.ts"
   },
   "dependencies": {
+    "@lucide/vue": "^1.52.0",
     "@tiptap/extension-link": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
     "@tiptap/vue-3": "3.31.3",

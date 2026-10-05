@@ -1,8 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/vue'
+import { cleanup, fireEvent, screen } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { createI18n } from 'vue-i18n'
 import { shallowRef } from 'vue'
+import type { ApplicationLocale } from './i18n/registry'
+import { pseudoLocalize } from './i18n/pseudo'
+import { renderWithI18n } from './test/i18n'
 
 type AuthenticationState =
   | { status: 'bootstrapping' }
@@ -15,7 +17,7 @@ vi.mock('./auth/auth', () => ({ useAuth: () => authMock }))
 
 import App from './App.vue'
 
-async function renderShell(path = '/') {
+async function renderShell(path = '/', locale: ApplicationLocale = 'en') {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/', component: { template: '<h1>Home page</h1>' } },
     { path: '/dashboard', component: { template: '<h1>Dashboard page</h1>' } },
@@ -25,8 +27,7 @@ async function renderShell(path = '/') {
   ] })
   await router.push(path)
   await router.isReady()
-  const i18n = createI18n({ legacy: false, locale: 'en', messages: { en: { appName: 'Bridging the Gap Academy', appContext: 'Structured learning', home: 'Home', dashboard: 'Dashboard', courses: 'Courses', authoring: 'Authoring' } } })
-  return { ...render(App, { global: { plugins: [router, i18n] } }), router }
+  return { ...renderWithI18n(App, { global: { plugins: [router] } }, locale), router }
 }
 
 describe('application header', () => {
@@ -61,5 +62,12 @@ describe('application header', () => {
     expect(router.currentRoute.value.path).toBe('/courses')
     expect(document.querySelector('.site-header')).toBe(header)
     expect(screen.queryByRole('heading', { name: 'Home page' })).toBeNull()
+  })
+
+  it('renders the migrated shell from the pseudo-locale without hardcoded English navigation', async () => {
+    await renderShell('/', 'en-XA')
+    expect(screen.getByRole('link', { name: pseudoLocalize('Home') })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Home' })).toBeNull()
+    expect(screen.getByRole('navigation', { name: pseudoLocalize('Main navigation') })).toBeTruthy()
   })
 })

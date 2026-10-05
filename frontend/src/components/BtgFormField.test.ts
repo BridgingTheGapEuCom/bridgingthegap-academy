@@ -32,6 +32,16 @@ describe('BtgFormField', () => {
     expect(input.getAttribute('aria-describedby')).toContain(error.id)
   })
 
+  it('accepts helper as the canonical supporting-text name', () => {
+    render({
+      components: { BtgFormField, BtgTextInput },
+      template: '<BtgFormField label="Title" helper="Visible to learners" v-slot="{ controlId, describedBy }"><BtgTextInput :id="controlId" :aria-describedby="describedBy" /></BtgFormField>',
+    })
+    const input = screen.getByRole('textbox', { name: 'Title' })
+    expect(input.getAttribute('aria-describedby')).toContain('description')
+    expect(screen.getByText('Visible to learners')).toBeTruthy()
+  })
+
   it('remains keyboard focusable as a native input', () => {
     render(FieldFixture)
     const input = screen.getByRole('textbox', { name: /email address/i })
