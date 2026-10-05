@@ -2,14 +2,13 @@
   <fieldset class="objectives-editor" :aria-describedby="describedBy">
     <legend>{{ label }} <span aria-hidden="true">*</span><span class="sr-only"> required</span></legend>
     <p v-if="description" :id="descriptionID" class="objectives-editor__description">{{ description }}</p>
-    <ol :aria-label="label">
-      <li v-for="(_, index) in modelValue" :key="index" :class="{ 'is-dragging': draggingIndex === index, 'is-drop-before': insertionIndex === index && draggingIndex !== index, 'is-drop-after': insertionIndex === index + 1 && draggingIndex !== index }" :data-objective-index="index">
-        <button :id="`${fieldID}-reorder-${index}`" type="button" class="objectives-editor__drag-handle" :aria-label="`Reorder ${objectiveName} ${index + 1}`" :aria-pressed="keyboardIndex === index" :disabled="disabled" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" /></svg></button>
-        <span class="objectives-editor__number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span>
+    <BtgOrderedList :aria-label="label">
+      <BtgOrderedRow v-for="(_, index) in modelValue" :key="index" :index="index" :class="{ 'is-dragging': draggingIndex === index, 'is-drop-before': insertionIndex === index && draggingIndex !== index, 'is-drop-after': insertionIndex === index + 1 && draggingIndex !== index }" :data-objective-index="index">
+        <template #handle><BtgDragHandle :id="`${fieldID}-reorder-${index}`" :label="reorderLabel(index + 1)" :aria-pressed="keyboardIndex === index" :disabled="disabled" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)" /></template>
         <BtgTextInput :model-value="modelValue[index]" :disabled="disabled" :aria-label="`${objectiveName} ${index + 1}`" :aria-invalid="Boolean(error) || undefined" placeholder="Enter a learning objective" @update:model-value="update(index, $event)" />
-        <BtgButton type="button" variant="secondary" class="objectives-editor__remove" :disabled="disabled || modelValue.length === 1" :aria-label="`Remove ${removeLabel} ${index + 1}`" @click="remove(index)">Remove</BtgButton>
-      </li>
-    </ol>
+        <template #actions><BtgButton type="button" variant="secondary" leading-icon="delete" class="objectives-editor__remove" :disabled="disabled || modelValue.length === 1" :aria-label="removeLabelFor(index + 1)" @click="remove(index)">{{ removeText }}</BtgButton></template>
+      </BtgOrderedRow>
+    </BtgOrderedList>
     <p v-if="error" :id="errorID" class="objectives-editor__error">{{ error }}</p>
     <BtgButton type="button" variant="secondary" class="objectives-editor__add" :disabled="disabled" @click="add">{{ addLabel }}</BtgButton>
     <p class="sr-only" aria-live="polite">{{ announcement }}</p>
@@ -20,9 +19,12 @@
 import { computed, nextTick, onBeforeUnmount, ref, useId } from 'vue'
 import BtgButton from './BtgButton.vue'
 import BtgTextInput from './BtgTextInput.vue'
+import BtgDragHandle from './BtgDragHandle.vue'
+import BtgOrderedList from './BtgOrderedList.vue'
+import BtgOrderedRow from './BtgOrderedRow.vue'
 
-const props = withDefaults(defineProps<{ modelValue: string[]; label?: string; description?: string; error?: string; disabled?: boolean; itemLabel?: string; removeLabel?: string; addLabel?: string }>(), {
-  label: 'Learning objectives', description: undefined, error: undefined, disabled: false, itemLabel: undefined, removeLabel: 'objective', addLabel: '+ Add objective',
+const props = withDefaults(defineProps<{ modelValue: string[]; label?: string; description?: string; error?: string; disabled?: boolean; itemLabel?: string; removeLabel?: string; addLabel?: string; removeText?: string; reorderLabel?: (position: number) => string; removeLabelFor?: (position: number) => string }>(), {
+  label: 'Learning objectives', description: undefined, error: undefined, disabled: false, itemLabel: undefined, removeLabel: 'objective', addLabel: '+ Add objective', removeText: 'Remove', reorderLabel: undefined, removeLabelFor: undefined,
 })
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 const announcement = ref('')
@@ -34,6 +36,8 @@ const descriptionID = `${fieldID}-description`
 const errorID = `${fieldID}-error`
 const describedBy = computed(() => [props.description ? descriptionID : '', props.error ? errorID : ''].filter(Boolean).join(' ') || undefined)
 const objectiveName = computed(() => props.itemLabel ?? (props.label.endsWith('s') ? props.label.slice(0, -1) : props.label))
+function reorderLabel(position: number) { return props.reorderLabel?.(position) ?? `Reorder ${objectiveName.value} ${position}` }
+function removeLabelFor(position: number) { return props.removeLabelFor?.(position) ?? `Remove ${props.removeLabel} ${position}` }
 let pointerID: number | undefined
 let sourceIndex = -1
 

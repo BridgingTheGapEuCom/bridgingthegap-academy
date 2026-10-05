@@ -15,7 +15,7 @@
       <AuthoringLessonHeader :title="state.lesson.title" :back-to="backToStructure" :tabs="lessonTabs" />
 
       <template v-if="currentSection === 'details' || legacyCombined">
-      <AuthoringPageTitle id="authoring-lesson-details-title" title="Lesson details" description="Define the lesson metadata learners and authors use to understand this lesson." focusable />
+      <AuthoringPageTitle id="authoring-lesson-details-title" :title="t('authoring.details.title')" :description="t('authoring.details.description')" focusable />
       <form class="authoring-lesson-editor__form" :aria-busy="saving" novalidate @submit.prevent="save">
         <p v-if="formError" class="authoring-lesson-editor__error" role="alert">{{ formError }}</p>
         <p v-if="saveMessage" class="authoring-lesson-editor__status" role="status">{{ saveMessage }}</p>
@@ -24,22 +24,22 @@
           <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? 'Reloading…' : 'Reload latest Lesson' }}</BtgButton>
         </div>
 
-        <AuthoringSection heading-id="authoring-lesson-basic-information-title" title="Basic information" description="Give this lesson a clear title and description.">
-            <BtgFormField label="Title" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }">
+        <AuthoringSection heading-id="authoring-lesson-basic-information-title" :title="t('authoring.details.basicInformation')" :description="t('authoring.details.basicInformationDescription')">
+            <BtgFormField :label="t('authoring.details.lessonTitle')" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }">
               <BtgTextInput :id="controlId" v-model="form.title" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
             </BtgFormField>
-            <BtgFormField label="Description" required :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
+            <BtgFormField :label="t('authoring.details.lessonDescription')" required :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
               <textarea :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
             </BtgFormField>
         </AuthoringSection>
 
-        <AuthoringSection heading-id="authoring-lesson-objectives-title" title="Learning objectives" description="Describe what learners should be able to do after completing this lesson.">
-          <RepeatableObjectivesEditor v-model="form.objectives" :disabled="saving || reloading" :error="errors.objectives" add-label="+ Add learning objective" remove-label="learning objective" />
+        <AuthoringSection heading-id="authoring-lesson-objectives-title" :title="t('authoring.details.objectives')" :description="t('authoring.details.objectivesDescription')">
+          <RepeatableObjectivesEditor v-model="form.objectives" :disabled="saving || reloading" :error="errors.objectives" :label="t('authoring.details.objectives')" :add-label="t('authoring.details.addObjective')" :reorder-label="(position) => t('authoring.details.reorderObjective', { position })" :remove-label-for="(position) => t('authoring.details.removeObjective', { position })" :remove-text="t('authoring.details.remove')" />
         </AuthoringSection>
 
-        <AuthoringSection heading-id="authoring-lesson-timing-title" title="Timing" description="Set an estimated duration for this lesson.">
-            <BtgFormField label="Estimated duration" :error="errors.estimatedDurationMinutes" v-slot="{ controlId, describedBy, invalid }">
-              <div class="authoring-lesson-editor__duration"><BtgTextInput :id="controlId" v-model="form.estimatedDurationMinutes" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" type="number" inputmode="numeric" min="1" max="1440" step="1" /><span>minutes</span></div>
+        <AuthoringSection heading-id="authoring-lesson-timing-title" :title="t('authoring.details.timing')" :description="t('authoring.details.timingDescription')">
+            <BtgFormField :label="t('authoring.details.estimatedDuration')" :error="errors.estimatedDurationMinutes" v-slot="{ controlId, describedBy, invalid }">
+              <div class="authoring-lesson-editor__duration"><BtgTextInput :id="controlId" v-model="form.estimatedDurationMinutes" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" type="number" inputmode="numeric" min="1" max="1440" step="1" /><span>{{ t('authoring.details.minutes') }}</span></div>
             </BtgFormField>
         </AuthoringSection>
 
@@ -150,14 +150,14 @@ function discardChanges() {
 
 function validate(): boolean {
   clearErrors()
-  if (!form.title.trim()) errors.title = 'Enter a title.'
-  if (!form.description.trim()) errors.description = 'Enter a description.'
+  if (!form.title.trim()) errors.title = t('authoring.details.validationTitle')
+  if (!form.description.trim()) errors.description = t('authoring.details.validationDescription')
   if (!form.objectives.length || form.objectives.some((objective) => !objective.trim())) {
-    errors.objectives = 'Enter a learning objective in every field.'
-    form.objectives.forEach((objective, index) => { if (!objective.trim()) errors[`objective-${index}`] = 'Enter a learning objective.' })
+    errors.objectives = t('authoring.details.validationObjectives')
+    form.objectives.forEach((objective, index) => { if (!objective.trim()) errors[`objective-${index}`] = t('authoring.details.validationObjective') })
   }
   const duration = form.estimatedDurationMinutes.trim()
-  if (duration && (!/^[1-9][0-9]*$/.test(duration) || Number(duration) > 1440)) errors.estimatedDurationMinutes = 'Enter a whole number from 1 to 1440, or leave this blank.'
+  if (duration && (!/^[1-9][0-9]*$/.test(duration) || Number(duration) > 1440)) errors.estimatedDurationMinutes = t('authoring.details.validationDuration')
   return Object.keys(errors).length === 0
 }
 
@@ -215,14 +215,14 @@ async function save() {
     original.value = nextForm
     replaceForm(nextForm)
     replaceDraft({ ...draft.value, revision: updated.draftRevision })
-    saveMessage.value = 'Lesson metadata saved.'
+    saveMessage.value = t('authoring.details.saved')
   } catch (error) {
     if (!isCurrent()) return
     if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
     if (error instanceof APIProblemError && error.status === 409) { conflict.value = true; return }
     formError.value = error instanceof APIProblemError && error.status === 400
-      ? 'We couldn’t save these changes. Check the fields and try again.'
-      : 'We couldn’t save this Lesson right now. Please try again.'
+      ? t('authoring.details.saveInvalid')
+      : t('authoring.details.saveUnavailable')
   } finally { if (isCurrent()) saving.value = false }
 }
 
@@ -247,7 +247,7 @@ async function reloadLatest() {
   } catch (error) {
     if (!isCurrent()) return
     if (error instanceof InvalidAuthoringDraftIDError || (error instanceof APIProblemError && error.status === 404)) markDraftUnavailable()
-    else formError.value = 'We couldn’t reload this Lesson right now. Please try again.'
+    else formError.value = t('authoring.details.reloadUnavailable')
   } finally { if (isCurrent()) reloading.value = false }
 }
 
