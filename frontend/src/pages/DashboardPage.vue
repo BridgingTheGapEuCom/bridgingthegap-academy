@@ -3,36 +3,36 @@
     <p class="sr-only" role="status" aria-live="polite">{{ announcement }}</p>
     <header class="dashboard-page__header">
       <div>
-        <p class="dashboard-page__eyebrow">Dashboard</p>
-        <h1 id="dashboard-title" ref="heading" tabindex="-1">Dashboard</h1>
-        <p>Your Academy overview and tools.</p>
+        <p class="dashboard-page__eyebrow">{{ t('dashboard.eyebrow') }}</p>
+        <h1 id="dashboard-title" ref="heading" tabindex="-1">{{ t('dashboard.title') }}</h1>
+        <p>{{ t('dashboard.description') }}</p>
       </div>
-      <BtgButton v-if="canManage && !managing" type="button" variant="secondary" @click="openManagement">Manage dashboard</BtgButton>
+      <BtgButton v-if="canManage && !managing" type="button" variant="secondary" leading-icon="settings" @click="openManagement">{{ t('dashboard.manage') }}</BtgButton>
     </header>
 
-    <section v-if="state.kind === 'loading'" class="dashboard-page__state" role="status"><p>Loading Dashboard…</p></section>
+    <section v-if="state.kind === 'loading'" class="dashboard-page__state" role="status"><p>{{ t('dashboard.loading') }}</p></section>
     <section v-else-if="state.kind === 'unavailable'" class="dashboard-page__state" role="alert" aria-labelledby="dashboard-unavailable-title">
-      <h2 id="dashboard-unavailable-title">Dashboard unavailable</h2>
-      <p>We couldn’t load the Dashboard right now. Please try again.</p>
-      <BtgButton variant="secondary" @click="load">Try again</BtgButton>
+      <h2 id="dashboard-unavailable-title">{{ t('dashboard.unavailableTitle') }}</h2>
+      <p>{{ t('dashboard.unavailableDescription') }}</p>
+      <BtgButton variant="secondary" @click="load">{{ t('common.actions.tryAgain') }}</BtgButton>
     </section>
     <template v-else>
       <section class="dashboard-page__widgets" aria-labelledby="dashboard-widgets-title">
-        <h2 id="dashboard-widgets-title" class="sr-only">Dashboard widgets</h2>
+        <h2 id="dashboard-widgets-title" class="sr-only">{{ t('dashboard.widgets') }}</h2>
         <div v-if="enabledWidgets.length === 0" class="dashboard-page__empty" role="status">
-          <div aria-hidden="true" class="dashboard-page__empty-icon">＋</div>
+          <BtgIcon aria-hidden="true" class="dashboard-page__empty-icon" name="plus" />
           <div>
-            <h2>No dashboard widgets yet</h2>
-            <p>Add useful tools to create an Academy dashboard that works for your installation.</p>
-            <BtgButton v-if="canManage" type="button" @click="openManagement">Add widget</BtgButton>
+            <h2>{{ t('dashboard.emptyTitle') }}</h2>
+            <p>{{ t('dashboard.emptyDescription') }}</p>
+            <BtgButton v-if="canManage" type="button" leading-icon="plus" @click="openManagement">{{ t('dashboard.addWidget') }}</BtgButton>
           </div>
         </div>
         <ol v-else class="dashboard-page__widget-grid">
           <li v-for="placement in enabledWidgets" :key="runtimeKey(placement)">
-            <article class="dashboard-page__widget-card" :aria-labelledby="`dashboard-widget-${placement.placementId}`">
+            <BtgPanel as="article" class="dashboard-page__widget-card" :aria-labelledby="`dashboard-widget-${placement.placementId}`">
               <h2 :id="`dashboard-widget-${placement.placementId}`">{{ placementName(placement) }}</h2>
               <DashboardWidgetPlacementFrame :placement="placement" />
-            </article>
+            </BtgPanel>
           </li>
         </ol>
       </section>
@@ -40,64 +40,64 @@
       <section v-if="managing && state.kind === 'ready'" class="dashboard-page__management" aria-labelledby="dashboard-management-title">
         <header class="dashboard-page__management-header">
           <div>
-            <p class="dashboard-page__eyebrow">Manage dashboard</p>
-            <h2 id="dashboard-management-title" ref="managementHeading" tabindex="-1">Configure dashboard</h2>
-            <p>Choose, configure, and arrange the widgets that appear on your dashboard.</p>
+            <p class="dashboard-page__eyebrow">{{ t('dashboard.managementEyebrow') }}</p>
+            <h2 id="dashboard-management-title" ref="managementHeading" tabindex="-1">{{ t('dashboard.managementTitle') }}</h2>
+            <p>{{ t('dashboard.managementDescription') }}</p>
           </div>
-          <BtgButton type="button" variant="secondary" @click="closeManagement">Done</BtgButton>
+          <BtgButton type="button" variant="secondary" @click="closeManagement">{{ t('dashboard.done') }}</BtgButton>
         </header>
         <p v-if="managementError" class="dashboard-page__error" role="alert">{{ managementError }}</p>
 
         <section class="dashboard-page__management-section" aria-labelledby="available-widgets-title">
-          <h3 id="available-widgets-title">Add a widget</h3>
-          <p v-if="availableLoading" role="status">Loading available widgets…</p>
-          <p v-else-if="available.length === 0" class="dashboard-page__muted">No dashboard widgets are currently available.</p>
+          <h3 id="available-widgets-title">{{ t('dashboard.addWidget') }}</h3>
+          <p v-if="availableLoading" role="status">{{ t('dashboard.availableLoading') }}</p>
+          <p v-else-if="available.length === 0" class="dashboard-page__muted">{{ t('dashboard.noneAvailable') }}</p>
           <ul v-else class="dashboard-page__picker">
             <li v-for="widget in available" :key="widgetKey(widget)">
-              <article>
+              <BtgPanel as="article" padding="compact">
                 <div><h4>{{ widget.widgetName }}</h4><p>{{ widget.description }}</p><p class="dashboard-page__meta">{{ widget.pluginName }} · {{ widget.pluginVersion }}</p></div>
-                <BtgButton type="button" variant="secondary" :disabled="busy" :aria-label="`Add ${widget.widgetName}`" @click="beginAdd(widget)">Add</BtgButton>
-              </article>
+                <BtgButton type="button" variant="secondary" leading-icon="plus" :disabled="busy" :aria-label="t('dashboard.addNamed', { name: widget.widgetName })" @click="beginAdd(widget)">{{ t('dashboard.add') }}</BtgButton>
+              </BtgPanel>
             </li>
           </ul>
         </section>
 
         <section v-if="configuringWidget" class="dashboard-page__configuration" aria-labelledby="add-configuration-title">
-          <h3 id="add-configuration-title">Configure {{ configuringWidget.widgetName }}</h3>
-          <p>Choose the settings for this widget before adding it.</p>
+          <h3 id="add-configuration-title">{{ t('dashboard.configureNamed', { name: configuringWidget.widgetName }) }}</h3>
+          <p>{{ t('dashboard.configureDescription') }}</p>
           <form @submit.prevent="createConfiguredPlacement">
             <WidgetConfigurationForm v-model="configurationDraft" :schema="configuringWidget.configuration!" :errors="configurationDraftErrors" />
-            <div class="dashboard-page__actions"><BtgButton type="submit" :disabled="busy || hasConfigurationErrors">Add widget</BtgButton><BtgButton type="button" variant="secondary" :disabled="busy" @click="cancelConfiguration">Cancel</BtgButton></div>
+            <div class="dashboard-page__actions"><BtgButton type="submit" leading-icon="plus" :disabled="busy || hasConfigurationErrors">{{ t('dashboard.addWidget') }}</BtgButton><BtgButton type="button" variant="secondary" :disabled="busy" @click="cancelConfiguration">{{ t('dashboard.cancel') }}</BtgButton></div>
           </form>
         </section>
 
         <section class="dashboard-page__management-section" aria-labelledby="installed-widgets-title">
-          <h3 id="installed-widgets-title" ref="installedHeading" tabindex="-1">Installed widgets</h3>
-          <p v-if="state.widgets.length === 0" class="dashboard-page__muted">No widgets have been added.</p>
-          <ol v-else class="dashboard-page__placements" aria-label="Configured Dashboard widgets">
+          <h3 id="installed-widgets-title" ref="installedHeading" tabindex="-1">{{ t('dashboard.installed') }}</h3>
+          <p v-if="state.widgets.length === 0" class="dashboard-page__muted">{{ t('dashboard.noneInstalled') }}</p>
+          <ol v-else class="dashboard-page__placements" :aria-label="t('dashboard.configured')">
             <li v-for="(placement, index) in state.widgets" :key="placement.placementId">
-              <article class="dashboard-page__placement">
+              <BtgPanel as="article" class="dashboard-page__placement" padding="compact">
                 <div class="dashboard-page__placement-summary">
-                  <div><h4>{{ placementName(placement) }}</h4><p v-if="placementDescription(placement)">{{ placementDescription(placement) }}</p><p class="dashboard-page__meta">{{ placement.enabled ? 'Enabled' : 'Disabled' }} · Position {{ placement.position + 1 }}</p></div>
-                  <span class="dashboard-page__status-label">{{ placement.enabled ? 'Enabled' : 'Disabled' }}</span>
+                  <div><h4>{{ placementName(placement) }}</h4><p v-if="placementDescription(placement)">{{ placementDescription(placement) }}</p><p class="dashboard-page__meta">{{ placement.enabled ? t('dashboard.enabled') : t('dashboard.disabled') }} · {{ t('dashboard.position', { position: placement.position + 1 }) }}</p></div>
+                  <BtgBadge>{{ placement.enabled ? t('dashboard.enabled') : t('dashboard.disabled') }}</BtgBadge>
                 </div>
                 <div class="dashboard-page__actions">
-                  <BtgButton v-if="placementSchema(placement)?.fields.length" type="button" variant="secondary" :disabled="busy" @click="beginEdit(placement)">Configure</BtgButton>
-                  <BtgButton type="button" variant="secondary" :disabled="busy || index === 0" :aria-label="`Move ${placementName(placement)} up`" @click="move(placement, 'up')">Move up</BtgButton>
-                  <BtgButton type="button" variant="secondary" :disabled="busy || index === state.widgets.length - 1" :aria-label="`Move ${placementName(placement)} down`" @click="move(placement, 'down')">Move down</BtgButton>
-                  <BtgButton type="button" variant="secondary" :disabled="busy" @click="setEnabled(placement, !placement.enabled)">{{ placement.enabled ? 'Disable' : 'Enable' }}</BtgButton>
+                  <BtgButton v-if="placementSchema(placement)?.fields.length" type="button" variant="secondary" leading-icon="settings" :disabled="busy" @click="beginEdit(placement)">{{ t('dashboard.configure') }}</BtgButton>
+                  <BtgButton type="button" variant="secondary" leading-icon="previous" :disabled="busy || index === 0" :aria-label="t('dashboard.moveNamedUp', { name: placementName(placement) })" @click="move(placement, 'up')">{{ t('dashboard.moveUp') }}</BtgButton>
+                  <BtgButton type="button" variant="secondary" trailing-icon="next" :disabled="busy || index === state.widgets.length - 1" :aria-label="t('dashboard.moveNamedDown', { name: placementName(placement) })" @click="move(placement, 'down')">{{ t('dashboard.moveDown') }}</BtgButton>
+                  <BtgButton type="button" variant="secondary" :disabled="busy" @click="setEnabled(placement, !placement.enabled)">{{ placement.enabled ? t('dashboard.disable') : t('dashboard.enable') }}</BtgButton>
                   <template v-if="confirmingRemoval === placement.placementId">
-                    <BtgButton type="button" variant="destructive" :disabled="busy" @click="remove(placement)">Confirm remove</BtgButton>
-                    <BtgButton type="button" variant="secondary" :disabled="busy" @click="confirmingRemoval = undefined">Cancel remove</BtgButton>
+                    <BtgButton type="button" variant="danger" leading-icon="delete" :disabled="busy" @click="remove(placement)">{{ t('dashboard.confirmRemove') }}</BtgButton>
+                    <BtgButton type="button" variant="secondary" :disabled="busy" @click="confirmingRemoval = undefined">{{ t('dashboard.cancelRemove') }}</BtgButton>
                   </template>
-                  <BtgButton v-else type="button" variant="destructive" :disabled="busy" @click="confirmingRemoval = placement.placementId">Remove</BtgButton>
+                  <BtgButton v-else type="button" variant="danger-secondary" leading-icon="delete" :disabled="busy" @click="confirmingRemoval = placement.placementId">{{ t('dashboard.remove') }}</BtgButton>
                 </div>
                 <form v-if="editing === placement.placementId && placementSchema(placement)" class="dashboard-page__configuration" @submit.prevent="save(placement)">
-                  <h5>Configure {{ placementName(placement) }}</h5>
+                  <h5>{{ t('dashboard.configureNamed', { name: placementName(placement) }) }}</h5>
                   <WidgetConfigurationForm v-model="configurationDraft" :schema="placementSchema(placement)!" :errors="configurationDraftErrors" />
-                  <div class="dashboard-page__actions"><BtgButton type="submit" :disabled="busy || hasConfigurationErrors">Save changes</BtgButton><BtgButton type="button" variant="secondary" :disabled="busy" @click="cancelConfiguration">Cancel</BtgButton></div>
+                  <div class="dashboard-page__actions"><BtgButton type="submit" :disabled="busy || hasConfigurationErrors">{{ t('dashboard.saveChanges') }}</BtgButton><BtgButton type="button" variant="secondary" :disabled="busy" @click="cancelConfiguration">{{ t('dashboard.cancel') }}</BtgButton></div>
                 </form>
-              </article>
+              </BtgPanel>
             </li>
           </ol>
         </section>
@@ -108,6 +108,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   createDashboardWidget, deleteDashboardWidget, isDashboardConflict, isDashboardForbidden,
   listAvailableDashboardWidgets, listDashboardWidgets, moveDashboardWidget, updateDashboardWidget,
@@ -115,11 +116,15 @@ import {
 } from '../dashboard/dashboard'
 import { configurationErrors, configurationInitial, type WidgetConfiguration, type WidgetConfigurationSchema } from '../plugins/configuration'
 import BtgButton from '../components/BtgButton.vue'
+import BtgBadge from '../components/BtgBadge.vue'
+import BtgIcon from '../components/BtgIcon.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import BtgPanel from '../components/BtgPanel.vue'
 import DashboardWidgetPlacementFrame from '../components/DashboardWidgetPlacement.vue'
 import WidgetConfigurationForm from '../components/WidgetConfigurationForm.vue'
 
 type State = { kind: 'loading' } | { kind: 'ready'; widgets: DashboardWidgetPlacement[] } | { kind: 'unavailable' }
+const { t } = useI18n()
 const state = ref<State>({ kind: 'loading' })
 const heading = ref<HTMLElement>()
 const managementHeading = ref<HTMLElement>()
@@ -162,7 +167,7 @@ async function load(clearError = true) {
     const response = await listDashboardWidgets()
     if (!active || current !== generation) return
     state.value = { kind: 'ready', widgets: sorted(response.widgets) }
-    announcement.value = 'Dashboard loaded.'
+    announcement.value = t('dashboard.loaded')
     void loadAvailable()
   } catch { if (active && current === generation) state.value = { kind: 'unavailable' } }
 }
@@ -172,7 +177,7 @@ async function loadAvailable() {
     const response = await listAvailableDashboardWidgets()
     if (active) { available.value = response.widgets; canManage.value = true }
   } catch (error) {
-    if (active) { canManage.value = false; if (managing.value && !isDashboardForbidden(error)) managementError.value = 'Available Dashboard widgets could not be loaded. Try again.' }
+    if (active) { canManage.value = false; if (managing.value && !isDashboardForbidden(error)) managementError.value = t('dashboard.availableUnavailable') }
   } finally { if (active) availableLoading.value = false }
 }
 async function openManagement() { managing.value = true; await nextTick(); managementHeading.value?.focus() }
@@ -196,8 +201,8 @@ async function createPlacement(widget: AvailableDashboardWidget, configuration: 
   try {
     const result = await createDashboardWidget({ pluginId: widget.pluginId, pluginVersion: widget.pluginVersion, artifactDigest: widget.artifactDigest, widgetId: widget.widgetId, configuration })
     if (!active || current !== generation) return
-    setWidgets([...state.value.widgets, result]); cancelConfiguration(); announcement.value = `${widget.widgetName} added.`; await nextTick(); installedHeading.value?.focus()
-  } catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict('Dashboard configuration changed. Reloaded the latest Dashboard.'); else managementError.value = 'The Dashboard widget could not be added. Check its settings and try again.' } } finally { if (active && current === generation) busy.value = false }
+    setWidgets([...state.value.widgets, result]); cancelConfiguration(); announcement.value = t('dashboard.added', { name: widget.widgetName }); await nextTick(); installedHeading.value?.focus()
+  } catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict(t('dashboard.configurationChanged')); else managementError.value = t('dashboard.widgetAddFailed') } } finally { if (active && current === generation) busy.value = false }
 }
 async function save(placement: DashboardWidgetPlacement) {
   if (busy.value || hasConfigurationErrors.value) return
@@ -205,26 +210,26 @@ async function save(placement: DashboardWidgetPlacement) {
   try {
     const result = await updateDashboardWidget(placement.placementId, placement.revision, configurationDraft.value, placement.enabled)
     if (!active || current !== generation) return
-    replace(result); cancelConfiguration(); announcement.value = 'Dashboard widget configuration saved.'; await nextTick(); managementHeading.value?.focus()
-  } catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict('Dashboard configuration changed. Your input is preserved; review the latest Dashboard and try again.'); else managementError.value = 'The Dashboard widget could not be saved. Check its settings and try again.' } } finally { if (active && current === generation) busy.value = false }
+    replace(result); cancelConfiguration(); announcement.value = t('dashboard.configurationSaved'); await nextTick(); managementHeading.value?.focus()
+  } catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict(t('dashboard.configurationConflict')); else managementError.value = t('dashboard.widgetSaveFailed') } } finally { if (active && current === generation) busy.value = false }
 }
 async function setEnabled(placement: DashboardWidgetPlacement, enabled: boolean) {
   if (busy.value) return
   const current = ++generation; busy.value = true; managementError.value = ''
-  try { const result = await updateDashboardWidget(placement.placementId, placement.revision, placement.configuration, enabled); if (!active || current !== generation) return; replace(result); announcement.value = enabled ? 'Dashboard widget enabled.' : 'Dashboard widget disabled.' }
-  catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict('Dashboard configuration changed. Reloaded the latest Dashboard.'); else managementError.value = 'The Dashboard widget could not be updated. Try again.' } } finally { if (active && current === generation) busy.value = false }
+  try { const result = await updateDashboardWidget(placement.placementId, placement.revision, placement.configuration, enabled); if (!active || current !== generation) return; replace(result); announcement.value = enabled ? t('dashboard.enabledAnnouncement') : t('dashboard.disabledAnnouncement') }
+  catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict(t('dashboard.configurationChanged')); else managementError.value = t('dashboard.updateFailed') } } finally { if (active && current === generation) busy.value = false }
 }
 async function move(placement: DashboardWidgetPlacement, direction: 'up' | 'down') {
   if (busy.value) return
   const current = ++generation; busy.value = true; managementError.value = ''
-  try { const result = await moveDashboardWidget(placement.placementId, direction, revisions()); if (!active || current !== generation) return; setWidgets(result.widgets); announcement.value = `Dashboard widget moved ${direction}.` }
-  catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict('Dashboard order changed. Reloaded the latest Dashboard.'); else managementError.value = 'The Dashboard order could not be updated. Try again.' } } finally { if (active && current === generation) busy.value = false }
+  try { const result = await moveDashboardWidget(placement.placementId, direction, revisions()); if (!active || current !== generation) return; setWidgets(result.widgets); announcement.value = t(direction === 'up' ? 'dashboard.movedUp' : 'dashboard.movedDown') }
+  catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict(t('dashboard.orderConflict')); else managementError.value = t('dashboard.updateFailed') } } finally { if (active && current === generation) busy.value = false }
 }
 async function remove(placement: DashboardWidgetPlacement) {
   if (busy.value) return
   const current = ++generation; busy.value = true; managementError.value = ''
-  try { await deleteDashboardWidget(placement.placementId, placement.revision); if (!active || current !== generation) return; setWidgets(state.value.kind === 'ready' ? state.value.widgets.filter((item) => item.placementId !== placement.placementId) : []); cancelConfiguration(); confirmingRemoval.value = undefined; announcement.value = 'Dashboard widget removed.'; await nextTick(); installedHeading.value?.focus() }
-  catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict('Dashboard configuration changed. Reloaded the latest Dashboard.'); else managementError.value = 'The Dashboard widget could not be removed. Try again.' } } finally { if (active && current === generation) busy.value = false }
+  try { await deleteDashboardWidget(placement.placementId, placement.revision); if (!active || current !== generation) return; setWidgets(state.value.kind === 'ready' ? state.value.widgets.filter((item) => item.placementId !== placement.placementId) : []); cancelConfiguration(); confirmingRemoval.value = undefined; announcement.value = t('dashboard.removed'); await nextTick(); installedHeading.value?.focus() }
+  catch (error) { if (active && current === generation) { if (isDashboardConflict(error)) await conflict(t('dashboard.configurationChanged')); else managementError.value = t('dashboard.removeFailed') } } finally { if (active && current === generation) busy.value = false }
 }
 
 void load()
@@ -240,7 +245,7 @@ onBeforeUnmount(() => { active = false; generation += 1 })
 .dashboard-page__eyebrow { color: var(--btg-home-text-secondary) !important; font-size: var(--btg-font-size-small); font-weight: var(--btg-font-weight-strong); letter-spacing: .09em; text-transform: uppercase; }
 .dashboard-page__widget-grid, .dashboard-page__picker, .dashboard-page__placements { display: grid; margin: 0; padding: 0; list-style: none; }
 .dashboard-page__widget-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--btg-space-5); }
-.dashboard-page__widget-card { display: grid; min-height: 14rem; gap: var(--btg-space-4); border: 1px solid var(--btg-home-border); border-radius: var(--btg-radius-surface); background: var(--btg-home-background); padding: var(--btg-space-5); }
+.dashboard-page__widget-card { display: grid; min-height: 14rem; gap: var(--btg-space-4); }
 .dashboard-page__widget-card h2 { font-size: var(--btg-font-size-h3); }
 .dashboard-page__empty { display: flex; align-items: center; gap: var(--btg-space-5); border: 1px solid var(--btg-home-border); background: var(--btg-home-surface-muted); padding: clamp(var(--btg-space-5), 5vw, var(--btg-space-7)); }
 .dashboard-page__empty > div:last-child { display: grid; gap: var(--btg-space-3); }
@@ -249,7 +254,6 @@ onBeforeUnmount(() => { active = false; generation += 1 })
 .dashboard-page__management { display: grid; gap: var(--btg-space-6); border-top: 1px solid var(--btg-home-border); background: var(--btg-home-surface-muted); padding: clamp(var(--btg-space-5), 5vw, var(--btg-space-7)); }
 .dashboard-page__management-section { display: grid; gap: var(--btg-space-4); }
 .dashboard-page__picker { grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--btg-space-4); }
-.dashboard-page__picker article, .dashboard-page__placement { border: 1px solid var(--btg-home-border); border-radius: var(--btg-radius-surface); background: var(--btg-home-background); padding: var(--btg-space-4); }
 .dashboard-page__picker article > div { display: grid; gap: var(--btg-space-2); }
 .dashboard-page__meta { font-size: var(--btg-font-size-small); }
 .dashboard-page__placements { gap: var(--btg-space-3); }

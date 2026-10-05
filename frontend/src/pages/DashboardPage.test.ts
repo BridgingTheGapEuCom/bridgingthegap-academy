@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APIProblemError } from '../api/client'
 
@@ -14,6 +14,8 @@ vi.mock('../dashboard/dashboard', async (original) => ({
   updateDashboardWidget: updateMock, moveDashboardWidget: moveMock, deleteDashboardWidget: deleteMock,
 }))
 import DashboardPage from './DashboardPage.vue'
+import { renderWithI18n } from '../test/i18n'
+import { pseudoLocalize } from '../i18n/pseudo'
 
 const schema = { fields: [{ key: 'title', type: 'TEXT' as const, label: 'Title', description: 'Shown by the widget.', required: true, maxLength: 80 }] }
 const first = { placementId: '11111111-1111-4111-8111-111111111111', pluginId: 'com.example.widget', pluginVersion: '1.0.0', artifactDigest: 'a'.repeat(64), widgetId: 'first', configuration: { title: 'First' }, position: 0, enabled: true, revision: 1 }
@@ -21,8 +23,8 @@ const second = { ...first, placementId: '22222222-2222-4222-8222-222222222222', 
 const available = { pluginId: first.pluginId, pluginName: 'Example', pluginVersion: first.pluginVersion, artifactDigest: first.artifactDigest, widgetId: first.widgetId, widgetName: 'Example Dashboard', description: 'A safe widget', configuration: schema }
 const noConfiguration = { ...available, widgetId: 'simple', widgetName: 'Simple widget', configuration: null }
 
-function renderPage() {
-  return render(DashboardPage, { global: { stubs: { DashboardWidgetPlacementFrame: { props: ['placement'], template: '<div data-testid="runtime">{{ placement.widgetId }}</div>' } } } })
+function renderPage(locale: 'en' | 'en-XA' = 'en') {
+  return renderWithI18n(DashboardPage, { global: { stubs: { DashboardWidgetPlacementFrame: { props: ['placement'], template: '<div data-testid="runtime">{{ placement.widgetId }}</div>' } } } }, locale)
 }
 
 async function openManagement() {
@@ -124,5 +126,11 @@ describe('DashboardPage', () => {
     renderPage()
     await openManagement()
     expect(screen.getByText('No dashboard widgets are currently available.')).toBeTruthy()
+  })
+
+  it('renders Dashboard controls through the pseudo-locale', async () => {
+    renderPage('en-XA')
+    expect(await screen.findByRole('heading', { level: 1, name: pseudoLocalize('Dashboard') })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: pseudoLocalize('Manage dashboard') })).toBeTruthy()
   })
 })

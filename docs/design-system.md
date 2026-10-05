@@ -400,6 +400,10 @@ Structure retains only feature ownership: outline hierarchy, the module/lesson c
 
 Draft Structure is the recommended first reference migration. It exercises the widest useful cross-section of primitives and interaction states without requiring a new product workflow. Dashboard should be the first non-Authoring validation to ensure the system does not become Authoring-specific.
 
+### Second reference: Dashboard
+
+Dashboard validates the same generic controls outside Authoring: `BtgButton`, `BtgIcon`, `BtgBadge`, form fields, and the page container handle standard presentation, while Dashboard owns widget grids, runtime-frame containment, placement ordering, and management-mode composition. Its schema-driven configuration uses shared controls without changing plugin semantics. This confirms that the core primitive layer is suitable for M-UI.5; Authoring compositions remain optional rather than a dependency for application pages.
+
 ## Usage examples
 
 Prefer semantic composition:
