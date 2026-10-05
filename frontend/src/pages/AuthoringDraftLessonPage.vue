@@ -51,7 +51,7 @@
         <AuthoringLessonContentEditor :draft-id="draft.id" :lesson="state.lesson" @saved="applyContent" @replace-lesson="replaceLesson" @preview="openPreview" @unavailable="markDraftUnavailable" />
       </template>
       <template v-if="currentSection === 'prerequisites' || legacyCombined">
-        <AuthoringPageTitle id="authoring-lesson-prerequisites-title" title="Prerequisites" description="Choose lessons learners should complete before this lesson." focusable />
+        <AuthoringPageTitle id="authoring-lesson-prerequisites-title" :title="t('authoring.prerequisites.title')" :description="t('authoring.prerequisites.description')" focusable />
       <AuthoringLessonPrerequisitesEditor
         :draft-id="draft.id"
         :lesson="state.lesson"
@@ -67,6 +67,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { APIProblemError } from '../api/client'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { authoringDraftPath, getAuthoringLesson, InvalidAuthoringDraftIDError, updateAuthoringLesson, type AuthoringLessonDetail, type AuthoringLessonMetadataPatch } from '../authoring/authoring'
@@ -87,6 +88,7 @@ type State = { kind: 'loading' } | { kind: 'ready'; lesson: AuthoringLessonDetai
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const { draft, replaceDraft, markDraftUnavailable } = useAuthoringDraftContext()
 const state = ref<State>({ kind: 'loading' })
 const original = ref<Form>()

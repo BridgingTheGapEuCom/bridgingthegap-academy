@@ -1,9 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick, ref } from 'vue'
 import { APIProblemError } from '../api/client'
 import { authoringDraftContextKey } from '../authoring/draftContext'
+import { renderWithI18n } from '../test/i18n'
+import { pseudoLocalize } from '../i18n/pseudo'
 
 const getAuthoringLessonMock = vi.hoisted(() => vi.fn())
 const updateAuthoringLessonMock = vi.hoisted(() => vi.fn())
@@ -44,7 +46,7 @@ function mutation(overrides = {}) {
   return { ...metadata, draftRevision: 4, ...overrides }
 }
 
-async function renderPage() {
+async function renderPage(locale: 'en' | 'en-XA' = 'en') {
   const currentDraft = ref(draft())
   const replaceDraft = vi.fn((nextDraft) => { currentDraft.value = nextDraft })
   const markDraftUnavailable = vi.fn()
@@ -52,7 +54,7 @@ async function renderPage() {
   await router.push(`/authoring/drafts/${draftID}/lessons/${lessonID}`)
   await router.isReady()
   return {
-    ...render(AuthoringDraftLessonPage, { global: { plugins: [router], provide: { [authoringDraftContextKey as symbol]: { draft: currentDraft, replaceDraft, markDraftUnavailable } } } }),
+    ...renderWithI18n(AuthoringDraftLessonPage, { global: { plugins: [router], provide: { [authoringDraftContextKey as symbol]: { draft: currentDraft, replaceDraft, markDraftUnavailable } } } }, locale),
     currentDraft, replaceDraft, markDraftUnavailable, router,
   }
 }
@@ -138,6 +140,13 @@ describe('AuthoringDraftLessonPage', () => {
     expect(screen.queryByRole('checkbox', { name: 'Select What is EAI? as a prerequisite' })).toBeNull()
     expect((screen.getByRole('checkbox', { name: 'Select Message routing as a prerequisite' }) as HTMLInputElement).checked).toBe(true)
     expect(screen.getByText(/do not restrict access/)).toBeTruthy()
+  })
+
+  it('renders prerequisite controls through the pseudo-locale', async () => {
+    await renderPage('en-XA')
+    expect(await screen.findByRole('heading', { level: 2, name: pseudoLocalize('Prerequisites') })).toBeTruthy()
+    await screen.findByRole('checkbox', { name: /Introduction to EAI/ })
+    expect(screen.getByRole('searchbox', { name: pseudoLocalize('Search lessons') })).toBeTruthy()
   })
 
   it('adds, removes, reorders, and saves the complete ordered prerequisite list', async () => {
