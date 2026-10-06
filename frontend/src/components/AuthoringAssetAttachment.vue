@@ -7,6 +7,7 @@ import { listAuthoringDraftAssets, uploadAuthoringAsset, type AuthoringAsset, ty
 import { draftAssetURL } from '../lesson/assets'
 import BtgButton from './BtgButton.vue'
 import BtgFormField from './BtgFormField.vue'
+import BtgIcon from './BtgIcon.vue'
 
 const props = defineProps<{
   draftId: string
@@ -157,7 +158,7 @@ function uploadError(reason: unknown): string {
       <div class="authoring-asset-attachment__field">
         <p class="authoring-asset-attachment__label">{{ label }}</p>
         <div class="authoring-asset-attachment__summary">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM6 16l4-4 3 3 2-2 3 3M8.5 9.5h.01" /></svg>
+          <BtgIcon :name="type === 'IMAGE' ? 'image' : 'document'" decorative />
           <div><strong>{{ currentAsset?.filename ?? uploaded?.filename ?? 'Attached asset' }}</strong><small v-if="currentAsset">{{ currentAsset.mediaType }} · {{ formatAssetByteSize(currentAsset.byteSize) }}</small></div>
           <BtgButton variant="secondary" @click="openPicker">Change {{ label.toLowerCase() }}</BtgButton>
         </div>
