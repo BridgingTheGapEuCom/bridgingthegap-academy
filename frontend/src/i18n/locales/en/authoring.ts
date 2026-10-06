@@ -77,6 +77,9 @@ export default {
       bold: 'Bold', italic: 'Italic', link: 'Link', bulletList: 'Bulleted list', numberedList: 'Numbered list', inlineCode: 'Inline code', codeBlock: 'Code block',
       linkEditor: 'Link editor', linkUrl: 'Link URL', linkPlaceholder: 'https://example.com or /course/page', cancel: 'Cancel', removeLink: 'Remove link', applyLink: 'Apply link', invalidLink: 'Use a safe HTTPS or internal URL.', empty: 'Enter text for this block.', help: 'Use paragraphs, lists, emphasis, links, inline code, and small multiline code blocks. Lesson headings belong in Heading blocks.',
     },
+    image: {
+      alternativeText: 'Alternative text', decorative: 'Decorative image', decorativeHelp: 'Mark as decorative if the image does not add meaning to the lesson.', caption: 'Caption', captionHelp: 'Optional caption displayed below the image.', altRequired: 'Describe this image, or mark it decorative.', change: 'Change image', choose: 'Choose image', pickerTitle: 'Change image', pickerDescription: 'Choose an existing image asset or upload a new one.', cancel: 'Cancel',
+    },
     picker: {
       title: 'Add content',
       description: 'Choose the kind of learning material to add.',

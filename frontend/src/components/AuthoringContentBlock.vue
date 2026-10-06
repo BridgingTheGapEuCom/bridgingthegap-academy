@@ -9,8 +9,11 @@ import AuthoringInlineTextEditor from './AuthoringInlineTextEditor.vue'
 import AuthoringAssetAttachment from './AuthoringAssetAttachment.vue'
 import AuthoringCheckboxField from './AuthoringCheckboxField.vue'
 import AuthoringAssessmentAttachment from './AuthoringAssessmentAttachment.vue'
+import BtgTextInput from './BtgTextInput.vue'
+import { useI18n } from 'vue-i18n'
 const props = defineProps<{ block: CanonicalBlock; position: number; draftId: string; lessonId: string; courseWidgets?: AuthoringCourseWidget[] }>()
 const emit = defineEmits<{ update: [block: CanonicalBlock]; unavailable: [] }>()
+const { t } = useI18n()
 function field(name: 'code' | 'language' | 'title' | 'text' | 'attribution' | 'sourceUrl' | 'altText' | 'caption' | 'label' | 'description' | 'transcript', event: Event) {
   const value = (event.target as HTMLInputElement).value
   if (props.block.type === 'CODE' || props.block.type === 'QUOTE' || props.block.type === 'CALLOUT') {
@@ -30,6 +33,12 @@ function field(name: 'code' | 'language' | 'title' | 'text' | 'attribution' | 's
     if (!value && name === 'description') delete payload.description
     emit('update', { ...props.block, payload })
   }
+}
+function imageField(name: 'altText' | 'caption', value: string) {
+  if (props.block.type !== 'IMAGE') return
+  const payload = { ...props.block.payload, [name]: value }
+  if (!value) delete payload[name]
+  emit('update', { ...props.block, payload })
 }
 function attach(field: 'asset' | 'captionsAsset', assetKey: string) {
   if (props.block.type === 'IMAGE' || props.block.type === 'AUDIO' || props.block.type === 'DOWNLOAD') {
@@ -82,11 +91,11 @@ function selectedWidget() {
     <AuthoringRichTextEditor :content="block.payload.content" :label="`Block ${position} callout`" @update:content="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
   </template>
   <template v-else-if="block.type === 'IMAGE'">
-    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="IMAGE" label="Image" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')">
+    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="IMAGE" :label="t('authoring.content.image.choose')" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')">
       <div class="authoring-image-editor__fields">
-        <BtgFormField label="Alternative text" :required="!block.payload.decorative" :error="!block.payload.decorative && !block.payload.altText?.trim() ? 'Describe this image, or mark it decorative.' : undefined" v-slot="{ controlId, describedBy, invalid }"><input :id="controlId" :value="block.payload.altText" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="1000" :required="!block.payload.decorative" :disabled="block.payload.decorative" @input="field('altText', $event)" /></BtgFormField>
-        <AuthoringCheckboxField :model-value="block.payload.decorative" label="Decorative image" description="Mark as decorative if the image does not add meaning to the lesson." @update:model-value="emit('update', { ...block, payload: { ...block.payload, decorative: $event, altText: $event ? '' : block.payload.altText } })" />
-        <BtgFormField label="Caption" v-slot="{ controlId, describedBy }"><input :id="controlId" :value="block.payload.caption" :aria-describedby="[describedBy, `image-caption-help-${block.key}`].filter(Boolean).join(' ')" maxlength="4000" @input="field('caption', $event)" /><p :id="`image-caption-help-${block.key}`" class="authoring-image-editor__help">Optional caption displayed below the image.</p></BtgFormField>
+        <BtgFormField :label="t('authoring.content.image.alternativeText')" :required="!block.payload.decorative" :error="!block.payload.decorative && !block.payload.altText?.trim() ? t('authoring.content.image.altRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextInput :id="controlId" :model-value="block.payload.altText" :aria-describedby="describedBy" :invalid="invalid" maxlength="1000" :required="!block.payload.decorative" :disabled="block.payload.decorative" @update:model-value="imageField('altText', $event)" /></BtgFormField>
+        <AuthoringCheckboxField :model-value="block.payload.decorative" :label="t('authoring.content.image.decorative')" :description="t('authoring.content.image.decorativeHelp')" @update:model-value="emit('update', { ...block, payload: { ...block.payload, decorative: $event, altText: $event ? '' : block.payload.altText } })" />
+        <BtgFormField :label="t('authoring.content.image.caption')" :description="t('authoring.content.image.captionHelp')" v-slot="{ controlId, describedBy }"><BtgTextInput :id="controlId" :model-value="block.payload.caption" :aria-describedby="describedBy" maxlength="4000" @update:model-value="imageField('caption', $event)" /></BtgFormField>
       </div>
     </AuthoringAssetAttachment>
   </template>

@@ -236,8 +236,24 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.queryByRole('dialog', { name: /Edit image block/ })).toBeNull()
     const alt = screen.getByRole('textbox', { name: /Alternative text/ })
     await fireEvent.update(alt, 'Updated alternative text')
+    await fireEvent.update(screen.getByRole('textbox', { name: /Caption/ }), 'Updated caption')
     await fireEvent.click(screen.getByRole('button', { name: 'Done editing block 1, image' }))
-    expect(screen.getByText('Updated alternative text')).toBeTruthy()
+    expect(screen.getByText('Updated caption')).toBeTruthy()
+    await edit(1)
+    expect(screen.getByRole('textbox', { name: /Alternative text/ })).toHaveProperty('value', 'Updated alternative text')
+    expect(screen.getByRole('textbox', { name: /Caption/ })).toHaveProperty('value', 'Updated caption')
+  })
+
+  it('keeps the Image decorative toggle interaction intact with shared text inputs', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: 'image-asset' }, altText: 'Alternative text', decorative: false, caption: '' } },
+    ] }) } })
+    await edit(1)
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Decorative image/ }))
+    expect(screen.getByRole('textbox', { name: /Alternative text/ })).toHaveProperty('disabled', true)
+    await fireEvent.click(screen.getByRole('button', { name: 'Done editing block 1, image' }))
+    await edit(1)
+    expect(screen.getByRole('checkbox', { name: /Decorative image/ })).toHaveProperty('checked', true)
   })
 
   it('does not eagerly mount editors for a large lesson', async () => {
