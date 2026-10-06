@@ -190,7 +190,7 @@ Details repeats much of Overview's field, checkbox, objective, section, and dirt
 
 ### Lesson Content
 
-Content has an ordered block list, toolbar/actions, selection, local menus, dialogs/pickers, status/conflict/empty states, dirty actions, and custom SVG or Unicode control icons. It would consume shared buttons/icons/menu/dialog/status, plus ordered-list and drag-handle compositions. Canonical content schema and persistence remain untouched.
+Content is now the specialized-editor reference migration. Its toolbar, dialogs, picker, buttons, icons, fields, ordered rows, drag handle, dirty bar, status surfaces, and localized copy use shared primitives. Remaining CSS is limited to ordered-document/drag geometry, editor writing surfaces, and Image/media/widget layouts. Canonical content schema, persistence, Preview, assets, and widget runtime semantics remain feature-owned.
 
 ### Lesson Prerequisites
 

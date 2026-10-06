@@ -21,7 +21,7 @@ function lesson(content: AuthoringLessonContent = { schemaVersion: 1, blocks: []
   return { id: lessonId, draft_id: draftId, module_id: '33333333-3333-4333-8333-333333333333', stable_key: 'intro', title: 'Introduction', description: '', objectives: [], estimated_duration_minutes: null, position: 0, revision: 7, recommended_prerequisite_keys: [], content, created_at: '', updated_at: '' }
 }
 async function add(type: string) {
-  await fireEvent.click(screen.getByRole('button', { name: '+ Add content' }))
+  await fireEvent.click(screen.getByRole('button', { name: 'Add content' }))
   await fireEvent.click(screen.getByRole('button', { name: type }))
   if (type !== 'Divider') await fireEvent.click(await screen.findByRole('button', { name: /Done editing block/ }))
 }
@@ -61,7 +61,7 @@ describe('AuthoringLessonContentEditor', () => {
 
   it('renders the add-content picker through the pseudo-locale', async () => {
     render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson() } }, 'en-XA')
-    await fireEvent.click(screen.getByRole('button', { name: '+ Add content' }))
+    await fireEvent.click(screen.getByRole('button', { name: pseudoLocalize('Add content') }))
     expect(screen.getByRole('dialog', { name: pseudoLocalize('Add content') })).toBeTruthy()
     expect(screen.getByText(pseudoLocalize('Add paragraphs of written content.'))).toBeTruthy()
   })
@@ -231,7 +231,7 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.getByRole('dialog', { name: 'You have unsaved changes' })).toBeTruthy()
     expect(screen.getByText('Latest active value')).toBeTruthy()
     expect(emitted().preview).toBeUndefined()
-    await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Save and preview' }))
     expect((replaceContent.mock.calls[0]![2] as any).content.blocks[0].payload.content.nodes[0].content[0].text).toBe('Latest active value')
   })
 

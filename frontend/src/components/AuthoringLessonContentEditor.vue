@@ -26,7 +26,7 @@ const baseline = ref(contentFingerprint(props.lesson.content))
 const savedContent = ref<AuthoringLessonContent>(copyContent(props.lesson.content))
 const supported = ref(false)
 const pickerOpen = ref(false)
-const previewWarning = ref<HTMLDialogElement>()
+const previewWarningOpen = ref(false)
 const editingKey = ref<string>()
 const editingBlock = ref<CanonicalBlock>()
 const editingOriginal = ref<CanonicalBlock>()
@@ -112,15 +112,15 @@ onBeforeUnmount(() => {
 function label(type: CanonicalBlock['type']) { return t(contentBlockPresentation(type).labelKey).toLocaleLowerCase() }
 function displayLabel(type: CanonicalBlock['type']) { return t(contentBlockPresentation(type).labelKey) }
 function openPicker(event: Event) { pickerTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined; pickerOpen.value = true }
-function preview() { commitEditing(false); if (dirty.value) { if (previewWarning.value?.showModal) previewWarning.value.showModal(); else previewWarning.value?.setAttribute('open', ''); return }; emit('preview') }
-function closePreviewWarning() { if (previewWarning.value && typeof previewWarning.value.close === 'function' && previewWarning.value.open) previewWarning.value.close(); else previewWarning.value?.removeAttribute('open') }
+function preview() { commitEditing(false); if (dirty.value) { previewWarningOpen.value = true; return }; emit('preview') }
+function closePreviewWarning() { previewWarningOpen.value = false }
 function onPickerClosed(open: boolean) { if (!open) void nextTick(() => pickerTrigger.value?.focus()) }
 function closePicker(restoreFocus = true) { pickerOpen.value = false; if (restoreFocus) void nextTick(() => pickerTrigger.value?.focus()) }
 function addBlock(blockType: EditableBlockType) {
   if (saving.value || document.value.blocks.length >= contentEditorLimits.blocks) return
   const block = createContentBlock(blockType, document.value.blocks.map((entry) => entry.key), initialBlockText)
   const next = { ...document.value, blocks: [...document.value.blocks, block] }
-  if (new TextEncoder().encode(JSON.stringify(next)).length > contentEditorLimits.bytes) { formError.value = 'Lesson content must fit within 1 MiB.'; return }
+  if (new TextEncoder().encode(JSON.stringify(next)).length > contentEditorLimits.bytes) { formError.value = validationMessage('content_too_large'); return }
   document.value = next
   message.value = undefined
   closePicker(false)
@@ -130,7 +130,7 @@ function addBlock(blockType: EditableBlockType) {
     else startEditing(index)
   })
 }
-function blockSummary(block: CanonicalBlock): string { const p: any = block.payload; if (block.type === 'TEXT') return richTextPlainText(p.content).slice(0, 140) || 'Written content'; if (block.type === 'HEADING') return p.content.map((i: any) => i.text).join(' '); if (block.type === 'IMAGE') return p.caption || p.altText || 'Image asset'; if (block.type === 'VIDEO' || block.type === 'AUDIO') return p.title; if (block.type === 'DOWNLOAD') return p.label; if (block.type === 'CODE') return [p.language, p.code.split('\n')[0]].filter(Boolean).join(' · '); if (block.type === 'QUOTE') return p.text.slice(0,140); if (block.type === 'CALLOUT') return p.title || 'Callout'; if (block.type === 'KNOWLEDGE_CHECK') return 'Inline learner assessment'; if (block.type === 'PLUGIN_WIDGET') return 'Course widget'; return '' }
+function blockSummary(block: CanonicalBlock): string { const p: any = block.payload; if (block.type === 'TEXT') return richTextPlainText(p.content).slice(0, 140) || t('authoring.content.summaries.text'); if (block.type === 'HEADING') return p.content.map((i: any) => i.text).join(' '); if (block.type === 'IMAGE') return p.caption || p.altText || t('authoring.content.summaries.image'); if (block.type === 'VIDEO' || block.type === 'AUDIO') return p.title; if (block.type === 'DOWNLOAD') return p.label; if (block.type === 'CODE') return [p.language, p.code.split('\n')[0]].filter(Boolean).join(' · '); if (block.type === 'QUOTE') return p.text.slice(0,140); if (block.type === 'CALLOUT') return p.title || t('authoring.content.summaries.callout'); if (block.type === 'KNOWLEDGE_CHECK') return t('authoring.content.summaries.assessment'); if (block.type === 'PLUGIN_WIDGET') return t('authoring.content.summaries.widget'); return '' }
 function contentIcon(type: CanonicalBlock['type']) { return contentBlockPresentation(type).icon }
 function validationMessage(code: ContentEditorValidationCode) { return t(`authoring.content.validation.${code}`) }
 function imageURL(block: CanonicalBlock): string | undefined {
@@ -348,28 +348,28 @@ async function reloadLatest() {
     if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
     if (error instanceof APIProblemError && error.status === 404) emit('unavailable')
-    else formError.value = 'We couldn’t reload Lesson content right now. Please try again.'
+    else formError.value = t('authoring.content.reloadUnavailable')
   } finally { if (generation === requestVersion) reloading.value = false }
 }
 </script>
 
 <template>
-  <section class="authoring-content" aria-label="Lesson content editor">
-    <p v-if="!supported" role="alert">This content format cannot be edited safely by this version of the Academy.</p>
+  <section class="authoring-content" :aria-label="t('authoring.content.editorRegion')">
+    <p v-if="!supported" role="alert">{{ t('authoring.content.unsupported') }}</p>
     <form v-else :aria-busy="saving" novalidate @submit.prevent="save">
       <p v-if="formError" class="authoring-content__error" role="alert">{{ formError }}</p>
       <p v-if="message" class="authoring-content__status" role="status">{{ message }}</p>
       <p class="sr-only" role="status" aria-live="polite">{{ reorderAnnouncement }}</p>
       <div v-if="conflict" class="authoring-content__conflict" role="status">
-        <p>Lesson content changed elsewhere. Your unsaved blocks are still here. Reload the latest content before saving again.</p>
-        <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? 'Reloading…' : 'Reload latest content' }}</BtgButton>
+        <p>{{ t('authoring.content.changedElsewhere') }}</p>
+        <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? t('authoring.content.reloading') : t('authoring.content.reloadLatest') }}</BtgButton>
       </div>
       <fieldset class="authoring-content__controls" :disabled="saving || reloading">
-        <legend class="sr-only">Content blocks</legend>
-        <BtgToolbar v-if="document.blocks.length" class="authoring-content__toolbar"><template #actions><BtgButton leading-icon="plus" :disabled="document.blocks.length >= contentEditorLimits.blocks" @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" leading-icon="content" @click="preview">Preview</BtgButton></template></BtgToolbar>
-        <p v-if="document.blocks.length >= contentEditorLimits.blocks">The Lesson has reached the 200-block limit.</p>
-        <p id="authoring-content-reorder-help" class="sr-only">Drag this handle with a mouse or touch to reorder the block. Press Space or Enter, then use the arrow keys to reorder with the keyboard. Move up and Move down are also available in Actions.</p>
-        <ol v-if="document.blocks.length" class="authoring-content__blocks" aria-label="Lesson content blocks">
+        <legend class="sr-only">{{ t('authoring.content.blocksLabel') }}</legend>
+        <BtgToolbar v-if="document.blocks.length" class="authoring-content__toolbar"><template #actions><BtgButton leading-icon="plus" :disabled="document.blocks.length >= contentEditorLimits.blocks" @click="openPicker">{{ t('authoring.content.add') }}</BtgButton><BtgButton variant="secondary" leading-icon="content" @click="preview">{{ t('authoring.content.preview.action') }}</BtgButton></template></BtgToolbar>
+        <p v-if="document.blocks.length >= contentEditorLimits.blocks">{{ t('authoring.content.blockLimit') }}</p>
+        <p id="authoring-content-reorder-help" class="sr-only">{{ t('authoring.content.reorderHelp') }}</p>
+        <ol v-if="document.blocks.length" class="authoring-content__blocks" :aria-label="t('authoring.content.blocksLabel')">
           <li v-for="(block, index) in document.blocks" :id="`authoring-content-block-${block.key}`" :key="block.key" :data-content-block-key="block.key" :class="['authoring-content__row', { 'is-expanded': isEditing(block), 'is-menu-open': actionsIndex === index, 'is-dragging': draggingKey === block.key, 'is-drop-before': draggingKey !== block.key && insertionIndex === index, 'is-drop-after': draggingKey !== block.key && insertionIndex === document.blocks.length && index === document.blocks.length - 1 }]" tabindex="-1">
             <div class="authoring-content__row-header">
               <BtgDragHandle :id="`authoring-content-reorder-${block.key}`" :label="t('authoring.content.actions.reorder', { position: index + 1, type: label(block.type) })" :aria-pressed="keyboardReorderKey === block.key" aria-describedby="authoring-content-reorder-help" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)" />
@@ -401,12 +401,12 @@ async function reloadLatest() {
                 </div>
               </div>
             </div>
-            <section v-if="isEditing(block) && editingBlock" :id="`authoring-content-editor-${block.key}`" class="authoring-content__inline-editor" :aria-label="`Editing block ${index + 1}, ${label(block.type)}`">
+            <section v-if="isEditing(block) && editingBlock" :id="`authoring-content-editor-${block.key}`" class="authoring-content__inline-editor" :aria-label="t('authoring.content.editingRegion', { position: index + 1, type: label(block.type) })">
               <AuthoringContentBlock :block="editingBlock" :position="index + 1" :draft-id="draftId" :lesson-id="lesson.id" :course-widgets="courseWidgets" @update="updateEditing" @unavailable="emit('unavailable')" />
             </section>
           </li>
         </ol>
-        <div v-else class="authoring-content__empty"><p><strong>No lesson content yet.</strong></p><p>Add text, media, code, callouts, and other learning material.</p><BtgButton @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
+        <div v-else class="authoring-content__empty"><p><strong>{{ t('authoring.content.empty.title') }}</strong></p><p>{{ t('authoring.content.empty.description') }}</p><BtgButton leading-icon="plus" @click="openPicker">{{ t('authoring.content.add') }}</BtgButton><BtgButton variant="secondary" leading-icon="content" @click="preview">{{ t('authoring.content.preview.action') }}</BtgButton></div>
       </fieldset>
       <AuthoringDirtyActionBar :show="dirty" :busy="saving" :message="t('authoring.content.actions.dirty')" :busy-label="t('authoring.content.actions.saving')" :save-label="t('authoring.content.actions.save')" :discard-label="t('authoring.content.actions.discard')" :disabled="saving || reloading" :save-disabled="conflict" @discard="discardChanges" />
     </form>
@@ -422,5 +422,7 @@ async function reloadLatest() {
         </div>
       </section>
   </BtgDialog>
-  <dialog ref="previewWarning" class="authoring-content__picker authoring-content__preview-warning" aria-labelledby="authoring-preview-warning-title"><div><h3 id="authoring-preview-warning-title">You have unsaved changes</h3><p>Preview will show the last saved version.</p><footer><BtgButton variant="secondary" @click="closePreviewWarning">Cancel</BtgButton><BtgButton variant="secondary" @click="closePreviewWarning(); emit('preview')">Preview saved version</BtgButton><BtgButton @click="save().then(() => { if (!formError) { closePreviewWarning(); emit('preview') } })">Save and preview</BtgButton></footer></div></dialog>
+  <BtgDialog v-model:open="previewWarningOpen" :title="t('authoring.content.preview.warningTitle')" :description="t('authoring.content.preview.warningDescription')" :show-trigger="false">
+    <template #footer><BtgButton variant="secondary" @click="closePreviewWarning">{{ t('authoring.content.preview.cancel') }}</BtgButton><BtgButton variant="secondary" @click="closePreviewWarning(); emit('preview')">{{ t('authoring.content.preview.saved') }}</BtgButton><BtgButton @click="save().then(() => { if (!formError) { closePreviewWarning(); emit('preview') } })">{{ t('authoring.content.preview.save') }}</BtgButton></template>
+  </BtgDialog>
 </template>

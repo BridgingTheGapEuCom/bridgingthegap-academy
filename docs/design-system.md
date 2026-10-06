@@ -383,6 +383,10 @@ Structure retains only feature ownership: outline hierarchy, the module/lesson c
 - Migrate Details, Content, and Prerequisites.
 - Consolidate fields, status/conflict messages, dialogs, ordered lists, drag handles, and dirty bars.
 
+### Reference migration: Lesson Content
+
+Lesson Content composes the shared Lesson header, toolbar, dialog, buttons, icons, ordered-row affordances, fields, dirty bar, and status surfaces. The page owns only the ordered-document geometry, drag insertion state, editor writing surfaces, Image/media layout, and widget runtime containment. Specialized editors retain their domain behavior and storage formats while using shared controls around them. Reusable subcomponents receive typed caller-supplied localized copy; validation helpers return stable codes and the page maps them to messages. Block icons and display labels resolve through the centralized content-presentation mapping rather than internal block IDs.
+
 ### M-UI.6 — Draft authoring
 
 - Migrate Overview, Members, Assessments, and Review.

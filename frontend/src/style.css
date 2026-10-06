@@ -3468,34 +3468,6 @@
 	gap: var(--btg-space-3);
 	min-width: 0;
 }
-.authoring-content__drag-handle {
-	display: inline-grid;
-	width: 2.5rem;
-	min-height: 2.5rem;
-	place-items: center;
-	border: 0;
-	border-radius: var(--btg-radius-control);
-	background: transparent;
-	color: var(--btg-color-text-secondary);
-	cursor: grab;
-	touch-action: none;
-}
-.authoring-content__drag-handle:hover,
-.authoring-content__drag-handle[aria-pressed="true"] {
-	background: var(--btg-color-surface-muted);
-	color: var(--btg-color-text);
-}
-.authoring-content__drag-handle:active {
-	cursor: grabbing;
-}
-.authoring-content__drag-handle svg {
-	width: 1.1rem;
-	height: 1.1rem;
-	fill: none;
-	stroke: currentColor;
-	stroke-linecap: round;
-	stroke-width: 3;
-}
 .authoring-content__number,
 .authoring-content__summary p {
 	color: var(--btg-color-text-secondary);
@@ -3629,10 +3601,6 @@
 	min-height: 4rem;
 	padding: var(--btg-space-2) var(--btg-space-3);
 }
-.authoring-content__drag-handle {
-	width: 2rem;
-	min-height: 2.25rem;
-}
 .authoring-content__number {
 	align-self: center;
 	text-align: center;
@@ -3679,41 +3647,6 @@
 		var(--btg-color-surface)
 	);
 	padding: var(--btg-space-5);
-}
-.authoring-content__save-bar {
-	position: sticky;
-	bottom: 0;
-	z-index: 2;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--btg-space-3);
-	margin-top: var(--btg-space-4);
-	border-top: var(--btg-border-width) solid var(--btg-color-border);
-	background: color-mix(in srgb, var(--btg-color-surface) 94%, transparent);
-	box-shadow: 0 -0.45rem 1rem rgb(0 0 0 / 0.04);
-	padding: var(--btg-space-3) 0;
-}
-.authoring-content__save-bar p {
-	display: flex;
-	align-items: center;
-	gap: var(--btg-space-2);
-	margin: 0;
-	color: var(--btg-color-text-secondary);
-	font-weight: var(--btg-font-weight-medium);
-}
-.authoring-content__save-bar p span {
-	width: 0.6rem;
-	height: 0.6rem;
-	border-radius: 50%;
-	background: var(--btg-color-text-secondary);
-}
-.authoring-content__save-bar > div {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: end;
-	gap: var(--btg-space-2);
 }
 
 .authoring-asset-attachment--image {
@@ -3840,13 +3773,6 @@
 	.authoring-content__inline-editor {
 		padding: var(--btg-space-3);
 	}
-	.authoring-content__save-bar > div {
-		width: 100%;
-		justify-content: stretch;
-	}
-	.authoring-content__save-bar > div .btg-button {
-		flex: 1 1 auto;
-	}
 }
 .authoring-content {
 	display: grid;
@@ -3884,17 +3810,6 @@
 .authoring-content__row-header {
 	grid-template-columns: 2.5rem 2rem 2rem minmax(0, 1fr) auto;
 	gap: var(--btg-space-3);
-}
-.authoring-content__drag-handle {
-	border: var(--btg-border-width) solid transparent;
-	color: var(--btg-color-border-strong);
-}
-.authoring-content__drag-handle:hover,
-.authoring-content__drag-handle:focus-visible,
-.authoring-content__drag-handle[aria-pressed="true"] {
-	border-color: var(--btg-color-border-strong);
-	background: var(--btg-color-surface);
-	color: var(--btg-color-text);
 }
 .authoring-content__number {
 	display: grid;
@@ -3954,44 +3869,9 @@
 	margin: 0;
 	font-size: var(--btg-font-size-small);
 }
-.authoring-content__save-bar {
-	position: sticky;
-	bottom: var(--btg-space-3);
-	z-index: 2;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--btg-space-3);
-	border: var(--btg-border-width) solid var(--btg-color-border-strong);
-	border-radius: var(--btg-radius-surface);
-	background: var(--btg-color-surface);
-	box-shadow: var(--btg-shadow-elevated);
-	padding: var(--btg-space-3) var(--btg-space-4);
-}
-.authoring-content__save-bar p {
-	margin: 0;
-	color: var(--btg-color-text-secondary);
-	font-weight: var(--btg-font-weight-medium);
-}
-.authoring-content__save-bar > div {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--btg-space-2);
-}
 @media (max-width: 42rem) {
 	.authoring-content__inline-editor {
 		margin-left: 0;
-	}
-	.authoring-content__save-bar {
-		bottom: var(--btg-space-2);
-		align-items: stretch;
-	}
-	.authoring-content__save-bar > div {
-		flex: 1 1 100%;
-	}
-	.authoring-content__save-bar .btg-button {
-		flex: 1 1 12rem;
 	}
 }
 @media (max-width: 34rem) {
@@ -4243,10 +4123,6 @@
 		grid-column: 1 / -1;
 		flex-wrap: wrap;
 	}
-}
-.authoring-content__save-bar {
-	border-color: var(--btg-color-border);
-	box-shadow: 0 -0.3rem 0.8rem rgb(0 0 0 / 0.035);
 }
 
 /* Lesson details follows the same quiet, document-style rhythm as content: a
