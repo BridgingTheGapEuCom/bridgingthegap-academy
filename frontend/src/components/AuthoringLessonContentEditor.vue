@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { APIProblemError } from '../api/client'
 import { preserveFocusAfterRemoval } from '../authoring/focus'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
@@ -15,6 +16,7 @@ import BtgDragHandle from './BtgDragHandle.vue'
 import BtgIcon from './BtgIcon.vue'
 import BtgIconButton from './BtgIconButton.vue'
 import BtgToolbar from './BtgToolbar.vue'
+import BtgDialog from './BtgDialog.vue'
 import type { BtgIconName } from './btg-icon-names'
 
 const props = defineProps<{ draftId: string; lesson: AuthoringLessonDetail }>()
@@ -23,7 +25,7 @@ const document = ref<AuthoringLessonContent>(copyContent(props.lesson.content))
 const baseline = ref(contentFingerprint(props.lesson.content))
 const savedContent = ref<AuthoringLessonContent>(copyContent(props.lesson.content))
 const supported = ref(false)
-const picker = ref<HTMLDialogElement>()
+const pickerOpen = ref(false)
 const previewWarning = ref<HTMLDialogElement>()
 const editingKey = ref<string>()
 const editingBlock = ref<CanonicalBlock>()
@@ -41,9 +43,10 @@ const formError = ref<string>()
 const message = ref<string>()
 const courseWidgets = ref<AuthoringCourseWidget[]>([])
 const dirty = computed(() => contentFingerprint(document.value) !== baseline.value)
+const { t } = useI18n()
 const pickerGroups = [
-  { id: 'content', label: 'Content', types: ['TEXT', 'HEADING', 'IMAGE', 'VIDEO', 'AUDIO', 'DOWNLOAD', 'CODE', 'CALLOUT', 'QUOTE', 'DIVIDER'] as EditableBlockType[] },
-  { id: 'interactive', label: 'Interactive', types: ['KNOWLEDGE_CHECK', 'PLUGIN_WIDGET'] as EditableBlockType[] },
+  { id: 'content', types: ['TEXT', 'HEADING', 'IMAGE', 'VIDEO', 'AUDIO', 'DOWNLOAD', 'CODE', 'CALLOUT', 'QUOTE', 'DIVIDER'] as EditableBlockType[] },
+  { id: 'interactive', types: ['KNOWLEDGE_CHECK', 'PLUGIN_WIDGET'] as EditableBlockType[] },
 ] as const
 const pickerDetails: Record<EditableBlockType, { description: string; icon: string }> = {
   TEXT: { description: 'Add paragraphs of written content.', icon: 'M4 5h16M4 10h16M4 15h12M4 20h16' },
@@ -118,11 +121,11 @@ onBeforeUnmount(() => {
 
 function label(type: string) { return (editableBlockTypes.find((entry) => entry.type === type)?.label ?? type).toLowerCase().replaceAll('_', ' ') }
 function displayLabel(type: string) { return editableBlockTypes.find((entry) => entry.type === type)?.label ?? type.replaceAll('_', ' ') }
-function openPicker(event: Event) { pickerTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined; if (picker.value?.showModal) picker.value.showModal(); else picker.value?.setAttribute('open', '') }
+function openPicker(event: Event) { pickerTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined; pickerOpen.value = true }
 function preview() { commitEditing(false); if (dirty.value) { if (previewWarning.value?.showModal) previewWarning.value.showModal(); else previewWarning.value?.setAttribute('open', ''); return }; emit('preview') }
 function closePreviewWarning() { if (previewWarning.value && typeof previewWarning.value.close === 'function' && previewWarning.value.open) previewWarning.value.close(); else previewWarning.value?.removeAttribute('open') }
-function onPickerClosed() { closePicker(true) }
-function closePicker(restoreFocus = true) { const dialog = picker.value; if (dialog && typeof dialog.close === 'function' && dialog.open) dialog.close(); else dialog?.removeAttribute('open'); if (restoreFocus) void nextTick(() => pickerTrigger.value?.focus()) }
+function onPickerClosed(open: boolean) { if (!open) void nextTick(() => pickerTrigger.value?.focus()) }
+function closePicker(restoreFocus = true) { pickerOpen.value = false; if (restoreFocus) void nextTick(() => pickerTrigger.value?.focus()) }
 function addBlock(blockType: EditableBlockType) {
   if (saving.value || document.value.blocks.length >= contentEditorLimits.blocks) return
   const block = createContentBlock(blockType, document.value.blocks.map((entry) => entry.key))
@@ -418,20 +421,16 @@ async function reloadLatest() {
       <AuthoringDirtyActionBar :show="dirty" :busy="saving" busy-label="Saving content…" save-label="Save content" :disabled="saving || reloading" :save-disabled="conflict" @discard="discardChanges" />
     </form>
   </section>
-  <dialog ref="picker" class="authoring-content__picker" aria-labelledby="authoring-content-picker-title" @close="onPickerClosed">
-    <div>
-      <header><h3 id="authoring-content-picker-title">Add content</h3><p>Choose the kind of learning material to add.</p></header>
+  <BtgDialog v-model:open="pickerOpen" class="authoring-content__picker" :title="t('authoring.content.picker.title')" :description="t('authoring.content.picker.description')" :dismiss-label="t('authoring.content.picker.close')" :show-trigger="false" @update:open="onPickerClosed">
       <section v-for="group in pickerGroups" :key="group.id" class="authoring-content__picker-group" :aria-labelledby="`authoring-content-picker-${group.id}`">
-        <h4 :id="`authoring-content-picker-${group.id}`">{{ group.label }}</h4>
+        <h4 :id="`authoring-content-picker-${group.id}`">{{ t(`authoring.content.picker.groups.${group.id}`) }}</h4>
         <div class="authoring-content__picker-options">
-          <button v-for="type in group.types" :key="type" type="button" :aria-label="pickerOptions.get(type)?.label" :aria-describedby="`authoring-content-picker-${type}`" @click="addBlock(type)">
+          <BtgButton v-for="type in group.types" :key="type" type="button" variant="secondary" :aria-label="t(`authoring.content.picker.types.${type}.label`)" :aria-describedby="`authoring-content-picker-${type}`" @click="addBlock(type)">
             <BtgIcon :name="contentIcon(type)" decorative />
-            <span><strong>{{ pickerOptions.get(type)?.label }}</strong><small :id="`authoring-content-picker-${type}`">{{ pickerOptions.get(type)?.description }}</small></span>
-          </button>
+            <span><strong>{{ t(`authoring.content.picker.types.${type}.label`) }}</strong><small :id="`authoring-content-picker-${type}`">{{ t(`authoring.content.picker.types.${type}.description`) }}</small></span>
+          </BtgButton>
         </div>
       </section>
-      <footer><BtgButton variant="secondary" @click="closePicker">Cancel</BtgButton></footer>
-    </div>
-  </dialog>
+  </BtgDialog>
   <dialog ref="previewWarning" class="authoring-content__picker authoring-content__preview-warning" aria-labelledby="authoring-preview-warning-title"><div><h3 id="authoring-preview-warning-title">You have unsaved changes</h3><p>Preview will show the last saved version.</p><footer><BtgButton variant="secondary" @click="closePreviewWarning">Cancel</BtgButton><BtgButton variant="secondary" @click="closePreviewWarning(); emit('preview')">Preview saved version</BtgButton><BtgButton @click="save().then(() => { if (!formError) { closePreviewWarning(); emit('preview') } })">Save and preview</BtgButton></footer></div></dialog>
 </template>

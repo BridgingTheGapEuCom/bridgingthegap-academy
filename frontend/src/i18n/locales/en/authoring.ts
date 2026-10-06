@@ -67,6 +67,15 @@ export default {
     description: 'Build the material learners will work through in this lesson.',
     add: 'Add content',
     preview: 'Preview',
+    picker: {
+      title: 'Add content',
+      description: 'Choose the kind of learning material to add.',
+      close: 'Cancel',
+      groups: { content: 'Content', interactive: 'Interactive' },
+      types: {
+        TEXT: { label: 'Text', description: 'Add paragraphs of written content.' }, HEADING: { label: 'Heading', description: 'Add a section heading.' }, IMAGE: { label: 'Image', description: 'Add an image from Academy assets.' }, VIDEO: { label: 'Video', description: 'Add video with accessible media details.' }, AUDIO: { label: 'Audio', description: 'Add audio and its transcript.' }, DOWNLOAD: { label: 'Download', description: 'Add a downloadable Academy asset.' }, CODE: { label: 'Code', description: 'Add a formatted code example.' }, CALLOUT: { label: 'Callout', description: 'Highlight an important idea.' }, QUOTE: { label: 'Quote', description: 'Add a quoted source or insight.' }, DIVIDER: { label: 'Divider', description: 'Separate two parts of the lesson.' }, KNOWLEDGE_CHECK: { label: 'Knowledge check', description: 'Add an inline learner assessment.' }, PLUGIN_WIDGET: { label: 'Plugin widget', description: 'Add an available Course widget.' },
+      },
+    },
   },
   structure: {
     title: 'Structure',

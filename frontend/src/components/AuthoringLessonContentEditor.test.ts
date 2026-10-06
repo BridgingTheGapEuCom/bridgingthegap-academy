@@ -1,7 +1,9 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, within } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthoringLessonContent, AuthoringLessonDetail } from '../authoring/authoring'
 import AuthoringLessonContentEditor from './AuthoringLessonContentEditor.vue'
+import { renderWithI18n as render } from '../test/i18n'
+import { pseudoLocalize } from '../i18n/pseudo'
 
 const replaceContent = vi.hoisted(() => vi.fn())
 vi.mock('../authoring/authoring', async (original) => ({
@@ -48,6 +50,13 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.getByRole('region', { name: 'Editing block 1, text' })).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'Block 1 text' }).querySelector('strong')?.textContent).toBe('Coupling describes dependency.')
     expect(screen.getByRole('toolbar', { name: 'Block 1 text formatting' })).toBeTruthy()
+  })
+
+  it('renders the add-content picker through the pseudo-locale', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson() } }, 'en-XA')
+    await fireEvent.click(screen.getByRole('button', { name: '+ Add content' }))
+    expect(screen.getByRole('dialog', { name: pseudoLocalize('Add content') })).toBeTruthy()
+    expect(screen.getByText(pseudoLocalize('Add paragraphs of written content.'))).toBeTruthy()
   })
 
   it('applies an edit locally, cancels isolated edits, and saves the complete document', async () => {
