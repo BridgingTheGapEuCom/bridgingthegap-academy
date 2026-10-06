@@ -67,6 +67,11 @@ export default {
     description: 'Build the material learners will work through in this lesson.',
     add: 'Add content',
     preview: 'Preview',
+    actions: {
+      edit: 'Edit', done: 'Done', cancel: 'Cancel', moveUp: 'Move up', moveDown: 'Move down', remove: 'Remove', save: 'Save content', saving: 'Saving content…', discard: 'Discard changes', dirty: 'Unsaved changes',
+      overflow: 'Actions for block {position}, {type}', editBlock: 'Edit block {position}, {type}', cancelBlock: 'Cancel changes for block {position}, {type}', doneBlock: 'Done editing block {position}, {type}', reorder: 'Reorder block {position}, {type}',
+      moved: '{type} block moved to position {position} of {total}.', reordering: 'Reordering {type} block. Use the arrow keys to move it, or Escape to finish.', finishedReordering: 'Finished reordering {type} block.', discarded: 'Unsaved content changes discarded.', saved: 'Lesson content saved.',
+    },
     picker: {
       title: 'Add content',
       description: 'Choose the kind of learning material to add.',

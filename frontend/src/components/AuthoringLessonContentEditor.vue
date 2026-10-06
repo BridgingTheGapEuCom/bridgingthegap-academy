@@ -209,7 +209,7 @@ function discardChanges() {
   formError.value = undefined
   finishEditing(false)
   closeActions()
-  message.value = 'Unsaved content changes discarded.'
+  message.value = t('authoring.content.actions.discarded')
 }
 function focusReorderHandle(key: string) { globalThis.document.getElementById(`authoring-content-reorder-${key}`)?.focus() }
 function moveBlock(fromIndex: number, toIndex: number, focus = false): boolean {
@@ -222,7 +222,7 @@ function moveBlock(fromIndex: number, toIndex: number, focus = false): boolean {
   document.value = { ...document.value, blocks }
   closeActions()
   message.value = undefined
-  reorderAnnouncement.value = `${displayLabel(block.type)} block moved to position ${toIndex + 1} of ${blocks.length}.`
+  reorderAnnouncement.value = t('authoring.content.actions.moved', { type: displayLabel(block.type), position: toIndex + 1, total: blocks.length })
   if (focus) void nextTick(() => focusReorderHandle(block.key))
   return true
 }
@@ -291,14 +291,14 @@ function keyboardReorder(event: KeyboardEvent, index: number) {
     event.preventDefault()
     keyboardReorderKey.value = keyboardReorderKey.value === block.key ? undefined : block.key
     reorderAnnouncement.value = keyboardReorderKey.value === block.key
-      ? `Reordering ${displayLabel(block.type)} block. Use the arrow keys to move it, or Escape to finish.`
-      : `Finished reordering ${displayLabel(block.type)} block.`
+      ? t('authoring.content.actions.reordering', { type: displayLabel(block.type) })
+      : t('authoring.content.actions.finishedReordering', { type: displayLabel(block.type) })
     return
   }
   if (event.key === 'Escape' && keyboardReorderKey.value === block.key) {
     event.preventDefault()
     keyboardReorderKey.value = undefined
-    reorderAnnouncement.value = `Finished reordering ${displayLabel(block.type)} block.`
+    reorderAnnouncement.value = t('authoring.content.actions.finishedReordering', { type: displayLabel(block.type) })
     return
   }
   if (keyboardReorderKey.value !== block.key || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
@@ -331,7 +331,7 @@ async function save() {
     if (!active || generation !== requestVersion) return
     initialize(result.content)
     emit('saved', result)
-    message.value = 'Lesson content saved.'
+    message.value = t('authoring.content.actions.saved')
   } catch (error) {
     if (!isCurrent()) return
     if (!active || generation !== requestVersion) return
@@ -382,7 +382,7 @@ async function reloadLatest() {
         <ol v-if="document.blocks.length" class="authoring-content__blocks" aria-label="Lesson content blocks">
           <li v-for="(block, index) in document.blocks" :id="`authoring-content-block-${block.key}`" :key="block.key" :data-content-block-key="block.key" :class="['authoring-content__row', { 'is-expanded': isEditing(block), 'is-menu-open': actionsIndex === index, 'is-dragging': draggingKey === block.key, 'is-drop-before': draggingKey !== block.key && insertionIndex === index, 'is-drop-after': draggingKey !== block.key && insertionIndex === document.blocks.length && index === document.blocks.length - 1 }]" tabindex="-1">
             <div class="authoring-content__row-header">
-              <BtgDragHandle :id="`authoring-content-reorder-${block.key}`" :label="`Reorder block ${index + 1}, ${label(block.type)}`" :aria-pressed="keyboardReorderKey === block.key" aria-describedby="authoring-content-reorder-help" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)" />
+              <BtgDragHandle :id="`authoring-content-reorder-${block.key}`" :label="t('authoring.content.actions.reorder', { position: index + 1, type: label(block.type) })" :aria-pressed="keyboardReorderKey === block.key" aria-describedby="authoring-content-reorder-help" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)" />
               <span class="authoring-content__number">{{ String(index + 1).padStart(2, '0') }}</span>
               <span class="authoring-content__type-icon"><BtgIcon :name="contentIcon(block.type)" decorative /></span>
               <div class="authoring-content__summary">
@@ -395,18 +395,18 @@ async function reloadLatest() {
               </div>
               <div class="authoring-content__row-actions">
                 <template v-if="block.type !== 'DIVIDER'">
-                  <BtgButton v-if="!isEditing(block)" :id="`authoring-content-edit-${block.key}`" variant="secondary" :aria-controls="`authoring-content-editor-${block.key}`" :aria-expanded="false" :aria-label="`Edit block ${index + 1}, ${label(block.type)}`" @click="startEditing(index)">Edit</BtgButton>
+                  <BtgButton v-if="!isEditing(block)" :id="`authoring-content-edit-${block.key}`" variant="secondary" leading-icon="edit" :aria-controls="`authoring-content-editor-${block.key}`" :aria-expanded="false" :aria-label="t('authoring.content.actions.editBlock', { position: index + 1, type: label(block.type) })" @click="startEditing(index)">{{ t('authoring.content.actions.edit') }}</BtgButton>
                   <template v-else>
-                    <BtgButton variant="secondary" :aria-label="`Cancel changes for block ${index + 1}, ${label(block.type)}`" @click="cancelEditing">Cancel</BtgButton>
-                    <BtgButton :id="`authoring-content-edit-${block.key}`" :aria-controls="`authoring-content-editor-${block.key}`" :aria-expanded="true" :aria-label="`Done editing block ${index + 1}, ${label(block.type)}`" @click="doneEditing">Done</BtgButton>
+                    <BtgButton variant="secondary" :aria-label="t('authoring.content.actions.cancelBlock', { position: index + 1, type: label(block.type) })" @click="cancelEditing">{{ t('authoring.content.actions.cancel') }}</BtgButton>
+                    <BtgButton :id="`authoring-content-edit-${block.key}`" :aria-controls="`authoring-content-editor-${block.key}`" :aria-expanded="true" :aria-label="t('authoring.content.actions.doneBlock', { position: index + 1, type: label(block.type) })" @click="doneEditing">{{ t('authoring.content.actions.done') }}</BtgButton>
                   </template>
                 </template>
                 <div class="authoring-content__menu">
-                  <BtgIconButton icon="overflow" :aria-expanded="actionsIndex === index" :label="`Actions for block ${index + 1}, ${label(block.type)}`" @click="toggleActions(index)" />
+                  <BtgIconButton icon="overflow" :aria-expanded="actionsIndex === index" :label="t('authoring.content.actions.overflow', { position: index + 1, type: label(block.type) })" @click="toggleActions(index)" />
                   <div v-if="actionsIndex === index" role="menu" class="authoring-content__menu-items" @keydown.esc="closeActions">
-                    <BtgButton role="menuitem" variant="secondary" :disabled="index === 0" @click="move(index, -1)">Move up</BtgButton>
-                    <BtgButton role="menuitem" variant="secondary" :disabled="index === document.blocks.length - 1" @click="move(index, 1)">Move down</BtgButton>
-                    <BtgButton role="menuitem" variant="destructive" @click="removeBlock(index)">Remove</BtgButton>
+                    <BtgButton role="menuitem" variant="secondary" leading-icon="previous" :disabled="index === 0" @click="move(index, -1)">{{ t('authoring.content.actions.moveUp') }}</BtgButton>
+                    <BtgButton role="menuitem" variant="secondary" trailing-icon="next" :disabled="index === document.blocks.length - 1" @click="move(index, 1)">{{ t('authoring.content.actions.moveDown') }}</BtgButton>
+                    <BtgButton role="menuitem" variant="danger-secondary" leading-icon="delete" @click="removeBlock(index)">{{ t('authoring.content.actions.remove') }}</BtgButton>
                   </div>
                 </div>
               </div>
@@ -418,7 +418,7 @@ async function reloadLatest() {
         </ol>
         <div v-else class="authoring-content__empty"><p><strong>No lesson content yet.</strong></p><p>Add text, media, code, callouts, and other learning material.</p><BtgButton @click="openPicker">+ Add content</BtgButton><BtgButton variant="secondary" @click="preview">Preview</BtgButton></div>
       </fieldset>
-      <AuthoringDirtyActionBar :show="dirty" :busy="saving" busy-label="Saving content…" save-label="Save content" :disabled="saving || reloading" :save-disabled="conflict" @discard="discardChanges" />
+      <AuthoringDirtyActionBar :show="dirty" :busy="saving" :message="t('authoring.content.actions.dirty')" :busy-label="t('authoring.content.actions.saving')" :save-label="t('authoring.content.actions.save')" :discard-label="t('authoring.content.actions.discard')" :disabled="saving || reloading" :save-disabled="conflict" @discard="discardChanges" />
     </form>
   </section>
   <BtgDialog v-model:open="pickerOpen" class="authoring-content__picker" :title="t('authoring.content.picker.title')" :description="t('authoring.content.picker.description')" :dismiss-label="t('authoring.content.picker.close')" :show-trigger="false" @update:open="onPickerClosed">
