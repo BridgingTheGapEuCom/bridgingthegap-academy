@@ -32,7 +32,7 @@ import {
   Target,
   Trash2,
   Type,
-  Bold, Italic, Link as LinkIcon, List, ListOrdered, Code, Unlink,
+  Bold, Italic, Link as LinkIcon, List, ListOrdered, Code, Unlink, Video, AudioLines,
 } from '@lucide/vue'
 import { computed } from 'vue'
 import type { BtgIconName } from './btg-icon-names'
@@ -60,6 +60,8 @@ const icons: Record<BtgIconName, typeof Plus> = {
   content: Layers,
   layers: Layers,
   image: Image,
+  video: Video,
+  audio: AudioLines,
   divider: Minus,
   text: Type,
   callout: Info,

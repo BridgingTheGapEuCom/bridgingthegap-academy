@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { APIProblemError } from '../api/client'
-import { acceptsUploadedMedia, assetAcceptHint, assetTypeLabel, formatAssetByteSize, type AssetAttachmentType } from '../authoring/assets'
+import { acceptsUploadedMedia, assetAcceptHint, formatAssetByteSize, type AssetAttachmentType } from '../authoring/assets'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { listAuthoringDraftAssets, uploadAuthoringAsset, type AuthoringAsset, type AuthoringAssetSummary } from '../authoring/authoring'
 import { draftAssetURL } from '../lesson/assets'
@@ -10,6 +10,7 @@ import BtgDialog from './BtgDialog.vue'
 import BtgFormField from './BtgFormField.vue'
 import BtgIcon from './BtgIcon.vue'
 import BtgPanel from './BtgPanel.vue'
+import type { BtgIconName } from './btg-icon-names'
 
 export interface AuthoringAssetAttachmentCopy {
   attachmentLabel: (label: string) => string
@@ -42,39 +43,6 @@ export interface AuthoringAssetAttachmentCopy {
   uploadUnavailable: string
 }
 
-function legacyCopy(label: string, assetType: string): AuthoringAssetAttachmentCopy {
-  return {
-    attachmentLabel: (attachmentLabel) => `${attachmentLabel} attachment`,
-    attachedAssetFallback: 'Attached asset',
-    change: `Change ${label.toLowerCase()}`,
-    choose: `Choose ${label.toLowerCase()}`,
-    pickerTitle: `Change ${label.toLowerCase()}`,
-    pickerDescription: `Choose an existing ${assetType} asset or upload a new one.`,
-    uploadLabel: `Upload new ${label.toLowerCase()}`,
-    uploadDescription: `Choose a file to upload for this ${assetType} block.`,
-    selected: (filename) => `Selected: ${filename}`,
-    uploadAndUse: 'Upload and use',
-    uploading: 'Uploading…',
-    existingAssets: `Existing ${assetType === 'image' ? 'images' : 'assets'}`,
-    loadingAssets: 'Loading uploaded assets…',
-    loadUnavailable: 'We couldn’t load uploaded assets right now. Try again.',
-    retry: 'Retry',
-    noAssets: 'No uploaded assets yet.',
-    availableAssets: 'Available uploaded assets',
-    useAsset: (filename) => `Use ${filename}`,
-    previous: 'Previous',
-    next: 'Next',
-    cancel: 'Cancel',
-    incompatibleUpload: `This uploaded file is not suitable for this ${assetType} block, so it was not attached.`,
-    uploadedAttached: (filename) => `${filename} uploaded and attached. Save content to keep this reference.`,
-    assetAttached: (filename) => `${filename} attached. Save content to keep this reference.`,
-    uploadInvalid: 'We couldn’t upload that file. Choose a different file and try again.',
-    uploadTooLarge: 'The selected file is too large. Choose a smaller file and try again.',
-    sessionEnded: 'Your session has ended. Sign in to continue.',
-    uploadUnavailable: 'We couldn’t upload this file right now. Please try again.',
-  }
-}
-
 const props = defineProps<{
   draftId: string
   lessonId: string
@@ -82,7 +50,7 @@ const props = defineProps<{
   type: AssetAttachmentType
   label: string
   currentAssetKey: string
-  copy?: AuthoringAssetAttachmentCopy
+  copy: AuthoringAssetAttachmentCopy
 }>()
 const emit = defineEmits<{ attached: [asset: AuthoringAsset]; unavailable: [] }>()
 const selected = ref<File>()
@@ -100,7 +68,9 @@ let uploadVersion = 0
 let listVersion = 0
 let active = true
 const captureScope = useAuthoringAsyncScope(() => `${props.draftId}/${props.lessonId}/${props.blockKey}/${props.label}`)
-const copy = computed(() => props.copy ?? legacyCopy(props.label, assetTypeLabel(props.type)))
+const copy = computed(() => props.copy)
+const attachmentIcons: Record<AssetAttachmentType, BtgIconName> = { IMAGE: 'image', VIDEO: 'video', AUDIO: 'audio', DOWNLOAD: 'document' }
+const icon = computed(() => attachmentIcons[props.type])
 
 watch(() => [props.draftId, props.lessonId, props.blockKey, props.label], () => {
   uploadVersion += 1
@@ -217,7 +187,7 @@ function uploadError(reason: unknown): string {
       <div class="authoring-asset-attachment__field">
         <p class="authoring-asset-attachment__label">{{ label }}</p>
         <BtgPanel class="authoring-asset-attachment__summary" padding="compact">
-          <BtgIcon :name="type === 'IMAGE' ? 'image' : 'document'" decorative />
+          <BtgIcon :name="icon" decorative />
           <div><strong>{{ currentAsset?.filename ?? uploaded?.filename ?? copy.attachedAssetFallback }}</strong><small v-if="currentAsset">{{ currentAsset.mediaType }} · {{ formatAssetByteSize(currentAsset.byteSize) }}</small></div>
           <BtgButton variant="secondary" @click="openPicker">{{ copy.change }}</BtgButton>
         </BtgPanel>

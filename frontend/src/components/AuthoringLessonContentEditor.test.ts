@@ -272,6 +272,85 @@ describe('AuthoringLessonContentEditor', () => {
     expect(within(picker).getByRole('button', { name: pseudoLocalize('Cancel') })).toBeTruthy()
   })
 
+  it('uses shared localized controls for Heading, Code, Quote, Callout, and Divider blocks', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'heading', type: 'HEADING', payload: { level: 2, content: [{ type: 'text', text: 'Heading', marks: [] }] } },
+      { key: 'code', type: 'CODE', payload: { code: 'const value = 1', language: 'ts', title: 'Example' } },
+      { key: 'quote', type: 'QUOTE', payload: { text: 'Quoted words', attribution: 'Ada', sourceUrl: 'https://example.test' } },
+      { key: 'callout', type: 'CALLOUT', payload: { kind: 'NOTE', title: 'Remember', content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Callout text', marks: [] }] }] } } },
+      { key: 'divider', type: 'DIVIDER', payload: {} },
+    ] }) } })
+    await edit(1)
+    await fireEvent.update(screen.getByRole('combobox', { name: 'Heading level' }), '3')
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Heading text 1' }), 'Updated heading')
+    await edit(2)
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Code language' }), 'go')
+    await edit(3)
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Quote attribution' }), 'Grace')
+    await edit(4)
+    await fireEvent.update(screen.getByRole('combobox', { name: 'Callout kind' }), 'TIP')
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Callout title' }), 'Try this')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
+    const blocks = (replaceContent.mock.calls[0]![2] as any).content.blocks
+    expect(blocks[0].payload.level).toBe(3)
+    expect(blocks[1].payload.language).toBe('go')
+    expect(blocks[2].payload.attribution).toBe('Grace')
+    expect(blocks[3].payload.kind).toBe('TIP')
+  })
+
+  it('localizes simple block labels and validation through the pseudo-locale', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'heading', type: 'HEADING', payload: { level: 2, content: [{ type: 'text', text: 'Heading', marks: [] }] } },
+      { key: 'code', type: 'CODE', payload: { code: '', language: '', title: '' } },
+      { key: 'quote', type: 'QUOTE', payload: { text: 'Quote', attribution: '', sourceUrl: '' } },
+      { key: 'callout', type: 'CALLOUT', payload: { kind: 'NOTE', title: '', content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Callout', marks: [] }] }] } } },
+      { key: 'divider', type: 'DIVIDER', payload: {} },
+    ] }) } }, 'en-XA')
+    expect(screen.getByText(pseudoLocalize('Divider').toLocaleLowerCase())).toBeTruthy()
+    await fireEvent.click(document.getElementById('authoring-content-edit-code')!)
+    expect(screen.getByRole('textbox', { name: pseudoLocalize('Code') })).toBeTruthy()
+    expect(screen.getByText(pseudoLocalize('Enter code to display.'))).toBeTruthy()
+    await fireEvent.click(document.getElementById('authoring-content-edit-heading')!)
+    expect(screen.getByRole('combobox', { name: pseudoLocalize('Heading level') })).toBeTruthy()
+    await fireEvent.click(document.getElementById('authoring-content-edit-quote')!)
+    expect(screen.getByRole('textbox', { name: pseudoLocalize('Quote text') })).toBeTruthy()
+    await fireEvent.click(document.getElementById('authoring-content-edit-callout')!)
+    expect(screen.getByRole('combobox', { name: pseudoLocalize('Callout kind') })).toBeTruthy()
+  })
+
+  it('updates media fields through shared controls and keeps their attachment actions localized', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'video', type: 'VIDEO', payload: { asset: { assetKey: 'video-asset' }, captionsAsset: { assetKey: 'captions-asset' }, title: 'Video', transcript: 'Transcript' } },
+      { key: 'audio', type: 'AUDIO', payload: { asset: { assetKey: 'audio-asset' }, title: 'Audio', transcript: 'Transcript' } },
+      { key: 'download', type: 'DOWNLOAD', payload: { asset: { assetKey: 'download-asset' }, label: 'Download', description: 'Description' } },
+    ] }) } })
+    await edit(1)
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Video title' }), 'Updated video')
+    expect(screen.getByRole('button', { name: 'Change Video' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Change Captions' })).toBeTruthy()
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Video title' }), '')
+    expect(screen.getByText('Enter a video title.')).toBeTruthy()
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Video title' }), 'Updated video')
+    await edit(2)
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Audio transcript' }), 'Updated audio transcript')
+    await edit(3)
+    await fireEvent.update(screen.getByRole('textbox', { name: 'Download label' }), 'Updated download')
+    await fireEvent.click(screen.getByRole('button', { name: 'Save content' }))
+    const blocks = (replaceContent.mock.calls[0]![2] as any).content.blocks
+    expect(blocks[0].payload.title).toBe('Updated video')
+    expect(blocks[1].payload.transcript).toBe('Updated audio transcript')
+    expect(blocks[2].payload.label).toBe('Updated download')
+  })
+
+  it('localizes media editors and attachment actions through the pseudo-locale', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'video', type: 'VIDEO', payload: { asset: { assetKey: 'video-asset' }, captionsAsset: { assetKey: 'captions-asset' }, title: 'Video', transcript: 'Transcript' } },
+    ] }) } }, 'en-XA')
+    await fireEvent.click(document.getElementById('authoring-content-edit-video')!)
+    expect(screen.getByRole('textbox', { name: pseudoLocalize('Video title') })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /Çĥàñĝë/ })).toHaveLength(2)
+  })
+
   it('does not eagerly mount editors for a large lesson', async () => {
     const blocks: AuthoringLessonContent['blocks'] = [
       { key: 'text-0', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'First', marks: [] }] }] } } },

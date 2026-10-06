@@ -11,6 +11,8 @@ import AuthoringAssetAttachment, { type AuthoringAssetAttachmentCopy } from './A
 import AuthoringCheckboxField from './AuthoringCheckboxField.vue'
 import AuthoringAssessmentAttachment from './AuthoringAssessmentAttachment.vue'
 import BtgTextInput from './BtgTextInput.vue'
+import BtgTextarea from './BtgTextarea.vue'
+import BtgSelect from './BtgSelect.vue'
 import { useI18n } from 'vue-i18n'
 const props = defineProps<{ block: CanonicalBlock; position: number; draftId: string; lessonId: string; courseWidgets?: AuthoringCourseWidget[] }>()
 const emit = defineEmits<{ update: [block: CanonicalBlock]; unavailable: [] }>()
@@ -45,24 +47,36 @@ const imageAttachmentCopy = computed<AuthoringAssetAttachmentCopy>(() => ({
   sessionEnded: t('authoring.content.image.sessionEnded'),
   uploadUnavailable: t('authoring.content.image.uploadUnavailable'),
 }))
-function field(name: 'code' | 'language' | 'title' | 'text' | 'attribution' | 'sourceUrl' | 'altText' | 'caption' | 'label' | 'description' | 'transcript', event: Event) {
-  const value = (event.target as HTMLInputElement).value
-  if (props.block.type === 'CODE' || props.block.type === 'QUOTE' || props.block.type === 'CALLOUT') {
-    const payload = { ...props.block.payload, [name]: value }
-    if (!value && name !== 'code' && name !== 'text') delete payload[name as keyof typeof payload]
-    emit('update', { ...props.block, payload } as CanonicalBlock)
-  } else if (props.block.type === 'IMAGE' && (name === 'altText' || name === 'caption')) {
-    const payload = { ...props.block.payload, [name]: value }
-    if (!value) delete payload[name]
-    emit('update', { ...props.block, payload })
-  } else if ((props.block.type === 'VIDEO' || props.block.type === 'AUDIO') && (name === 'title' || name === 'transcript')) {
-    const payload = { ...props.block.payload, [name]: value }
-    if (!value && name === 'transcript') delete payload.transcript
-    emit('update', { ...props.block, payload } as CanonicalBlock)
-  } else if (props.block.type === 'DOWNLOAD' && (name === 'label' || name === 'description')) {
-    const payload = { ...props.block.payload, [name]: value }
-    if (!value && name === 'description') delete payload.description
-    emit('update', { ...props.block, payload })
+function mediaAttachmentCopy(label: string, assetType: string): AuthoringAssetAttachmentCopy {
+  return {
+    attachmentLabel: (attachmentLabel) => t('authoring.content.media.attachmentLabel', { label: attachmentLabel }),
+    attachedAssetFallback: t('authoring.content.media.attachedAsset'),
+    change: t('authoring.content.media.change', { label }),
+    choose: t('authoring.content.media.choose', { label }),
+    pickerTitle: t('authoring.content.media.pickerTitle', { label }),
+    pickerDescription: t('authoring.content.media.pickerDescription', { assetType }),
+    uploadLabel: t('authoring.content.media.uploadLabel', { label }),
+    uploadDescription: t('authoring.content.media.uploadDescription', { assetType }),
+    selected: (filename) => t('authoring.content.media.selected', { filename }),
+    uploadAndUse: t('authoring.content.media.uploadAndUse'),
+    uploading: t('authoring.content.media.uploading'),
+    existingAssets: t('authoring.content.media.existingAssets', { assetType }),
+    loadingAssets: t('authoring.content.media.loadingAssets'),
+    loadUnavailable: t('authoring.content.media.loadUnavailable'),
+    retry: t('authoring.content.media.retry'),
+    noAssets: t('authoring.content.media.noAssets'),
+    availableAssets: t('authoring.content.media.availableAssets'),
+    useAsset: (filename) => t('authoring.content.media.useAsset', { filename }),
+    previous: t('authoring.content.media.previous'),
+    next: t('authoring.content.media.next'),
+    cancel: t('authoring.content.media.cancel'),
+    incompatibleUpload: t('authoring.content.media.incompatibleUpload', { assetType }),
+    uploadedAttached: (filename) => t('authoring.content.media.uploadedAttached', { filename }),
+    assetAttached: (filename) => t('authoring.content.media.assetAttached', { filename }),
+    uploadInvalid: t('authoring.content.media.uploadInvalid'),
+    uploadTooLarge: t('authoring.content.media.uploadTooLarge'),
+    sessionEnded: t('authoring.content.media.sessionEnded'),
+    uploadUnavailable: t('authoring.content.media.uploadUnavailable'),
   }
 }
 function imageField(name: 'altText' | 'caption', value: string) {
@@ -70,6 +84,29 @@ function imageField(name: 'altText' | 'caption', value: string) {
   const payload = { ...props.block.payload, [name]: value }
   if (!value) delete payload[name]
   emit('update', { ...props.block, payload })
+}
+function simpleField(name: 'code' | 'language' | 'title' | 'text' | 'attribution' | 'sourceUrl', value: string) {
+  if (props.block.type !== 'CODE' && props.block.type !== 'QUOTE' && props.block.type !== 'CALLOUT') return
+  const payload = { ...props.block.payload, [name]: value }
+  if (!value && name !== 'code' && name !== 'text') delete payload[name as keyof typeof payload]
+  emit('update', { ...props.block, payload } as CanonicalBlock)
+}
+function mediaField(name: 'title' | 'transcript' | 'label' | 'description', value: string) {
+  if (props.block.type === 'VIDEO' || props.block.type === 'AUDIO') {
+    const payload = { ...props.block.payload, [name]: value }
+    if (!value && name === 'transcript') delete payload.transcript
+    emit('update', { ...props.block, payload } as CanonicalBlock)
+  } else if (props.block.type === 'DOWNLOAD') {
+    const payload = { ...props.block.payload, [name]: value }
+    if (!value && name === 'description') delete payload.description
+    emit('update', { ...props.block, payload })
+  }
+}
+function headingLevel(value: string) {
+  if (props.block.type === 'HEADING') emit('update', { ...props.block, payload: { ...props.block.payload, level: Number(value) } })
+}
+function calloutKind(value: string) {
+  if (props.block.type === 'CALLOUT') emit('update', { ...props.block, payload: { ...props.block.payload, kind: value as 'INFO' | 'NOTE' | 'WARNING' | 'TIP' } })
 }
 function attach(field: 'asset' | 'captionsAsset', assetKey: string) {
   if (props.block.type === 'IMAGE' || props.block.type === 'AUDIO' || props.block.type === 'DOWNLOAD') {
@@ -99,27 +136,27 @@ function selectedWidget() {
 </script>
 
 <template>
-  <AuthoringRichTextEditor v-if="block.type === 'TEXT'" :content="block.payload.content" :label="`Block ${position} text`" code-blocks @update:content="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
+  <AuthoringRichTextEditor v-if="block.type === 'TEXT'" :content="block.payload.content" :label="t('authoring.content.blocks.TEXT.editorLabel', { position })" code-blocks @update:content="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
   <template v-else-if="block.type === 'HEADING'">
-    <BtgFormField label="Heading level" v-slot="{ controlId }">
-      <select :id="controlId" :value="block.payload.level" @change="emit('update', { ...block, payload: { ...block.payload, level: Number(($event.target as HTMLSelectElement).value) } })"><option :value="2">Heading 2</option><option :value="3">Heading 3</option><option :value="4">Heading 4</option></select>
+    <BtgFormField :label="t('authoring.content.blocks.HEADING.level')" v-slot="{ controlId }">
+      <BtgSelect :id="controlId" :model-value="String(block.payload.level)" @update:model-value="headingLevel"><option value="2">{{ t('authoring.content.blocks.HEADING.levelTwo') }}</option><option value="3">{{ t('authoring.content.blocks.HEADING.levelThree') }}</option><option value="4">{{ t('authoring.content.blocks.HEADING.levelFour') }}</option></BtgSelect>
     </BtgFormField>
-    <AuthoringInlineTextEditor :items="block.payload.content" :label="`Block ${position} heading`" @update:items="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
+    <AuthoringInlineTextEditor :items="block.payload.content" :label="t('authoring.content.blocks.HEADING.editorLabel', { position })" :copy="{ textLabel: (index) => t('authoring.content.blocks.HEADING.textLabel', { index }), preservedFormatting: t('authoring.content.blocks.HEADING.preservedFormatting'), textRequired: t('authoring.content.blocks.HEADING.textRequired'), hardBreakPreserved: t('authoring.content.blocks.HEADING.hardBreakPreserved') }" @update:items="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
   </template>
   <template v-else-if="block.type === 'CODE'">
-    <BtgFormField label="Code" :error="!block.payload.code ? 'Enter code to display.' : undefined" v-slot="{ controlId, describedBy, invalid }"><textarea :id="controlId" :value="block.payload.code" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" spellcheck="false" maxlength="100000" required @input="field('code', $event)" /></BtgFormField>
-    <BtgFormField label="Code language" v-slot="{ controlId }"><input :id="controlId" :value="block.payload.language" maxlength="64" @input="field('language', $event)" /></BtgFormField>
-    <BtgFormField label="Code title" v-slot="{ controlId }"><input :id="controlId" :value="block.payload.title" maxlength="240" @input="field('title', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.blocks.CODE.code')" :error="!block.payload.code ? t('authoring.content.blocks.CODE.codeRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextarea :id="controlId" :model-value="block.payload.code" :aria-describedby="describedBy" :invalid="invalid" spellcheck="false" maxlength="100000" required @update:model-value="simpleField('code', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.blocks.CODE.language')" v-slot="{ controlId }"><BtgTextInput :id="controlId" :model-value="block.payload.language" maxlength="64" @update:model-value="simpleField('language', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.blocks.CODE.title')" v-slot="{ controlId }"><BtgTextInput :id="controlId" :model-value="block.payload.title" maxlength="240" @update:model-value="simpleField('title', $event)" /></BtgFormField>
   </template>
   <template v-else-if="block.type === 'QUOTE'">
-    <BtgFormField label="Quote text" :error="!block.payload.text.trim() ? 'Enter quote text.' : undefined" v-slot="{ controlId, describedBy, invalid }"><textarea :id="controlId" :value="block.payload.text" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="50000" required @input="field('text', $event)" /></BtgFormField>
-    <BtgFormField label="Quote attribution" v-slot="{ controlId }"><input :id="controlId" :value="block.payload.attribution" maxlength="240" @input="field('attribution', $event)" /></BtgFormField>
-    <BtgFormField label="Quote source URL" v-slot="{ controlId }"><input :id="controlId" :value="block.payload.sourceUrl" maxlength="2048" @input="field('sourceUrl', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.blocks.QUOTE.text')" :error="!block.payload.text.trim() ? t('authoring.content.blocks.QUOTE.textRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextarea :id="controlId" :model-value="block.payload.text" :aria-describedby="describedBy" :invalid="invalid" maxlength="50000" required @update:model-value="simpleField('text', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.blocks.QUOTE.attribution')" v-slot="{ controlId }"><BtgTextInput :id="controlId" :model-value="block.payload.attribution" maxlength="240" @update:model-value="simpleField('attribution', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.blocks.QUOTE.sourceUrl')" v-slot="{ controlId }"><BtgTextInput :id="controlId" :model-value="block.payload.sourceUrl" maxlength="2048" @update:model-value="simpleField('sourceUrl', $event)" /></BtgFormField>
   </template>
   <template v-else-if="block.type === 'CALLOUT'">
-    <BtgFormField label="Callout kind" v-slot="{ controlId }"><select :id="controlId" :value="block.payload.kind" @change="emit('update', { ...block, payload: { ...block.payload, kind: ($event.target as HTMLSelectElement).value as 'INFO' | 'NOTE' | 'WARNING' | 'TIP' } })"><option value="INFO">Information</option><option value="NOTE">Note</option><option value="WARNING">Warning</option><option value="TIP">Tip</option></select></BtgFormField>
-    <BtgFormField label="Callout title" v-slot="{ controlId }"><input :id="controlId" :value="block.payload.title" maxlength="240" @input="field('title', $event)" /></BtgFormField>
-    <AuthoringRichTextEditor :content="block.payload.content" :label="`Block ${position} callout`" @update:content="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
+    <BtgFormField :label="t('authoring.content.blocks.CALLOUT.kind')" v-slot="{ controlId }"><BtgSelect :id="controlId" :model-value="block.payload.kind" @update:model-value="calloutKind"><option value="INFO">{{ t('authoring.content.blocks.CALLOUT.kinds.INFO') }}</option><option value="NOTE">{{ t('authoring.content.blocks.CALLOUT.kinds.NOTE') }}</option><option value="WARNING">{{ t('authoring.content.blocks.CALLOUT.kinds.WARNING') }}</option><option value="TIP">{{ t('authoring.content.blocks.CALLOUT.kinds.TIP') }}</option></BtgSelect></BtgFormField>
+    <BtgFormField :label="t('authoring.content.blocks.CALLOUT.title')" v-slot="{ controlId }"><BtgTextInput :id="controlId" :model-value="block.payload.title" maxlength="240" @update:model-value="simpleField('title', $event)" /></BtgFormField>
+    <AuthoringRichTextEditor :content="block.payload.content" :label="t('authoring.content.blocks.CALLOUT.editorLabel', { position })" @update:content="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
   </template>
   <template v-else-if="block.type === 'IMAGE'">
     <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="IMAGE" :label="t('authoring.content.image.label')" :copy="imageAttachmentCopy" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')">
@@ -131,20 +168,20 @@ function selectedWidget() {
     </AuthoringAssetAttachment>
   </template>
   <template v-else-if="block.type === 'VIDEO'">
-    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="VIDEO" label="Video" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')" />
-    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="DOWNLOAD" label="Captions" :current-asset-key="block.payload.captionsAsset.assetKey" @attached="attach('captionsAsset', $event.assetKey)" @unavailable="emit('unavailable')" />
-    <BtgFormField label="Video title" :error="!block.payload.title.trim() ? 'Enter a video title.' : undefined" v-slot="{ controlId, describedBy, invalid }"><input :id="controlId" :value="block.payload.title" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="240" required @input="field('title', $event)" /></BtgFormField>
-    <BtgFormField label="Video transcript" :error="!block.payload.transcript?.trim() && !block.payload.transcriptAsset ? 'Provide a transcript or transcript asset.' : undefined" v-slot="{ controlId, describedBy, invalid }"><textarea :id="controlId" :value="block.payload.transcript" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="50000" @input="field('transcript', $event)" /></BtgFormField>
+    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="VIDEO" :label="t('authoring.content.media.video.asset')" :copy="mediaAttachmentCopy(t('authoring.content.media.video.asset'), t('authoring.content.media.assetTypes.video'))" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')" />
+    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="DOWNLOAD" :label="t('authoring.content.media.video.captions')" :copy="mediaAttachmentCopy(t('authoring.content.media.video.captions'), t('authoring.content.media.assetTypes.captions'))" :current-asset-key="block.payload.captionsAsset.assetKey" @attached="attach('captionsAsset', $event.assetKey)" @unavailable="emit('unavailable')" />
+    <BtgFormField :label="t('authoring.content.media.video.title')" :error="!block.payload.title.trim() ? t('authoring.content.media.video.titleRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextInput :id="controlId" :model-value="block.payload.title" :aria-describedby="describedBy" :invalid="invalid" maxlength="240" required @update:model-value="mediaField('title', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.media.video.transcript')" :error="!block.payload.transcript?.trim() && !block.payload.transcriptAsset ? t('authoring.content.media.video.transcriptRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextarea :id="controlId" :model-value="block.payload.transcript" :aria-describedby="describedBy" :invalid="invalid" maxlength="50000" @update:model-value="mediaField('transcript', $event)" /></BtgFormField>
   </template>
   <template v-else-if="block.type === 'AUDIO'">
-    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="AUDIO" label="Audio" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')" />
-    <BtgFormField label="Audio title" :error="!block.payload.title.trim() ? 'Enter an audio title.' : undefined" v-slot="{ controlId, describedBy, invalid }"><input :id="controlId" :value="block.payload.title" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="240" required @input="field('title', $event)" /></BtgFormField>
-    <BtgFormField label="Audio transcript" :error="!block.payload.transcript?.trim() && !block.payload.transcriptAsset ? 'Provide a transcript or transcript asset.' : undefined" v-slot="{ controlId, describedBy, invalid }"><textarea :id="controlId" :value="block.payload.transcript" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="50000" @input="field('transcript', $event)" /></BtgFormField>
+    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="AUDIO" :label="t('authoring.content.media.audio.asset')" :copy="mediaAttachmentCopy(t('authoring.content.media.audio.asset'), t('authoring.content.media.assetTypes.audio'))" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')" />
+    <BtgFormField :label="t('authoring.content.media.audio.title')" :error="!block.payload.title.trim() ? t('authoring.content.media.audio.titleRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextInput :id="controlId" :model-value="block.payload.title" :aria-describedby="describedBy" :invalid="invalid" maxlength="240" required @update:model-value="mediaField('title', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.media.audio.transcript')" :error="!block.payload.transcript?.trim() && !block.payload.transcriptAsset ? t('authoring.content.media.audio.transcriptRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextarea :id="controlId" :model-value="block.payload.transcript" :aria-describedby="describedBy" :invalid="invalid" maxlength="50000" @update:model-value="mediaField('transcript', $event)" /></BtgFormField>
   </template>
   <template v-else-if="block.type === 'DOWNLOAD'">
-    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="DOWNLOAD" label="Download" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')" />
-    <BtgFormField label="Download label" :error="!block.payload.label.trim() ? 'Enter a download label.' : undefined" v-slot="{ controlId, describedBy, invalid }"><input :id="controlId" :value="block.payload.label" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" maxlength="240" required @input="field('label', $event)" /></BtgFormField>
-    <BtgFormField label="Download description" v-slot="{ controlId }"><textarea :id="controlId" :value="block.payload.description" maxlength="4000" @input="field('description', $event)" /></BtgFormField>
+    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="DOWNLOAD" :label="t('authoring.content.media.download.asset')" :copy="mediaAttachmentCopy(t('authoring.content.media.download.asset'), t('authoring.content.media.assetTypes.download'))" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')" />
+    <BtgFormField :label="t('authoring.content.media.download.label')" :error="!block.payload.label.trim() ? t('authoring.content.media.download.labelRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextInput :id="controlId" :model-value="block.payload.label" :aria-describedby="describedBy" :invalid="invalid" maxlength="240" required @update:model-value="mediaField('label', $event)" /></BtgFormField>
+    <BtgFormField :label="t('authoring.content.media.download.description')" v-slot="{ controlId }"><BtgTextarea :id="controlId" :model-value="block.payload.description" maxlength="4000" @update:model-value="mediaField('description', $event)" /></BtgFormField>
   </template>
   <template v-else-if="block.type === 'KNOWLEDGE_CHECK'">
     <AuthoringAssessmentAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" :current-assessment-key="block.payload.assessmentKey" @attached="attachAssessment" @unavailable="emit('unavailable')" />
@@ -159,8 +196,8 @@ function selectedWidget() {
     <p v-else class="authoring-section__intro">This widget has no configurable settings.</p>
     <p class="authoring-section__intro">Widget configuration is data only. This release is pinned when the Course is published.</p>
   </template>
-  <p v-else-if="block.type === 'DIVIDER'" class="authoring-section__intro">A semantic divider. No configuration is needed.</p>
+  <p v-else-if="block.type === 'DIVIDER'" class="authoring-section__intro">{{ t('authoring.content.blocks.DIVIDER.description') }}</p>
   <template v-else>
-    <p>This {{ block.type.toLowerCase().replaceAll('_', ' ') }} block is preserved read-only. You can move or remove it.</p>
+    <p>{{ t('authoring.content.blocks.readOnly', { type: t(`authoring.content.blocks.${block.type}.label`) }) }}</p>
   </template>
 </template>

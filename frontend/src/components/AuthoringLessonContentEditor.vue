@@ -5,7 +5,8 @@ import { APIProblemError } from '../api/client'
 import { preserveFocusAfterRemoval } from '../authoring/focus'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { getAuthoringLesson, listAuthoringCourseWidgets, replaceAuthoringLessonContent, type AuthoringCourseWidget, type AuthoringLessonContent, type AuthoringLessonContentMutation, type AuthoringLessonDetail } from '../authoring/authoring'
-import { contentEditorError, contentEditorLimits, contentFingerprint, copyContent, createContentBlock, editableBlockTypes, type CanonicalBlock, type EditableBlockType } from '../authoring/contentEditor'
+import { contentEditorError, contentEditorLimits, contentFingerprint, copyContent, createContentBlock, editableBlockTypes, type CanonicalBlock, type ContentBlockInitialText, type ContentEditorValidationCode, type EditableBlockType } from '../authoring/contentEditor'
+import { contentBlockPresentation } from '../authoring/contentPresentation'
 import { richTextPlainText } from '../authoring/richText'
 import { decodeLessonContent } from '../lesson/content'
 import { draftAssetURL } from '../lesson/assets'
@@ -17,7 +18,6 @@ import BtgIcon from './BtgIcon.vue'
 import BtgIconButton from './BtgIconButton.vue'
 import BtgToolbar from './BtgToolbar.vue'
 import BtgDialog from './BtgDialog.vue'
-import type { BtgIconName } from './btg-icon-names'
 
 const props = defineProps<{ draftId: string; lesson: AuthoringLessonDetail }>()
 const emit = defineEmits<{ saved: [result: AuthoringLessonContentMutation]; replaceLesson: [lesson: AuthoringLessonDetail]; preview: []; unavailable: [] }>()
@@ -48,21 +48,11 @@ const pickerGroups = [
   { id: 'content', types: ['TEXT', 'HEADING', 'IMAGE', 'VIDEO', 'AUDIO', 'DOWNLOAD', 'CODE', 'CALLOUT', 'QUOTE', 'DIVIDER'] as EditableBlockType[] },
   { id: 'interactive', types: ['KNOWLEDGE_CHECK', 'PLUGIN_WIDGET'] as EditableBlockType[] },
 ] as const
-const pickerDetails: Record<EditableBlockType, { description: string; icon: string }> = {
-  TEXT: { description: 'Add paragraphs of written content.', icon: 'M4 5h16M4 10h16M4 15h12M4 20h16' },
-  HEADING: { description: 'Add a section heading.', icon: 'M5 4v16M19 4v16M5 12h14' },
-  IMAGE: { description: 'Add an image from Academy assets.', icon: 'M4 5h16v14H4zM6 16l4-4 3 3 2-2 3 3' },
-  VIDEO: { description: 'Add video with accessible media details.', icon: 'M4 6h11v12H4zM15 10l5-3v10l-5-3z' },
-  AUDIO: { description: 'Add audio and its transcript.', icon: 'M4 10h4l5-4v12l-5-4H4zM16 9c1 .8 1 5.2 0 6M19 6c3 3 3 9 0 12' },
-  DOWNLOAD: { description: 'Add a downloadable Academy asset.', icon: 'M12 3v11M8 10l4 4 4-4M5 20h14' },
-  CODE: { description: 'Add a formatted code example.', icon: 'M9 6 4 12l5 6M15 6l5 6-5 6' },
-  CALLOUT: { description: 'Highlight an important idea.', icon: 'M12 4 3 20h18L12 4zM12 9v4M12 17h.01' },
-  QUOTE: { description: 'Add a quoted source or insight.', icon: 'M7 7H4v6h5V9H7zm9 0h-3v6h5V9h-2z' },
-  DIVIDER: { description: 'Separate two parts of the lesson.', icon: 'M4 12h16' },
-  KNOWLEDGE_CHECK: { description: 'Add an inline learner assessment.', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9a2.5 2.5 0 1 1 4.5 1.5c-1 .8-2 1.2-2 2.5M12 17h.01' },
-  PLUGIN_WIDGET: { description: 'Add an available Course widget.', icon: 'M8 3v4M16 3v4M3 8h4M17 8h4M8 17v4M16 17v4M3 16h4M17 16h4M8 8h8v8H8z' },
+// These are persisted course-content seeds, not interface copy. They deliberately
+// remain independent of the application locale and preserve existing creation semantics.
+const initialBlockText: ContentBlockInitialText = {
+  text: 'New text', heading: 'New heading', videoTitle: 'New video', mediaTranscript: 'Add a transcript.', code: '// Code example', quote: 'New quote', downloadLabel: 'New download',
 }
-const pickerOptions = computed(() => new Map(editableBlockTypes.map((entry) => [entry.type, { ...entry, ...pickerDetails[entry.type] }])))
 let loadedLessonID = ''
 let requestVersion = 0
 let active = true
@@ -119,8 +109,8 @@ onBeforeUnmount(() => {
   globalThis.document.removeEventListener('pointerdown', closeActionsOnOutsidePointer, true)
 })
 
-function label(type: string) { return (editableBlockTypes.find((entry) => entry.type === type)?.label ?? type).toLowerCase().replaceAll('_', ' ') }
-function displayLabel(type: string) { return editableBlockTypes.find((entry) => entry.type === type)?.label ?? type.replaceAll('_', ' ') }
+function label(type: CanonicalBlock['type']) { return t(contentBlockPresentation(type).labelKey).toLocaleLowerCase() }
+function displayLabel(type: CanonicalBlock['type']) { return t(contentBlockPresentation(type).labelKey) }
 function openPicker(event: Event) { pickerTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined; pickerOpen.value = true }
 function preview() { commitEditing(false); if (dirty.value) { if (previewWarning.value?.showModal) previewWarning.value.showModal(); else previewWarning.value?.setAttribute('open', ''); return }; emit('preview') }
 function closePreviewWarning() { if (previewWarning.value && typeof previewWarning.value.close === 'function' && previewWarning.value.open) previewWarning.value.close(); else previewWarning.value?.removeAttribute('open') }
@@ -128,7 +118,7 @@ function onPickerClosed(open: boolean) { if (!open) void nextTick(() => pickerTr
 function closePicker(restoreFocus = true) { pickerOpen.value = false; if (restoreFocus) void nextTick(() => pickerTrigger.value?.focus()) }
 function addBlock(blockType: EditableBlockType) {
   if (saving.value || document.value.blocks.length >= contentEditorLimits.blocks) return
-  const block = createContentBlock(blockType, document.value.blocks.map((entry) => entry.key))
+  const block = createContentBlock(blockType, document.value.blocks.map((entry) => entry.key), initialBlockText)
   const next = { ...document.value, blocks: [...document.value.blocks, block] }
   if (new TextEncoder().encode(JSON.stringify(next)).length > contentEditorLimits.bytes) { formError.value = 'Lesson content must fit within 1 MiB.'; return }
   document.value = next
@@ -141,9 +131,8 @@ function addBlock(blockType: EditableBlockType) {
   })
 }
 function blockSummary(block: CanonicalBlock): string { const p: any = block.payload; if (block.type === 'TEXT') return richTextPlainText(p.content).slice(0, 140) || 'Written content'; if (block.type === 'HEADING') return p.content.map((i: any) => i.text).join(' '); if (block.type === 'IMAGE') return p.caption || p.altText || 'Image asset'; if (block.type === 'VIDEO' || block.type === 'AUDIO') return p.title; if (block.type === 'DOWNLOAD') return p.label; if (block.type === 'CODE') return [p.language, p.code.split('\n')[0]].filter(Boolean).join(' · '); if (block.type === 'QUOTE') return p.text.slice(0,140); if (block.type === 'CALLOUT') return p.title || 'Callout'; if (block.type === 'KNOWLEDGE_CHECK') return 'Inline learner assessment'; if (block.type === 'PLUGIN_WIDGET') return 'Course widget'; return '' }
-function contentIcon(type: string): BtgIconName {
-  return ({ TEXT: 'text', HEADING: 'text', IMAGE: 'image', VIDEO: 'content', AUDIO: 'content', DOWNLOAD: 'document', CODE: 'document', CALLOUT: 'callout', QUOTE: 'document', DIVIDER: 'divider', KNOWLEDGE_CHECK: 'objective', PLUGIN_WIDGET: 'settings' } as Record<string, BtgIconName>)[type] ?? 'content'
-}
+function contentIcon(type: CanonicalBlock['type']) { return contentBlockPresentation(type).icon }
+function validationMessage(code: ContentEditorValidationCode) { return t(`authoring.content.validation.${code}`) }
 function imageURL(block: CanonicalBlock): string | undefined {
   return block.type === 'IMAGE' ? draftAssetURL({ draftID: props.draftId }, block.payload.asset) : undefined
 }
@@ -309,7 +298,7 @@ function keyboardReorder(event: KeyboardEvent, index: number) {
 function removeBlock(index: number) {
   if (saving.value) return
   commitEditing(false)
-  const restoreFocus = preserveFocusAfterRemoval(() => globalThis.document.querySelector<HTMLElement>('.authoring-content__add button'))
+  const restoreFocus = preserveFocusAfterRemoval(() => globalThis.document.querySelector<HTMLElement>('.authoring-content__toolbar button'))
   document.value.blocks.splice(index, 1)
   closeActions()
   void restoreFocus()
@@ -320,8 +309,9 @@ async function save() {
   const isCurrent = captureScope()
   commitEditing(false)
   if (saving.value || reloading.value || conflict.value || !supported.value || !dirty.value) return
-  formError.value = contentEditorError(document.value)
-  if (formError.value) return
+  const issue = contentEditorError(document.value)
+  formError.value = issue ? validationMessage(issue.code) : undefined
+  if (issue) return
   const generation = requestVersion
   saving.value = true
   message.value = undefined
