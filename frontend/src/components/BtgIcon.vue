@@ -32,6 +32,7 @@ import {
   Target,
   Trash2,
   Type,
+  Bold, Italic, Link as LinkIcon, List, ListOrdered, Code, Unlink,
 } from '@lucide/vue'
 import { computed } from 'vue'
 import type { BtgIconName } from './btg-icon-names'
@@ -67,6 +68,13 @@ const icons: Record<BtgIconName, typeof Plus> = {
   settings: Settings,
   delete: Trash2,
   trash: Trash2,
+  bold: Bold,
+  italic: Italic,
+  link: LinkIcon,
+  list: List,
+  listOrdered: ListOrdered,
+  code: Code,
+  unlink: Unlink,
 }
 
 const props = withDefaults(defineProps<{

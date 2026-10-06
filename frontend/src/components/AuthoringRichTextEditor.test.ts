@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/vue'
+import { cleanup, fireEvent, screen } from '@testing-library/vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import AuthoringRichTextEditor from './AuthoringRichTextEditor.vue'
+import { renderWithI18n as render } from '../test/i18n'
 
 describe('AuthoringRichTextEditor', () => {
   afterEach(cleanup)

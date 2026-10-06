@@ -72,6 +72,11 @@ export default {
       overflow: 'Actions for block {position}, {type}', editBlock: 'Edit block {position}, {type}', cancelBlock: 'Cancel changes for block {position}, {type}', doneBlock: 'Done editing block {position}, {type}', reorder: 'Reorder block {position}, {type}',
       moved: '{type} block moved to position {position} of {total}.', reordering: 'Reordering {type} block. Use the arrow keys to move it, or Escape to finish.', finishedReordering: 'Finished reordering {type} block.', discarded: 'Unsaved content changes discarded.', saved: 'Lesson content saved.',
     },
+    richText: {
+      toolbar: 'formatting', inline: 'Inline formatting', linkFormatting: 'Link formatting', listFormatting: 'List formatting', codeFormatting: 'Code formatting',
+      bold: 'Bold', italic: 'Italic', link: 'Link', bulletList: 'Bulleted list', numberedList: 'Numbered list', inlineCode: 'Inline code', codeBlock: 'Code block',
+      linkEditor: 'Link editor', linkUrl: 'Link URL', linkPlaceholder: 'https://example.com or /course/page', cancel: 'Cancel', removeLink: 'Remove link', applyLink: 'Apply link', invalidLink: 'Use a safe HTTPS or internal URL.', empty: 'Enter text for this block.', help: 'Use paragraphs, lists, emphasis, links, inline code, and small multiline code blocks. Lesson headings belong in Heading blocks.',
+    },
     picker: {
       title: 'Add content',
       description: 'Choose the kind of learning material to add.',
