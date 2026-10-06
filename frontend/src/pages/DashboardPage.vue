@@ -66,7 +66,7 @@
           <h3 id="add-configuration-title">{{ t('dashboard.configureNamed', { name: configuringWidget.widgetName }) }}</h3>
           <p>{{ t('dashboard.configureDescription') }}</p>
           <form @submit.prevent="createConfiguredPlacement">
-            <WidgetConfigurationForm v-model="configurationDraft" :schema="configuringWidget.configuration!" :errors="configurationDraftErrors" />
+            <WidgetConfigurationForm v-model="configurationDraft" :schema="configuringWidget.configuration!" :copy="widgetConfigurationCopy" :errors="configurationDraftErrors" />
             <div class="dashboard-page__actions"><BtgButton type="submit" leading-icon="plus" :disabled="busy || hasConfigurationErrors">{{ t('dashboard.addWidget') }}</BtgButton><BtgButton type="button" variant="secondary" :disabled="busy" @click="cancelConfiguration">{{ t('dashboard.cancel') }}</BtgButton></div>
           </form>
         </section>
@@ -94,7 +94,7 @@
                 </div>
                 <form v-if="editing === placement.placementId && placementSchema(placement)" class="dashboard-page__configuration" @submit.prevent="save(placement)">
                   <h5>{{ t('dashboard.configureNamed', { name: placementName(placement) }) }}</h5>
-                  <WidgetConfigurationForm v-model="configurationDraft" :schema="placementSchema(placement)!" :errors="configurationDraftErrors" />
+                  <WidgetConfigurationForm v-model="configurationDraft" :schema="placementSchema(placement)!" :copy="widgetConfigurationCopy" :errors="configurationDraftErrors" />
                   <div class="dashboard-page__actions"><BtgButton type="submit" :disabled="busy || hasConfigurationErrors">{{ t('dashboard.saveChanges') }}</BtgButton><BtgButton type="button" variant="secondary" :disabled="busy" @click="cancelConfiguration">{{ t('dashboard.cancel') }}</BtgButton></div>
                 </form>
               </BtgPanel>
@@ -125,6 +125,7 @@ import WidgetConfigurationForm from '../components/WidgetConfigurationForm.vue'
 
 type State = { kind: 'loading' } | { kind: 'ready'; widgets: DashboardWidgetPlacement[] } | { kind: 'unavailable' }
 const { t } = useI18n()
+const widgetConfigurationCopy = computed(() => ({ selectOption: t('dashboard.selectOption'), enabled: t('dashboard.enabled'), disabled: t('dashboard.disabled') }))
 const state = ref<State>({ kind: 'loading' })
 const heading = ref<HTMLElement>()
 const managementHeading = ref<HTMLElement>()

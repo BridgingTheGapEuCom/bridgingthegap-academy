@@ -1530,8 +1530,6 @@
 	display: grid;
 	min-width: 0;
 	gap: var(--btg-space-3);
-	border-inline-start: 0.25rem solid var(--btg-color-border-strong);
-	padding-inline-start: var(--btg-space-4);
 }
 .authoring-assessment-attachment ul {
 	display: grid;
@@ -1541,14 +1539,7 @@
 	padding: 0;
 }
 .authoring-assessment-attachment li {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--btg-space-2);
 	overflow-wrap: anywhere;
-}
-.authoring-assessment-attachment span {
-	color: var(--btg-color-text-secondary);
 }
 .authoring-assessments,
 .authoring-assessment-editor,

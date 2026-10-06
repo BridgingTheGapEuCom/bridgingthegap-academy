@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from '@testing-library/vue'
+import { cleanup, fireEvent, render, screen } from '@testing-library/vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderWithI18n } from '../test/i18n'
 import WidgetConfigurationForm from './WidgetConfigurationForm.vue'
@@ -11,12 +11,13 @@ const schema = { fields: [
   { key: 'completed', type: 'BOOLEAN' as const, label: 'Show completed', required: false },
   { key: 'scope', type: 'SINGLE_SELECT' as const, label: 'Scope', required: true, options: [{ value: 'active', label: 'Active courses' }, { value: 'all', label: 'All courses' }] },
 ] }
+const copy = { selectOption: 'Choose an option', enabled: 'Enabled', disabled: 'Disabled' }
 
 describe('WidgetConfigurationForm', () => {
   afterEach(cleanup)
 
   it('renders the bounded declarative field vocabulary with labels and help', () => {
-    renderWithI18n(WidgetConfigurationForm, { props: { schema, modelValue: { title: 'Overview', notes: 'Hello', count: 5, ratio: 1.5, completed: true, scope: 'active' }, errors: { title: 'Review this value.' } } })
+    render(WidgetConfigurationForm, { props: { schema, modelValue: { title: 'Overview', notes: 'Hello', count: 5, ratio: 1.5, completed: true, scope: 'active' }, copy, errors: { title: 'Review this value.' } } })
     expect((screen.getByRole('textbox', { name: /Title/ }) as HTMLInputElement).value).toBe('Overview')
     expect((screen.getByRole('textbox', { name: 'Notes' }) as HTMLTextAreaElement).value).toBe('Hello')
     expect((screen.getByRole('spinbutton', { name: 'Number of items' }) as HTMLInputElement).value).toBe('5')
@@ -28,7 +29,7 @@ describe('WidgetConfigurationForm', () => {
   })
 
   it('emits structured data from native controls', async () => {
-    const view = renderWithI18n(WidgetConfigurationForm, { props: { schema, modelValue: {} } })
+    const view = renderWithI18n(WidgetConfigurationForm, { props: { schema, modelValue: {}, copy } })
     await fireEvent.update(screen.getByRole('textbox', { name: /Title/ }), 'Recent activity')
     expect((view.emitted('update:modelValue') as unknown[][]).at(-1)?.[0]).toEqual({ title: 'Recent activity' })
     await view.rerender({ schema, modelValue: { completed: false } })

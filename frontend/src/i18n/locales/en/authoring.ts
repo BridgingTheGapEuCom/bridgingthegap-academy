@@ -88,6 +88,12 @@ export default {
       audio: { asset: 'Audio', title: 'Audio title', titleRequired: 'Enter an audio title.', transcript: 'Audio transcript', transcriptRequired: 'Provide a transcript or transcript asset.' },
       download: { asset: 'Download', label: 'Download label', labelRequired: 'Enter a download label.', description: 'Download description' },
     },
+    assessment: {
+      title: 'Assessment', selected: 'An assessment is selected.', selectedUnavailable: 'The current assessment reference is not available in this Draft’s assessments.', loading: 'Loading assessments…', loadUnavailable: 'We couldn’t load assessments right now. Try again.', retry: 'Retry', empty: 'No assessments yet. Create one in the Assessments section.', available: 'Available assessments', use: 'Use {title}', questions: 'no questions | {count} question | {count} questions', updated: 'Updated {date}', previous: 'Previous', next: 'Next', pagination: 'Assessments {from}–{to} of {total}',
+    },
+    widget: {
+      selectorLabel: 'Course widget', noneAvailable: 'No Course widgets are currently available.', noConfiguration: 'This widget has no configurable settings.', pinnedDescription: 'Widget configuration is data only. This release is pinned when the Course is published.', selectOption: 'Choose an option', enabled: 'Enabled', disabled: 'Disabled',
+    },
     blocks: {
       readOnly: 'This {type} block is preserved read-only. You can move or remove it.',
       TEXT: { label: 'Text', editorLabel: 'Block {position} text' },

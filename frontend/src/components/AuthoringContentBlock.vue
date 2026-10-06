@@ -9,14 +9,37 @@ import AuthoringRichTextEditor from './AuthoringRichTextEditor.vue'
 import AuthoringInlineTextEditor from './AuthoringInlineTextEditor.vue'
 import AuthoringAssetAttachment, { type AuthoringAssetAttachmentCopy } from './AuthoringAssetAttachment.vue'
 import AuthoringCheckboxField from './AuthoringCheckboxField.vue'
-import AuthoringAssessmentAttachment from './AuthoringAssessmentAttachment.vue'
+import AuthoringAssessmentAttachment, { type AuthoringAssessmentAttachmentCopy } from './AuthoringAssessmentAttachment.vue'
 import BtgTextInput from './BtgTextInput.vue'
 import BtgTextarea from './BtgTextarea.vue'
 import BtgSelect from './BtgSelect.vue'
 import { useI18n } from 'vue-i18n'
+import { useApplicationFormatters } from '../i18n/formatters'
 const props = defineProps<{ block: CanonicalBlock; position: number; draftId: string; lessonId: string; courseWidgets?: AuthoringCourseWidget[] }>()
 const emit = defineEmits<{ update: [block: CanonicalBlock]; unavailable: [] }>()
 const { t } = useI18n()
+const { date } = useApplicationFormatters()
+const widgetConfigurationCopy = computed(() => ({
+  selectOption: t('authoring.content.widget.selectOption'),
+  enabled: t('authoring.content.widget.enabled'),
+  disabled: t('authoring.content.widget.disabled'),
+}))
+const assessmentCopy = computed<AuthoringAssessmentAttachmentCopy>(() => ({
+  title: t('authoring.content.assessment.title'),
+  selected: t('authoring.content.assessment.selected'),
+  selectedUnavailable: t('authoring.content.assessment.selectedUnavailable'),
+  loading: t('authoring.content.assessment.loading'),
+  loadUnavailable: t('authoring.content.assessment.loadUnavailable'),
+  retry: t('authoring.content.assessment.retry'),
+  empty: t('authoring.content.assessment.empty'),
+  available: t('authoring.content.assessment.available'),
+  use: (title) => t('authoring.content.assessment.use', { title }),
+  questions: (count) => t('authoring.content.assessment.questions', count),
+  updated: (value) => t('authoring.content.assessment.updated', { date: date(value) }),
+  previous: t('authoring.content.assessment.previous'),
+  next: t('authoring.content.assessment.next'),
+  pagination: (from, to, total) => t('authoring.content.assessment.pagination', { from, to, total }),
+}))
 const imageAttachmentCopy = computed<AuthoringAssetAttachmentCopy>(() => ({
   attachmentLabel: (label) => t('authoring.content.image.attachment', { label }),
   attachedAssetFallback: t('authoring.content.image.attachedAsset'),
@@ -118,9 +141,9 @@ function attach(field: 'asset' | 'captionsAsset', assetKey: string) {
 function attachAssessment(assessmentKey: string) {
   if (props.block.type === 'KNOWLEDGE_CHECK') emit('update', { ...props.block, payload: { assessmentKey } })
 }
-function chooseWidget(event: Event) {
+function chooseWidgetValue(value: string) {
   if (props.block.type !== 'PLUGIN_WIDGET') return
-  const selected = props.courseWidgets?.find((widget) => `${widget.pluginId}:${widget.pluginVersion}:${widget.artifactDigest}:${widget.widgetId}` === (event.target as HTMLSelectElement).value)
+  const selected = props.courseWidgets?.find((widget) => `${widget.pluginId}:${widget.pluginVersion}:${widget.artifactDigest}:${widget.widgetId}` === value)
   if (!selected) return
   emit('update', { ...props.block, payload: { pluginId: selected.pluginId, pluginVersion: selected.pluginVersion, artifactDigest: selected.artifactDigest, widgetId: selected.widgetId, widgetType: 'COURSE_WIDGET', configuration: configurationInitial(selected.configuration) } })
 }
@@ -184,17 +207,17 @@ function selectedWidget() {
     <BtgFormField :label="t('authoring.content.media.download.description')" v-slot="{ controlId }"><BtgTextarea :id="controlId" :model-value="block.payload.description" maxlength="4000" @update:model-value="mediaField('description', $event)" /></BtgFormField>
   </template>
   <template v-else-if="block.type === 'KNOWLEDGE_CHECK'">
-    <AuthoringAssessmentAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" :current-assessment-key="block.payload.assessmentKey" @attached="attachAssessment" @unavailable="emit('unavailable')" />
+    <AuthoringAssessmentAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" :current-assessment-key="block.payload.assessmentKey" :copy="assessmentCopy" @attached="attachAssessment" @unavailable="emit('unavailable')" />
   </template>
   <template v-else-if="block.type === 'PLUGIN_WIDGET'">
-    <BtgFormField label="Course widget" :error="!courseWidgets?.length ? 'No Course widgets are currently available.' : undefined" v-slot="{ controlId, describedBy, invalid }">
-      <select :id="controlId" :value="`${block.payload.pluginId}:${block.payload.pluginVersion}:${block.payload.artifactDigest}:${block.payload.widgetId}`" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" @change="chooseWidget">
+    <BtgFormField :label="t('authoring.content.widget.selectorLabel')" :error="!courseWidgets?.length ? t('authoring.content.widget.noneAvailable') : undefined" v-slot="{ controlId, describedBy, invalid }">
+      <BtgSelect :id="controlId" :model-value="`${block.payload.pluginId}:${block.payload.pluginVersion}:${block.payload.artifactDigest}:${block.payload.widgetId}`" :aria-describedby="describedBy" :invalid="invalid" @update:model-value="chooseWidgetValue">
         <option v-for="widget in courseWidgets" :key="`${widget.pluginId}:${widget.pluginVersion}:${widget.artifactDigest}:${widget.widgetId}`" :value="`${widget.pluginId}:${widget.pluginVersion}:${widget.artifactDigest}:${widget.widgetId}`">{{ widget.widgetName }} · {{ widget.pluginName }} {{ widget.pluginVersion }}</option>
-      </select>
+      </BtgSelect>
     </BtgFormField>
-    <WidgetConfigurationForm v-if="selectedWidget()?.configuration?.fields.length" :schema="selectedWidget()!.configuration!" :model-value="block.payload.configuration" :errors="configurationErrors(selectedWidget()!.configuration, block.payload.configuration)" @update:model-value="widgetConfiguration" />
-    <p v-else class="authoring-section__intro">This widget has no configurable settings.</p>
-    <p class="authoring-section__intro">Widget configuration is data only. This release is pinned when the Course is published.</p>
+    <WidgetConfigurationForm v-if="selectedWidget()?.configuration?.fields.length" :schema="selectedWidget()!.configuration!" :copy="widgetConfigurationCopy" :model-value="block.payload.configuration" :errors="configurationErrors(selectedWidget()!.configuration, block.payload.configuration)" @update:model-value="widgetConfiguration" />
+    <p v-else class="authoring-section__intro">{{ t('authoring.content.widget.noConfiguration') }}</p>
+    <p class="authoring-section__intro">{{ t('authoring.content.widget.pinnedDescription') }}</p>
   </template>
   <p v-else-if="block.type === 'DIVIDER'" class="authoring-section__intro">{{ t('authoring.content.blocks.DIVIDER.description') }}</p>
   <template v-else>
