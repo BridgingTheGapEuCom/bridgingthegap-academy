@@ -1,13 +1,79 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { APIProblemError } from '../api/client'
 import { acceptsUploadedMedia, assetAcceptHint, assetTypeLabel, formatAssetByteSize, type AssetAttachmentType } from '../authoring/assets'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { listAuthoringDraftAssets, uploadAuthoringAsset, type AuthoringAsset, type AuthoringAssetSummary } from '../authoring/authoring'
 import { draftAssetURL } from '../lesson/assets'
 import BtgButton from './BtgButton.vue'
+import BtgDialog from './BtgDialog.vue'
 import BtgFormField from './BtgFormField.vue'
 import BtgIcon from './BtgIcon.vue'
+import BtgPanel from './BtgPanel.vue'
+
+export interface AuthoringAssetAttachmentCopy {
+  attachmentLabel: (label: string) => string
+  attachedAssetFallback: string
+  change: string
+  choose: string
+  pickerTitle: string
+  pickerDescription: string
+  uploadLabel: string
+  uploadDescription: string
+  selected: (filename: string) => string
+  uploadAndUse: string
+  uploading: string
+  existingAssets: string
+  loadingAssets: string
+  loadUnavailable: string
+  retry: string
+  noAssets: string
+  availableAssets: string
+  useAsset: (filename: string) => string
+  previous: string
+  next: string
+  cancel: string
+  incompatibleUpload: string
+  uploadedAttached: (filename: string) => string
+  assetAttached: (filename: string) => string
+  uploadInvalid: string
+  uploadTooLarge: string
+  sessionEnded: string
+  uploadUnavailable: string
+}
+
+function legacyCopy(label: string, assetType: string): AuthoringAssetAttachmentCopy {
+  return {
+    attachmentLabel: (attachmentLabel) => `${attachmentLabel} attachment`,
+    attachedAssetFallback: 'Attached asset',
+    change: `Change ${label.toLowerCase()}`,
+    choose: `Choose ${label.toLowerCase()}`,
+    pickerTitle: `Change ${label.toLowerCase()}`,
+    pickerDescription: `Choose an existing ${assetType} asset or upload a new one.`,
+    uploadLabel: `Upload new ${label.toLowerCase()}`,
+    uploadDescription: `Choose a file to upload for this ${assetType} block.`,
+    selected: (filename) => `Selected: ${filename}`,
+    uploadAndUse: 'Upload and use',
+    uploading: 'Uploading…',
+    existingAssets: `Existing ${assetType === 'image' ? 'images' : 'assets'}`,
+    loadingAssets: 'Loading uploaded assets…',
+    loadUnavailable: 'We couldn’t load uploaded assets right now. Try again.',
+    retry: 'Retry',
+    noAssets: 'No uploaded assets yet.',
+    availableAssets: 'Available uploaded assets',
+    useAsset: (filename) => `Use ${filename}`,
+    previous: 'Previous',
+    next: 'Next',
+    cancel: 'Cancel',
+    incompatibleUpload: `This uploaded file is not suitable for this ${assetType} block, so it was not attached.`,
+    uploadedAttached: (filename) => `${filename} uploaded and attached. Save content to keep this reference.`,
+    assetAttached: (filename) => `${filename} attached. Save content to keep this reference.`,
+    uploadInvalid: 'We couldn’t upload that file. Choose a different file and try again.',
+    uploadTooLarge: 'The selected file is too large. Choose a smaller file and try again.',
+    sessionEnded: 'Your session has ended. Sign in to continue.',
+    uploadUnavailable: 'We couldn’t upload this file right now. Please try again.',
+  }
+}
 
 const props = defineProps<{
   draftId: string
@@ -16,6 +82,7 @@ const props = defineProps<{
   type: AssetAttachmentType
   label: string
   currentAssetKey: string
+  copy?: AuthoringAssetAttachmentCopy
 }>()
 const emit = defineEmits<{ attached: [asset: AuthoringAsset]; unavailable: [] }>()
 const selected = ref<File>()
@@ -24,8 +91,7 @@ const uploading = ref(false)
 const error = ref<string>()
 const message = ref<string>()
 const fileInput = ref<HTMLInputElement>()
-const picker = ref<HTMLDialogElement>()
-const pickerTrigger = ref<HTMLElement>()
+const pickerOpen = ref(false)
 const listed = ref<AuthoringAssetSummary[]>([])
 const listLimit = ref(20); const listOffset = ref(0); const listTotal = ref(0)
 const listing = ref(false); const listError = ref<string>()
@@ -34,6 +100,7 @@ let uploadVersion = 0
 let listVersion = 0
 let active = true
 const captureScope = useAuthoringAsyncScope(() => `${props.draftId}/${props.lessonId}/${props.blockKey}/${props.label}`)
+const copy = computed(() => props.copy ?? legacyCopy(props.label, assetTypeLabel(props.type)))
 
 watch(() => [props.draftId, props.lessonId, props.blockKey, props.label], () => {
   uploadVersion += 1
@@ -57,17 +124,9 @@ function chooseFile(event: Event) {
   message.value = undefined
 }
 
-function openPicker(event: Event) {
-  pickerTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined
-  if (picker.value?.showModal) picker.value.showModal()
-  else picker.value?.setAttribute('open', '')
-}
+function openPicker() { pickerOpen.value = true }
 
-function closePicker() {
-  if (picker.value?.open && typeof picker.value.close === 'function') picker.value.close()
-  else picker.value?.removeAttribute('open')
-  void nextTick(() => pickerTrigger.value?.focus())
-}
+function closePicker() { pickerOpen.value = false }
 
 function clearSelectedFile() {
   selected.value = undefined
@@ -86,13 +145,13 @@ async function upload() {
     const asset = await uploadAuthoringAsset(props.draftId, file)
     if (!isCurrent() || !active || generation !== uploadVersion) return
     if (!acceptsUploadedMedia(props.type, asset.mediaType)) {
-      error.value = `This uploaded file is not suitable for this ${assetTypeLabel(props.type)} block, so it was not attached.`
+      error.value = copy.value.incompatibleUpload
       return
     }
     uploaded.value = asset
     emit('attached', asset)
     clearSelectedFile()
-    message.value = `${asset.filename} uploaded and attached. Save content to keep this reference.`
+    message.value = copy.value.uploadedAttached(asset.filename)
     refreshAssets()
     closePicker()
   } catch (reason) {
@@ -125,7 +184,7 @@ async function loadAssets(offset = listOffset.value) {
   } catch (reason) {
     if (!isCurrent() || !active || generation !== listVersion) return
     if (reason instanceof APIProblemError && reason.status === 404) { emit('unavailable'); return }
-    listError.value = 'We couldn’t load uploaded assets right now. Try again.'
+    listError.value = copy.value.loadUnavailable
   } finally {
     if (isCurrent() && active && generation === listVersion) {
       listing.value = false
@@ -137,54 +196,53 @@ function refreshAssets() { if (listing.value) { listRefreshRequested = true; ret
 function selectExisting(asset: AuthoringAssetSummary) {
   if (!acceptsUploadedMedia(props.type, asset.mediaType)) return
   emit('attached', { ...asset, status: 'AVAILABLE' })
-  message.value = `${asset.filename} attached. Save content to keep this reference.`
+  message.value = copy.value.assetAttached(asset.filename)
   closePicker()
 }
 
 function uploadError(reason: unknown): string {
   if (reason instanceof APIProblemError) {
-    if (reason.status === 400) return 'We couldn’t upload that file. Choose a different file and try again.'
-    if (reason.status === 413) return 'The selected file is too large. Choose a smaller file and try again.'
-    if (reason.status === 401) return 'Your session has ended. Sign in to continue.'
+    if (reason.status === 400) return copy.value.uploadInvalid
+    if (reason.status === 413) return copy.value.uploadTooLarge
+    if (reason.status === 401) return copy.value.sessionEnded
   }
-  return 'We couldn’t upload this file right now. Please try again.'
+  return copy.value.uploadUnavailable
 }
 </script>
 
 <template>
-  <section class="authoring-asset-attachment" :class="{ 'authoring-asset-attachment--image': type === 'IMAGE' }" :aria-busy="uploading" :aria-label="`${label} attachment`">
+  <section class="authoring-asset-attachment" :class="{ 'authoring-asset-attachment--image': type === 'IMAGE' }" :aria-busy="uploading" :aria-label="copy.attachmentLabel(label)">
     <div v-if="currentAssetKey" class="authoring-asset-attachment__current">
       <img v-if="currentImageURL" :src="currentImageURL" alt="" />
       <div class="authoring-asset-attachment__field">
         <p class="authoring-asset-attachment__label">{{ label }}</p>
-        <div class="authoring-asset-attachment__summary">
+        <BtgPanel class="authoring-asset-attachment__summary" padding="compact">
           <BtgIcon :name="type === 'IMAGE' ? 'image' : 'document'" decorative />
-          <div><strong>{{ currentAsset?.filename ?? uploaded?.filename ?? 'Attached asset' }}</strong><small v-if="currentAsset">{{ currentAsset.mediaType }} · {{ formatAssetByteSize(currentAsset.byteSize) }}</small></div>
-          <BtgButton variant="secondary" @click="openPicker">Change {{ label.toLowerCase() }}</BtgButton>
-        </div>
+          <div><strong>{{ currentAsset?.filename ?? uploaded?.filename ?? copy.attachedAssetFallback }}</strong><small v-if="currentAsset">{{ currentAsset.mediaType }} · {{ formatAssetByteSize(currentAsset.byteSize) }}</small></div>
+          <BtgButton variant="secondary" @click="openPicker">{{ copy.change }}</BtgButton>
+        </BtgPanel>
       </div>
     </div>
-    <BtgButton v-else variant="secondary" @click="openPicker">Choose {{ label.toLowerCase() }}</BtgButton>
+    <BtgButton v-else variant="secondary" @click="openPicker">{{ copy.choose }}</BtgButton>
     <slot />
-    <dialog ref="picker" class="authoring-asset-attachment__picker" :aria-labelledby="`asset-picker-${blockKey}`">
-      <form method="dialog" @submit.prevent="closePicker">
-      <header><h3 :id="`asset-picker-${blockKey}`">Change {{ label.toLowerCase() }}</h3><p>Choose an existing {{ assetTypeLabel(type) }} asset or upload a new one.</p></header>
-      <BtgFormField :label="`Upload new ${label.toLowerCase()}`" :description="`Choose a file to upload for this ${assetTypeLabel(type)} block.`" v-slot="{ controlId, describedBy }">
+    <BtgDialog v-model:open="pickerOpen" :title="copy.pickerTitle" :description="copy.pickerDescription" :dismiss-label="copy.cancel" :show-trigger="false">
+      <div class="authoring-asset-attachment__picker-content">
+      <BtgFormField :label="copy.uploadLabel" :description="copy.uploadDescription" v-slot="{ controlId, describedBy }">
         <input :id="controlId" ref="fileInput" type="file" :accept="assetAcceptHint(type)" :aria-describedby="describedBy" :disabled="uploading" @change="chooseFile" />
       </BtgFormField>
-      <div class="authoring-asset-attachment__upload"><p v-if="selected" class="authoring-asset-attachment__selection">Selected: {{ selected.name }}</p><BtgButton :disabled="!selected || uploading" @click="upload">{{ uploading ? 'Uploading…' : 'Upload and use' }}</BtgButton></div>
+      <div class="authoring-asset-attachment__upload"><p v-if="selected" class="authoring-asset-attachment__selection">{{ copy.selected(selected.name) }}</p><BtgButton :disabled="!selected || uploading" :loading="uploading" @click="upload">{{ copy.uploadAndUse }}</BtgButton></div>
       <p v-if="error" class="authoring-asset-attachment__error" role="alert">{{ error }}</p>
       <section class="authoring-asset-attachment__existing" aria-labelledby="`asset-picker-existing-${blockKey}`">
-      <h4 :id="`asset-picker-existing-${blockKey}`">Existing {{ type === 'IMAGE' ? 'images' : 'assets' }}</h4>
-      <p v-if="listing" role="status">Loading uploaded assets…</p>
-      <p v-else-if="listError" role="alert">{{ listError }} <BtgButton variant="secondary" @click="refreshAssets">Retry</BtgButton></p>
-      <p v-else-if="!compatibleAssets.length">No uploaded assets yet.</p>
-      <ul v-else class="authoring-asset-attachment__list" aria-label="Available uploaded assets"><li v-for="asset in compatibleAssets" :key="asset.assetKey"><button type="button" :aria-label="`Use ${asset.filename}`" @click="selectExisting(asset)"><img v-if="type === 'IMAGE'" :src="draftAssetURL({ draftID: draftId }, { assetKey: asset.assetKey })" alt="" /><span><strong>{{ asset.filename }}</strong><small>{{ asset.mediaType }} · {{ formatAssetByteSize(asset.byteSize) }}</small></span></button></li></ul>
-      <p v-if="listTotal > listLimit"><BtgButton variant="secondary" :disabled="listOffset === 0 || listing" @click="loadAssets(Math.max(0, listOffset - listLimit))">Previous</BtgButton><BtgButton variant="secondary" :disabled="listOffset + listLimit >= listTotal || listing" @click="loadAssets(listOffset + listLimit)">Next</BtgButton></p>
+      <h4 :id="`asset-picker-existing-${blockKey}`">{{ copy.existingAssets }}</h4>
+      <p v-if="listing" role="status">{{ copy.loadingAssets }}</p>
+      <p v-else-if="listError" role="alert">{{ listError }} <BtgButton variant="secondary" @click="refreshAssets">{{ copy.retry }}</BtgButton></p>
+      <p v-else-if="!compatibleAssets.length">{{ copy.noAssets }}</p>
+      <ul v-else class="authoring-asset-attachment__list" :aria-label="copy.availableAssets"><li v-for="asset in compatibleAssets" :key="asset.assetKey"><BtgPanel padding="compact"><BtgButton class="authoring-asset-attachment__asset-choice" variant="tertiary" :aria-label="copy.useAsset(asset.filename)" @click="selectExisting(asset)"><img v-if="type === 'IMAGE'" :src="draftAssetURL({ draftID: draftId }, { assetKey: asset.assetKey })" alt="" /><span><strong>{{ asset.filename }}</strong><small>{{ asset.mediaType }} · {{ formatAssetByteSize(asset.byteSize) }}</small></span></BtgButton></BtgPanel></li></ul>
+      <p v-if="listTotal > listLimit"><BtgButton variant="secondary" :disabled="listOffset === 0 || listing" @click="loadAssets(Math.max(0, listOffset - listLimit))">{{ copy.previous }}</BtgButton><BtgButton variant="secondary" :disabled="listOffset + listLimit >= listTotal || listing" @click="loadAssets(listOffset + listLimit)">{{ copy.next }}</BtgButton></p>
       </section>
-      <footer><BtgButton variant="secondary" @click="closePicker">Cancel</BtgButton></footer>
-      </form>
-    </dialog>
+      </div>
+      <template #footer><BtgButton variant="secondary" @click="closePicker">{{ copy.cancel }}</BtgButton></template>
+    </BtgDialog>
     <p v-if="message" class="authoring-asset-attachment__status" role="status">{{ message }}</p>
   </section>
 </template>

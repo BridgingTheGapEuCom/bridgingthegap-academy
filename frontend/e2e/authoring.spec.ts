@@ -541,6 +541,13 @@ test('Authoring attaches an uploaded asset to the exact block and persists only 
   await expect(page.getByRole('region', { name: 'Image attachment' }).getByText('Image', { exact: true })).toBeVisible()
   await page.setViewportSize({ width: 320, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  const overflowingElements = await page.locator('body *').evaluateAll((elements) => elements
+    .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+    .filter(({ rect }) => rect.right > window.innerWidth + 1)
+    .map(({ element, rect }) => `${element.tagName}.${element.className} ${rect.left}/${rect.right}`))
+  expect(overflowingElements).toEqual([])
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 

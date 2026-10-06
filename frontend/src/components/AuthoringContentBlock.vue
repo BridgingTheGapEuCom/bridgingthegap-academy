@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { CanonicalBlock } from '../authoring/contentEditor'
 import type { AuthoringCourseWidget } from '../authoring/authoring'
 import BtgFormField from './BtgFormField.vue'
@@ -6,7 +7,7 @@ import WidgetConfigurationForm from './WidgetConfigurationForm.vue'
 import { configurationErrors, configurationInitial, type WidgetConfiguration } from '../plugins/configuration'
 import AuthoringRichTextEditor from './AuthoringRichTextEditor.vue'
 import AuthoringInlineTextEditor from './AuthoringInlineTextEditor.vue'
-import AuthoringAssetAttachment from './AuthoringAssetAttachment.vue'
+import AuthoringAssetAttachment, { type AuthoringAssetAttachmentCopy } from './AuthoringAssetAttachment.vue'
 import AuthoringCheckboxField from './AuthoringCheckboxField.vue'
 import AuthoringAssessmentAttachment from './AuthoringAssessmentAttachment.vue'
 import BtgTextInput from './BtgTextInput.vue'
@@ -14,6 +15,36 @@ import { useI18n } from 'vue-i18n'
 const props = defineProps<{ block: CanonicalBlock; position: number; draftId: string; lessonId: string; courseWidgets?: AuthoringCourseWidget[] }>()
 const emit = defineEmits<{ update: [block: CanonicalBlock]; unavailable: [] }>()
 const { t } = useI18n()
+const imageAttachmentCopy = computed<AuthoringAssetAttachmentCopy>(() => ({
+  attachmentLabel: (label) => t('authoring.content.image.attachment', { label }),
+  attachedAssetFallback: t('authoring.content.image.attachedAsset'),
+  change: t('authoring.content.image.change'),
+  choose: t('authoring.content.image.choose'),
+  pickerTitle: t('authoring.content.image.pickerTitle'),
+  pickerDescription: t('authoring.content.image.pickerDescription'),
+  uploadLabel: t('authoring.content.image.uploadLabel'),
+  uploadDescription: t('authoring.content.image.uploadDescription'),
+  selected: (filename) => t('authoring.content.image.selected', { filename }),
+  uploadAndUse: t('authoring.content.image.uploadAndUse'),
+  uploading: t('authoring.content.image.uploading'),
+  existingAssets: t('authoring.content.image.existingAssets'),
+  loadingAssets: t('authoring.content.image.loadingAssets'),
+  loadUnavailable: t('authoring.content.image.loadUnavailable'),
+  retry: t('authoring.content.image.retry'),
+  noAssets: t('authoring.content.image.noAssets'),
+  availableAssets: t('authoring.content.image.availableAssets'),
+  useAsset: (filename) => t('authoring.content.image.useAsset', { filename }),
+  previous: t('authoring.content.image.previous'),
+  next: t('authoring.content.image.next'),
+  cancel: t('authoring.content.image.cancel'),
+  incompatibleUpload: t('authoring.content.image.incompatibleUpload'),
+  uploadedAttached: (filename) => t('authoring.content.image.uploadedAttached', { filename }),
+  assetAttached: (filename) => t('authoring.content.image.assetAttached', { filename }),
+  uploadInvalid: t('authoring.content.image.uploadInvalid'),
+  uploadTooLarge: t('authoring.content.image.uploadTooLarge'),
+  sessionEnded: t('authoring.content.image.sessionEnded'),
+  uploadUnavailable: t('authoring.content.image.uploadUnavailable'),
+}))
 function field(name: 'code' | 'language' | 'title' | 'text' | 'attribution' | 'sourceUrl' | 'altText' | 'caption' | 'label' | 'description' | 'transcript', event: Event) {
   const value = (event.target as HTMLInputElement).value
   if (props.block.type === 'CODE' || props.block.type === 'QUOTE' || props.block.type === 'CALLOUT') {
@@ -91,7 +122,7 @@ function selectedWidget() {
     <AuthoringRichTextEditor :content="block.payload.content" :label="`Block ${position} callout`" @update:content="emit('update', { ...block, payload: { ...block.payload, content: $event } })" />
   </template>
   <template v-else-if="block.type === 'IMAGE'">
-    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="IMAGE" :label="t('authoring.content.image.choose')" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')">
+    <AuthoringAssetAttachment :draft-id="draftId" :lesson-id="lessonId" :block-key="block.key" type="IMAGE" :label="t('authoring.content.image.label')" :copy="imageAttachmentCopy" :current-asset-key="block.payload.asset.assetKey" @attached="attach('asset', $event.assetKey)" @unavailable="emit('unavailable')">
       <div class="authoring-image-editor__fields">
         <BtgFormField :label="t('authoring.content.image.alternativeText')" :required="!block.payload.decorative" :error="!block.payload.decorative && !block.payload.altText?.trim() ? t('authoring.content.image.altRequired') : undefined" v-slot="{ controlId, describedBy, invalid }"><BtgTextInput :id="controlId" :model-value="block.payload.altText" :aria-describedby="describedBy" :invalid="invalid" maxlength="1000" :required="!block.payload.decorative" :disabled="block.payload.decorative" @update:model-value="imageField('altText', $event)" /></BtgFormField>
         <AuthoringCheckboxField :model-value="block.payload.decorative" :label="t('authoring.content.image.decorative')" :description="t('authoring.content.image.decorativeHelp')" @update:model-value="emit('update', { ...block, payload: { ...block.payload, decorative: $event, altText: $event ? '' : block.payload.altText } })" />

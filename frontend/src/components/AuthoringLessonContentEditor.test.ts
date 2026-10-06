@@ -256,6 +256,22 @@ describe('AuthoringLessonContentEditor', () => {
     expect(screen.getByRole('checkbox', { name: /Decorative image/ })).toHaveProperty('checked', true)
   })
 
+  it('renders Image controls and the asset picker through the pseudo-locale', async () => {
+    render(AuthoringLessonContentEditor, { props: { draftId, lesson: lesson({ schemaVersion: 1, blocks: [
+      { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: 'image-asset' }, altText: 'Alternative text', decorative: false, caption: '' } },
+    ] }) } }, 'en-XA')
+    const editImage = document.getElementById('authoring-content-edit-image')
+    if (!editImage) throw new Error('Image edit control was not rendered')
+    await fireEvent.click(editImage)
+    expect(screen.getByRole('textbox', { name: (name) => name.startsWith(pseudoLocalize('Alternative text')) })).toBeTruthy()
+    expect(screen.getByText(pseudoLocalize('Optional caption displayed below the image.'))).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: pseudoLocalize('Change image') }))
+    const picker = screen.getByRole('dialog', { name: pseudoLocalize('Change image') })
+    expect(picker).toBeTruthy()
+    expect(screen.getByText(pseudoLocalize('Choose an existing image asset or upload a new one.'))).toBeTruthy()
+    expect(within(picker).getByRole('button', { name: pseudoLocalize('Cancel') })).toBeTruthy()
+  })
+
   it('does not eagerly mount editors for a large lesson', async () => {
     const blocks: AuthoringLessonContent['blocks'] = [
       { key: 'text-0', type: 'TEXT', payload: { content: { nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'First', marks: [] }] }] } } },
