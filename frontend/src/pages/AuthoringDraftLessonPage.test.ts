@@ -144,6 +144,9 @@ describe('AuthoringDraftLessonPage', () => {
 
   it('renders prerequisite controls through the pseudo-locale', async () => {
     await renderPage('en-XA')
+    expect(await screen.findByRole('link', { name: pseudoLocalize('Back to Structure') })).toBeTruthy()
+    expect(screen.getByRole('navigation', { name: pseudoLocalize('Lesson sections') })).toBeTruthy()
+    expect(screen.getByText(pseudoLocalize('Define the lesson metadata learners and authors use to understand this lesson.'))).toBeTruthy()
     expect(await screen.findByRole('heading', { level: 2, name: pseudoLocalize('Prerequisites') })).toBeTruthy()
     await screen.findByRole('checkbox', { name: /Introduction to EAI/ })
     expect(screen.getByRole('searchbox', { name: pseudoLocalize('Search lessons') })).toBeTruthy()

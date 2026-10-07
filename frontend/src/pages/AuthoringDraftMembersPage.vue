@@ -1,58 +1,60 @@
 <template>
   <section class="authoring-section authoring-members" aria-labelledby="authoring-members-title">
-    <AuthoringPageTitle id="authoring-members-title" title="Members" description="Manage access with opaque user IDs. This Draft does not look up names or email addresses." focusable />
+    <AuthoringPageTitle id="authoring-members-title" :title="t('authoring.members.title')" :description="t('authoring.members.description')" focusable />
 
-    <p v-if="state.kind === 'loading'" class="authoring-members__state" role="status">Loading current members…</p>
-    <div v-else-if="state.kind === 'unavailable'" class="authoring-members__state">
-      <p>We couldn’t load current members right now.</p>
-      <BtgButton variant="secondary" @click="loadMembers()">Try again</BtgButton>
-    </div>
+    <BtgPanel v-if="state.kind === 'loading'" variant="subtle" padding="compact" class="authoring-members__state"><p role="status">{{ t('authoring.members.loading') }}</p></BtgPanel>
+    <BtgPanel v-else-if="state.kind === 'unavailable'" variant="subtle" padding="compact" class="authoring-members__state">
+      <p>{{ t('authoring.members.unavailable') }}</p>
+      <BtgButton variant="secondary" @click="loadMembers()">{{ t('authoring.members.tryAgain') }}</BtgButton>
+    </BtgPanel>
 
     <template v-else>
-      <p v-if="message" class="authoring-members__status" role="status">{{ message }}</p>
-      <p v-if="formError" class="authoring-members__error" role="alert">{{ formError }}</p>
-      <div v-if="conflict" class="authoring-members__conflict" role="status">
-        <p>This membership change could not be completed. The Draft may have changed, or it must keep at least one maintainer. Your current form values are still here. Reload the latest Draft before trying again.</p>
-        <BtgButton variant="secondary" :disabled="busy || reloading" @click="reloadLatest">{{ reloading ? 'Reloading…' : 'Reload latest Draft' }}</BtgButton>
-      </div>
+      <BtgPanel v-if="message" variant="subtle" padding="compact" class="authoring-members__status"><p role="status">{{ message }}</p></BtgPanel>
+      <BtgPanel v-if="formError" variant="subtle" padding="compact" class="authoring-members__error"><p role="alert">{{ formError }}</p></BtgPanel>
+      <BtgPanel v-if="conflict" variant="subtle" padding="compact" class="authoring-members__conflict" role="status">
+        <p>{{ t('authoring.members.changedElsewhere') }}</p>
+        <BtgButton variant="secondary" :disabled="busy || reloading" @click="reloadLatest">{{ reloading ? t('authoring.members.reloading') : t('authoring.members.reloadLatest') }}</BtgButton>
+      </BtgPanel>
 
       <form class="authoring-members__add" :aria-busy="busy" novalidate @submit.prevent="addMember">
-        <h3>Add member</h3>
-        <BtgFormField label="User ID" required description="Enter an existing opaque user ID. This is not an email address or name." :error="addErrors.userId" v-slot="{ controlId, describedBy, invalid }">
-          <BtgTextInput :id="controlId" v-model="addForm.userId" :disabled="busy || reloading" :aria-describedby="describedBy" :invalid="invalid" autocomplete="off" required />
-        </BtgFormField>
-        <BtgFormField label="Role" required v-slot="{ controlId, describedBy }">
-          <select :id="controlId" v-model="addForm.role" :aria-describedby="describedBy" :disabled="busy || reloading || conflict" required>
-            <option value="AUTHOR">Author</option>
-            <option value="MAINTAINER">Maintainer</option>
-          </select>
-        </BtgFormField>
-        <BtgButton type="submit" :disabled="busy || reloading || conflict">{{ busy ? 'Saving…' : 'Add member' }}</BtgButton>
+        <AuthoringSection heading-id="authoring-add-member-title" :title="t('authoring.members.add')">
+          <BtgFormField :label="t('authoring.members.userId')" required :description="t('authoring.members.userIdHelp')" :error="addErrors.userId" v-slot="{ controlId, describedBy, invalid }">
+            <BtgTextInput :id="controlId" v-model="addForm.userId" :disabled="busy || reloading" :aria-describedby="describedBy" :invalid="invalid" autocomplete="off" required />
+          </BtgFormField>
+          <BtgFormField :label="t('authoring.members.role')" required v-slot="{ controlId, describedBy }">
+            <BtgSelect :id="controlId" v-model="addForm.role" :aria-describedby="describedBy" :disabled="busy || reloading || conflict" required>
+              <option value="AUTHOR">{{ t('authoring.members.author') }}</option>
+              <option value="MAINTAINER">{{ t('authoring.members.maintainer') }}</option>
+            </BtgSelect>
+          </BtgFormField>
+          <BtgButton type="submit" :disabled="busy || reloading || conflict">{{ busy ? t('authoring.members.saving') : t('authoring.members.add') }}</BtgButton>
+        </AuthoringSection>
       </form>
 
-      <section class="authoring-members__current" aria-labelledby="authoring-current-members-title">
-        <h3 id="authoring-current-members-title">Current members</h3>
-        <p v-if="!state.members.length" class="authoring-members__empty">No active members were returned for this Draft.</p>
-        <ul v-else class="authoring-members__list" aria-label="Current Draft members">
+      <AuthoringSection heading-id="authoring-current-members-title" :title="t('authoring.members.current')" :description="t('authoring.members.currentDescription')">
+        <p v-if="!state.members.length" class="authoring-members__empty">{{ t('authoring.members.empty') }}</p>
+        <ul v-else class="authoring-members__list" :aria-label="t('authoring.members.list')">
           <AuthoringMemberItem
             v-for="member in state.members"
             :key="member.userId"
             :member="member"
             :busy="busy || reloading || conflict"
             :confirming="confirmingUserID === member.userId"
+            :labels="memberItemLabels"
             @change-role="changeRole"
             @confirm-revoke="confirmingUserID = $event"
             @cancel-revoke="confirmingUserID = undefined"
             @revoke="revokeMember"
           />
         </ul>
-      </section>
+      </AuthoringSection>
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { APIProblemError } from '../api/client'
 import { preserveFocusAfterRemoval } from '../authoring/focus'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
@@ -69,12 +71,16 @@ import { useAuthoringDraftContext } from '../authoring/draftContext'
 import AuthoringMemberItem from '../components/AuthoringMemberItem.vue'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
+import BtgPanel from '../components/BtgPanel.vue'
+import BtgSelect from '../components/BtgSelect.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
 import AuthoringPageTitle from '../components/AuthoringPageTitle.vue'
+import AuthoringSection from '../components/AuthoringSection.vue'
 
 type State = { kind: 'loading' } | { kind: 'ready'; members: AuthoringActiveMember[] } | { kind: 'unavailable' }
 
 const { draft, replaceDraft, markDraftUnavailable } = useAuthoringDraftContext()
+const { t } = useI18n()
 const state = ref<State>({ kind: 'loading' })
 const busy = ref(false)
 const reloading = ref(false)
@@ -84,6 +90,20 @@ const message = ref<string>()
 const confirmingUserID = ref<string>()
 const addForm = reactive<{ userId: string; role: AuthoringActiveMember['role'] }>({ userId: '', role: 'AUTHOR' })
 const addErrors = reactive<Record<string, string | undefined>>({})
+const memberItemLabels = computed(() => ({
+  userId: t('authoring.members.userId'),
+  currentRole: t('authoring.members.currentRole'),
+  roleLabel: (role: AuthoringActiveMember['role']) => role === 'MAINTAINER' ? t('authoring.members.maintainer') : t('authoring.members.author'),
+  roleFor: (userId: string) => t('authoring.members.roleFor', { userId }),
+  author: t('authoring.members.author'),
+  maintainer: t('authoring.members.maintainer'),
+  saveRole: t('authoring.members.saveRole'),
+  revokeAccess: (userId: string) => t('authoring.members.revokeAccess', { userId }),
+  revokeQuestion: (userId: string) => t('authoring.members.revokeQuestion', { userId }),
+  confirmRevoke: (userId: string) => t('authoring.members.confirmRevoke', { userId }),
+  confirmRevokeText: t('authoring.members.confirmRevokeText'),
+  cancel: t('authoring.members.cancel'),
+}))
 let requestVersion = 0
 let active = true
 
@@ -127,10 +147,10 @@ async function reloadLatest() {
     state.value = { kind: 'ready', members: memberships.members }
     conflict.value = false
     confirmingUserID.value = undefined
-    message.value = 'The latest Draft members have been loaded.'
+    message.value = t('authoring.members.latestLoaded')
   } catch (error) {
     if (!isCurrent()) return
-    handleReadError(error, 'We couldn’t reload this Draft right now. Please try again.')
+    handleReadError(error, t('authoring.members.reloadUnavailable'))
   } finally {
     if (isCurrent()) reloading.value = false
   }
@@ -138,7 +158,7 @@ async function reloadLatest() {
 
 async function addMember() {
   for (const key of Object.keys(addErrors)) delete addErrors[key]
-  if (!isAuthoringDraftID(addForm.userId)) addErrors.userId = 'Enter a valid user ID.'
+  if (!isAuthoringDraftID(addForm.userId)) addErrors.userId = t('authoring.members.validation.userId')
   if (Object.keys(addErrors).length || busy.value || conflict.value) return
   await mutate(async () => {
     const isCurrent = captureScope()
@@ -150,7 +170,7 @@ async function addMember() {
     if (!isCurrent()) return
     addForm.userId = ''
     addForm.role = 'AUTHOR'
-    await commit(result.draftRevision, 'Member added.')
+    await commit(result.draftRevision, t('authoring.members.added'))
   })
 }
 
@@ -162,7 +182,7 @@ async function changeRole(input: { userId: string; role: AuthoringActiveMember['
       expectedDraftRevision: draft.value.revision,
     })
     if (!isCurrent()) return
-    await commit(result.draftRevision, 'Member role updated.')
+    await commit(result.draftRevision, t('authoring.members.roleUpdated'))
   })
 }
 
@@ -172,7 +192,7 @@ async function revokeMember(userID: string) {
     const result = await revokeAuthoringMember(draft.value.id, userID, draft.value.revision)
     if (!isCurrent()) return
     confirmingUserID.value = undefined
-    await commit(result.draftRevision, 'Member access revoked.')
+    await commit(result.draftRevision, t('authoring.members.revoked'))
   })
 }
 
@@ -191,8 +211,8 @@ async function mutate(operation: () => Promise<void>) {
     if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
     if (error instanceof APIProblemError && error.status === 409) { conflict.value = true; return }
     formError.value = error instanceof APIProblemError && error.status === 400
-      ? 'We couldn’t save this membership change. Check the values and try again.'
-      : 'We couldn’t save this membership change right now. Please try again.'
+      ? t('authoring.members.saveInvalid')
+      : t('authoring.members.saveUnavailable')
   } finally {
     if (isCurrent()) busy.value = false
   }

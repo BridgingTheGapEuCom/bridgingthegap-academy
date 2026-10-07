@@ -1,36 +1,36 @@
 <template>
   <BtgPageContainer as="section" class="authoring-shell" :aria-labelledby="isLessonWorkspace ? undefined : 'authoring-draft-title'">
     <div v-if="auth.state.value.status === 'bootstrapping'" class="authoring-shell__state" role="status">
-      <h1 id="authoring-draft-title">Checking your session</h1>
-      <p>One moment while we check whether you are signed in.</p>
+      <h1 id="authoring-draft-title">{{ t('authoring.draftShell.checkingSession') }}</h1>
+      <p>{{ t('authoring.draftShell.checkingSessionDescription') }}</p>
     </div>
 
     <div v-else-if="auth.state.value.status === 'unavailable'" class="authoring-shell__state">
-      <h1 id="authoring-draft-title">Authoring unavailable</h1>
-      <p>We couldn’t check your session right now. Please try again.</p>
-      <BtgButton variant="secondary" @click="retryBootstrap">Try again</BtgButton>
+      <h1 id="authoring-draft-title">{{ t('authoring.draftShell.authoringUnavailable') }}</h1>
+      <p>{{ t('authoring.draftShell.sessionUnavailable') }}</p>
+      <BtgButton variant="secondary" @click="retryBootstrap">{{ t('common.actions.tryAgain') }}</BtgButton>
     </div>
 
     <div v-else-if="auth.state.value.status === 'unauthenticated'" class="authoring-shell__state" role="status">
-      <h1 id="authoring-draft-title">Sign in required</h1>
-      <p>Taking you to sign in.</p>
+      <h1 id="authoring-draft-title">{{ t('authoring.draftShell.signInRequired') }}</h1>
+      <p>{{ t('authoring.draftShell.redirectingToSignIn') }}</p>
     </div>
 
     <div v-else-if="state.kind === 'loading'" class="authoring-shell__state" role="status">
-      <h1 id="authoring-draft-title">Loading draft…</h1>
-      <p>One moment while we load this Authoring workspace.</p>
+      <h1 id="authoring-draft-title">{{ t('authoring.draftShell.loading') }}</h1>
+      <p>{{ t('authoring.draftShell.loadingDescription') }}</p>
     </div>
 
     <div v-else-if="state.kind === 'not-found'" class="authoring-shell__state">
-      <h1 id="authoring-draft-title">Draft unavailable</h1>
-      <p>This Draft is not available.</p>
-      <RouterLink to="/">Return home</RouterLink>
+      <h1 id="authoring-draft-title">{{ t('authoring.draftShell.draftUnavailable') }}</h1>
+      <p>{{ t('authoring.draftShell.notAvailable') }}</p>
+      <RouterLink to="/">{{ t('authoring.draftShell.returnHome') }}</RouterLink>
     </div>
 
     <div v-else-if="state.kind === 'unavailable'" class="authoring-shell__state">
-      <h1 id="authoring-draft-title">Authoring unavailable</h1>
-      <p>We couldn’t load this Draft right now. Please try again.</p>
-      <BtgButton variant="secondary" @click="load">Try again</BtgButton>
+      <h1 id="authoring-draft-title">{{ t('authoring.draftShell.authoringUnavailable') }}</h1>
+      <p>{{ t('authoring.draftShell.loadUnavailable') }}</p>
+      <BtgButton variant="secondary" @click="load">{{ t('common.actions.tryAgain') }}</BtgButton>
     </div>
 
     <div v-else-if="isLessonPreview" class="authoring-shell__content authoring-shell__content--preview">
@@ -52,6 +52,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { APIProblemError } from '../api/client'
 import { useAuth } from '../auth/auth'
 import { loginLocation, routeReturnPath } from '../auth/navigation'
@@ -61,28 +62,31 @@ import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
 import AuthoringDraftHeader from '../components/AuthoringDraftHeader.vue'
 import { languageLabel } from '../i18n/languages'
+import { useApplicationFormatters } from '../i18n/formatters'
 
 type State = { kind: 'loading' } | { kind: 'ready'; draft: AuthoringDraft } | { kind: 'not-found' } | { kind: 'unavailable' }
 
 const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
+const { date } = useApplicationFormatters()
 const state = ref<State>({ kind: 'loading' })
 const draft = ref<AuthoringDraft>()
 const isLessonPreview = computed(() => route.name === 'authoring-draft-lesson-preview')
 const isLessonWorkspace = computed(() => route.name === 'authoring-draft-lesson' || route.name === 'authoring-draft-lesson-content' || route.name === 'authoring-draft-lesson-prerequisites')
 const draftMetadata = computed(() => state.value.kind === 'ready' ? [
-  { label: 'Intended version', value: state.value.draft.intended_version },
-  { label: 'Status', value: draftStatus(state.value.draft.status) },
-  { label: 'Source language', value: languageLabel(state.value.draft.source_language) },
-  { label: 'Last updated', value: updatedAt(state.value.draft.updated_at) },
+  { label: t('authoring.draftHeader.intendedVersion'), value: state.value.draft.intended_version },
+  { label: t('authoring.draftHeader.status'), value: draftStatus(state.value.draft.status) },
+  { label: t('authoring.draftHeader.sourceLanguage'), value: languageLabel(state.value.draft.source_language) },
+  { label: t('authoring.draftHeader.lastUpdated'), value: date(state.value.draft.updated_at, 'dateTime') },
 ] : [])
 const draftTabs = computed(() => state.value.kind === 'ready' ? [
-  { label: 'Overview', to: authoringDraftPath(state.value.draft.id, 'overview') },
-  { label: 'Structure', to: authoringDraftPath(state.value.draft.id, 'structure') },
-  { label: 'Members', to: authoringDraftPath(state.value.draft.id, 'members') },
-  { label: 'Assessments', to: `/authoring/drafts/${encodeURIComponent(state.value.draft.id)}/assessments` },
-  { label: 'Review', to: authoringDraftPath(state.value.draft.id, 'review') },
+  { label: t('authoring.draftHeader.tabs.overview'), to: authoringDraftPath(state.value.draft.id, 'overview') },
+  { label: t('authoring.draftHeader.tabs.structure'), to: authoringDraftPath(state.value.draft.id, 'structure') },
+  { label: t('authoring.draftHeader.tabs.members'), to: authoringDraftPath(state.value.draft.id, 'members') },
+  { label: t('authoring.draftHeader.tabs.assessments'), to: `/authoring/drafts/${encodeURIComponent(state.value.draft.id)}/assessments` },
+  { label: t('authoring.draftHeader.tabs.review'), to: authoringDraftPath(state.value.draft.id, 'review') },
 ] : [])
 
 let requestVersion = 0
@@ -145,11 +149,5 @@ async function retryBootstrap() {
   await auth.bootstrapSession()
 }
 
-function draftStatus(status: AuthoringDraft['status']): string {
-  return status === 'ACTIVE' ? 'Active Draft' : 'Abandoned Draft'
-}
-function updatedAt(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
-}
+function draftStatus(status: AuthoringDraft['status']): string { return status === 'ACTIVE' ? t('authoring.draftHeader.active') : t('authoring.draftHeader.abandoned') }
 </script>

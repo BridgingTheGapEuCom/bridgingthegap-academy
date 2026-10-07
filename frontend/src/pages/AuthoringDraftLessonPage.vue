@@ -1,18 +1,18 @@
 <template>
   <section class="authoring-section authoring-lesson-editor" aria-labelledby="authoring-lesson-title">
     <div v-if="state.kind === 'loading'" class="authoring-lesson-editor__state" role="status">
-      <h2 id="authoring-lesson-title">Loading Lesson…</h2>
-      <p>One moment while we load this Lesson.</p>
+      <h2 id="authoring-lesson-title">{{ t('authoring.details.loading') }}</h2>
+      <p>{{ t('authoring.details.loadingDescription') }}</p>
     </div>
 
     <div v-else-if="state.kind === 'unavailable'" class="authoring-lesson-editor__state">
-      <h2 id="authoring-lesson-title">Lesson unavailable</h2>
-      <p>We couldn’t load this Lesson right now.</p>
-      <BtgButton variant="secondary" @click="load">Try again</BtgButton>
+      <h2 id="authoring-lesson-title">{{ t('authoring.details.unavailable') }}</h2>
+      <p>{{ t('authoring.details.unavailableDescription') }}</p>
+      <BtgButton variant="secondary" @click="load">{{ t('common.actions.tryAgain') }}</BtgButton>
     </div>
 
     <template v-else-if="state.kind === 'ready'">
-      <AuthoringLessonHeader :title="state.lesson.title" :back-to="backToStructure" :tabs="lessonTabs" />
+      <AuthoringLessonHeader :title="state.lesson.title" :back-to="backToStructure" :tabs="lessonTabs" :labels="lessonHeaderLabels" />
 
       <template v-if="currentSection === 'details' || legacyCombined">
       <AuthoringPageTitle id="authoring-lesson-details-title" :title="t('authoring.details.title')" :description="t('authoring.details.description')" focusable />
@@ -20,8 +20,8 @@
         <p v-if="formError" class="authoring-lesson-editor__error" role="alert">{{ formError }}</p>
         <p v-if="saveMessage" class="authoring-lesson-editor__status" role="status">{{ saveMessage }}</p>
         <div v-if="conflict" class="authoring-lesson-editor__conflict" role="status">
-          <p>This Lesson changed elsewhere. Your edits are still here, but you need to reload the latest Lesson before saving again.</p>
-          <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? 'Reloading…' : 'Reload latest Lesson' }}</BtgButton>
+          <p>{{ t('authoring.details.changedElsewhere') }}</p>
+          <BtgButton variant="secondary" :disabled="reloading" @click="reloadLatest">{{ reloading ? t('authoring.details.reloading') : t('authoring.details.reloadLatest') }}</BtgButton>
         </div>
 
         <AuthoringSection heading-id="authoring-lesson-basic-information-title" :title="t('authoring.details.basicInformation')" :description="t('authoring.details.basicInformationDescription')">
@@ -29,7 +29,7 @@
               <BtgTextInput :id="controlId" v-model="form.title" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
             </BtgFormField>
             <BtgFormField :label="t('authoring.details.lessonDescription')" required :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
-              <textarea :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
+              <BtgTextarea :id="controlId" v-model="form.description" :disabled="saving || reloading" :aria-describedby="describedBy" :invalid="invalid" required />
             </BtgFormField>
         </AuthoringSection>
 
@@ -43,7 +43,7 @@
             </BtgFormField>
         </AuthoringSection>
 
-        <AuthoringDirtyActionBar :show="dirty" :busy="saving" :disabled="saving || reloading" :save-disabled="conflict" @discard="discardChanges" />
+        <AuthoringDirtyActionBar :show="dirty" :busy="saving" :disabled="saving || reloading" :save-disabled="conflict" :message="t('authoring.details.dirty')" :discard-label="t('authoring.details.discard')" :save-label="t('authoring.details.save')" :busy-label="t('authoring.details.saving')" @discard="discardChanges" />
       </form>
       </template>
       <template v-if="currentSection === 'content' || legacyCombined">
@@ -75,6 +75,7 @@ import { useAuthoringDraftContext } from '../authoring/draftContext'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
+import BtgTextarea from '../components/BtgTextarea.vue'
 import AuthoringLessonPrerequisitesEditor from '../components/AuthoringLessonPrerequisitesEditor.vue'
 import AuthoringLessonContentEditor from '../components/AuthoringLessonContentEditor.vue'
 import AuthoringDirtyActionBar from '../components/AuthoringDirtyActionBar.vue'
@@ -100,14 +101,15 @@ const saving = ref(false)
 const reloading = ref(false)
 const conflict = ref(false)
 const dirty = computed(() => original.value !== undefined && JSON.stringify(normalized(form)) !== JSON.stringify(normalized(original.value)))
-const sections = [{ id: 'details', label: 'Details' }, { id: 'content', label: 'Content' }, { id: 'prerequisites', label: 'Prerequisites' }] as const
-type Section = typeof sections[number]['id']
+const sections = ['details', 'content', 'prerequisites'] as const
+type Section = typeof sections[number]
 const currentSection = computed<Section>(() => route.name === 'authoring-draft-lesson-content' ? 'content' : route.name === 'authoring-draft-lesson-prerequisites' ? 'prerequisites' : 'details')
 const legacyCombined = computed(() => route.name === undefined)
 const backToStructure = computed(() => route.query.from === 'structure'
   ? { path: authoringDraftPath(draft.value.id, 'structure'), query: { lesson: lessonID(), search: typeof route.query.search === 'string' ? route.query.search : undefined } }
   : authoringDraftPath(draft.value.id, 'structure'))
-const lessonTabs = computed(() => sections.map((section) => ({ label: section.label, to: sectionPath(section.id) })))
+const lessonHeaderLabels = computed(() => ({ context: t('authoring.lessonHeader.context'), back: t('authoring.lessonHeader.back'), lesson: t('authoring.lessonHeader.lesson'), draft: t('authoring.lessonHeader.draft'), sections: t('authoring.lessonHeader.sections') }))
+const lessonTabs = computed(() => sections.map((section) => ({ label: t(`authoring.lessonHeader.tabs.${section}`), to: sectionPath(section) })))
 
 let requestVersion = 0
 let active = true

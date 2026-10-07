@@ -176,6 +176,7 @@ A component may choose one value within a range, then owns it for every consumer
 | `BtgTextarea` | Multiline text control | Same field contract and resize behavior | Create page-specific textarea chrome |
 | `BtgSelect` | Native select presentation | Label/error association and disabled state | Replace with a custom listbox without need |
 | `BtgCheckbox` | Checkbox, label, helper, error | Enlarged hit target and associations | Separate the input from its visible label |
+| `BtgRadio` | A single radio choice for feature-owned native groups | Native radio semantics and focus behavior | Recreate radio control chrome |
 | `BtgRadioGroup` | Radios or a deliberate segmented variant | Group label, keyboard/native semantics | Use buttons without selection semantics |
 | `BtgSearchField` | Search input with leading search icon and clear action where needed | Persistent or accessible label, native search semantics | Hand-position an icon over an input |
 | `BtgBadge` | Read-only status/category label | Text conveys state, not color alone | Use it as an interactive control |
@@ -270,6 +271,10 @@ These patterns sit above generic primitives because they encode Academy Authorin
 - `AuthoringContentBlockList`: canonical content-block selection and reordering.
 
 Feature patterns own domain labels, data, ordering rules, permissions, and persistence. They compose generic controls and surfaces rather than redefining them.
+
+### Lesson workspace references
+
+The three Lesson routes share `AuthoringLessonHeader`, `AuthoringPageTitle`, tabs, and the dirty-action-bar composition. Lesson Details is the standard Authoring form reference; Lesson Content is the specialized-editor reference, retaining only editor and media geometry; Lesson Prerequisites is the relationship-editor reference, using the balanced split workspace. Product copy is supplied by each route or feature composition, including accessibility copy; reusable Lesson components do not embed English defaults.
 
 ## Ownership rules
 

@@ -1,10 +1,11 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { shallowRef } from 'vue'
 import { APIProblemError } from '../api/client'
 import { authoringDraftContextKey } from '../authoring/draftContext'
 import type { AuthoringPublication, AuthoringReviewDetail } from '../authoring/authoring'
+import { renderWithI18n } from '../test/i18n'
 import AuthoringDraftReviewSnapshotPage from './AuthoringDraftReviewSnapshotPage.vue'
 
 const getAuthoringDraftReviewMock = vi.hoisted(() => vi.fn())
@@ -112,7 +113,7 @@ async function renderPage(path = `/authoring/drafts/${draftID}/reviews/${firstRe
   await router.isReady()
   const draft = shallowRef(currentDraft)
   const markDraftUnavailable = vi.fn()
-  const result = render({ template: '<RouterView />' }, {
+  const result = renderWithI18n({ template: '<RouterView />' }, {
     global: { plugins: [router], provide: { [authoringDraftContextKey as symbol]: { draft, replaceDraft: vi.fn(), markDraftUnavailable } } },
   })
   return { ...result, router, draft, markDraftUnavailable }
@@ -309,7 +310,7 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(screen.getByRole('heading', { level: 4, name: 'Published course version' })).toBeTruthy()
     expect(screen.queryByRole('heading', { level: 4, name: 'Course version published' })).toBeNull()
     expect(screen.queryByText('Course version 1.0.0 was published successfully.')).toBeNull()
-    expect(screen.getByText('16 Sept 2026, 14:30')).toBeTruthy()
+    expect(screen.getByText('Sep 16, 2026, 4:30 PM')).toBeTruthy()
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 4, name: 'Published course version' })))
   })
 
@@ -429,7 +430,7 @@ describe('AuthoringDraftReviewSnapshotPage', () => {
     expect(await screen.findByRole('heading', { level: 4, name: 'Publication status could not be confirmed' })).toBeTruthy()
     expect(screen.getByText(/refreshed Review did not confirm Published/)).toBeTruthy()
     expect(screen.queryByRole('heading', { level: 4, name: 'Published course version' })).toBeNull()
-    expect(screen.queryByText('16 Sept 2026, 14:30')).toBeNull()
+    expect(screen.queryByText('Sep 16, 2026, 4:30 PM')).toBeNull()
   })
 
   it('recovers from a failed post-publication refresh without leaving the action stuck pending', async () => {

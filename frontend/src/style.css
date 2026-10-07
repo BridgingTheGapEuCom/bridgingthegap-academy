@@ -905,26 +905,22 @@
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
-.authoring-shell__metadata,
-.authoring-overview__metadata {
+.authoring-shell__metadata {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--btg-space-3) var(--btg-space-6);
 	margin: 0;
 }
-.authoring-shell__metadata div,
-.authoring-overview__metadata div {
+.authoring-shell__metadata div {
 	display: grid;
 	gap: var(--btg-space-1);
 }
-.authoring-shell__metadata dt,
-.authoring-overview__metadata dt {
+.authoring-shell__metadata dt {
 	color: var(--btg-color-text-secondary);
 	font-size: var(--btg-font-size-small);
 	font-weight: var(--btg-font-weight-medium);
 }
-.authoring-shell__metadata dd,
-.authoring-overview__metadata dd {
+.authoring-shell__metadata dd {
 	margin: 0;
 	font-weight: var(--btg-font-weight-strong);
 }
@@ -1024,60 +1020,9 @@
 	gap: var(--btg-space-3);
 }
 .authoring-overview,
-.authoring-overview__heading,
 .authoring-overview__form {
 	display: grid;
 	gap: var(--btg-space-5);
-}
-.authoring-overview__heading {
-	gap: var(--btg-space-3);
-}
-.authoring-overview__heading > p {
-	margin: 0;
-}
-.authoring-overview__panel {
-	border: 1px solid var(--btg-color-border);
-	border-radius: var(--btg-radius-surface);
-	background: var(--btg-color-surface);
-}
-.authoring-overview__panel:focus-within {
-	position: relative;
-	z-index: 1;
-}
-.authoring-overview__panel-header {
-	display: grid;
-	gap: var(--btg-space-1);
-	border-radius: var(--btg-radius-surface) var(--btg-radius-surface) 0 0;
-	border-bottom: 1px solid var(--btg-color-border);
-	background: var(--btg-color-surface-muted);
-	padding: var(--btg-space-4) var(--btg-space-5);
-}
-.authoring-overview__panel-header h3 {
-	display: flex;
-	align-items: center;
-	gap: var(--btg-space-3);
-	font-size: 1.125rem;
-}
-.authoring-overview__panel-header h3 span {
-	display: grid;
-	width: 2rem;
-	height: 2rem;
-	place-items: center;
-	border-radius: 50%;
-	background: var(--btg-color-code-background);
-	color: var(--btg-color-text-secondary);
-	font-family: var(--btg-font-mono);
-	font-size: var(--btg-font-size-small);
-}
-.authoring-overview__panel-header p {
-	margin: 0;
-	color: var(--btg-color-text-secondary);
-	font-size: var(--btg-font-size-small);
-}
-.authoring-overview__panel-body {
-	display: grid;
-	gap: var(--btg-space-5);
-	padding: var(--btg-space-5);
 }
 .authoring-overview__two-column {
 	display: grid;
@@ -1096,58 +1041,15 @@
 .authoring-overview__license-text {
 	min-height: 6rem;
 }
-.authoring-overview__actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--btg-space-3);
-	padding-top: var(--btg-space-2);
-}
 @media (max-width: 42rem) {
 	.authoring-overview__two-column {
 		grid-template-columns: 1fr;
 	}
 }
-.authoring-lesson-editor__header,
 .authoring-lesson-editor__form,
-.authoring-lesson-editor__objectives,
 .authoring-lesson-editor__state {
 	display: grid;
 	gap: var(--btg-space-4);
-}
-.authoring-lesson-editor__key {
-	color: var(--btg-color-text-secondary);
-}
-.authoring-lesson-editor__key span {
-	font-size: var(--btg-font-size-small);
-	font-weight: var(--btg-font-weight-medium);
-}
-.authoring-lesson-editor__form textarea {
-	min-height: 8rem;
-	resize: vertical;
-}
-.authoring-lesson-editor__objectives {
-	margin: 0;
-	border: var(--btg-border-width) solid var(--btg-color-border);
-	padding: var(--btg-space-4);
-}
-.authoring-lesson-editor__objectives legend {
-	padding-inline: var(--btg-space-2);
-	font-weight: var(--btg-font-weight-strong);
-}
-.authoring-lesson-editor__objectives > p {
-	color: var(--btg-color-text-secondary);
-}
-.authoring-lesson-editor__objectives ol {
-	display: grid;
-	gap: var(--btg-space-3);
-	margin: 0;
-	padding-inline-start: var(--btg-space-5);
-}
-.authoring-lesson-editor__objectives li {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: end;
-	gap: var(--btg-space-3);
 }
 .authoring-lesson-editor__error,
 .authoring-lesson-editor__conflict,
@@ -1165,79 +1067,6 @@
 }
 .authoring-lesson-editor__conflict p {
 	margin-bottom: var(--btg-space-3);
-}
-.authoring-lesson-editor__unsaved {
-	color: var(--btg-color-text-secondary);
-	font-weight: var(--btg-font-weight-medium);
-}
-.authoring-lesson-editor__actions {
-	display: flex;
-	gap: var(--btg-space-3);
-}
-.authoring-lesson-editor__metadata {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--btg-space-4);
-	margin: 0;
-	color: var(--btg-color-text-secondary);
-}
-.authoring-lesson-editor__metadata div {
-	display: grid;
-	gap: var(--btg-space-1);
-}
-.authoring-lesson-editor__metadata dt {
-	font-size: var(--btg-font-size-small);
-}
-.authoring-lesson-editor__metadata dd {
-	margin: 0;
-	color: var(--btg-color-text);
-	font-weight: var(--btg-font-weight-medium);
-}
-.authoring-lesson-editor__context {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--btg-space-2);
-}
-.authoring-lesson-editor__context span {
-	border-radius: var(--btg-radius-control);
-	background: var(--btg-color-surface-muted);
-	color: var(--btg-color-text-secondary);
-	font-size: var(--btg-font-size-small);
-	font-weight: var(--btg-font-weight-strong);
-	padding: 0.35rem 0.65rem;
-}
-.authoring-lesson-editor__navigation {
-	border-bottom: var(--btg-border-width) solid var(--btg-color-border);
-}
-.authoring-lesson-editor__navigation ul {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--btg-space-4);
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-.authoring-lesson-editor__navigation a {
-	display: block;
-	padding: var(--btg-space-2) 0;
-	color: var(--btg-color-text-secondary);
-	text-decoration: none;
-}
-.authoring-lesson-editor__navigation a[aria-current="page"] {
-	border-bottom: 0.125rem solid var(--btg-color-text);
-	color: var(--btg-color-text);
-	font-weight: var(--btg-font-weight-strong);
-}
-.authoring-lesson-editor__subview {
-	display: grid;
-	gap: var(--btg-space-2);
-}
-.authoring-lesson-editor__subview h2,
-.authoring-lesson-editor__subview p {
-	margin: 0;
-}
-.authoring-lesson-editor__subview p {
-	color: var(--btg-color-text-secondary);
 }
 .authoring-lesson-editor__duration {
 	display: flex;
@@ -1543,16 +1372,9 @@
 }
 .authoring-assessments,
 .authoring-assessment-editor,
-.authoring-assessments__create,
-.authoring-assessment-editor__form,
-.authoring-assessment-editor__add {
+.authoring-assessment-editor__form {
 	display: grid;
 	gap: var(--btg-space-4);
-}
-.authoring-assessments__create,
-.authoring-assessment-editor__questions > li > fieldset {
-	border: var(--btg-border-width) solid var(--btg-color-border);
-	padding: var(--btg-space-4);
 }
 .authoring-assessments__list,
 .authoring-assessment-editor__questions {
@@ -1567,6 +1389,12 @@
 	display: grid;
 	gap: var(--btg-space-3);
 	min-width: 0;
+}
+.authoring-assessment-editor fieldset {
+	min-width: 0;
+	margin: 0;
+	border: 0;
+	padding: 0;
 }
 .authoring-assessments__list dl {
 	display: flex;
@@ -1594,10 +1422,6 @@
 	min-height: 6rem;
 	resize: vertical;
 }
-.authoring-assessment-editor__questions > li > fieldset > fieldset {
-	display: grid;
-	gap: var(--btg-space-3);
-}
 .authoring-assessment-editor__questions ol {
 	display: grid;
 	gap: var(--btg-space-3);
@@ -1612,19 +1436,6 @@
 }
 .authoring-assessment-editor__questions ol > li .btg-form-field {
 	min-width: 0;
-}
-.authoring-assessment-editor__error,
-.authoring-assessment-editor__conflict,
-.authoring-assessment-editor__status {
-	border-inline-start: 0.25rem solid var(--btg-color-danger);
-	background: var(--btg-color-surface-muted);
-	padding: var(--btg-space-3) var(--btg-space-4);
-}
-.authoring-assessment-editor__conflict {
-	border-inline-start-color: var(--btg-color-warning);
-}
-.authoring-assessment-editor__status {
-	border-inline-start-color: var(--btg-color-success);
 }
 .authoring-structure,
 .authoring-structure__header {
@@ -1654,19 +1465,11 @@
 	margin-bottom: var(--btg-space-3);
 }
 .authoring-members,
-.authoring-members__header,
-.authoring-members__add,
-.authoring-members__current,
 .authoring-members__item,
 .authoring-members__identity,
 .authoring-members__controls {
 	display: grid;
 	gap: var(--btg-space-4);
-}
-.authoring-members__add,
-.authoring-members__current {
-	border: var(--btg-border-width) solid var(--btg-color-border);
-	padding: var(--btg-space-4);
 }
 .authoring-members__list {
 	display: grid;
@@ -1677,15 +1480,13 @@
 	list-style: none;
 }
 .authoring-members__item {
-	border-inline-start: 0.25rem solid var(--btg-color-border);
-	padding-inline-start: var(--btg-space-4);
+	min-width: 0;
 }
 .authoring-members__identity {
 	gap: var(--btg-space-2);
 	min-width: 0;
 }
-.authoring-members__user-id,
-.authoring-members__role {
+.authoring-members__user-id {
 	margin: 0;
 }
 .authoring-members__user-id span {
@@ -1699,6 +1500,10 @@
 	user-select: all;
 }
 .authoring-members__role {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--btg-space-2);
 	color: var(--btg-color-text-secondary);
 }
 .authoring-members__controls {
@@ -1713,23 +1518,6 @@
 }
 .authoring-members__empty {
 	color: var(--btg-color-text-secondary);
-}
-.authoring-members__state,
-.authoring-members__error,
-.authoring-members__conflict,
-.authoring-members__status {
-	border-inline-start: 0.25rem solid var(--btg-color-danger);
-	background: var(--btg-color-surface-muted);
-	padding: var(--btg-space-3) var(--btg-space-4);
-}
-.authoring-members__state {
-	border-inline-start-color: var(--btg-color-border-strong);
-}
-.authoring-members__conflict {
-	border-inline-start-color: var(--btg-color-warning);
-}
-.authoring-members__status {
-	border-inline-start-color: var(--btg-color-success);
 }
 .authoring-members__conflict p {
 	margin-bottom: var(--btg-space-3);
@@ -1751,14 +1539,6 @@
 .authoring-review-snapshot__content {
 	display: grid;
 	gap: var(--btg-space-4);
-}
-.authoring-review__summary,
-.authoring-review__history,
-.authoring-review__submission,
-.authoring-review__decisions,
-.authoring-review__state {
-	border: var(--btg-border-width) solid var(--btg-color-border);
-	padding: var(--btg-space-4);
 }
 .authoring-review__summary h3,
 .authoring-review__submission h3,
@@ -1807,9 +1587,6 @@
 .authoring-review__empty {
 	color: var(--btg-color-text-secondary);
 }
-.authoring-review__state {
-	border-inline-start: 0.25rem solid var(--btg-color-border-strong);
-}
 .authoring-review__conflict {
 	border-inline-start: 0.25rem solid var(--btg-color-warning);
 	padding-inline-start: var(--btg-space-3);
@@ -1822,25 +1599,6 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--btg-space-3);
-}
-.authoring-review__publication-feedback {
-	display: grid;
-	gap: var(--btg-space-3);
-	padding: var(--btg-space-3) var(--btg-space-4);
-	border-inline-start: 0.25rem solid var(--btg-color-border-strong);
-	background: var(--btg-color-surface-muted);
-}
-.authoring-review__publication-feedback--success {
-	border-inline-start-color: var(--btg-color-success);
-}
-.authoring-review__publication-feedback--ready {
-	border-inline-start-color: var(--btg-color-success);
-}
-.authoring-review__publication-feedback--conflict {
-	border-inline-start-color: var(--btg-color-warning);
-}
-.authoring-review__publication-feedback--error {
-	border-inline-start-color: var(--btg-color-danger);
 }
 .authoring-review__publication-feedback h4,
 .authoring-review__publication-feedback p {
@@ -1905,19 +1663,8 @@
 		border-inline-start: 0;
 		padding-inline-start: 0;
 	}
-	.authoring-overview__panel-header,
-	.authoring-overview__panel-body {
-		padding: var(--btg-space-4);
-	}
-	.authoring-overview__actions > .btg-button {
-		flex: 1 1 100%;
-	}
 	.authoring-structure-module__header {
 		grid-template-columns: 1fr;
-	}
-	.authoring-lesson-editor__objectives li {
-		grid-template-columns: 1fr;
-		align-items: stretch;
 	}
 	.authoring-assessment-editor__questions ol > li {
 		grid-template-columns: 1fr;
@@ -3564,16 +3311,6 @@
 	width: 100%;
 	max-width: none;
 }
-.authoring-lesson-editor__header {
-	gap: var(--btg-space-3);
-}
-.authoring-lesson-editor__header h1 {
-	font-size: clamp(2rem, 4vw, 3rem);
-}
-.authoring-lesson-editor__subview--content {
-	gap: var(--btg-space-1);
-	margin-top: calc(-1 * var(--btg-space-2));
-}
 
 /* Lesson content is an ordered document: the row header stays visible while its
    editor unfolds beneath it, and lesson-wide changes live in a separate bar. */
@@ -4125,172 +3862,8 @@
 	}
 }
 
-/* Lesson details follows the same quiet, document-style rhythm as content: a
-   small amount of context, then three clear editing sections. */
 .authoring-lesson-editor__form {
 	gap: var(--btg-space-5);
-}
-.authoring-lesson-details__panel {
-	display: grid;
-	gap: var(--btg-space-4);
-	border: var(--btg-border-width) solid
-		color-mix(in srgb, var(--btg-color-border) 82%, transparent);
-	border-radius: var(--btg-radius-control);
-	background: var(--btg-color-surface);
-	padding: var(--btg-space-5);
-}
-.authoring-lesson-details__panel > header {
-	display: grid;
-	gap: var(--btg-space-1);
-}
-.authoring-lesson-details__panel h3,
-.authoring-lesson-details__panel p {
-	margin: 0;
-}
-.authoring-lesson-details__panel h3 {
-	font-size: 1.125rem;
-}
-.authoring-lesson-details__panel > header p,
-.authoring-lesson-details__panel-body
-	> .btg-form-field
-	> .btg-form-field__description {
-	color: var(--btg-color-text-secondary);
-}
-.authoring-lesson-details__panel-body {
-	display: grid;
-	gap: var(--btg-space-4);
-	min-width: 0;
-}
-.authoring-lesson-details__panel-body .btg-form-field {
-	gap: var(--btg-space-1);
-}
-.authoring-lesson-details__panel-body textarea {
-	min-height: 9rem;
-}
-.authoring-lesson-details__objectives {
-	display: grid;
-	gap: var(--btg-space-2);
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-.authoring-lesson-details__objectives li {
-	display: grid;
-	position: relative;
-	grid-template-columns: 2.25rem 2.25rem minmax(0, 1fr) auto;
-	align-items: center;
-	gap: var(--btg-space-3);
-	min-width: 0;
-	border-bottom: var(--btg-border-width) solid
-		color-mix(in srgb, var(--btg-color-border) 72%, transparent);
-	padding-block: var(--btg-space-2);
-}
-.authoring-lesson-details__objectives li.is-dragging {
-	opacity: 0.55;
-}
-.authoring-lesson-details__objectives li.is-drop-before::before,
-.authoring-lesson-details__objectives li.is-drop-after::after {
-	position: absolute;
-	right: 0;
-	left: 0;
-	height: 0.15rem;
-	background: var(--btg-color-text);
-	content: "";
-}
-.authoring-lesson-details__objectives li.is-drop-before::before {
-	top: calc(-1 * var(--btg-space-2));
-}
-.authoring-lesson-details__objectives li.is-drop-after::after {
-	bottom: calc(-1 * var(--btg-space-2));
-}
-.authoring-lesson-details__drag-handle {
-	display: inline-grid;
-	width: 2.25rem;
-	min-height: 2.5rem;
-	place-items: center;
-	border: var(--btg-border-width) solid transparent;
-	border-radius: var(--btg-radius-control);
-	background: transparent;
-	color: var(--btg-color-border-strong);
-	cursor: grab;
-	touch-action: none;
-}
-.authoring-lesson-details__drag-handle:hover,
-.authoring-lesson-details__drag-handle:focus-visible,
-.authoring-lesson-details__drag-handle[aria-pressed="true"] {
-	border-color: var(--btg-color-border-strong);
-	background: var(--btg-color-surface-muted);
-	color: var(--btg-color-text);
-}
-.authoring-lesson-details__drag-handle:active {
-	cursor: grabbing;
-}
-.authoring-lesson-details__drag-handle svg {
-	width: 1rem;
-	height: 1rem;
-	fill: none;
-	stroke: currentcolor;
-	stroke-linecap: round;
-	stroke-width: 3;
-}
-.authoring-lesson-details__objectives li:first-child {
-	padding-block-start: 0;
-}
-.authoring-lesson-details__objectives li:last-child {
-	border-bottom: 0;
-	padding-block-end: 0;
-}
-.authoring-lesson-details__objective-number {
-	display: grid;
-	width: 2.25rem;
-	min-height: 2.5rem;
-	place-items: center;
-	color: var(--btg-color-text-secondary);
-	font-size: var(--btg-font-size-small);
-	font-weight: var(--btg-font-weight-strong);
-	letter-spacing: 0.06em;
-}
-.authoring-lesson-details__add-objective {
-	width: fit-content;
-	margin-top: var(--btg-space-1);
-}
-.authoring-lesson-details__panel--timing
-	.authoring-lesson-editor__duration
-	input {
-	width: min(100%, 8rem);
-}
-.authoring-lesson-details__save-bar {
-	position: sticky;
-	bottom: var(--btg-space-3);
-	z-index: 2;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--btg-space-3);
-	border: var(--btg-border-width) solid var(--btg-color-border);
-	border-radius: var(--btg-radius-surface);
-	background: var(--btg-color-surface);
-	box-shadow: 0 -0.3rem 0.8rem rgb(0 0 0 / 0.035);
-	padding: var(--btg-space-3) var(--btg-space-4);
-}
-.authoring-lesson-details__save-bar p,
-.authoring-lesson-details__save-bar > div {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--btg-space-2);
-	margin: 0;
-}
-.authoring-lesson-details__save-bar p {
-	color: var(--btg-color-text-secondary);
-	font-weight: var(--btg-font-weight-medium);
-}
-.authoring-lesson-details__save-bar p span {
-	width: 0.55rem;
-	height: 0.55rem;
-	border-radius: 50%;
-	background: var(--btg-color-text-secondary);
 }
 
 /* Shared Authoring foundation. Draft and Lesson routes use the same canvas,
@@ -4495,14 +4068,7 @@
 	gap: var(--authoring-toolbar-gap);
 }
 .authoring-structure-outline,
-.authoring-structure-detail,
-.authoring-members__add,
-.authoring-members__current,
-.authoring-assessments__create,
-.authoring-review__summary,
-.authoring-review__history,
-.authoring-review__submission,
-.authoring-review__decisions {
+.authoring-structure-detail {
 	border-color: var(--authoring-border-subtle);
 	border-radius: var(--btg-radius-control);
 	background: var(--btg-color-surface);
@@ -4828,41 +4394,5 @@
 	.authoring-prerequisites__selected-actions {
 		grid-column: 3;
 		justify-content: start;
-	}
-}
-@media (max-width: 42rem) {
-	.authoring-lesson-details__panel {
-		padding: var(--btg-space-4);
-	}
-	.authoring-lesson-details__save-bar {
-		bottom: var(--btg-space-2);
-		align-items: stretch;
-	}
-	.authoring-lesson-details__save-bar > div {
-		flex: 1 1 100%;
-	}
-	.authoring-lesson-details__save-bar .btg-button {
-		flex: 1 1 12rem;
-	}
-}
-@media (max-width: 34rem) {
-	.authoring-lesson-details__panel {
-		padding: var(--btg-space-3);
-	}
-	.authoring-lesson-details__objectives li {
-		grid-template-columns: 2rem 2rem minmax(0, 1fr);
-		gap: var(--btg-space-2);
-	}
-	.authoring-lesson-details__drag-handle {
-		width: 2rem;
-		min-height: 2.25rem;
-	}
-	.authoring-lesson-details__objective-number {
-		width: 2rem;
-		min-height: 2.25rem;
-	}
-	.authoring-lesson-details__objectives li .btg-button {
-		grid-column: 3;
-		justify-self: start;
 	}
 }

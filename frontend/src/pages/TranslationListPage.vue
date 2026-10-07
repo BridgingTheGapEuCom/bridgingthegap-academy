@@ -8,7 +8,7 @@
       <p>Translations of source version <strong>{{ version }}</strong>. Each workspace remains linked to this exact version.</p>
       <form class="translation-create" @submit.prevent="create">
         <BtgFormField label="Target language" description="Select the language for this translation." :error="languageError" v-slot="{ controlId, describedBy, invalid }">
-          <LanguagePicker :id="controlId" v-model="language" :described-by="describedBy" :invalid="invalid" :disabled="creating" />
+          <LanguagePicker :id="controlId" v-model="language" :labels="languagePickerLabels" :described-by="describedBy" :invalid="invalid" :disabled="creating" />
         </BtgFormField>
         <p v-if="message" role="status">{{ message }}</p>
         <BtgButton type="submit" :disabled="creating">{{ creating ? 'Creating…' : 'Create translation' }}</BtgButton>
@@ -44,6 +44,7 @@ const language = ref('')
 const languageError = ref('')
 const message = ref('')
 const creating = ref(false)
+const languagePickerLabels = { placeholder: 'Search by language or tag', close: 'Close language options', open: 'Show language options', options: 'Language options', empty: 'No matching languages.', useTag: (tag: string) => `Use language tag “${tag}”`, available: (count: number) => `${count} language options available.`, selected: (label: string) => `${label} selected.` }
 let generation = 0
 let active = true
 

@@ -1,8 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { APIProblemError } from '../api/client'
 import { authoringDraftContextKey } from '../authoring/draftContext'
+import { pseudoLocalize } from '../i18n/pseudo'
+import { renderWithI18n } from '../test/i18n'
 
 const getAuthoringDraftMembersMock = vi.hoisted(() => vi.fn())
 const getAuthoringDraftMock = vi.hoisted(() => vi.fn())
@@ -34,12 +36,12 @@ const members = () => ({ members: [
   { userId: maintainerID, role: 'MAINTAINER' as const },
 ] })
 
-async function renderPage() {
+async function renderPage(locale: 'en' | 'en-XA' = 'en') {
   const currentDraft = ref(draft())
   const replaceDraft = vi.fn((nextDraft) => { currentDraft.value = nextDraft })
   const markDraftUnavailable = vi.fn()
   return {
-    ...render(AuthoringDraftMembersPage, { global: { provide: { [authoringDraftContextKey as symbol]: { draft: currentDraft, replaceDraft, markDraftUnavailable } } } }),
+    ...renderWithI18n(AuthoringDraftMembersPage, { global: { provide: { [authoringDraftContextKey as symbol]: { draft: currentDraft, replaceDraft, markDraftUnavailable } } } }, locale),
     currentDraft, replaceDraft, markDraftUnavailable,
   }
 }
@@ -171,5 +173,13 @@ describe('AuthoringDraftMembersPage', () => {
     await fireEvent.update(screen.getByRole('textbox', { name: /User ID/ }), addedID)
     await fireEvent.click(screen.getByRole('button', { name: 'Add member' }))
     await waitFor(() => expect(markDraftUnavailable).toHaveBeenCalledTimes(1))
+  })
+
+  it('supplies localized Members and accessibility copy under the pseudo-locale', async () => {
+    await renderPage('en-XA')
+    expect(await screen.findByRole('heading', { level: 2, name: pseudoLocalize('Members') })).toBeTruthy()
+    expect(screen.getByRole('button', { name: pseudoLocalize('Add member') })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: pseudoLocalize(`Role for ${authorID}`) })).toBeTruthy()
+    expect(screen.getByRole('button', { name: pseudoLocalize(`Revoke access for ${authorID}`) })).toBeTruthy()
   })
 })

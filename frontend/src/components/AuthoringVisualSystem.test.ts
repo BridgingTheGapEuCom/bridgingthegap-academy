@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
+import { renderWithI18n } from '../test/i18n'
 import AuthoringDirtyActionBar from './AuthoringDirtyActionBar.vue'
 import AuthoringDraftHeader from './AuthoringDraftHeader.vue'
 import AuthoringLessonHeader from './AuthoringLessonHeader.vue'
@@ -24,7 +25,7 @@ describe('Authoring visual-system components', () => {
   it('renders the canonical Draft header and shared active tab semantics', async () => {
     const instance = router('/draft/overview')
     await instance.isReady()
-    render(AuthoringDraftHeader, {
+    renderWithI18n(AuthoringDraftHeader, {
       props: {
         title: 'Integration foundations',
         metadata: [{ label: 'Status', value: 'Active Draft' }],
@@ -46,6 +47,7 @@ describe('Authoring visual-system components', () => {
         title: 'What is EAI?',
         backTo: '/structure',
         tabs: [{ label: 'Details', to: '/lesson/details' }],
+        labels: { context: 'Lesson context', back: 'Back to Structure', lesson: 'Lesson', draft: 'Draft', sections: 'Lesson sections' },
       },
       global: { plugins: [instance] },
     })
@@ -62,9 +64,10 @@ describe('Authoring visual-system components', () => {
     expect(screen.getByRole('region', { name: 'Basic information' })).toBeTruthy()
 
     const discard = vi.fn()
-    const view = render(AuthoringDirtyActionBar, { props: { show: false, onDiscard: discard } })
+    const labels = { message: 'Unsaved changes', discardLabel: 'Discard changes', saveLabel: 'Save changes', busyLabel: 'Saving…' }
+    const view = render(AuthoringDirtyActionBar, { props: { show: false, onDiscard: discard, ...labels } })
     expect(screen.queryByLabelText('Unsaved changes')).toBeNull()
-    await view.rerender({ show: true, onDiscard: discard })
+    await view.rerender({ show: true, onDiscard: discard, ...labels })
     expect(document.querySelector('.authoring-dirty-bar .btg-toolbar')).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
     expect(discard).toHaveBeenCalledOnce()

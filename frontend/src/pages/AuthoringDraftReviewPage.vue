@@ -1,11 +1,11 @@
 <template>
   <section class="authoring-section authoring-review" aria-labelledby="authoring-review-title">
-    <AuthoringPageTitle id="authoring-review-title" title="Review" description="Review cycles evaluate a frozen Draft revision. This page shows cycle metadata only." focusable />
+    <AuthoringPageTitle id="authoring-review-title" :title="t('authoring.review.title')" :description="t('authoring.review.description')" focusable />
 
-    <p v-if="state.kind === 'loading'" class="authoring-review__state" role="status">Loading Review information…</p>
+    <BtgPanel v-if="state.kind === 'loading'" variant="subtle" padding="compact"><p role="status">{{ t('authoring.review.loading') }}</p></BtgPanel>
     <div v-else-if="state.kind === 'unavailable'" class="authoring-review__state">
-      <p>We couldn’t load Review information right now.</p>
-      <BtgButton variant="secondary" @click="loadReviews">Try again</BtgButton>
+      <p>{{ t('authoring.review.unavailable') }}</p>
+      <BtgButton variant="secondary" @click="loadReviews">{{ t('authoring.review.tryAgain') }}</BtgButton>
     </div>
 
     <template v-else>
@@ -27,6 +27,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { APIProblemError } from '../api/client'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { preserveFocusAfterRemoval } from '../authoring/focus'
@@ -41,6 +42,7 @@ import AuthoringReviewHistory from '../components/AuthoringReviewHistory.vue'
 import AuthoringReviewSubmission from '../components/AuthoringReviewSubmission.vue'
 import AuthoringReviewStatusSummary from '../components/AuthoringReviewStatusSummary.vue'
 import BtgButton from '../components/BtgButton.vue'
+import BtgPanel from '../components/BtgPanel.vue'
 import AuthoringPageTitle from '../components/AuthoringPageTitle.vue'
 
 type State =
@@ -49,6 +51,7 @@ type State =
   | { kind: 'unavailable' }
 
 const { draft, replaceDraft, markDraftUnavailable } = useAuthoringDraftContext()
+const { t } = useI18n()
 const state = ref<State>({ kind: 'loading' })
 const captureScope = useAuthoringAsyncScope(() => draft.value.id)
 const submitting = ref(false)
@@ -113,7 +116,7 @@ async function submitForReview() {
     await submitAuthoringDraftReview(draftID, { expectedDraftRevision: draft.value.revision })
     if (!isCurrent() || !active) return
     if (await loadReviews()) {
-      submissionStatus.value = 'Draft submitted for review.'
+      submissionStatus.value = t('authoring.review.submitted')
       if (isCurrent()) await restoreFocus()
     }
   } catch (error) {
@@ -124,8 +127,8 @@ async function submitForReview() {
       return
     }
     submissionError.value = error instanceof APIProblemError && error.status === 400
-      ? 'We couldn’t submit this Draft for review. Check the Draft and try again.'
-      : 'We couldn’t submit this Draft for review right now. Please try again.'
+      ? t('authoring.review.submitInvalid')
+      : t('authoring.review.submitUnavailable')
   } finally {
     if (isCurrent()) submitting.value = false
   }
@@ -144,13 +147,13 @@ async function reloadReviewState() {
     replaceDraft(latestDraft)
     if (await loadReviews()) {
       submissionConflict.value = false
-      submissionStatus.value = 'The latest Draft and Review state have been loaded.'
+      submissionStatus.value = t('authoring.review.latestLoaded')
       if (isCurrent()) await restoreFocus()
     }
   } catch (error) {
     if (!isCurrent() || !active) return
     if (error instanceof APIProblemError && error.status === 404) { markDraftUnavailable(); return }
-    submissionError.value = 'We couldn’t reload this Draft right now. Please try again.'
+    submissionError.value = t('authoring.review.reloadUnavailable')
   } finally {
     if (isCurrent()) reloading.value = false
   }

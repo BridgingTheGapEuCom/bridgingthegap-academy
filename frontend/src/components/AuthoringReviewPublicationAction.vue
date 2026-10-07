@@ -1,67 +1,78 @@
 <template>
-  <section
+  <BtgPanel
+    as="section"
     class="authoring-review__decisions authoring-review__publication"
     aria-labelledby="authoring-review-publication-title"
     :aria-busy="state.kind === 'submitting'"
   >
-    <h3 id="authoring-review-publication-title">Publish this Review</h3>
-    <p>Publishing creates an immutable CourseVersion from this exact frozen Review snapshot.</p>
+    <h3 id="authoring-review-publication-title">{{ t('authoring.review.publication.publishTitle') }}</h3>
+    <p>{{ t('authoring.review.publication.publishDescription') }}</p>
 
-    <p v-if="state.kind === 'submitting'" class="authoring-review__status" role="status">Publishing course version…</p>
+    <p v-if="state.kind === 'submitting'" class="authoring-review__status" role="status">{{ t('authoring.review.publication.publishing') }}</p>
 
-    <div
+    <BtgPanel
       v-else-if="state.kind === 'confirmation-failure'"
-      class="authoring-review__publication-feedback authoring-review__publication-feedback--error"
+      class="authoring-review__publication-feedback"
+      variant="subtle"
+      padding="compact"
     >
-      <h4 id="authoring-review-publication-feedback-title" tabindex="-1">Publication status could not be confirmed</h4>
-      <p>The publication request completed, but the refreshed Review did not confirm Published. Review the current state before trying again.</p>
-    </div>
+      <h4 id="authoring-review-publication-feedback-title" tabindex="-1">{{ t('authoring.review.publication.confirmationTitle') }}</h4>
+      <p>{{ t('authoring.review.publication.confirmationDescription') }}</p>
+    </BtgPanel>
 
-    <div
+    <BtgPanel
       v-else-if="state.kind === 'validation-failure'"
-      class="authoring-review__publication-feedback authoring-review__publication-feedback--error"
+      class="authoring-review__publication-feedback"
+      variant="subtle"
+      padding="compact"
     >
-      <h4 id="authoring-review-publication-feedback-title" tabindex="-1">Publication validation issues</h4>
-      <p>Publication could not proceed because {{ issueCountLabel(state.issues.length) }} found.</p>
-      <ul class="authoring-review__validation-list" aria-label="Publication validation issues">
+      <h4 id="authoring-review-publication-feedback-title" tabindex="-1">{{ t('authoring.review.publication.validationTitle') }}</h4>
+      <p>{{ t('authoring.review.publication.validationCount', { count: state.issues.length }, state.issues.length) }}</p>
+      <ul class="authoring-review__validation-list" :aria-label="t('authoring.review.publication.issues')">
         <li v-for="(issue, index) in state.issues" :key="`${issue.code}:${issue.path}:${index}`">
           <strong>{{ issueTitle(issue.code) }}</strong>
           <p>{{ issue.message }}</p>
           <p v-if="issueGuidance(issue.code)" class="authoring-review__validation-guidance">{{ issueGuidance(issue.code) }}</p>
-          <p v-if="issue.path" class="authoring-review__validation-path">Location: <code>{{ issue.path }}</code></p>
+          <p v-if="issue.path" class="authoring-review__validation-path">{{ t('authoring.review.publication.location', { path: issue.path }) }}</p>
         </li>
       </ul>
-    </div>
+    </BtgPanel>
 
-    <div
+    <BtgPanel
       v-else-if="state.kind === 'conflict'"
-      class="authoring-review__publication-feedback authoring-review__publication-feedback--conflict"
+      class="authoring-review__publication-feedback"
+      variant="subtle"
+      padding="compact"
     >
       <h4 id="authoring-review-publication-feedback-title" tabindex="-1">{{ conflictTitle(state.code) }}</h4>
       <p>{{ conflictMessage(state.code) }}</p>
-    </div>
+    </BtgPanel>
 
-    <div
+    <BtgPanel
       v-else-if="state.kind === 'operational-failure'"
-      class="authoring-review__publication-feedback authoring-review__publication-feedback--error"
+      class="authoring-review__publication-feedback"
+      variant="subtle"
+      padding="compact"
     >
-      <h4 id="authoring-review-publication-feedback-title" tabindex="-1">Publication failed</h4>
-      <p role="alert">We couldn’t publish this Review right now. Please try again.</p>
-    </div>
+      <h4 id="authoring-review-publication-feedback-title" tabindex="-1">{{ t('authoring.review.publication.failed') }}</h4>
+      <p role="alert">{{ t('authoring.review.publication.failedDescription') }}</p>
+    </BtgPanel>
 
     <BtgButton
       v-if="canPublish"
       :disabled="state.kind === 'submitting'"
       :aria-busy="state.kind === 'submitting'"
       @click="$emit('publish')"
-    >{{ state.kind === 'submitting' ? 'Publishing…' : 'Publish course version' }}</BtgButton>
-  </section>
+    >{{ state.kind === 'submitting' ? t('authoring.review.publication.busy') : t('authoring.review.publication.action') }}</BtgButton>
+  </BtgPanel>
 </template>
 
 <script setup lang="ts">
 import type { PublicationValidationIssue } from '../authoring/authoring'
 import type { AuthoringPublicationConflictCode, AuthoringPublicationState } from '../authoring/publication'
+import { useI18n } from 'vue-i18n'
 import BtgButton from './BtgButton.vue'
+import BtgPanel from './BtgPanel.vue'
 
 defineProps<{
   canPublish: boolean
@@ -71,41 +82,38 @@ defineProps<{
 defineEmits<{
   publish: []
 }>()
-
-function issueCountLabel(count: number): string {
-  return `${count} blocking ${count === 1 ? 'issue was' : 'issues were'}`
-}
+const { t } = useI18n()
 
 function issueTitle(code: PublicationValidationIssue['code']): string {
-  if (code === 'unresolved_asset_reference') return 'Unresolved asset reference'
-  if (code === 'unresolved_assessment_reference') return 'Unresolved assessment reference'
-  return 'Publication requirement'
+  if (code === 'unresolved_asset_reference') return t('authoring.review.publication.assetTitle')
+  if (code === 'unresolved_assessment_reference') return t('authoring.review.publication.assessmentTitle')
+  return t('authoring.review.publication.requirementTitle')
 }
 
 function issueGuidance(code: PublicationValidationIssue['code']): string | undefined {
-  if (code === 'unresolved_asset_reference') return 'The referenced asset must be available before this course can be published.'
-  if (code === 'unresolved_assessment_reference') return 'The referenced assessment must be available before this course can be published.'
+  if (code === 'unresolved_asset_reference') return t('authoring.review.publication.assetGuidance')
+  if (code === 'unresolved_assessment_reference') return t('authoring.review.publication.assessmentGuidance')
   return undefined
 }
 
 function conflictTitle(code: AuthoringPublicationConflictCode | undefined): string {
-  if (code === 'course_version_already_exists') return 'Course version already exists'
-  if (code === 'publication_conflict') return 'Publication conflict'
-  return 'Review state changed'
+  if (code === 'course_version_already_exists') return t('authoring.review.publication.versionConflictTitle')
+  if (code === 'publication_conflict') return t('authoring.review.publication.publicationConflictTitle')
+  return t('authoring.review.publication.reviewRevisionConflictTitle')
 }
 
 function conflictMessage(code: AuthoringPublicationConflictCode | undefined): string {
   switch (code) {
     case 'review_revision_conflict':
-      return 'This Review changed before publication completed. The latest Review state has been loaded; publication was not retried.'
+      return t('authoring.review.publication.reviewRevisionConflict')
     case 'review_not_approved':
-      return 'This Review is no longer approved for publication. The current Review state has been loaded.'
+      return t('authoring.review.publication.reviewNotApproved')
     case 'course_version_already_exists':
-      return 'This semantic version already exists for another publication. Choose a new version in a later Draft and Review cycle before publishing.'
+      return t('authoring.review.publication.versionConflict')
     case 'publication_conflict':
-      return 'Publication could not be completed because the stored publication state is inconsistent. Review the current state before trying again.'
+      return t('authoring.review.publication.publicationConflict')
     default:
-      return 'Publication could not be completed because the Review state changed. Review the current state before trying again.'
+      return t('authoring.review.publication.conflictDefault')
   }
 }
 </script>

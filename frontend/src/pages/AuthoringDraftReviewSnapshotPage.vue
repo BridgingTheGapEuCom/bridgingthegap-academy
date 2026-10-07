@@ -1,38 +1,38 @@
 <template>
   <section class="authoring-section authoring-review-snapshot" aria-labelledby="authoring-review-snapshot-title">
     <div v-if="state.kind === 'loading'" class="authoring-review__state">
-      <h2 id="authoring-review-snapshot-title" tabindex="-1">Review snapshot</h2>
-      <p role="status">Loading frozen Review snapshot…</p>
+      <h2 id="authoring-review-snapshot-title" tabindex="-1">{{ t('authoring.review.snapshot.title') }}</h2>
+      <p role="status">{{ t('authoring.review.snapshot.loading') }}</p>
     </div>
 
     <div v-else-if="state.kind === 'unavailable'" class="authoring-review__state">
-      <h2 id="authoring-review-snapshot-title" tabindex="-1">Review unavailable</h2>
-      <p role="alert">We couldn’t load this Review snapshot right now.</p>
-      <BtgButton variant="secondary" @click="load">Try again</BtgButton>
+      <h2 id="authoring-review-snapshot-title" tabindex="-1">{{ t('authoring.review.snapshot.unavailable') }}</h2>
+      <p role="alert">{{ t('authoring.review.snapshot.unavailableDescription') }}</p>
+      <BtgButton variant="secondary" @click="load">{{ t('authoring.review.tryAgain') }}</BtgButton>
     </div>
 
     <div v-else-if="state.kind === 'unsupported'" class="authoring-review__state" role="alert">
-      <h2 id="authoring-review-snapshot-title" tabindex="-1">Review snapshot format unavailable</h2>
-      <p>This historical Review snapshot uses a format this version of the Academy cannot display.</p>
-      <RouterLink :to="authoringDraftPath(routeDraftID(), 'review')">Back to Review overview</RouterLink>
+      <h2 id="authoring-review-snapshot-title" tabindex="-1">{{ t('authoring.review.snapshot.unsupported') }}</h2>
+      <p>{{ t('authoring.review.snapshot.unsupportedDescription') }}</p>
+      <RouterLink :to="authoringDraftPath(routeDraftID(), 'review')">{{ t('authoring.review.snapshot.back') }}</RouterLink>
     </div>
 
     <template v-else>
-      <nav aria-label="Review snapshot navigation"><RouterLink :to="authoringDraftPath(routeDraftID(), 'review')">Back to Review overview</RouterLink></nav>
+      <nav :aria-label="t('authoring.review.snapshot.navigation')"><RouterLink :to="authoringDraftPath(routeDraftID(), 'review')">{{ t('authoring.review.snapshot.back') }}</RouterLink></nav>
       <p v-if="decisionStatus" class="authoring-review__status" role="status">{{ decisionStatus }}</p>
       <header class="authoring-review-snapshot__header">
-        <p class="authoring-review-snapshot__eyebrow">Frozen Review snapshot</p>
-        <h2 id="authoring-review-snapshot-title" tabindex="-1">Reviewing Draft revision {{ state.detail.review.draftRevision }}</h2>
-        <p>This is the immutable snapshot captured when this Review was submitted. Later Draft edits do not change it.</p>
+        <p class="authoring-review-snapshot__eyebrow">{{ t('authoring.review.snapshot.frozen') }}</p>
+        <h2 id="authoring-review-snapshot-title" tabindex="-1">{{ t('authoring.review.snapshot.reviewing', { revision: state.detail.review.draftRevision }) }}</h2>
+        <p>{{ t('authoring.review.snapshot.description') }}</p>
         <p class="authoring-review__status">{{ statusLabel(state.detail.review.status) }}</p>
-        <p v-if="state.detail.review.status === 'APPROVED'">Approved Review is not a published Course.</p>
-        <AuthoringReviewMetadata :review="state.detail.review" />
+        <p v-if="state.detail.review.status === 'APPROVED'">{{ t('authoring.review.snapshot.approvedNotPublished') }}</p>
+        <AuthoringReviewMetadata :review="state.detail.review" :labels="metadataLabels" />
       </header>
 
       <AuthoringReviewDecisionActions
         v-if="state.detail.review.status === 'IN_REVIEW'"
         :busy="pendingDecision !== undefined"
-        :pending-label="pendingDecision === 'request-changes' ? 'Requesting changes' : 'Approving'"
+        :pending-label="pendingDecision === 'request-changes' ? t('authoring.review.decisions.requesting') : t('authoring.review.decisions.approving')"
         :reloading="reloading"
         :policy-conflict="policyConflict"
         :conflict="decisionConflict"
@@ -56,27 +56,27 @@
       />
 
       <section class="authoring-review-snapshot__draft" aria-labelledby="review-snapshot-draft-title">
-        <h3 id="review-snapshot-draft-title">Draft metadata</h3>
+        <h3 id="review-snapshot-draft-title">{{ t('authoring.review.snapshot.draftMetadata') }}</h3>
         <h4>{{ state.detail.snapshot.draft.title }}</h4>
         <p v-if="state.detail.snapshot.draft.description">{{ state.detail.snapshot.draft.description }}</p>
         <dl class="authoring-review__metadata">
-          <div><dt>Intended version</dt><dd>{{ state.detail.snapshot.draft.intendedVersion }}</dd></div>
-          <div><dt>Source language</dt><dd>{{ state.detail.snapshot.draft.sourceLanguage }}</dd></div>
-          <div><dt>Content license</dt><dd>{{ state.detail.snapshot.draft.license.DisplayName }}</dd></div>
+          <div><dt>{{ t('authoring.review.snapshot.intendedVersion') }}</dt><dd>{{ state.detail.snapshot.draft.intendedVersion }}</dd></div>
+          <div><dt>{{ t('authoring.review.snapshot.sourceLanguage') }}</dt><dd>{{ state.detail.snapshot.draft.sourceLanguage }}</dd></div>
+          <div><dt>{{ t('authoring.review.snapshot.contentLicense') }}</dt><dd>{{ state.detail.snapshot.draft.license.DisplayName }}</dd></div>
         </dl>
         <div v-if="state.detail.snapshot.draft.objectives.length" aria-labelledby="review-snapshot-draft-objectives-title">
-          <h4 id="review-snapshot-draft-objectives-title">Objectives</h4>
+          <h4 id="review-snapshot-draft-objectives-title">{{ t('authoring.review.snapshot.objectives') }}</h4>
           <ul><li v-for="objective in state.detail.snapshot.draft.objectives" :key="objective">{{ objective }}</li></ul>
         </div>
         <div v-if="state.detail.snapshot.draft.changelog" aria-labelledby="review-snapshot-changelog-title">
-          <h4 id="review-snapshot-changelog-title">Changelog</h4>
+          <h4 id="review-snapshot-changelog-title">{{ t('authoring.review.snapshot.changelog') }}</h4>
           <p>{{ state.detail.snapshot.draft.changelog }}</p>
         </div>
       </section>
 
       <section class="authoring-review-snapshot__structure" aria-labelledby="review-snapshot-structure-title">
-        <h3 id="review-snapshot-structure-title">Snapshot structure</h3>
-        <p v-if="!state.detail.snapshot.modules.length">No Modules were captured in this snapshot.</p>
+        <h3 id="review-snapshot-structure-title">{{ t('authoring.review.snapshot.structure') }}</h3>
+        <p v-if="!state.detail.snapshot.modules.length">{{ t('authoring.review.snapshot.emptyStructure') }}</p>
         <template v-else>
           <AuthoringReviewSnapshotModule
             v-for="module in state.detail.snapshot.modules"
@@ -93,6 +93,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { APIProblemError } from '../api/client'
 import { useAuthoringAsyncScope } from '../authoring/asyncScope'
 import { preserveFocusAfterRemoval } from '../authoring/focus'
@@ -106,8 +107,9 @@ import {
 } from '../authoring/authoring'
 import { classifyAuthoringPublicationFailure, type AuthoringPublicationState } from '../authoring/publication'
 import { useAuthoringDraftContext } from '../authoring/draftContext'
+import { useApplicationFormatters } from '../i18n/formatters'
 import AuthoringReviewDecisionActions from '../components/AuthoringReviewDecisionActions.vue'
-import AuthoringReviewMetadata from '../components/AuthoringReviewMetadata.vue'
+import AuthoringReviewMetadata, { type AuthoringReviewMetadataLabels } from '../components/AuthoringReviewMetadata.vue'
 import AuthoringReviewPublicationAction from '../components/AuthoringReviewPublicationAction.vue'
 import AuthoringReviewPublicationStatus from '../components/AuthoringReviewPublicationStatus.vue'
 import AuthoringReviewSnapshotModule from '../components/AuthoringReviewSnapshotModule.vue'
@@ -120,6 +122,8 @@ type State =
   | { kind: 'unavailable' }
 
 const route = useRoute()
+const { t } = useI18n()
+const { date } = useApplicationFormatters()
 const { markDraftUnavailable } = useAuthoringDraftContext()
 const state = ref<State>({ kind: 'loading' })
 const routeDraftID = () => typeof route.params.draftId === 'string' ? route.params.draftId : ''
@@ -129,6 +133,12 @@ const lessonTitles = computed<Readonly<Record<string, string>>>(() => {
   if (state.value.kind !== 'ready') return {}
   return Object.fromEntries(state.value.detail.snapshot.modules.flatMap((module) => module.lessons.map((lesson) => [lesson.stableKey, lesson.title])))
 })
+const metadataLabels = computed<AuthoringReviewMetadataLabels>(() => ({
+  draftRevision: t('authoring.review.metadata.draftRevision'),
+  submitted: t('authoring.review.metadata.submitted'),
+  decided: t('authoring.review.metadata.decided'),
+  formatDate: (value) => date(value, 'dateTime'),
+}))
 let active = true
 let requestVersion = 0
 const pendingDecision = ref<'approve' | 'request-changes'>()
@@ -216,8 +226,8 @@ async function decide(decision: 'approve' | 'request-changes') {
     // snapshot separate from current Draft state and uses server status/revision.
     if (await load()) {
       decisionStatus.value = decision === 'approve'
-        ? 'Review approved. The frozen snapshot is unchanged and has not been published.'
-        : 'Changes requested. This Review cycle is finished and the frozen snapshot is unchanged.'
+        ? t('authoring.review.decisions.approved')
+        : t('authoring.review.decisions.changesRequested')
       if (isCurrent()) await restoreFocus()
     }
   } catch (error) {
@@ -229,8 +239,8 @@ async function decide(decision: 'approve' | 'request-changes') {
       return
     }
     decisionError.value = error instanceof APIProblemError && error.status === 400
-      ? 'We couldn’t save this Review decision. Please check the Review state and try again.'
-      : 'We couldn’t save this Review decision right now. Please try again.'
+      ? t('authoring.review.decisions.saveInvalid')
+      : t('authoring.review.decisions.saveUnavailable')
   } finally {
     if (isCurrent()) pendingDecision.value = undefined
   }
@@ -324,9 +334,9 @@ async function focusPublicationStatus(id: string, isCurrent: () => boolean) {
 
 function statusLabel(status: AuthoringReviewDetail['review']['status']): string {
   switch (status) {
-    case 'IN_REVIEW': return 'In review'
-    case 'APPROVED': return 'Approved'
-    case 'CHANGES_REQUESTED': return 'Changes requested'
+    case 'IN_REVIEW': return t('authoring.review.status.inReview')
+    case 'APPROVED': return t('authoring.review.status.approved')
+    case 'CHANGES_REQUESTED': return t('authoring.review.status.changesRequested')
   }
 }
 </script>

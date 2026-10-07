@@ -2,10 +2,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import LanguagePicker from './LanguagePicker.vue'
 
+const labels = { placeholder: 'Search by language or tag', close: 'Close language options', open: 'Show language options', options: 'Language options', empty: 'No matching languages.', useTag: (tag: string) => `Use language tag “${tag}”`, available: (count: number) => `${count} language options available.`, selected: (language: string) => `${language} selected.` }
+
 describe('LanguagePicker', () => {
   afterEach(cleanup)
   it('uses one searchable combobox and emits the canonical selected tag', async () => {
-    const { emitted } = render(LanguagePicker, { props: { id: 'language', modelValue: '' } })
+    const { emitted } = render(LanguagePicker, { props: { id: 'language', modelValue: '', labels } })
     const picker = screen.getByRole('combobox')
     expect((picker as HTMLInputElement).readOnly).toBe(true)
     await fireEvent.focus(picker)
@@ -17,7 +19,7 @@ describe('LanguagePicker', () => {
   })
 
   it('supports keyboard selection and an in-flow valid language tag option', async () => {
-    const { emitted } = render(LanguagePicker, { props: { id: 'language', modelValue: '' } })
+    const { emitted } = render(LanguagePicker, { props: { id: 'language', modelValue: '', labels } })
     const picker = screen.getByRole('combobox')
     await fireEvent.focus(picker)
     await fireEvent.update(picker, 'sw-ke')
@@ -28,7 +30,7 @@ describe('LanguagePicker', () => {
   })
 
   it('closes when focus or a pointer moves outside the combobox', async () => {
-    render(LanguagePicker, { props: { id: 'language', modelValue: '' } })
+    render(LanguagePicker, { props: { id: 'language', modelValue: '', labels } })
     const picker = screen.getByRole('combobox')
     await fireEvent.focus(picker)
     expect(picker.getAttribute('aria-expanded')).toBe('true')

@@ -39,7 +39,7 @@
                 <BtgTextInput :id="controlId" v-model="form.intendedVersion" :disabled="creating" :aria-describedby="describedBy" :invalid="invalid" required />
               </BtgFormField>
               <BtgFormField label="Source language" required description="Language used by the original Course content." :error="errors.sourceLanguage" v-slot="{ controlId, describedBy, invalid }">
-                <LanguagePicker :id="controlId" v-model="form.sourceLanguage" :disabled="creating" :described-by="describedBy" :invalid="invalid" />
+                <LanguagePicker :id="controlId" v-model="form.sourceLanguage" :labels="languagePickerLabels" :disabled="creating" :described-by="describedBy" :invalid="invalid" />
               </BtgFormField>
             </div>
           </div>
@@ -101,6 +101,7 @@ const form = reactive<Form>({ title: '', intendedVersion: '0.1.0', sourceLanguag
 const errors = reactive<Record<string, string | undefined>>({})
 const formError = ref<string>()
 const creating = ref(false)
+const languagePickerLabels = { placeholder: 'Search by language or tag', close: 'Close language options', open: 'Show language options', options: 'Language options', empty: 'No matching languages.', useTag: (tag: string) => `Use language tag “${tag}”`, available: (count: number) => `${count} language options available.`, selected: (language: string) => `${language} selected.` }
 let active = true
 let requestVersion = 0
 

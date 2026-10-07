@@ -1,8 +1,10 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { shallowRef } from 'vue'
 import { APIProblemError } from '../api/client'
 import { authoringDraftContextKey } from '../authoring/draftContext'
+import { pseudoLocalize } from '../i18n/pseudo'
+import { renderWithI18n } from '../test/i18n'
 import AuthoringDraftReviewPage from './AuthoringDraftReviewPage.vue'
 
 type AuthenticationState =
@@ -50,13 +52,13 @@ const review = (id: string, status: 'IN_REVIEW' | 'APPROVED' | 'CHANGES_REQUESTE
   decidedAt: status === 'IN_REVIEW' ? null : '2026-09-15T13:00:00Z',
 })
 
-async function renderPage(initialDraft = draft()) {
+async function renderPage(initialDraft = draft(), locale: 'en' | 'en-XA' = 'en') {
   const currentDraft = shallowRef(initialDraft)
   const markDraftUnavailable = vi.fn()
   const replaceDraft = vi.fn((nextDraft) => { currentDraft.value = nextDraft })
-  const result = render(AuthoringDraftReviewPage, {
+  const result = renderWithI18n(AuthoringDraftReviewPage, {
     global: { provide: { [authoringDraftContextKey as symbol]: { draft: currentDraft, markDraftUnavailable, replaceDraft } } },
-  })
+  }, locale)
   return { ...result, currentDraft, markDraftUnavailable, replaceDraft }
 }
 
@@ -77,6 +79,12 @@ describe('AuthoringDraftReviewPage', () => {
     expect(screen.getByText('No Review cycles yet.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Submit for review' })).toBeTruthy()
     expect(getAuthoringDraftReviewHistoryMock).toHaveBeenCalledWith(firstID)
+  })
+
+  it('renders the Review shell and actions in the pseudo-locale', async () => {
+    await renderPage(draft(), 'en-XA')
+    expect(await screen.findByRole('heading', { level: 2, name: pseudoLocalize('Review') })).toBeTruthy()
+    expect(screen.getByRole('button', { name: pseudoLocalize('Submit for review') })).toBeTruthy()
   })
 
   it('renders active Review metadata without fetching a snapshot', async () => {

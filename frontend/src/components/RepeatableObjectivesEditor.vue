@@ -5,7 +5,7 @@
     <BtgOrderedList :aria-label="label">
       <BtgOrderedRow v-for="(_, index) in modelValue" :key="index" :index="index" :class="{ 'is-dragging': draggingIndex === index, 'is-drop-before': insertionIndex === index && draggingIndex !== index, 'is-drop-after': insertionIndex === index + 1 && draggingIndex !== index }" :data-objective-index="index">
         <template #handle><BtgDragHandle :id="`${fieldID}-reorder-${index}`" :label="reorderLabel(index + 1)" :aria-pressed="keyboardIndex === index" :disabled="disabled" @pointerdown="startPointerReorder($event, index)" @keydown="keyboardReorder($event, index)" /></template>
-        <BtgTextInput :model-value="modelValue[index]" :disabled="disabled" :aria-label="`${objectiveName} ${index + 1}`" :aria-invalid="Boolean(error) || undefined" placeholder="Enter a learning objective" @update:model-value="update(index, $event)" />
+        <BtgTextInput :model-value="modelValue[index]" :disabled="disabled" :aria-label="`${objectiveName} ${index + 1}`" :aria-invalid="Boolean(error) || undefined" :placeholder="placeholder" @update:model-value="update(index, $event)" />
         <template #actions><BtgButton type="button" variant="secondary" leading-icon="delete" class="objectives-editor__remove" :disabled="disabled || modelValue.length === 1" :aria-label="removeLabelFor(index + 1)" @click="remove(index)">{{ removeText }}</BtgButton></template>
       </BtgOrderedRow>
     </BtgOrderedList>
@@ -23,8 +23,8 @@ import BtgDragHandle from './BtgDragHandle.vue'
 import BtgOrderedList from './BtgOrderedList.vue'
 import BtgOrderedRow from './BtgOrderedRow.vue'
 
-const props = withDefaults(defineProps<{ modelValue: string[]; label?: string; description?: string; error?: string; disabled?: boolean; itemLabel?: string; removeLabel?: string; addLabel?: string; removeText?: string; reorderLabel?: (position: number) => string; removeLabelFor?: (position: number) => string }>(), {
-  label: 'Learning objectives', description: undefined, error: undefined, disabled: false, itemLabel: undefined, removeLabel: 'objective', addLabel: '+ Add objective', removeText: 'Remove', reorderLabel: undefined, removeLabelFor: undefined,
+const props = withDefaults(defineProps<{ modelValue: string[]; label?: string; description?: string; error?: string; disabled?: boolean; itemLabel?: string; removeLabel?: string; addLabel?: string; removeText?: string; placeholder?: string; reorderLabel?: (position: number) => string; removeLabelFor?: (position: number) => string; addedAnnouncement?: (position: number) => string; removedAnnouncement?: () => string; movedAnnouncement?: (position: number, total: number) => string; reorderingAnnouncement?: (position: number) => string; finishedReorderingAnnouncement?: () => string }>(), {
+  label: 'Learning objectives', description: undefined, error: undefined, disabled: false, itemLabel: undefined, removeLabel: 'objective', addLabel: '+ Add objective', removeText: 'Remove', placeholder: 'Enter a learning objective', reorderLabel: undefined, removeLabelFor: undefined, addedAnnouncement: undefined, removedAnnouncement: undefined, movedAnnouncement: undefined, reorderingAnnouncement: undefined, finishedReorderingAnnouncement: undefined,
 })
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 const announcement = ref('')
@@ -44,8 +44,8 @@ let sourceIndex = -1
 onBeforeUnmount(clearPointerReorder)
 
 function update(index: number, value: string) { const next = [...props.modelValue]; next[index] = value; emit('update:modelValue', next) }
-function add() { emit('update:modelValue', [...props.modelValue, '']); announcement.value = `${capitalize(objectiveName.value)} ${props.modelValue.length + 1} added.` }
-function remove(index: number) { if (props.modelValue.length === 1) return; emit('update:modelValue', props.modelValue.filter((_, currentIndex) => currentIndex !== index)); announcement.value = `${capitalize(objectiveName.value)} removed.` }
+function add() { emit('update:modelValue', [...props.modelValue, '']); announcement.value = props.addedAnnouncement?.(props.modelValue.length + 1) ?? `${capitalize(objectiveName.value)} ${props.modelValue.length + 1} added.` }
+function remove(index: number) { if (props.modelValue.length === 1) return; emit('update:modelValue', props.modelValue.filter((_, currentIndex) => currentIndex !== index)); announcement.value = props.removedAnnouncement?.() ?? `${capitalize(objectiveName.value)} removed.` }
 function capitalize(value: string) { return `${value.charAt(0).toUpperCase()}${value.slice(1)}` }
 function focusHandle(index: number) { document.getElementById(`${fieldID}-reorder-${index}`)?.focus() }
 function move(from: number, to: number, focus = false) {
@@ -53,7 +53,7 @@ function move(from: number, to: number, focus = false) {
   const next = [...props.modelValue]; const [item] = next.splice(from, 1)
   if (item === undefined) return false
   next.splice(to, 0, item); emit('update:modelValue', next)
-  announcement.value = `${capitalize(objectiveName.value)} moved to position ${to + 1} of ${next.length}.`
+  announcement.value = props.movedAnnouncement?.(to + 1, next.length) ?? `${capitalize(objectiveName.value)} moved to position ${to + 1} of ${next.length}.`
   if (focus) void nextTick(() => focusHandle(to))
   return true
 }
@@ -76,8 +76,8 @@ function finishPointerReorder(event: PointerEvent) { if (event.pointerId !== poi
 function cancelPointerReorder(event: PointerEvent) { if (event.pointerId !== pointerID) return; const from = sourceIndex; clearPointerReorder(); if (from >= 0) void nextTick(() => focusHandle(from)) }
 function keyboardReorder(event: KeyboardEvent, index: number) {
   if (props.disabled) return
-  if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); keyboardIndex.value = keyboardIndex.value === index ? undefined : index; announcement.value = keyboardIndex.value === index ? `Reordering ${objectiveName.value} ${index + 1}. Use the arrow keys to move it, or Escape to finish.` : `Finished reordering ${objectiveName.value}.`; return }
-  if (event.key === 'Escape' && keyboardIndex.value === index) { event.preventDefault(); keyboardIndex.value = undefined; announcement.value = `Finished reordering ${objectiveName.value}.`; return }
+  if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); keyboardIndex.value = keyboardIndex.value === index ? undefined : index; announcement.value = keyboardIndex.value === index ? props.reorderingAnnouncement?.(index + 1) ?? `Reordering ${objectiveName.value} ${index + 1}. Use the arrow keys to move it, or Escape to finish.` : props.finishedReorderingAnnouncement?.() ?? `Finished reordering ${objectiveName.value}.`; return }
+  if (event.key === 'Escape' && keyboardIndex.value === index) { event.preventDefault(); keyboardIndex.value = undefined; announcement.value = props.finishedReorderingAnnouncement?.() ?? `Finished reordering ${objectiveName.value}.`; return }
   if (keyboardIndex.value !== index || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
   event.preventDefault(); move(index, index + (event.key === 'ArrowUp' ? -1 : 1), true); keyboardIndex.value = undefined
 }

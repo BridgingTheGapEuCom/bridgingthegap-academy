@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick, shallowRef } from 'vue'
 import { APIProblemError } from '../api/client'
 import { renderWithI18n } from '../test/i18n'
+import { pseudoLocalize } from '../i18n/pseudo'
 
 type AuthenticationState =
   | { status: 'bootstrapping' }
@@ -73,11 +74,11 @@ function routerFor() {
   })
 }
 
-async function renderShell(path = `/authoring/drafts/${firstID}`) {
+async function renderShell(path = `/authoring/drafts/${firstID}`, locale: 'en' | 'en-XA' = 'en') {
   const router = routerFor()
   await router.push(path)
   await router.isReady()
-  return { ...renderWithI18n({ template: '<RouterView />' }, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n({ template: '<RouterView />' }, { global: { plugins: [router] } }, locale), router }
 }
 
 describe('AuthoringDraftShell', () => {
@@ -200,6 +201,13 @@ describe('AuthoringDraftShell', () => {
     expect(screen.getByRole('textbox', { name: 'License display name required' })).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'License identifier' })).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'License URL' })).toBeTruthy()
+  })
+
+  it('renders Overview and Draft navigation through the pseudo-locale', async () => {
+    await renderShell(undefined, 'en-XA')
+    expect(await screen.findByRole('heading', { level: 2, name: pseudoLocalize('Overview') })).toBeTruthy()
+    expect(screen.getByRole('navigation', { name: pseudoLocalize('Draft sections') })).toBeTruthy()
+    expect(screen.getAllByRole('combobox').some((control) => control.classList.contains('language-picker__input'))).toBe(true)
   })
 
   it('edits, adds, and removes objectives without changing their ordered payload', async () => {

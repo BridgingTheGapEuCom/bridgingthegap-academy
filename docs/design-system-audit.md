@@ -10,6 +10,8 @@ Academy has the beginning of a design system, but not yet a consistently enforce
 
 The highest-value next step is not another page-level polish pass. It is to separate foundation values from semantic theme tokens, standardize the existing Lucide-backed icon abstraction, complete the core control set, and then extract repeated compositions. Draft Structure is the best reference migration because it exercises most of the required system; Dashboard should validate that the result is not Authoring-specific.
 
+Migration status (2026-10-06): Draft Structure, Dashboard, and the Lesson Details, Content, and Prerequisites workspace references are complete. The Lesson workspace now shares its shell, controls, localized copy contracts, and responsive/accessibility coverage; remaining stylesheet ownership in those routes is feature-specific layout.
+
 ## Audit scope and method
 
 The audit inspected:
@@ -186,7 +188,7 @@ Overview benefits from `AuthoringSection`, `BtgFormField`, `BtgTextInput`, `Repe
 
 ### Lesson Details
 
-Details repeats much of Overview's field, checkbox, objective, section, and dirty-state language under a Lesson header. It is a strong second consumer for the form and Authoring-section contracts. Product-specific revision/conflict handling stays local.
+Details is the standard Lesson Authoring form reference. It uses the canonical Lesson header, page title, sections, shared fields, objective rows, drag handle, and dirty-action bar. Revision/conflict handling and form state remain feature-owned.
 
 ### Lesson Content
 
@@ -194,7 +196,7 @@ Content is now the specialized-editor reference migration. Its toolbar, dialogs,
 
 ### Lesson Prerequisites
 
-Prerequisites uses a responsive split workspace, search, disclosure, selected ordered rows, drag/keyboard reordering, status/conflict handling, and a dirty bar. It is a natural second consumer for SplitWorkspace, SearchField, Disclosure, OrderedList, and DragHandle. Prerequisite semantics and save behavior remain Authoring-owned.
+Prerequisites is the relationship-editor reference. It uses the canonical Lesson shell plus SplitWorkspace, SearchField, Disclosure, OrderedList, DragHandle, and the shared dirty-action bar. Advisory prerequisite semantics and save behavior remain Authoring-owned.
 
 ### Dashboard
 

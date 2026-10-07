@@ -1,9 +1,9 @@
 <template>
   <dl class="authoring-review__metadata">
-    <div><dt>Draft revision under review</dt><dd>{{ review.draftRevision }}</dd></div>
-    <div><dt>Submitted</dt><dd><time :datetime="review.submittedAt">{{ formatTimestamp(review.submittedAt) }}</time></dd></div>
+    <div><dt>{{ labels.draftRevision }}</dt><dd>{{ review.draftRevision }}</dd></div>
+    <div><dt>{{ labels.submitted }}</dt><dd><time :datetime="review.submittedAt">{{ labels.formatDate(review.submittedAt) }}</time></dd></div>
     <template v-if="review.decidedAt">
-      <div><dt>Decided</dt><dd><time :datetime="review.decidedAt">{{ formatTimestamp(review.decidedAt) }}</time></dd></div>
+      <div><dt>{{ labels.decided }}</dt><dd><time :datetime="review.decidedAt">{{ labels.formatDate(review.decidedAt) }}</time></dd></div>
     </template>
   </dl>
 </template>
@@ -11,11 +11,12 @@
 <script setup lang="ts">
 import type { AuthoringReview } from '../authoring/authoring'
 
-defineProps<{ review: AuthoringReview }>()
-
-function formatTimestamp(value: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC',
-  }).format(new Date(value))
+export type AuthoringReviewMetadataLabels = {
+  draftRevision: string
+  submitted: string
+  decided: string
+  formatDate: (value: string) => string
 }
+
+defineProps<{ review: AuthoringReview; labels: AuthoringReviewMetadataLabels }>()
 </script>

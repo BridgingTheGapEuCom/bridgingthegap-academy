@@ -76,6 +76,10 @@
 .btg-checkbox__description { color: var(--academy-text-helper); }
 .btg-checkbox__error { color: var(--academy-text-error); font-weight: var(--academy-font-weight-medium); }
 
+.btg-radio { display: grid; grid-template-columns: var(--academy-icon-size-large) minmax(0, 1fr); align-items: start; column-gap: var(--academy-space-2); color: var(--academy-text-primary); font-weight: var(--academy-font-weight-regular); }
+.btg-radio__control { width: var(--academy-icon-size-large); height: var(--academy-icon-size-large); min-height: 0; margin: 0.18em 0 0; accent-color: var(--academy-action-primary-bg); }
+.btg-radio__label { font-weight: var(--academy-font-weight-strong); }
+
 .btg-search-field { position: relative; min-width: 0; }
 .btg-search-field__label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .btg-search-field__icon { position: absolute; z-index: 1; top: 50%; inset-inline-start: var(--academy-space-3); transform: translateY(-50%); color: var(--academy-text-secondary); pointer-events: none; }

@@ -16,7 +16,7 @@
       :aria-invalid="invalid || undefined"
       aria-autocomplete="list"
       autocomplete="off"
-      placeholder="Search by language or tag"
+      :placeholder="labels.placeholder"
       @focus="openPicker"
       @input="search"
       @keydown="handleKeydown"
@@ -25,17 +25,17 @@
       class="language-picker__toggle"
       type="button"
       :disabled="disabled"
-      :aria-label="open ? 'Close language options' : 'Show language options'"
+      :aria-label="open ? labels.close : labels.open"
       :aria-expanded="open"
       :aria-controls="listboxID"
       tabindex="-1"
       @mousedown.prevent
       @click="togglePicker"
     >
-      <span aria-hidden="true">▾</span>
+      <BtgIcon name="chevronDown" decorative />
     </button>
-    <ul v-if="open" :id="listboxID" class="language-picker__options" role="listbox" aria-label="Language options">
-      <li v-if="!options.length" class="language-picker__empty" role="presentation">No matching languages.</li>
+    <ul v-if="open" :id="listboxID" class="language-picker__options" role="listbox" :aria-label="labels.options">
+      <li v-if="!options.length" class="language-picker__empty" role="presentation">{{ labels.empty }}</li>
       <li
         v-for="(option, index) in options"
         :id="optionID(index)"
@@ -57,6 +57,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { canonicalLanguageTag, filterLanguageOptions, languageLabel, type LanguageOption } from '../i18n/languages'
+import BtgIcon from './BtgIcon.vue'
 
 const props = defineProps<{
   id: string
@@ -64,8 +65,20 @@ const props = defineProps<{
   disabled?: boolean
   invalid?: boolean
   describedBy?: string
+  labels: LanguagePickerLabels
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+
+type LanguagePickerLabels = {
+  placeholder: string
+  close: string
+  open: string
+  options: string
+  empty: string
+  useTag: (tag: string) => string
+  available: (count: number) => string
+  selected: (language: string) => string
+}
 
 const input = ref<HTMLInputElement>()
 const root = ref<HTMLElement>()
@@ -79,7 +92,7 @@ const options = computed<LanguageOption[]>(() => {
   const matches = filterLanguageOptions(query.value)
   const canonical = canonicalLanguageTag(query.value)
   if (canonical && !matches.some((option) => option.tag === canonical)) {
-    return [...matches, { tag: canonical, label: `Use language tag “${canonical}”`, search: canonical.toLocaleLowerCase() }]
+    return [...matches, { tag: canonical, label: props.labels.useTag(canonical), search: canonical.toLocaleLowerCase() }]
   }
   return matches
 })
@@ -99,7 +112,7 @@ function openPicker() {
   open.value = true
   query.value = ''
   activeIndex.value = -1
-  statusMessage.value = `${options.value.length} language options available.`
+  statusMessage.value = props.labels.available(options.value.length)
 }
 function closePicker() {
   open.value = false
@@ -124,11 +137,11 @@ function togglePicker() {
 function search(event: Event) {
   query.value = (event.target as HTMLInputElement).value
   activeIndex.value = options.value.length ? 0 : -1
-  statusMessage.value = options.value.length ? `${options.value.length} language options available.` : 'No matching languages.'
+  statusMessage.value = options.value.length ? props.labels.available(options.value.length) : props.labels.empty
 }
 function select(option: LanguageOption) {
   emit('update:modelValue', option.tag)
-  statusMessage.value = `${languageLabel(option.tag)} selected.`
+  statusMessage.value = props.labels.selected(languageLabel(option.tag))
   closePicker()
 }
 function handleKeydown(event: KeyboardEvent) {
