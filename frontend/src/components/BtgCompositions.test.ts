@@ -26,7 +26,9 @@ describe('Academy composition primitives', () => {
   it('renders metadata as a label/value definition list with optional icon', () => {
     render(BtgMetadataStrip, { props: { items: [{ label: 'Module', value: '01 · Foundations', icon: 'module' }, { label: 'Position', value: '2 of 3' }] } })
     expect(screen.getByText('Module').tagName).toBe('DT')
-    expect(screen.getByText('01 · Foundations').tagName).toBe('DD')
+    expect(screen.getByText('01 · Foundations').closest('dd')?.tagName).toBe('DD')
+    expect(screen.getByText('01 · Foundations').classList.contains('btg-metadata-strip__value')).toBe(true)
+    expect(screen.getByText('01 · Foundations').closest('dd')?.getAttribute('title')).toBe('01 · Foundations')
     expect(document.querySelector('.btg-metadata-strip svg')).toBeTruthy()
   })
 

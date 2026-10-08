@@ -31,7 +31,7 @@
             @next="next && $emit('select-lesson', next)"
           />
         </div>
-        <h3>{{ item.lesson.title }}</h3>
+		<h3 class="authoring-structure-detail-panel__lesson-title" :title="item.lesson.title">{{ item.lesson.title }}</h3>
         <BtgMetadataStrip :items="metadata" />
       </header>
 

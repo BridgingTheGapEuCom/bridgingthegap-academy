@@ -1011,8 +1011,16 @@ test('Authoring Overview edits structured metadata with its current revision', a
 test('Authoring Structure uses the responsive outline workspace and preserves keyboard actions', async ({ page }) => {
   let orderBody: unknown
   let lessonContent = { schemaVersion: 1, blocks: [] as Array<{ key: string; type: string; payload: unknown }> }
+  const longModuleTitle = 'A module with a very long and complex name that remains readable in the course structure'
+  const longLessonTitle = 'A lesson with a very long and complex name that remains readable in the lesson inspector'
+  const longTitleStructure = {
+    modules: [
+      { ...structure.modules[0], title: longModuleTitle, lessons: [{ ...structure.modules[0].lessons[0], title: longLessonTitle }] },
+      ...structure.modules.slice(1),
+    ],
+  }
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
-  await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(structure) }))
+  await page.route(`**/api/authoring/drafts/${draftID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(longTitleStructure) }))
   await page.route(`**/api/authoring/drafts/${draftID}/modules/order`, (route) => {
     orderBody = route.request().postDataJSON()
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draftRevision: 4 }) })
@@ -1028,10 +1036,10 @@ test('Authoring Structure uses the responsive outline workspace and preserves ke
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(`/authoring/drafts/${draftID}/structure`)
   const outline = page.getByRole('complementary', { name: 'Course structure' })
-  await expect(outline.getByRole('button', { name: 'Expand Foundations' })).toBeVisible()
+  await expect(outline.getByRole('button', { name: `Expand ${longModuleTitle}` })).toBeVisible()
   const workspaceWidth = await page.locator('.authoring-structure-workspace-shell').evaluate((element) => element.getBoundingClientRect().width)
   expect(workspaceWidth).toBeGreaterThan(960)
-  await outline.getByRole('button', { name: 'Expand Foundations' }).click()
+  await outline.getByRole('button', { name: `Expand ${longModuleTitle}` }).click()
   await outline.locator('.authoring-structure-outline__select').first().click()
   await expect(page.locator('.authoring-structure-detail')).toBeVisible()
   const geometry = await page.evaluate(() => {
@@ -1066,13 +1074,13 @@ test('Authoring Structure uses the responsive outline workspace and preserves ke
   await expect(page.getByText('Module order updated.')).toBeVisible()
   expect(orderBody).toEqual({ expectedDraftRevision: 3, moduleIds: [structure.modules[1]?.id, structure.modules[0]?.id] })
 
-  await page.getByRole('searchbox', { name: 'Search structure' }).fill('advanced')
+  await page.getByRole('searchbox', { name: 'Search modules and lessons' }).fill('advanced')
   await expect(outline.getByText('Advanced', { exact: true }).last()).toBeVisible()
-  await expect(outline.getByText('What is EAI?')).toHaveCount(0)
+  await expect(outline.getByText(longLessonTitle)).toHaveCount(0)
   const filteredGeometry = await page.evaluate(() => ({ outline: document.querySelector('.authoring-structure-outline')?.getBoundingClientRect(), detail: document.querySelector('.authoring-structure-detail')?.getBoundingClientRect() }))
   expect(filteredGeometry.outline?.bottom).toBeCloseTo(filteredGeometry.detail?.bottom ?? 0, 1)
 
-  await page.getByRole('searchbox', { name: 'Search structure' }).fill('')
+  await page.getByRole('searchbox', { name: 'Search modules and lessons' }).fill('')
   await page.getByRole('button', { name: 'Collapse all' }).click()
   const collapsedGeometry = await page.evaluate(() => ({ outline: document.querySelector('.authoring-structure-outline')?.getBoundingClientRect(), detail: document.querySelector('.authoring-structure-detail')?.getBoundingClientRect() }))
   expect(collapsedGeometry.outline?.bottom).toBeCloseTo(collapsedGeometry.detail?.bottom ?? 0, 1)
@@ -1081,9 +1089,9 @@ test('Authoring Structure uses the responsive outline workspace and preserves ke
   await expect(outline.locator('.authoring-structure-detail-panel')).toHaveCount(0)
 
   await page.setViewportSize({ width: 320, height: 844 })
-  const foundationsDisclosure = outline.getByRole('button', { name: /(?:Expand|Collapse) Foundations/ })
+  const foundationsDisclosure = outline.getByRole('button', { name: new RegExp(`(?:Expand|Collapse) ${longModuleTitle}`) })
   if ((await foundationsDisclosure.getAttribute('aria-expanded')) !== 'true') await foundationsDisclosure.click()
-  await outline.getByRole('button', { name: /What is EAI/ }).click()
+  await outline.getByRole('button', { name: new RegExp(longLessonTitle) }).click()
   await expect(outline).toBeVisible()
   await expect(page.getByRole('article', { name: 'Selected item inspector' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)

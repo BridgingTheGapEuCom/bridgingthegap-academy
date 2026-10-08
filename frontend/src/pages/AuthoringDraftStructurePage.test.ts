@@ -102,15 +102,38 @@ describe('AuthoringDraftStructurePage', () => {
     await fireEvent.click(within(outline).getByRole('button', { name: 'Expand Foundations' }))
     expect(await within(outline).findByRole('button', { name: /What is EAI/ })).toBeTruthy()
 
-    await fireEvent.update(screen.getByRole('searchbox', { name: 'Search structure' }), 'advanced')
+    await fireEvent.update(screen.getByRole('searchbox', { name: 'Search modules and lessons' }), 'advanced')
     expect(within(outline).queryByRole('button', { name: /What is EAI/ })).toBeNull()
     expect(within(outline).getByText('Advanced')).toBeTruthy()
+  })
+
+  it('keeps long outline and inspector values in clamped, full-value-labelled elements', async () => {
+    const longModuleTitle = 'A module with a very long and complex name that must remain readable in the course structure'
+    const longLessonTitle = 'A lesson with a very long and complex name that must remain readable in the lesson inspector'
+    const result = structure()
+    result.modules[0]!.title = longModuleTitle
+    result.modules[0]!.lessons[0]!.title = longLessonTitle
+    mocks.getStructure.mockResolvedValueOnce(result)
+    mocks.getLesson.mockResolvedValueOnce({
+      ...result.modules[0]!.lessons[0], draft_id: draft.id, module_id: result.modules[0]!.id,
+      content: { schemaVersion: 1, blocks: [] }, created_at: '', updated_at: '',
+    })
+
+    mount()
+    const outline = await screen.findByRole('complementary', { name: 'Course structure' })
+    expect(within(outline).getByTitle(longModuleTitle).classList.contains('authoring-structure-outline__module-title')).toBe(true)
+    await fireEvent.click(within(outline).getByRole('button', { name: `Expand ${longModuleTitle}` }))
+    const lessonTitle = within(outline).getByTitle(longLessonTitle)
+    expect(lessonTitle.classList.contains('authoring-structure-outline__lesson-title')).toBe(true)
+    await fireEvent.click(within(outline).getByRole('button', { name: new RegExp(longLessonTitle) }))
+    expect((await screen.findByRole('heading', { name: longLessonTitle })).getAttribute('title')).toBe(longLessonTitle)
+    expect(screen.getByTitle(`01 · ${longModuleTitle}`).querySelector('.btg-metadata-strip__value')).toBeTruthy()
   })
 
   it('renders Structure controls through the pseudo-locale without hardcoded page copy', async () => {
     mount('en-XA')
     expect(await screen.findByRole('heading', { name: pseudoLocalize('Structure') })).toBeTruthy()
-    expect(screen.getByRole('searchbox', { name: pseudoLocalize('Search structure') })).toBeTruthy()
+    expect(screen.getByRole('searchbox', { name: pseudoLocalize('Search modules and lessons') })).toBeTruthy()
     expect(screen.getByRole('button', { name: pseudoLocalize('Expand all') })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Add module' })).toBeNull()
     const outline = screen.getByRole('complementary', { name: pseudoLocalize('Course structure') })
@@ -201,7 +224,7 @@ describe('AuthoringDraftStructurePage', () => {
     await fireEvent.pointerDown(handle, { pointerId: 1, button: 0 })
     await fireEvent.pointerUp(document, { pointerId: 1 })
     expect(mocks.reorderLessons).not.toHaveBeenCalled()
-    await fireEvent.update(screen.getByRole('searchbox', { name: 'Search structure' }), 'second')
+    await fireEvent.update(screen.getByRole('searchbox', { name: 'Search modules and lessons' }), 'second')
     expect(within(outline).getByRole('button', { name: 'Reorder lesson 02' }).hasAttribute('disabled')).toBe(true)
     expect(screen.getByText('Clear search to reorder lessons.')).toBeTruthy()
   })

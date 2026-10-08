@@ -150,6 +150,13 @@ Equivalent content uses semantic roles rather than page-owned font combinations.
 
 Heading level remains a semantic HTML decision; a visual role does not select a heading level. Components should expose roles through shared classes or tokens rather than setting a unique `font-size` and `font-weight` pair per page.
 
+### Long text and overflow
+
+- Primary titles may wrap to two or three lines, then clamp; keep the complete value in the DOM and expose it through the existing accessible name or a native title where a hover affordance is useful.
+- Navigation labels may wrap to two lines within a `minmax(0, 1fr)` column; fixed metadata and action columns must remain stable.
+- Metadata values use a flexible first column and compact trailing values. Clamp descriptive values to one or two lines instead of displacing dates, positions, or actions.
+- Actions should wrap rather than truncate. Authored content is never clamped by shared UI rules.
+
 ## Spacing
 
 Use the shared spacing scale by purpose:
@@ -396,6 +403,10 @@ Lesson Content composes the shared Lesson header, toolbar, dialog, buttons, icon
 
 - Migrate Overview, Members, Assessments, and Review.
 - Consolidate headers, metadata, sections, tables/lists, empty states, and workflow messages.
+
+### Reference migration: Draft workspace
+
+The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and page-title composition. Overview is the standard Draft-form reference; Structure is the complex outline/inspector workspace reference; Members demonstrates membership and role management; Assessments demonstrates structured editor forms; and Review demonstrates status, validation, and publication feedback. Shared primitives own controls, panels, actions, metadata, dialogs, and accessibility mechanics. Each page retains only its domain layout and workflow behavior. Reusable Draft components receive typed caller-supplied copy and date formatting where they are expected to render independently.
 
 ### M-UI.7 — remaining Academy pages
 

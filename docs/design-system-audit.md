@@ -117,6 +117,10 @@ A selector-name scan found approximately 296 references across recurring visual 
 
 Large page-prefix families also demonstrate visual ownership at the feature level: Authoring Review, Home, Dashboard, Prerequisites, Create, Content, Members, the Lesson page, Structure, and Administration each carry substantial selector sets. The issue is not BEM naming; it is that many of those selectors implement the same surface, control, metadata, and status concepts.
 
+## Migration status
+
+The Draft workspace migration is complete. Overview, Structure, Members, Assessments, and Review use the canonical Draft shell and shared primitives; remaining Draft CSS is limited to page-specific form, outline/inspector, member-list, assessment-editor, and review-snapshot geometry. Reusable Draft components keep caller-supplied copy and formatting contracts where needed.
+
 Repeated token usage shows that adoption is real: spacing tokens 2–5 and the small type/radius tokens appear dozens of times. At the same time, raw `1rem`, `1.125rem`, `1.25rem`, `2rem`, `2.25rem`, `2.5rem`, `2.75rem`, and `3rem` values recur often enough to indicate missing type, icon, row, and control roles. Breakpoints proliferate around 20, 24, 28, 30, 32, 34, 38, 42, 44, 48, and 52rem, plus 480px.
 
 ## Hardcoded-value classification

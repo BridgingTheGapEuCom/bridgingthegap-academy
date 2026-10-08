@@ -73,6 +73,8 @@ describe('Academy core primitives', () => {
   it('provides a labelled search input with a non-interfering decorative icon', async () => {
     render(BtgSearchField, { props: { label: 'Search lessons', placeholder: 'Search lessons…' } })
     const search = screen.getByRole('searchbox', { name: 'Search lessons' }) as HTMLInputElement
+    expect((screen.getByText('Search lessons', { selector: 'label' }) as HTMLLabelElement).htmlFor).toBe(search.id)
+    expect(search.placeholder).toBe('Search lessons…')
     await fireEvent.update(search, 'intro')
     expect(search.value).toBe('intro')
     expect(document.querySelector('.btg-search-field__icon')?.getAttribute('aria-hidden')).toBe('true')

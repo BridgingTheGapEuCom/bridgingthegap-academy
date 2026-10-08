@@ -341,8 +341,8 @@ export default {
       noMatches: 'No matching modules or lessons found.',
     },
     toolbar: {
-      searchLabel: 'Search structure',
-      searchPlaceholder: 'Search modules and lessons…',
+      searchLabel: 'Search modules and lessons',
+      searchPlaceholder: 'Search by module or lesson…',
       expandAll: 'Expand all',
       collapseAll: 'Collapse all',
       addModule: 'Add module',

@@ -55,13 +55,7 @@
 							<BtgButton variant="quiet" @click="expandAll"
 								>{{ t('authoring.structure.toolbar.expandAll') }}</BtgButton
 							><BtgButton variant="quiet" @click="collapseAll"
-								>{{ t('authoring.structure.toolbar.collapseAll') }}</BtgButton
-							><BtgButton
-								:disabled="busy || conflict"
-								leading-icon="plus"
-								@click="openModule(undefined, $event)"
-								>{{ t('authoring.structure.toolbar.addModule') }}</BtgButton
-							>
+								>{{ t('authoring.structure.toolbar.collapseAll') }}</BtgButton>
 						</template>
 					</BtgToolbar>
 					<BtgSplitWorkspace class="authoring-structure-workspace" variant="outline-inspector">
@@ -94,6 +88,7 @@
 								>
 									<BtgDisclosure
 										:model-value="expanded.has(module.id) || Boolean(query)"
+										icon-only
 										:label="expanded.has(module.id) || query ? t('authoring.structure.outline.collapseModule', { title: module.title }) : t('authoring.structure.outline.expandModule', { title: module.title })"
 										@update:model-value="toggle(module.id)"
 									/>
@@ -111,7 +106,7 @@
 										<BtgIcon name="module" /><b>{{
 											number(module.position)
 										}}</b
-										><span>{{ module.title }}</span
+										><span class="authoring-structure-outline__module-title" :title="module.title">{{ module.title }}</span
 										><small
 											>{{ t('common.counts.lesson', { count: module.lessons.length }) }}</small
 										>
@@ -194,16 +189,16 @@
 												selectLesson(module, lesson)
 											"
 										>
-												<BtgIcon name="lesson" /><span>{{ lesson.title }}</span>
+												<BtgIcon name="lesson" /><span class="authoring-structure-outline__lesson-title" :title="lesson.title">{{ lesson.title }}</span>
 											</BtgButton>
 										</BtgOrderedRow>
 									<li
 										v-if="!module.lessons.length"
 										class="authoring-structure-outline__empty-module"
 									>
-											{{ t('authoring.structure.empty.noLessons') }}
-											<BtgButton variant="tertiary" size="small" leading-icon="plus" @click="openLesson(module)">{{ t('authoring.structure.toolbar.addFirstLesson') }}</BtgButton>
-									</li>
+											<p>{{ t('authoring.structure.empty.noLessons') }}</p>
+											<BtgButton variant="secondary" size="small" leading-icon="plus" @click="openLesson(module)">{{ t('authoring.structure.toolbar.addFirstLesson') }}</BtgButton>
+										</li>
 								</ol>
 								<div
 									v-if="expanded.has(module.id) || query"

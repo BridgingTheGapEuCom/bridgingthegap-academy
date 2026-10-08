@@ -2,7 +2,7 @@
   <dl class="btg-metadata-strip">
     <div v-for="item in items" :key="item.label" class="btg-metadata-strip__item">
       <dt>{{ item.label }}</dt>
-      <dd><BtgIcon v-if="item.icon" :name="item.icon" decorative size="small" />{{ item.value }}</dd>
+      <dd :title="item.value"><BtgIcon v-if="item.icon" :name="item.icon" decorative size="small" /><span class="btg-metadata-strip__value">{{ item.value }}</span></dd>
     </div>
   </dl>
 </template>
