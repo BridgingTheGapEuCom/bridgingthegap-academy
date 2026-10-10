@@ -116,5 +116,14 @@
 .btg-section__heading { min-width: 0; font-size: var(--academy-font-size-subsection-title); }
 .btg-section__action { flex: 0 0 auto; }
 
+.btg-page-title { display: grid; min-width: 0; gap: var(--academy-space-2); }
+.btg-page-title h1, .btg-page-title p { margin: 0; }
+.btg-page-title h1 { overflow-wrap: anywhere; color: var(--academy-text-primary); font-size: var(--academy-font-size-page-title); line-height: var(--academy-line-height-heading); }
+.btg-page-title p { max-inline-size: 65ch; color: var(--academy-text-secondary); }
+
+@media (max-width: 48rem) {
+  .btg-page-title h1 { font-size: clamp(1.5rem, 10vw, 2.25rem); }
+}
+
 @keyframes btg-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .btg-button__spinner { animation: none; } }

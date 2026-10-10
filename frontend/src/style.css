@@ -89,6 +89,7 @@
 	min-width: 0;
 	align-items: center;
 	justify-self: end;
+	gap: var(--btg-space-3);
 }
 .site-session a {
 	color: var(--btg-home-text-secondary);
@@ -2199,7 +2200,12 @@
 
 @media (max-width: 38rem) {
 	.site-header__inner {
+		grid-template-columns: minmax(0, 1fr);
 		gap: var(--btg-space-2);
+	}
+	.site-session {
+		justify-self: start;
+		flex-wrap: wrap;
 	}
 	.site-navigation {
 		gap: var(--btg-space-3);

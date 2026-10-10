@@ -1,6 +1,7 @@
 export default {
   checking: 'Checking session…',
   signIn: 'Sign in',
+  settings: 'Settings',
   signOut: 'Sign out',
   signingOut: 'Signing out…',
   unavailable: 'Session check unavailable.',

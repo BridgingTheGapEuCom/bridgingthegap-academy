@@ -28,6 +28,7 @@ export interface UserPreferencesStore {
   readonly state: Readonly<Ref<UserPreferencesState>>
   bootstrap(): Promise<void>
   refresh(): Promise<void>
+  applySaved(preferences: unknown): Promise<boolean>
   dispose(): void
 }
 
@@ -85,6 +86,24 @@ export function createUserPreferencesStore(options: UserPreferencesStoreOptions)
     await apply({ locale, storedAppearance: 'SYSTEM', appearance }, token)
   }
 
+  const applyStoredPreferences = async (preferences: unknown, token: number): Promise<boolean> => {
+    if (!validPreferences(preferences)) {
+      await apply({ locale: fallbackLocale(), storedAppearance: 'SYSTEM', appearance: resolveAppearance('SYSTEM', mediaQuery?.matches ?? false), error: 'invalid-preference' }, token)
+      return false
+    }
+    const locale = resolveApplicationLocale({ persistedLocale: preferences.applicationLocale })
+    const invalidLocale = preferences.applicationLocale !== null && !isProductionApplicationLocale(preferences.applicationLocale)
+    await apply({
+      locale,
+      storedAppearance: preferences.appearance,
+      appearance: resolveAppearance(preferences.appearance, mediaQuery?.matches ?? false),
+      preferences,
+      revision: preferences.revision,
+      error: invalidLocale ? 'invalid-preference' : undefined,
+    }, token)
+    return !invalidLocale
+  }
+
   const load = async (userID: string) => {
     if (currentUserID === userID && inFlight) return inFlight
     const token = ++generation
@@ -94,20 +113,7 @@ export function createUserPreferencesStore(options: UserPreferencesStoreOptions)
       try {
         const preferences = await options.auth.request<unknown>('/api/me/preferences', { invalidateOnUnauthorized: false })
         if (token !== generation || currentUserID !== userID) return
-        if (!validPreferences(preferences)) {
-          await apply({ locale: fallbackLocale(), storedAppearance: 'SYSTEM', appearance: resolveAppearance('SYSTEM', mediaQuery?.matches ?? false), error: 'invalid-preference' }, token)
-          return
-        }
-        const locale = resolveApplicationLocale({ persistedLocale: preferences.applicationLocale })
-        const invalidLocale = preferences.applicationLocale !== null && !isProductionApplicationLocale(preferences.applicationLocale)
-        await apply({
-          locale,
-          storedAppearance: preferences.appearance,
-          appearance: resolveAppearance(preferences.appearance, mediaQuery?.matches ?? false),
-          preferences,
-          revision: preferences.revision,
-          error: invalidLocale ? 'invalid-preference' : undefined,
-        }, token)
+        await applyStoredPreferences(preferences, token)
       } catch {
         if (token !== generation || currentUserID !== userID) return
         await apply({ locale: fallbackLocale(), storedAppearance: 'SYSTEM', appearance: resolveAppearance('SYSTEM', mediaQuery?.matches ?? false), error: 'unavailable' }, token)
@@ -143,6 +149,13 @@ export function createUserPreferencesStore(options: UserPreferencesStoreOptions)
       await reconcile()
     },
     async refresh() { await reconcile() },
+    async applySaved(preferences) {
+      const session = options.auth.state.value
+      if (session.status !== 'authenticated') return false
+      const token = ++generation
+      currentUserID = session.userId
+      return applyStoredPreferences(preferences, token)
+    },
     dispose() {
       stop()
       mediaQuery?.removeEventListener?.('change', onColorSchemeChange)

@@ -21,6 +21,31 @@ test('authenticated preferences apply locale and follow the system appearance', 
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
+test('Settings saves preference changes with accessible responsive controls', async ({ page }) => {
+  let preferences = { applicationLocale: null, appearance: 'SYSTEM', revision: 0, updatedAt: null as string | null }
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(authenticated) }))
+  await page.route('**/api/me/preferences', async (route) => {
+    if (route.request().method() === 'PUT') {
+      const update = route.request().postDataJSON()
+      preferences = { applicationLocale: update.applicationLocale, appearance: update.appearance, revision: preferences.revision + 1, updatedAt: '2026-10-10T00:00:00Z' }
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(preferences) })
+  })
+
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Settings' }).click()
+  await expect(page).toHaveURL('/settings')
+  await page.getByRole('radio', { name: 'Dark' }).check()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('status')).toContainText('Preferences saved.')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.locator('html').evaluate((element) => { element.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
 test('application shell is keyboard accessible', async ({ page }) => {
   await page.route('**/api/auth/session', (route) => route.fulfill({
     status: 401,

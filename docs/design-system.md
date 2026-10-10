@@ -246,6 +246,7 @@ Extract these only where repeated use is established:
 | Composition | Responsibility |
 | --- | --- |
 | `BtgPageContainer` | Canonical page max width, gutters, and shrink behavior |
+| `BtgPageTitle` | Standard routed-page title and optional helper text; callers provide localized copy |
 | `BtgPageHeader` | Eyebrow, title, context, metadata, and route-navigation slots; pages provide wording and destinations |
 | `BtgPageTabs` | Route-section navigation aligned to the page canvas |
 | `BtgToolbar` | Flexible leading/content/action groups with logical wrapping; it does not assign action hierarchy |

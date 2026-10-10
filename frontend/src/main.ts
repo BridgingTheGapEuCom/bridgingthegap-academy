@@ -33,6 +33,7 @@ import AuthoringDraftAssessmentsPage from './pages/AuthoringDraftAssessmentsPage
 import AuthoringDraftAssessmentPage from './pages/AuthoringDraftAssessmentPage.vue'
 import TranslationListPage from './pages/TranslationListPage.vue'
 import TranslationWorkspacePage from './pages/TranslationWorkspacePage.vue'
+import SettingsPreferencesPage from './pages/SettingsPreferencesPage.vue'
 import { createApplicationI18n } from './i18n/application'
 import { initializeUserPreferences } from './preferences/preferences'
 import './style.css'
@@ -51,6 +52,7 @@ const router = createRouter({
     { path: '/', component: HomePage },
     { path: '/dashboard', component: DashboardPage, meta: { requiresAuth: true } },
     { path: '/login', component: LoginPage },
+    { path: '/settings', component: SettingsPreferencesPage, meta: { requiresAuth: true } },
     { path: '/admin', component: AdminPage, meta: { requiresAuth: true } },
     { path: '/admin/course-import', component: CourseImportPage, meta: { requiresAuth: true } },
     { path: '/admin/plugins', component: PluginManagementPage, meta: { requiresAuth: true } },
