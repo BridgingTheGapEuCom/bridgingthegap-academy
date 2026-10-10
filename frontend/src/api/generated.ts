@@ -1353,6 +1353,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the authenticated user's application preferences. A user with no persisted row receives the logical SYSTEM default at revision 0. */
+        get: operations["getCurrentUserPreferences"];
+        /** @description Replaces all currently supported application preferences for the authenticated user. The request revision must match; revision 0 creates the first persisted row. */
+        put: operations["replaceCurrentUserPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/status": {
         parameters: {
             query?: never;
@@ -2856,6 +2874,21 @@ export interface components {
             expires_at: string;
             /** @description Session-bound synchronizer token. Keep in memory and send as X-CSRF-Token on cookie-authenticated POST, PUT, PATCH, and DELETE requests. Not an authentication credential. */
             csrf_token: string;
+        };
+        /** @enum {string} */
+        Appearance: "SYSTEM" | "LIGHT" | "DARK";
+        UserPreferences: {
+            /** @description Supported Academy application locale */
+            applicationLocale: string | null;
+            appearance: components["schemas"]["Appearance"];
+            revision: number;
+            /** Format: date-time */
+            updatedAt: string | null;
+        };
+        UpdateUserPreferencesRequest: {
+            applicationLocale: string | null;
+            appearance: components["schemas"]["Appearance"];
+            revision: number;
         };
         AdminStatus: {
             /** @constant */
@@ -6081,6 +6114,63 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             500: components["responses"]["Problem"];
+        };
+    };
+    getCurrentUserPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current user application preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferences"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    replaceCurrentUserPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trusted application Origin required for browser mutations. */
+                Origin: components["parameters"]["AuthoringOrigin"];
+                /** @description CSRF token bound to the authenticated session. */
+                "X-CSRF-Token": components["parameters"]["AuthoringCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserPreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated user application preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferences"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getAdministratorStatus: {

@@ -69,6 +69,7 @@ type authHTTP struct {
 	loginMetrics                *prometheus.CounterVec
 	loginRejects                *prometheus.CounterVec
 	authorizer                  identity.Authorizer
+	preferences                 userPreferencesService
 	authzMetrics                *prometheus.CounterVec
 	courses                     *courses.ReadService
 	publishedCourses            *courses.PublishedReadService

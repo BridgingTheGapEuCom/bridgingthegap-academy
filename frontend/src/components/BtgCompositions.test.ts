@@ -32,6 +32,11 @@ describe('Academy composition primitives', () => {
     expect(document.querySelector('.btg-metadata-strip svg')).toBeTruthy()
   })
 
+  it('provides an explicit three-column metadata layout when requested', () => {
+    render(BtgMetadataStrip, { props: { layout: 'three-column', items: [{ label: 'Module', value: '01 · Foundations' }, { label: 'Position', value: '1 of 1' }, { label: 'Last updated', value: 'September 15, 2026, 1:00 PM' }] } })
+    expect(document.querySelector('.btg-metadata-strip--three-column')).toBeTruthy()
+  })
+
   it('opens a dialog from its trigger and returns focus after Escape', async () => {
     render(BtgDialog, { props: { title: 'Move lesson', description: 'Choose a destination.' }, slots: { trigger: '<button type="button">Open move</button>', default: '<p>Dialog body</p>' } })
     const trigger = screen.getByRole('button', { name: 'Open move' })

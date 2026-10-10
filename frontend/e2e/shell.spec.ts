@@ -4,6 +4,23 @@ import AxeBuilder from '@axe-core/playwright'
 const unauthenticated = { type: 'about:blank', title: 'Unauthenticated', status: 401, instance: '/api/auth/session', request_id: 'test-request' }
 const authenticated = { authenticated: true, user_id: '22222222-2222-4222-8222-222222222222', expires_at: '2026-09-17T12:00:00Z', csrf_token: 'test-csrf-token' }
 
+test('authenticated preferences apply locale and follow the system appearance', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(authenticated) }))
+  await page.route('**/api/me/preferences', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ applicationLocale: 'en', appearance: 'SYSTEM', revision: 1, updatedAt: '2026-10-10T00:00:00Z' }),
+  }))
+
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await expect.poll(() => page.locator('html').getAttribute('data-theme')).toBe('light')
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
 test('application shell is keyboard accessible', async ({ page }) => {
   await page.route('**/api/auth/session', (route) => route.fulfill({
     status: 401,

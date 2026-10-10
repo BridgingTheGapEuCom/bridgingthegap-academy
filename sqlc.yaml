@@ -20,6 +20,16 @@ sql:
         sql_package: pgx/v5
   - engine: postgresql
     schema:
+      - internal/modules/infrastructure/postgres/db/migrations/00002_identity.sql
+      - internal/modules/infrastructure/postgres/db/migrations/00035_user_preferences.sql
+    queries: internal/modules/preferences/db/query
+    gen:
+      go:
+        package: sqlc
+        out: internal/modules/preferences/db/sqlc
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema:
       - internal/modules/infrastructure/postgres/db/migrations/00003_audit.sql
       - internal/modules/infrastructure/postgres/db/migrations/00004_session_audit.sql
     queries: internal/modules/audit/db/query

@@ -122,12 +122,44 @@ describe('AuthoringDraftStructurePage', () => {
     mount()
     const outline = await screen.findByRole('complementary', { name: 'Course structure' })
     expect(within(outline).getByTitle(longModuleTitle).classList.contains('authoring-structure-outline__module-title')).toBe(true)
-    await fireEvent.click(within(outline).getByRole('button', { name: `Expand ${longModuleTitle}` }))
+    await fireEvent.click(within(outline).getByRole('button', { name: `Select module ${longModuleTitle}` }))
+    const inspector = screen.getByRole('article', { name: 'Selected item inspector' })
+    expect(within(inspector).getByText('Module · 01')).toBeTruthy()
+    expect(within(inspector).getByRole('heading', { name: longModuleTitle }).getAttribute('title')).toBe(longModuleTitle)
+    expect(within(inspector).getByText('Position')).toBeTruthy()
+    expect(within(inspector).getByText('Lessons')).toBeTruthy()
+    expect(within(inspector).getByRole('button', { name: 'Move up' }).hasAttribute('disabled')).toBe(true)
+    expect(within(inspector).getByRole('button', { name: 'Move down' })).toBeTruthy()
+    expect(within(inspector).getByRole('heading', { name: 'Danger zone' })).toBeTruthy()
+    expect(within(inspector).getByText('This module contains 1 lesson. Move or remove it before deleting the module.')).toBeTruthy()
+    expect(within(inspector).getByRole('button', { name: 'Delete module' }).hasAttribute('disabled')).toBe(true)
+    const disclosure = within(outline).getByRole('button', { name: new RegExp(`(?:Expand|Collapse) ${longModuleTitle}`) })
+    if (disclosure.getAttribute('aria-expanded') !== 'true') await fireEvent.click(disclosure)
     const lessonTitle = within(outline).getByTitle(longLessonTitle)
     expect(lessonTitle.classList.contains('authoring-structure-outline__lesson-title')).toBe(true)
     await fireEvent.click(within(outline).getByRole('button', { name: new RegExp(longLessonTitle) }))
     expect((await screen.findByRole('heading', { name: longLessonTitle })).getAttribute('title')).toBe(longLessonTitle)
     expect(screen.getByTitle(`01 · ${longModuleTitle}`).querySelector('.btg-metadata-strip__value')).toBeTruthy()
+  })
+
+  it('explains the module deletion restriction from the actual lesson count', async () => {
+    mocks.getStructure.mockResolvedValueOnce(structureWithLessons())
+    mount()
+    const outline = await screen.findByRole('complementary', { name: 'Course structure' })
+
+    await fireEvent.click(within(outline).getByRole('button', { name: 'Select module Foundations' }))
+    const inspector = screen.getByRole('article', { name: 'Selected item inspector' })
+    expect(within(inspector).getByText('This module contains 3 lessons. Move or remove them before deleting the module.')).toBeTruthy()
+    expect(within(inspector).getByRole('button', { name: 'Delete module' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('keeps deletion available and clearly described for an empty module', async () => {
+    mount()
+    const outline = await screen.findByRole('complementary', { name: 'Course structure' })
+    await fireEvent.click(within(outline).getByRole('button', { name: 'Select module Advanced' }))
+    const inspector = screen.getByRole('article', { name: 'Selected item inspector' })
+    expect(within(inspector).getByText('Deleting this module cannot be undone.')).toBeTruthy()
+    expect(within(inspector).getByRole('button', { name: 'Delete module' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('renders Structure controls through the pseudo-locale without hardcoded page copy', async () => {
@@ -141,6 +173,13 @@ describe('AuthoringDraftStructurePage', () => {
     await fireEvent.click(within(outline).getByRole('button', { name: /What is EAI/ }))
     expect(await screen.findByRole('heading', { name: pseudoLocalize('Description') })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Edit content' })).toBeNull()
+  })
+
+  it('localizes the module danger zone through the pseudo-locale', async () => {
+    mount('en-XA')
+    const outline = await screen.findByRole('complementary', { name: pseudoLocalize('Course structure') })
+    await fireEvent.click(within(outline).getAllByRole('button', { name: /Foundations/ })[1]!)
+    expect(screen.getByRole('heading', { name: pseudoLocalize('Danger zone') })).toBeTruthy()
   })
 
   it('creates modules and lessons through focused dialogs without stable-key inputs', async () => {

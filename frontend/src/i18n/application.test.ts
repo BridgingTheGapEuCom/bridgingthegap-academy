@@ -28,6 +28,15 @@ describe('Academy application internationalization', () => {
     expect(readLocalePreference(storage)).toBeUndefined()
   })
 
+  it('gives a valid persisted production locale priority without accepting pseudo or unsupported server values', () => {
+    const storage = new MemoryStorage()
+    storage.setItem(applicationLocaleStorageKey, 'en-XA')
+    expect(resolveApplicationLocale({ persistedLocale: 'en', storage, browserLanguages: ['es-ES'] })).toBe('en')
+    const fallbackStorage = new MemoryStorage()
+    expect(resolveApplicationLocale({ persistedLocale: 'en-XA', storage: fallbackStorage, browserLanguages: ['en'] })).toBe('en')
+    expect(resolveApplicationLocale({ persistedLocale: 'es', storage: fallbackStorage, browserLanguages: ['en'] })).toBe('en')
+  })
+
   it('persists only canonical registered locales through the preference boundary', () => {
     const storage = new MemoryStorage()
     saveLocalePreference('en-XA', storage)

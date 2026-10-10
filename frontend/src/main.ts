@@ -34,6 +34,7 @@ import AuthoringDraftAssessmentPage from './pages/AuthoringDraftAssessmentPage.v
 import TranslationListPage from './pages/TranslationListPage.vue'
 import TranslationWorkspacePage from './pages/TranslationWorkspacePage.vue'
 import { createApplicationI18n } from './i18n/application'
+import { initializeUserPreferences } from './preferences/preferences'
 import './style.css'
 
 const router = createRouter({
@@ -117,8 +118,9 @@ router.afterEach((to, from) => {
 
 async function startApplication() {
   const i18n = await createApplicationI18n()
+  const preferences = initializeUserPreferences({ auth, i18n })
+  await preferences.bootstrap()
   createApp(App).use(router).use(i18n).mount('#app')
-  void auth.bootstrapSession()
 }
 
 void startApplication()

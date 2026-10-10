@@ -1,6 +1,7 @@
 @import "./foundation.css";
 @import "./semantic.css";
 @import "./themes/academy-default.css";
+@import "./themes/academy-dark.css";
 
 /* Compatibility aliases are intentionally retained while feature pages migrate
    to the semantic Academy contract. New primitive and feature CSS must prefer

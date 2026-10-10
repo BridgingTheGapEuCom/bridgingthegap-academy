@@ -1,0 +1,52 @@
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --academy-surface-page: #171717;
+  --academy-surface-default: #222222;
+  --academy-surface-elevated: #2a2a2a;
+  --academy-surface-subtle: #303030;
+  --academy-surface-selected: #363636;
+  --academy-surface-danger-subtle: #432525;
+  --academy-surface-code: #303030;
+  --academy-surface-overlay: rgb(0 0 0 / 72%);
+  --academy-text-primary: #f5f5f3;
+  --academy-text-secondary: #d0d0cc;
+  --academy-text-muted: #aaa9a4;
+  --academy-text-link: #7bc6e2;
+  --academy-text-link-hover: #b0e2f3;
+  --academy-text-danger: #ff9b93;
+  --academy-text-on-primary: #1d1d1d;
+  --academy-border-default: #696966;
+  --academy-border-subtle: #484845;
+  --academy-border-strong: #aeadab;
+  --academy-border-danger: #ff9b93;
+  --academy-action-primary-bg: #f0f0ed;
+  --academy-action-primary-bg-hover: #ffffff;
+  --academy-action-primary-text: #1d1d1d;
+  --academy-action-secondary-bg: #292929;
+  --academy-action-secondary-bg-hover: #383838;
+  --academy-action-secondary-border: #aeadab;
+  --academy-action-danger-bg: #c94a42;
+  --academy-action-danger-bg-hover: #e35a51;
+  --academy-action-danger-border: #ff9b93;
+  --academy-action-danger-text: #ff9b93;
+  --academy-focus-ring: #82d0ed;
+  --academy-status-success: #7fce99;
+  --academy-status-warning: #f1c56e;
+  --academy-status-danger: #ff9b93;
+
+  /* Legacy editorial aliases share the same root appearance boundary. */
+  --btg-home-background: var(--academy-surface-default);
+  --btg-home-surface-muted: var(--academy-surface-subtle);
+  --btg-home-surface-emphasis: #3a3a3a;
+  --btg-home-icon-surface: #414141;
+  --btg-home-icon-stroke: var(--academy-text-primary);
+  --btg-home-text: var(--academy-text-primary);
+  --btg-home-text-secondary: var(--academy-text-secondary);
+  --btg-home-text-muted: var(--academy-text-muted);
+  --btg-home-border: var(--academy-border-default);
+  --btg-home-border-strong: var(--academy-border-strong);
+  --btg-home-interactive: var(--academy-action-primary-bg);
+  --btg-home-interactive-hover: var(--academy-action-primary-bg-hover);
+  --btg-home-interactive-active: #d8d8d4;
+  --btg-home-focus: var(--academy-focus-ring);
+}

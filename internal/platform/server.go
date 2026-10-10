@@ -34,6 +34,8 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
 	pluginspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/portability"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/preferences"
+	preferencespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/preferences/postgres"
 	progresspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
 	translationspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations/postgres"
@@ -101,6 +103,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 	}
 	coursesRepository := coursespostgres.New(pool)
 	pluginRepository := pluginspostgres.New(pool)
+	preferencesService := preferences.NewService(preferencespostgres.New(pool))
 	pluginRegistry := plugins.NewRegistryService(pluginRepository, plugins.Policy{})
 	dashboardWidgets := &dashboardWidgetAPI{placements: plugins.NewDashboardPlacementService(pluginRegistry, pluginRepository, time.Now), registry: pluginRegistry}
 	pluginManagement := &pluginManagementAPI{registry: pluginRegistry}
@@ -186,6 +189,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		loginMetrics:                loginAttempts,
 		loginRejects:                loginRejections,
 		authorizer:                  identity.NewAuthorizationService(identitypostgres.New(pool)),
+		preferences:                 preferencesService,
 		courses:                     courses.NewReadService(coursesRepository),
 		publishedCourses:            courses.NewPublishedReadService(coursesRepository),
 		publishedAssets:             courses.NewPublishedAssetReadService(coursesRepository),
@@ -341,6 +345,10 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					portable.Post("/portability/imports/{previewToken}/execute", auth.handlePortabilityExecute)
 				}
 				protected.Get("/auth/session", auth.handleSession)
+				if auth.preferences != nil {
+					protected.Get("/me/preferences", auth.handleUserPreferencesGet)
+					protected.Put("/me/preferences", auth.handleUserPreferencesUpdate)
+				}
 				if auth.certificateIssuance != nil && auth.certificates != nil {
 					protected.Post("/courses/by-id/{courseId}/versions/{version}/certificate", auth.handleCertificateIssue)
 					protected.Get("/learner/certificates/{certificateId}", auth.handleLearnerCertificateGet)

@@ -1,19 +1,29 @@
 <template>
   <article v-if="item" class="authoring-structure-detail-panel">
     <template v-if="item.kind === 'module'">
-      <header class="authoring-structure-detail-panel__module-header">
-        <p><BtgIcon name="module" decorative />{{ t('authoring.structure.inspector.module') }} · {{ t('common.counts.lesson', { count: item.module.lessons.length }) }}</p>
-        <h3>{{ item.module.title }}</h3>
-        <p v-if="item.module.description">{{ item.module.description }}</p>
+      <header class="authoring-structure-detail-panel__header authoring-structure-detail-panel__module-header">
+        <div class="authoring-structure-detail-panel__identity-row">
+          <p>{{ t('authoring.structure.inspector.moduleIdentity', { module: number(item.module.position) }) }}</p>
+          <BtgButton variant="secondary" size="small" leading-icon="edit" :disabled="busy" @click="$emit('edit-module', item.module, $event)">{{ t('authoring.structure.inspector.editModule') }}</BtgButton>
+        </div>
+        <h3 class="authoring-structure-detail-panel__title" :title="item.module.title">{{ item.module.title }}</h3>
+        <BtgMetadataStrip class="authoring-structure-detail-panel__metadata authoring-structure-detail-panel__module-metadata" :items="moduleMetadata" layout="two-column" />
       </header>
-      <div class="authoring-structure-detail-panel__actions">
-        <BtgButton variant="secondary" leading-icon="edit" :disabled="busy" @click="$emit('edit-module', item.module, $event)">{{ t('authoring.structure.inspector.editModule') }}</BtgButton>
-        <BtgButton variant="tertiary" :disabled="busy || item.module.position === 0" @click="$emit('move-module', -1, item.module)">{{ t('authoring.structure.inspector.moveUp') }}</BtgButton>
-        <BtgButton variant="tertiary" :disabled="busy || item.module.position === moduleCount - 1" @click="$emit('move-module', 1, item.module)">{{ t('authoring.structure.inspector.moveDown') }}</BtgButton>
-      </div>
-      <div class="authoring-structure-detail-panel__destructive">
+
+      <AuthoringInspectorSection v-if="item.module.description" :title="t('authoring.structure.inspector.description')" icon="document">
+        <p>{{ item.module.description }}</p>
+      </AuthoringInspectorSection>
+
+      <AuthoringInspectorSection :title="t('authoring.structure.inspector.otherActions')" icon="settings">
+        <div class="authoring-structure-detail-panel__module-actions">
+          <BtgButton variant="secondary" leading-icon="arrowUp" :disabled="busy || item.module.position === 0" @click="$emit('move-module', -1, item.module)">{{ t('authoring.structure.inspector.moveUp') }}</BtgButton>
+          <BtgButton variant="secondary" leading-icon="arrowDown" :disabled="busy || item.module.position === moduleCount - 1" @click="$emit('move-module', 1, item.module)">{{ t('authoring.structure.inspector.moveDown') }}</BtgButton>
+        </div>
+      </AuthoringInspectorSection>
+      <AuthoringInspectorSection class="authoring-structure-detail-panel__danger-zone" :title="t('authoring.structure.inspector.dangerZone')" icon="delete">
+        <p>{{ moduleDeleteDescription }}</p>
         <BtgButton variant="danger-secondary" leading-icon="delete" :disabled="busy || item.module.lessons.length > 0" @click="$emit('delete-module', item.module)">{{ t('authoring.structure.inspector.deleteModule') }}</BtgButton>
-      </div>
+      </AuthoringInspectorSection>
     </template>
 
     <template v-else>
@@ -31,8 +41,8 @@
             @next="next && $emit('select-lesson', next)"
           />
         </div>
-		<h3 class="authoring-structure-detail-panel__lesson-title" :title="item.lesson.title">{{ item.lesson.title }}</h3>
-        <BtgMetadataStrip :items="metadata" />
+		<h3 class="authoring-structure-detail-panel__lesson-title authoring-structure-detail-panel__title" :title="item.lesson.title">{{ item.lesson.title }}</h3>
+        <BtgMetadataStrip class="authoring-structure-detail-panel__metadata" :items="metadata" layout="three-column" />
       </header>
 
       <AuthoringInspectorSection :title="t('authoring.structure.inspector.description')" icon="document">
@@ -65,9 +75,9 @@
       </AuthoringInspectorSection>
 
       <AuthoringInspectorSection :title="t('authoring.structure.inspector.otherActions')" icon="settings">
-        <BtgButton variant="secondary" leading-icon="move" :disabled="busy" @click="$emit('move-lesson', item.lesson, $event)">{{ t('authoring.structure.inspector.moveLesson') }}</BtgButton>
+        <BtgButton style="width: 100%" variant="secondary" leading-icon="move" :disabled="busy" @click="$emit('move-lesson', item.lesson, $event)">{{ t('authoring.structure.inspector.moveLesson') }}</BtgButton>
         <div class="authoring-structure-detail-panel__destructive">
-          <BtgButton variant="danger-secondary" leading-icon="delete" :disabled="busy" @click="$emit('delete-lesson', item.lesson)">{{ t('authoring.structure.inspector.deleteLesson') }}</BtgButton>
+          <BtgButton style="width: 100%" variant="danger-secondary" leading-icon="delete" :disabled="busy" @click="$emit('delete-lesson', item.lesson)">{{ t('authoring.structure.inspector.deleteLesson') }}</BtgButton>
         </div>
       </AuthoringInspectorSection>
     </template>
@@ -82,7 +92,6 @@ import { useApplicationFormatters } from '../i18n/formatters'
 import AuthoringInspectorSection from './AuthoringInspectorSection.vue'
 import BtgButton from './BtgButton.vue'
 import BtgChip from './BtgChip.vue'
-import BtgIcon from './BtgIcon.vue'
 import BtgMetadataStrip from './BtgMetadataStrip.vue'
 import BtgPreviousNextNavigation from './BtgPreviousNextNavigation.vue'
 
@@ -109,6 +118,20 @@ const metadata = computed(() => {
     { label: t('authoring.structure.inspector.position'), value: t('authoring.structure.lessonPosition', { current: lesson.position + 1, total: module.lessons.length }) },
     { label: t('authoring.structure.inspector.lastUpdated'), value: updatedAt },
   ]
+})
+const moduleMetadata = computed(() => {
+  if (props.item?.kind !== 'module') return []
+  return [
+    { label: t('authoring.structure.inspector.position'), value: number(props.item.module.position) },
+    { label: t('authoring.structure.inspector.lessonCount'), value: t('common.counts.lesson', { count: props.item.module.lessons.length }) },
+  ]
+})
+const moduleDeleteDescription = computed(() => {
+  if (props.item?.kind !== 'module') return ''
+  const count = props.item.module.lessons.length
+  return count === 0
+    ? t('authoring.structure.inspector.deleteModuleDescription')
+    : t('authoring.structure.inspector.deleteModuleWithLessonsDescription', { count }, count)
 })
 const blockLabels = computed(() => {
   if (props.content.kind !== 'ready') return []

@@ -10,14 +10,16 @@
 			focusable
 		/>
 		<p v-if="state.kind === 'loading'" role="status">
-			{{ t('authoring.structure.loading') }}
+			{{ t("authoring.structure.loading") }}
 		</p>
 		<div
 			v-else-if="state.kind === 'unavailable'"
 			class="authoring-structure__state"
 		>
-				<p>{{ t('authoring.structure.unavailable') }}</p>
-				<BtgButton variant="secondary" @click="load">{{ t('common.actions.tryAgain') }}</BtgButton>
+			<p>{{ t("authoring.structure.unavailable") }}</p>
+			<BtgButton variant="secondary" @click="load">{{
+				t("common.actions.tryAgain")
+			}}</BtgButton>
 		</div>
 		<template v-else>
 			<p v-if="message" class="authoring-structure__status" role="status">
@@ -32,250 +34,414 @@
 				role="status"
 			>
 				<p>
-						{{ t('authoring.structure.changedElsewhere') }}
+					{{ t("authoring.structure.changedElsewhere") }}
 				</p>
-				<BtgButton variant="secondary" @click="reload"
-						>{{ t('authoring.structure.reload') }}</BtgButton
-				>
+				<BtgButton variant="secondary" @click="reload">{{
+					t("authoring.structure.reload")
+				}}</BtgButton>
 			</div>
 			<div v-if="!modules.length" class="authoring-structure__empty">
-					<h3>{{ t('authoring.structure.empty.title') }}</h3>
-					<p>{{ t('authoring.structure.empty.description') }}</p>
-					<BtgButton leading-icon="plus" @click="openModule()"
-						>{{ t('authoring.structure.toolbar.addModule') }}</BtgButton
-				>
+				<h3>{{ t("authoring.structure.empty.title") }}</h3>
+				<p>{{ t("authoring.structure.empty.description") }}</p>
+				<BtgButton leading-icon="plus" @click="openModule()">{{
+					t("authoring.structure.toolbar.addModule")
+				}}</BtgButton>
 			</div>
 			<div
 				class="authoring-structure-workspace-shell"
 				:class="{ 'is-reordering': reordering }"
 			>
-					<BtgToolbar class="authoring-structure-workspace__toolbar">
-						<template #leading><BtgSearchField v-model="query" :label="t('authoring.structure.toolbar.searchLabel')" :placeholder="t('authoring.structure.toolbar.searchPlaceholder')" /></template>
-						<template #actions>
-							<BtgButton variant="quiet" @click="expandAll"
-								>{{ t('authoring.structure.toolbar.expandAll') }}</BtgButton
-							><BtgButton variant="quiet" @click="collapseAll"
-								>{{ t('authoring.structure.toolbar.collapseAll') }}</BtgButton>
-						</template>
-					</BtgToolbar>
-					<BtgSplitWorkspace class="authoring-structure-workspace" variant="outline-inspector">
-						<template #primary><BtgPanel
+				<BtgToolbar class="authoring-structure-workspace__toolbar">
+					<template #leading
+						><BtgSearchField
+							v-model="query"
+							:label="
+								t('authoring.structure.toolbar.searchLabel')
+							"
+							:placeholder="
+								t(
+									'authoring.structure.toolbar.searchPlaceholder',
+								)
+							"
+					/></template>
+					<template #actions>
+						<BtgButton variant="quiet" @click="expandAll">{{
+							t("authoring.structure.toolbar.expandAll")
+						}}</BtgButton
+						><BtgButton variant="quiet" @click="collapseAll">{{
+							t("authoring.structure.toolbar.collapseAll")
+						}}</BtgButton>
+					</template>
+				</BtgToolbar>
+				<BtgSplitWorkspace
+					class="authoring-structure-workspace"
+					variant="outline-inspector"
+				>
+					<template #primary
+						><BtgPanel
 							as="aside"
 							class="authoring-structure-outline"
 							:aria-label="t('authoring.structure.outline.label')"
 						>
-						<header class="authoring-structure-outline__header">
-								<h3>{{ t('authoring.structure.outline.label') }}</h3>
+							<header class="authoring-structure-outline__header">
+								<h3>
+									{{ t("authoring.structure.outline.label") }}
+								</h3>
 								<p>
-									{{ t('common.counts.module', { count: modules.length }) }}
+									{{
+										t("common.counts.module", {
+											count: modules.length,
+										})
+									}}
+								</p>
+							</header>
+							<p
+								v-if="!filtered.length"
+								class="authoring-structure-outline__empty"
+							>
+								{{ t("authoring.structure.empty.noMatches") }}
 							</p>
-						</header>
-						<p
-							v-if="!filtered.length"
-							class="authoring-structure-outline__empty"
-						>
-								{{ t('authoring.structure.empty.noMatches') }}
-						</p>
-						<ol v-else class="authoring-structure-outline__modules">
-							<li v-for="module in filtered" :key="module.id">
-								<div
-									class="authoring-structure-outline__module"
-									:class="{
-										selected:
-											selection?.kind === 'module' &&
-											selection.id === module.id,
-									}"
-								>
-									<BtgDisclosure
-										:model-value="expanded.has(module.id) || Boolean(query)"
-										icon-only
-										:label="expanded.has(module.id) || query ? t('authoring.structure.outline.collapseModule', { title: module.title }) : t('authoring.structure.outline.expandModule', { title: module.title })"
-										@update:model-value="toggle(module.id)"
-									/>
-									<BtgButton
-										type="button"
-										class="authoring-structure-outline__select"
-										variant="tertiary"
-										:aria-label="t('authoring.structure.outline.selectModule', { title: module.title })"
-										:aria-pressed="
-											selection?.kind === 'module' &&
-											selection.id === module.id
-										"
-										@click="selectModule(module)"
+							<ol
+								v-else
+								class="authoring-structure-outline__modules"
+							>
+								<li v-for="module in filtered" :key="module.id">
+									<div
+										class="authoring-structure-outline__module"
+										:class="{
+											selected:
+												selection?.kind === 'module' &&
+												selection.id === module.id,
+										}"
 									>
-										<BtgIcon name="module" /><b>{{
-											number(module.position)
-										}}</b
-										><span class="authoring-structure-outline__module-title" :title="module.title">{{ module.title }}</span
-										><small
-											>{{ t('common.counts.lesson', { count: module.lessons.length }) }}</small
+										<BtgDisclosure
+											:model-value="
+												expanded.has(module.id) ||
+												Boolean(query)
+											"
+											icon-only
+											:label="
+												expanded.has(module.id) || query
+													? t(
+															'authoring.structure.outline.collapseModule',
+															{
+																title: module.title,
+															},
+														)
+													: t(
+															'authoring.structure.outline.expandModule',
+															{
+																title: module.title,
+															},
+														)
+											"
+											@update:model-value="
+												toggle(module.id)
+											"
+										/>
+										<BtgButton
+											type="button"
+											class="authoring-structure-outline__select"
+											variant="tertiary"
+											:aria-label="
+												t(
+													'authoring.structure.outline.selectModule',
+													{ title: module.title },
+												)
+											"
+											:aria-pressed="
+												selection?.kind === 'module' &&
+												selection.id === module.id
+											"
+											@click="selectModule(module)"
 										>
-									</BtgButton>
-								</div>
-								<ol
-									v-if="expanded.has(module.id) || query"
-									class="authoring-structure-outline__lessons"
-								>
+											<div
+												class="authoring-structure-module-title"
+											>
+												<BtgIcon name="module" /><b>{{
+													number(module.position)
+												}}</b
+												><span
+													class="authoring-structure-outline__module-title"
+													:title="module.title"
+													>{{ module.title }}</span
+												><small>{{
+													t("common.counts.lesson", {
+														count: module.lessons
+															.length,
+													})
+												}}</small>
+											</div>
+										</BtgButton>
+									</div>
+									<ol
+										v-if="expanded.has(module.id) || query"
+										class="authoring-structure-outline__lessons"
+									>
 										<BtgOrderedRow
 											v-for="lesson in lessons(module)"
 											:key="lesson.id"
 											:index="lesson.position"
-											:selected="selection?.kind === 'lesson' && selection.id === lesson.id"
-										:data-structure-lesson-id="lesson.id"
-										:data-structure-module-id="module.id"
-										:class="{
-											'is-dragging':
-												draggingLessonID === lesson.id,
-											'is-drop-before':
-												draggingLessonID !==
-													lesson.id &&
-												dragModuleID === module.id &&
-												insertionIndex ===
-													module.lessons.findIndex(
-														(item) =>
-															item.id ===
-															lesson.id,
-													),
-											'is-drop-after':
-												draggingLessonID !==
-													lesson.id &&
-												dragModuleID === module.id &&
-												insertionIndex ===
-													module.lessons.length &&
-												lesson.id ===
-													module.lessons.at(-1)?.id,
-										}"
-										>
-											<template #handle><BtgDragHandle
-											:id="`authoring-structure-reorder-${lesson.id}`"
-											type="button"
-											class="authoring-structure-outline__drag"
-												:label="t('authoring.structure.outline.reorderLesson', { position: number(lesson.position) })"
-											:aria-pressed="
-												keyboardReorderLessonID ===
+											:selected="
+												selection?.kind === 'lesson' &&
+												selection.id === lesson.id
+											"
+											:data-structure-lesson-id="
 												lesson.id
 											"
-											:aria-describedby="
-												query
-													? 'authoring-structure-reorder-filtered'
-													: 'authoring-structure-reorder-help'
+											:data-structure-module-id="
+												module.id
 											"
-											:disabled="!canReorder"
-											@pointerdown="
-												startPointerReorder(
-													$event,
-													module,
-													lesson,
-												)
-											"
-											@keydown="
-												keyboardReorder(
-													$event,
-													module,
-													lesson,
-												)
-											"
+											:class="{
+												'is-dragging':
+													draggingLessonID ===
+													lesson.id,
+												'is-drop-before':
+													draggingLessonID !==
+														lesson.id &&
+													dragModuleID ===
+														module.id &&
+													insertionIndex ===
+														module.lessons.findIndex(
+															(item) =>
+																item.id ===
+																lesson.id,
+														),
+												'is-drop-after':
+													draggingLessonID !==
+														lesson.id &&
+													dragModuleID ===
+														module.id &&
+													insertionIndex ===
+														module.lessons.length &&
+													lesson.id ===
+														module.lessons.at(-1)
+															?.id,
+											}"
+										>
+											<template #handle
+												><BtgDragHandle
+													:id="`authoring-structure-reorder-${lesson.id}`"
+													type="button"
+													class="authoring-structure-outline__drag"
+													:label="
+														t(
+															'authoring.structure.outline.reorderLesson',
+															{
+																position:
+																	number(
+																		lesson.position,
+																	),
+															},
+														)
+													"
+													:aria-pressed="
+														keyboardReorderLessonID ===
+														lesson.id
+													"
+													:aria-describedby="
+														query
+															? 'authoring-structure-reorder-filtered'
+															: 'authoring-structure-reorder-help'
+													"
+													:disabled="!canReorder"
+													@pointerdown="
+														startPointerReorder(
+															$event,
+															module,
+															lesson,
+														)
+													"
+													@keydown="
+														keyboardReorder(
+															$event,
+															module,
+															lesson,
+														)
+													"
 											/></template>
 											<BtgButton
 												type="button"
 												class="authoring-structure-outline__lesson-select"
 												variant="tertiary"
-												:aria-label="t('authoring.structure.outline.selectLesson', { title: lesson.title })"
-											:aria-pressed="
-												selection?.kind === 'lesson' &&
-												selection.id === lesson.id
-											"
-											@click="
-												selectLesson(module, lesson)
-											"
-										>
-												<BtgIcon name="lesson" /><span class="authoring-structure-outline__lesson-title" :title="lesson.title">{{ lesson.title }}</span>
+												:aria-label="
+													t(
+														'authoring.structure.outline.selectLesson',
+														{ title: lesson.title },
+													)
+												"
+												:aria-pressed="
+													selection?.kind ===
+														'lesson' &&
+													selection.id === lesson.id
+												"
+												@click="
+													selectLesson(module, lesson)
+												"
+											>
+												<BtgIcon name="lesson" /><span
+													class="authoring-structure-outline__lesson-title"
+													:title="lesson.title"
+													>{{ lesson.title }}</span
+												>
 											</BtgButton>
 										</BtgOrderedRow>
-									<li
-										v-if="!module.lessons.length"
-										class="authoring-structure-outline__empty-module"
-									>
-											<p>{{ t('authoring.structure.empty.noLessons') }}</p>
-											<BtgButton variant="secondary" size="small" leading-icon="plus" @click="openLesson(module)">{{ t('authoring.structure.toolbar.addFirstLesson') }}</BtgButton>
+										<li
+											v-if="!module.lessons.length"
+											class="authoring-structure-outline__empty-module"
+										>
+											<p>
+												{{
+													t(
+														"authoring.structure.empty.noLessons",
+													)
+												}}
+											</p>
+											<BtgButton
+												variant="secondary"
+												size="small"
+												leading-icon="plus"
+												@click="openLesson(module)"
+												>{{
+													t(
+														"authoring.structure.toolbar.addFirstLesson",
+													)
+												}}</BtgButton
+											>
 										</li>
-								</ol>
-								<div
-									v-if="expanded.has(module.id) || query"
-									class="authoring-structure-outline__add"
-								>
-									<BtgButton
-										variant="quiet"
-										@click="openLesson(module)"
-										leading-icon="plus">{{ t('authoring.structure.toolbar.addLesson') }}</BtgButton
+									</ol>
+									<div
+										v-if="expanded.has(module.id) || query"
+										class="authoring-structure-outline__add"
 									>
-								</div>
-							</li>
-						</ol>
-						<p
-							id="authoring-structure-reorder-help"
-							class="sr-only"
-						>
-							{{ t('authoring.structure.outline.reorderHelp') }}
-						</p>
-						<p
-							v-if="query"
-							id="authoring-structure-reorder-filtered"
-							class="authoring-structure-outline__reorder-note"
-						>
-							{{ t('authoring.structure.outline.reorderFiltered') }}
-						</p>
-						<p class="sr-only" aria-live="polite">
-							{{ reorderAnnouncement }}
-						</p>
-						<BtgButton
-							class="authoring-structure-outline__add-module"
-							variant="secondary"
-							:disabled="busy || conflict"
-							leading-icon="plus"
-							@click="openModule(undefined, $event)"
-							>{{ t('authoring.structure.toolbar.addModule') }}</BtgButton
-						>
-					</BtgPanel></template>
-					<template #secondary><BtgPanel
-						as="article"
-						class="authoring-structure-detail"
-						:aria-label="t('authoring.structure.outline.inspectorLabel')"
+										<BtgButton
+											variant="quiet"
+											@click="openLesson(module)"
+											leading-icon="plus"
+											>{{
+												t(
+													"authoring.structure.toolbar.addLesson",
+												)
+											}}</BtgButton
+										>
+									</div>
+								</li>
+							</ol>
+							<p
+								id="authoring-structure-reorder-help"
+								class="sr-only"
+							>
+								{{
+									t("authoring.structure.outline.reorderHelp")
+								}}
+							</p>
+							<p
+								v-if="query"
+								id="authoring-structure-reorder-filtered"
+								class="authoring-structure-outline__reorder-note"
+							>
+								{{
+									t(
+										"authoring.structure.outline.reorderFiltered",
+									)
+								}}
+							</p>
+							<p class="sr-only" aria-live="polite">
+								{{ reorderAnnouncement }}
+							</p>
+							<BtgButton
+								class="authoring-structure-outline__add-module"
+								variant="secondary"
+								:disabled="busy || conflict"
+								leading-icon="plus"
+								@click="openModule(undefined, $event)"
+								>{{
+									t("authoring.structure.toolbar.addModule")
+								}}</BtgButton
+							>
+						</BtgPanel></template
 					>
-						<Detail
-							v-if="selection"
-							:item="current"
-							:busy="busy || conflict"
-							:module-count="modules.length"
-							:content="contentSummary"
-							:previous="lessonNavigation.previous"
-							:next="lessonNavigation.next"
-							@edit-module="openModule"
-							@edit-details="openLessonDetails"
-							@edit-content="openLessonContent"
-							@retry-content="loadContentSummary"
-							@move-module="moveModule"
-							@move-lesson="openMove"
-							@delete-module="removeModule"
-							@delete-lesson="removeLesson"
-							@select-lesson="selectNavigationLesson"
-						/>
-						<div v-else class="authoring-structure-detail__empty">
-							<h3>{{ t('authoring.structure.inspector.selectLessonTitle') }}</h3>
-							<p>{{ t('authoring.structure.inspector.selectLessonDescription') }}</p>
-						</div>
-					</BtgPanel></template>
-					</BtgSplitWorkspace>
+					<template #secondary
+						><BtgPanel
+							as="article"
+							class="authoring-structure-detail"
+							:aria-label="
+								t('authoring.structure.outline.inspectorLabel')
+							"
+						>
+							<Detail
+								v-if="selection"
+								:item="current"
+								:busy="busy || conflict"
+								:module-count="modules.length"
+								:content="contentSummary"
+								:previous="lessonNavigation.previous"
+								:next="lessonNavigation.next"
+								@edit-module="openModule"
+								@edit-details="openLessonDetails"
+								@edit-content="openLessonContent"
+								@retry-content="loadContentSummary"
+								@move-module="moveModule"
+								@move-lesson="openMove"
+								@delete-module="removeModule"
+								@delete-lesson="removeLesson"
+								@select-lesson="selectNavigationLesson"
+							/>
+							<div
+								v-else
+								class="authoring-structure-detail__empty"
+							>
+								<h3>
+									{{
+										t(
+											"authoring.structure.inspector.selectLessonTitle",
+										)
+									}}
+								</h3>
+								<p>
+									{{
+										t(
+											"authoring.structure.inspector.selectLessonDescription",
+										)
+									}}
+								</p>
+							</div>
+						</BtgPanel></template
+					>
+				</BtgSplitWorkspace>
 			</div>
 		</template>
-		<BtgDialog v-model:open="moduleDialogOpen" :show-trigger="false" :title="moduleEdit ? t('authoring.structure.dialog.editModuleTitle') : t('authoring.structure.dialog.addModuleTitle')" :description="moduleEdit ? t('authoring.structure.dialog.editModuleDescription') : t('authoring.structure.dialog.addModuleDescription')">
+		<BtgDialog
+			v-model:open="moduleDialogOpen"
+			:show-trigger="false"
+			:title="
+				moduleEdit
+					? t('authoring.structure.dialog.editModuleTitle')
+					: t('authoring.structure.dialog.addModuleTitle')
+			"
+			:description="
+				moduleEdit
+					? t('authoring.structure.dialog.editModuleDescription')
+					: t('authoring.structure.dialog.addModuleDescription')
+			"
+		>
 			<form @submit.prevent="saveModule">
-				<h3>{{ moduleEdit ? t('authoring.structure.dialog.editModuleTitle') : t('authoring.structure.dialog.addModuleTitle') }}</h3>
+				<h3>
+					{{
+						moduleEdit
+							? t("authoring.structure.dialog.editModuleTitle")
+							: t("authoring.structure.dialog.addModuleTitle")
+					}}
+				</h3>
 				<p>
 					{{
 						moduleEdit
-							? t('authoring.structure.dialog.editModuleDescription')
-							: t('authoring.structure.dialog.addModuleDescription')
+							? t(
+									"authoring.structure.dialog.editModuleDescription",
+								)
+							: t(
+									"authoring.structure.dialog.addModuleDescription",
+								)
 					}}
 				</p>
 				<BtgFormField
@@ -289,7 +455,10 @@
 						:aria-describedby="p.describedBy"
 						:invalid="p.invalid"
 						required /></BtgFormField
-				><BtgFormField :label="t('authoring.structure.dialog.moduleDescription')" v-slot="p">
+				><BtgFormField
+					:label="t('authoring.structure.dialog.moduleDescription')"
+					v-slot="p"
+				>
 					<BtgTextarea
 						:id="p.controlId"
 						v-model="moduleForm.description"
@@ -300,21 +469,46 @@
 					<BtgButton
 						variant="secondary"
 						@click.prevent="moduleDialogOpen = false"
-						>{{ t('authoring.structure.dialog.cancel') }}</BtgButton
+						>{{ t("authoring.structure.dialog.cancel") }}</BtgButton
 					><BtgButton type="submit" :disabled="busy">{{
-						moduleEdit ? t('authoring.structure.dialog.saveModule') : t('authoring.structure.dialog.createModule')
+						moduleEdit
+							? t("authoring.structure.dialog.saveModule")
+							: t("authoring.structure.dialog.createModule")
 					}}</BtgButton>
 				</div>
 			</form>
 		</BtgDialog>
-		<BtgDialog v-model:open="lessonDialogOpen" :show-trigger="false" :title="lessonEdit ? t('authoring.structure.dialog.editLessonTitle') : t('authoring.structure.dialog.addLessonTitle')" :description="lessonEdit ? t('authoring.structure.dialog.editLessonDescription') : t('authoring.structure.dialog.addLessonDescription')">
+		<BtgDialog
+			v-model:open="lessonDialogOpen"
+			:show-trigger="false"
+			:title="
+				lessonEdit
+					? t('authoring.structure.dialog.editLessonTitle')
+					: t('authoring.structure.dialog.addLessonTitle')
+			"
+			:description="
+				lessonEdit
+					? t('authoring.structure.dialog.editLessonDescription')
+					: t('authoring.structure.dialog.addLessonDescription')
+			"
+		>
 			<form @submit.prevent="saveLesson">
-				<h3>{{ lessonEdit ? t('authoring.structure.dialog.editLessonTitle') : t('authoring.structure.dialog.addLessonTitle') }}</h3>
+				<h3>
+					{{
+						lessonEdit
+							? t("authoring.structure.dialog.editLessonTitle")
+							: t("authoring.structure.dialog.addLessonTitle")
+					}}
+				</h3>
 				<p>
 					{{
 						lessonEdit
-							? t('authoring.structure.dialog.editLessonDescription')
-							: t('authoring.structure.dialog.addLessonDescription')
+							? t(
+									"authoring.structure.dialog.editLessonDescription",
+								)
+							: t(
+									"authoring.structure.dialog.addLessonDescription",
+								)
 					}}
 				</p>
 				<BtgFormField
@@ -325,14 +519,20 @@
 					><BtgTextInput
 						:id="p.controlId"
 						v-model="lessonForm.title"
-						:placeholder="t('authoring.structure.dialog.lessonTitlePlaceholder')"
+						:placeholder="
+							t(
+								'authoring.structure.dialog.lessonTitlePlaceholder',
+							)
+						"
 						:aria-describedby="p.describedBy"
 						:invalid="p.invalid"
 						required /></BtgFormField
 				><BtgFormField
 					:label="t('authoring.structure.dialog.lessonDescription')"
 					required
-					:description="t('authoring.structure.dialog.lessonDescriptionHelp')"
+					:description="
+						t('authoring.structure.dialog.lessonDescriptionHelp')
+					"
 					:error="lessonErrors.description"
 					v-slot="p"
 				>
@@ -341,12 +541,13 @@
 						v-model="lessonForm.description"
 						:aria-describedby="p.describedBy"
 						:aria-invalid="p.invalid || undefined"
-						required
-					/></BtgFormField
+						required /></BtgFormField
 				><RepeatableObjectivesEditor
 					v-model="lessonForm.objectives"
 					:label="t('authoring.structure.dialog.objectives')"
-					:description="t('authoring.structure.dialog.objectivesHelp')"
+					:description="
+						t('authoring.structure.dialog.objectivesHelp')
+					"
 					:error="lessonErrors.objectives"
 					:disabled="busy"
 				/>
@@ -354,20 +555,32 @@
 					<BtgButton
 						variant="secondary"
 						@click.prevent="lessonDialogOpen = false"
-						>{{ t('authoring.structure.dialog.cancel') }}</BtgButton
+						>{{ t("authoring.structure.dialog.cancel") }}</BtgButton
 					><BtgButton type="submit" :disabled="busy">{{
-						lessonEdit ? t('authoring.structure.dialog.saveLesson') : t('authoring.structure.dialog.createLesson')
+						lessonEdit
+							? t("authoring.structure.dialog.saveLesson")
+							: t("authoring.structure.dialog.createLesson")
 					}}</BtgButton>
 				</div>
 			</form>
 		</BtgDialog>
-		<BtgDialog v-model:open="moveDialogOpen" :show-trigger="false" :title="t('authoring.structure.dialog.moveLessonTitle')">
+		<BtgDialog
+			v-model:open="moveDialogOpen"
+			:show-trigger="false"
+			:title="t('authoring.structure.dialog.moveLessonTitle')"
+		>
 			<form @submit.prevent="saveMove">
-				<h3>{{ t('authoring.structure.dialog.moveLessonTitle') }}</h3>
+				<h3>{{ t("authoring.structure.dialog.moveLessonTitle") }}</h3>
 				<p>
-					{{ t('authoring.structure.dialog.moveLessonDescription', { title: moving?.title }) }}
+					{{
+						t("authoring.structure.dialog.moveLessonDescription", {
+							title: moving?.title,
+						})
+					}}
 				</p>
-				<BtgFormField :label="t('authoring.structure.dialog.module')" v-slot="p"
+				<BtgFormField
+					:label="t('authoring.structure.dialog.module')"
+					v-slot="p"
 					><BtgSelect
 						:id="p.controlId"
 						v-model="targetModule"
@@ -381,7 +594,9 @@
 							{{ module.title }}
 						</option>
 					</BtgSelect></BtgFormField
-				><BtgFormField :label="t('authoring.structure.dialog.position')" v-slot="p"
+				><BtgFormField
+					:label="t('authoring.structure.dialog.position')"
+					v-slot="p"
 					><BtgSelect
 						:id="p.controlId"
 						:model-value="String(targetPosition)"
@@ -401,10 +616,10 @@
 					<BtgButton
 						variant="secondary"
 						@click.prevent="moveDialogOpen = false"
-						>{{ t('authoring.structure.dialog.cancel') }}</BtgButton
-					><BtgButton type="submit" :disabled="busy"
-						>{{ t('authoring.structure.inspector.moveLesson') }}</BtgButton
-					>
+						>{{ t("authoring.structure.dialog.cancel") }}</BtgButton
+					><BtgButton type="submit" :disabled="busy">{{
+						t("authoring.structure.inspector.moveLesson")
+					}}</BtgButton>
 				</div>
 			</form>
 		</BtgDialog>
@@ -562,7 +777,12 @@ const contentSummary = computed(() =>
 const positions = computed(() => {
 	const m = modules.value.find((x) => x.id === targetModule.value);
 	const rest = m?.lessons.filter((x) => x.id !== moving.value?.id) ?? [];
-	return [t('authoring.structure.dialog.atBeginning'), ...rest.map((x) => t('authoring.structure.dialog.afterLesson', { title: x.title }))];
+	return [
+		t("authoring.structure.dialog.atBeginning"),
+		...rest.map((x) =>
+			t("authoring.structure.dialog.afterLesson", { title: x.title }),
+		),
+	];
 });
 watch(
 	() => draft.value.id,
@@ -584,9 +804,12 @@ watch(targetModule, () => {
 		positions.value.length - 1,
 	);
 });
-watch([moduleDialogOpen, lessonDialogOpen, moveDialogOpen], (open, previous) => {
-	if (previous.some(Boolean) && !open.some(Boolean)) restoreFocus();
-});
+watch(
+	[moduleDialogOpen, lessonDialogOpen, moveDialogOpen],
+	(open, previous) => {
+		if (previous.some(Boolean) && !open.some(Boolean)) restoreFocus();
+	},
+);
 onBeforeUnmount(() => {
 	alive = false;
 	clearPointerReorder();
@@ -718,14 +941,21 @@ function keyboardReorder(
 			keyboardReorderLessonID.value === lesson.id ? undefined : lesson.id;
 		reorderAnnouncement.value =
 			keyboardReorderLessonID.value === lesson.id
-				? t('authoring.structure.outline.reordering', { title: lesson.title })
-				: t('authoring.structure.outline.finishedReordering', { title: lesson.title });
+				? t("authoring.structure.outline.reordering", {
+						title: lesson.title,
+					})
+				: t("authoring.structure.outline.finishedReordering", {
+						title: lesson.title,
+					});
 		return;
 	}
 	if (event.key === "Escape" && keyboardReorderLessonID.value === lesson.id) {
 		event.preventDefault();
 		keyboardReorderLessonID.value = undefined;
-		reorderAnnouncement.value = t('authoring.structure.outline.finishedReordering', { title: lesson.title });
+		reorderAnnouncement.value = t(
+			"authoring.structure.outline.finishedReordering",
+			{ title: lesson.title },
+		);
 		return;
 	}
 	if (
@@ -898,7 +1128,7 @@ async function reload() {
 		replaceDraft(d);
 		state.value = { kind: "ready", structure: s };
 		conflict.value = false;
-		message.value = t('authoring.structure.latestLoaded');
+		message.value = t("authoring.structure.latestLoaded");
 	} catch (cause) {
 		fail(cause);
 	} finally {
@@ -907,7 +1137,8 @@ async function reload() {
 }
 async function saveModule() {
 	clear(moduleErrors);
-	if (!moduleForm.title.trim()) moduleErrors.title = t('authoring.structure.validation.moduleTitle');
+	if (!moduleForm.title.trim())
+		moduleErrors.title = t("authoring.structure.validation.moduleTitle");
 	if (Object.keys(moduleErrors).length) return;
 	await mutate(async () => {
 		const r = moduleEdit.value
@@ -925,19 +1156,26 @@ async function saveModule() {
 				});
 		await commit(
 			r.draftRevision,
-			moduleEdit.value ? t('authoring.structure.feedback.moduleUpdated') : t('authoring.structure.feedback.moduleCreated'),
+			moduleEdit.value
+				? t("authoring.structure.feedback.moduleUpdated")
+				: t("authoring.structure.feedback.moduleCreated"),
 		);
 		moduleDialogOpen.value = false;
 	});
 }
 async function saveLesson() {
 	clear(lessonErrors);
-	if (!lessonForm.title.trim()) lessonErrors.title = t('authoring.structure.validation.lessonTitle');
+	if (!lessonForm.title.trim())
+		lessonErrors.title = t("authoring.structure.validation.lessonTitle");
 	if (!lessonForm.description.trim())
-		lessonErrors.description = t('authoring.structure.validation.lessonDescription');
+		lessonErrors.description = t(
+			"authoring.structure.validation.lessonDescription",
+		);
 	const objectives = lessonForm.objectives.map((x) => x.trim());
 	if (!objectives.length || objectives.some((x) => !x))
-		lessonErrors.objectives = t('authoring.structure.validation.objectives');
+		lessonErrors.objectives = t(
+			"authoring.structure.validation.objectives",
+		);
 	if (Object.keys(lessonErrors).length || !lessonModule.value) return;
 	await mutate(async () => {
 		const r = lessonEdit.value
@@ -959,7 +1197,9 @@ async function saveLesson() {
 				);
 		await commit(
 			r.draftRevision,
-			lessonEdit.value ? t('authoring.structure.feedback.lessonUpdated') : t('authoring.structure.feedback.lessonCreated'),
+			lessonEdit.value
+				? t("authoring.structure.feedback.lessonUpdated")
+				: t("authoring.structure.feedback.lessonCreated"),
 		);
 		lessonDialogOpen.value = false;
 	});
@@ -977,7 +1217,10 @@ async function moveModule(delta: -1 | 1, m?: AuthoringModuleSummary) {
 			draft.value.revision,
 			ids,
 		);
-		await commit(r.draftRevision, t('authoring.structure.feedback.moduleOrderUpdated'));
+		await commit(
+			r.draftRevision,
+			t("authoring.structure.feedback.moduleOrderUpdated"),
+		);
 	});
 }
 async function saveMove() {
@@ -1025,7 +1268,11 @@ async function moveLesson(
 	const destination = Math.max(0, Math.min(position, to.lessonIds.length));
 	if (from === to && sourceIndex === destination) return;
 	to.lessonIds.splice(destination, 0, l.id);
-	const text = t('authoring.structure.movedLesson', { title: l.title, position: destination + 1, total: to.lessonIds.length });
+	const text = t("authoring.structure.movedLesson", {
+		title: l.title,
+		position: destination + 1,
+		total: to.lessonIds.length,
+	});
 	reordering.value = true;
 	try {
 		await mutate(async () => {
@@ -1047,7 +1294,7 @@ async function removeModule(m?: AuthoringModuleSummary) {
 	const module = m ?? current.value?.module;
 	if (!module) return;
 	if (module.lessons.length) {
-		error.value = t('authoring.structure.feedback.moduleHasLessons');
+		error.value = t("authoring.structure.feedback.moduleHasLessons");
 		return;
 	}
 	await mutate(async () => {
@@ -1058,7 +1305,10 @@ async function removeModule(m?: AuthoringModuleSummary) {
 			module.revision,
 		);
 		selection.value = undefined;
-		await commit(r.draftRevision, t('authoring.structure.feedback.emptyModuleDeleted'));
+		await commit(
+			r.draftRevision,
+			t("authoring.structure.feedback.emptyModuleDeleted"),
+		);
 	});
 }
 async function removeLesson(l?: AuthoringLessonSummary) {
@@ -1072,7 +1322,10 @@ async function removeLesson(l?: AuthoringLessonSummary) {
 			lesson.revision,
 		);
 		selection.value = undefined;
-		await commit(r.draftRevision, t('authoring.structure.feedback.lessonDeleted'));
+		await commit(
+			r.draftRevision,
+			t("authoring.structure.feedback.lessonDeleted"),
+		);
 	});
 }
 async function mutate(action: () => Promise<void>, preserveMessage = false) {
@@ -1111,7 +1364,7 @@ function fail(cause: unknown) {
 	}
 	error.value =
 		cause instanceof APIProblemError && cause.status === 400
-			? t('authoring.structure.feedback.saveInvalid')
-			: t('authoring.structure.feedback.saveUnavailable');
+			? t("authoring.structure.feedback.saveInvalid")
+			: t("authoring.structure.feedback.saveUnavailable");
 }
 </script>

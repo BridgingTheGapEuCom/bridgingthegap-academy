@@ -1,4 +1,4 @@
-import { defaultApplicationLocale, isApplicationLocale, matchApplicationLocale, type ApplicationLocale } from './registry'
+import { defaultApplicationLocale, isApplicationLocale, isProductionApplicationLocale, matchApplicationLocale, type ApplicationLocale } from './registry'
 
 export const applicationLocaleStorageKey = 'btg.academy.application-locale'
 
@@ -45,9 +45,11 @@ export function clearLocalePreference(storage: LocalePreferenceStorage | undefin
 }
 
 export function resolveApplicationLocale(options: {
+  persistedLocale?: string | null
   storage?: LocalePreferenceStorage
   browserLanguages?: readonly string[]
 } = {}): ApplicationLocale {
+  if (isProductionApplicationLocale(options.persistedLocale)) return options.persistedLocale
   const saved = readLocalePreference(options.storage)
   if (saved) return saved
   const browserLanguages = options.browserLanguages ?? (typeof navigator === 'undefined' ? [] : navigator.languages)

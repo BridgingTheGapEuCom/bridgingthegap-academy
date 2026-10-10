@@ -126,7 +126,7 @@ Existing `--btg-color-*` variables become compatibility aliases during migration
 
 `foundation.css` defines stable scales. `semantic.css` declares the required semantic contract and safe fallbacks. `themes/academy-default.css` maps that contract to foundation values under `:root` or `[data-theme="academy-default"]`.
 
-Future dark, high-contrast, or branded themes override semantic tokens only. Component selectors must not be duplicated inside theme files. Themes cannot change semantics, DOM order, accessible names, target sizes, focus visibility, or product behavior. User accessibility settings take precedence over brand choices.
+Appearance is applied only at the document root as `data-theme="light"` or `data-theme="dark"`. `SYSTEM` resolves from `prefers-color-scheme` and can update live; the dark layer overrides semantic tokens and legacy editorial aliases, never feature selectors. Future high-contrast or branded themes follow the same semantic-token boundary. Themes cannot change semantics, DOM order, accessible names, target sizes, focus visibility, or product behavior. User accessibility settings take precedence over brand choices.
 
 The current homepage palette should become a named semantic theme or a documented editorial exception; it should not remain an unrelated set of page-specific color variables mixed into the foundation layer.
 

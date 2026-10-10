@@ -1,5 +1,6 @@
 :root,
 [data-theme="academy-default"] {
+  color-scheme: light;
   --academy-surface-page: var(--academy-foundation-neutral-50);
   --academy-surface-default: var(--academy-foundation-neutral-0);
   --academy-surface-elevated: var(--academy-foundation-neutral-0);

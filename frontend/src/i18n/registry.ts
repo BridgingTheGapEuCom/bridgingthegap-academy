@@ -26,6 +26,10 @@ export function isApplicationLocale(value: unknown): value is ApplicationLocale 
   return typeof value === 'string' && Object.hasOwn(applicationLocales, value)
 }
 
+export function isProductionApplicationLocale(value: unknown): value is ApplicationLocale {
+  return isApplicationLocale(value) && applicationLocales[value].production
+}
+
 export function matchApplicationLocale(value: string | null | undefined, includeTestLocales = false): ApplicationLocale | undefined {
   if (!value) return undefined
   let canonical: string
