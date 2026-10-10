@@ -1,13 +1,5 @@
 <template>
-  <BtgPageContainer as="section" class="settings-page" aria-labelledby="settings-title">
-    <div class="settings-page__layout">
-      <aside class="settings-page__navigation" :aria-label="t('settings.navigationLabel')">
-        <h2>{{ t('settings.title') }}</h2>
-        <nav :aria-label="t('settings.navigationLabel')">
-          <RouterLink to="/settings">{{ t('settings.preferences') }}</RouterLink>
-        </nav>
-      </aside>
-
+  <SettingsShell :title="t('settings.title')" title-id="settings-title" :navigation-label="t('settings.navigationLabel')" :items="navigationItems">
       <div class="settings-page__content">
         <BtgPageTitle id="settings-title" :title="t('settings.preferences')" :description="t('settings.preferencesDescription')" />
 
@@ -65,8 +57,7 @@
           />
         </form>
       </div>
-    </div>
-  </BtgPageContainer>
+  </SettingsShell>
 </template>
 
 <script setup lang="ts">
@@ -77,12 +68,12 @@ import { useAuth } from '../auth/auth'
 import AuthoringDirtyActionBar from '../components/AuthoringDirtyActionBar.vue'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
-import BtgPageContainer from '../components/BtgPageContainer.vue'
 import BtgPageTitle from '../components/BtgPageTitle.vue'
 import BtgPanel from '../components/BtgPanel.vue'
 import BtgRadio from '../components/BtgRadio.vue'
 import BtgSection from '../components/BtgSection.vue'
 import BtgSelect from '../components/BtgSelect.vue'
+import SettingsShell from '../components/SettingsShell.vue'
 import { applicationLocales } from '../i18n/registry'
 import { useUserPreferences, type UserPreferencesResponse } from '../preferences/preferences'
 import type { StoredAppearance } from '../preferences/appearance'
@@ -103,6 +94,10 @@ const appearanceOptions = computed(() => [
   { value: 'SYSTEM' as const, label: t('settings.system'), description: t('settings.systemDescription') },
   { value: 'LIGHT' as const, label: t('settings.light'), description: t('settings.lightDescription') },
   { value: 'DARK' as const, label: t('settings.dark'), description: t('settings.darkDescription') },
+])
+const navigationItems = computed(() => [
+  { to: '/settings/preferences', label: t('settings.preferences') },
+  { to: '/settings/account', label: t('settings.account.title') },
 ])
 
 watch(stored, (next) => {
@@ -174,18 +169,10 @@ async function save() {
 </script>
 
 <style scoped>
-.settings-page { padding-block: var(--academy-page-padding-block); }
-.settings-page__layout { display: grid; grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr); align-items: start; gap: clamp(var(--academy-space-6), 6vw, var(--academy-space-8)); }
-.settings-page__navigation { display: grid; gap: var(--academy-space-3); color: var(--academy-text-primary); }
-.settings-page__navigation h2 { margin: 0; font-size: var(--academy-font-size-subsection-title); }
-.settings-page__navigation nav { display: grid; gap: var(--academy-space-1); }
-.settings-page__navigation a { display: block; border-inline-start: 0.2rem solid transparent; color: var(--academy-text-secondary); padding: var(--academy-space-2) var(--academy-space-3); text-decoration: none; }
-.settings-page__navigation a[aria-current="page"] { border-color: var(--academy-action-primary-bg); background: var(--academy-surface-selected); color: var(--academy-text-primary); font-weight: var(--academy-font-weight-strong); }
 .settings-page__content, .settings-page__content form { display: grid; min-width: 0; gap: var(--academy-space-6); }
 .settings-page__content form { max-inline-size: 48rem; }
 .settings-page__note, .settings-page__appearance-option > span { margin: 0; color: var(--academy-text-secondary); }
 .settings-page__appearance { display: grid; gap: var(--academy-space-3); border: 0; margin: 0; padding: 0; }
 .settings-page__appearance-option { display: grid; gap: var(--academy-space-1); border: 1px solid var(--academy-border-default); background: var(--academy-surface-default); padding: var(--academy-space-4); }
 .settings-page__appearance-option :deep(.btg-radio) { align-items: center; }
-@media (max-width: 48rem) { .settings-page__layout { grid-template-columns: 1fr; gap: var(--academy-space-5); } .settings-page__navigation nav { grid-template-columns: minmax(0, 1fr); } }
 </style>

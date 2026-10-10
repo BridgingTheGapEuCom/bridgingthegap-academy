@@ -26,4 +26,12 @@ export default {
   conflict: 'Your preferences were changed elsewhere. Reload the latest settings before saving again.',
   reload: 'Reload settings',
   saved: 'Preferences saved.',
+  account: {
+    title: 'Account',
+    description: 'Manage your profile and account information.',
+    session: 'Current session',
+    sessionDescription: 'Your current Academy session is active until the time shown below.',
+    sessionExpires: 'Session expires',
+    notAvailable: 'Not available',
+  },
 } as const

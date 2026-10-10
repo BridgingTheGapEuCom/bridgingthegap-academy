@@ -23,8 +23,8 @@ vi.mock('../preferences/preferences', () => ({ useUserPreferences: () => prefere
 import SettingsPreferencesPage from './SettingsPreferencesPage.vue'
 
 async function renderPage(locale: ApplicationLocale = 'en') {
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/settings', component: SettingsPreferencesPage }] })
-  await router.push('/settings')
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/settings/preferences', component: SettingsPreferencesPage }, { path: '/settings/account', component: SettingsPreferencesPage }] })
+  await router.push('/settings/preferences')
   await router.isReady()
   return renderWithI18n(SettingsPreferencesPage, { global: { plugins: [router] } }, locale)
 }
