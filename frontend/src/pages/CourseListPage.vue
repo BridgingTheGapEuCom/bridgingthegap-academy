@@ -1,30 +1,28 @@
 <template>
   <BtgPageContainer as="section" class="courses-page" aria-labelledby="courses-title">
-    <div v-if="state.kind === 'loading'" class="courses-page__state" role="status" aria-live="polite">
-      <h1 id="courses-title">Courses</h1>
-      <p>Loading published courses…</p>
-    </div>
+    <BtgPanel v-if="state.kind === 'loading'" class="courses-page__state" variant="subtle" role="status" aria-live="polite">
+      <BtgPageTitle id="courses-title" :title="t('courses.catalog.title')" :description="t('courses.catalog.loading')" />
+    </BtgPanel>
 
-    <div v-else-if="state.kind === 'unavailable'" class="courses-page__state" role="alert">
-      <h1 id="courses-title">Courses unavailable</h1>
-      <p>We couldn’t load published courses right now. Please try again.</p>
-      <BtgButton variant="secondary" @click="load()">Try again</BtgButton>
-    </div>
+    <BtgPanel v-else-if="state.kind === 'unavailable'" class="courses-page__state" variant="subtle" role="alert">
+      <BtgPageTitle id="courses-title" :title="t('courses.catalog.unavailableTitle')" :description="t('courses.catalog.unavailableDescription')" />
+      <BtgButton variant="secondary" @click="load()">{{ t('common.actions.tryAgain') }}</BtgButton>
+    </BtgPanel>
 
     <div v-else class="courses-page__content">
-      <p class="courses-page__eyebrow">Bridging the Gap Academy</p>
-      <h1 id="courses-title">Courses</h1>
-      <p class="courses-page__intro">Structured learning resources for understanding integration and the systems around it.</p>
+      <p class="courses-page__eyebrow">{{ t('courses.catalog.eyebrow') }}</p>
+      <BtgPageTitle id="courses-title" :title="t('courses.catalog.title')" :description="t('courses.catalog.description')" />
 
-      <p v-if="state.page.items.length === 0 && state.page.total === 0" class="courses-page__empty" role="status">No published courses are available yet.</p>
+      <BtgPanel v-if="state.page.items.length === 0 && state.page.total === 0" variant="subtle" role="status">{{ t('courses.catalog.empty') }}</BtgPanel>
       <template v-else>
-        <PublishedCourseCatalogList v-if="state.page.items.length" :courses="state.page.items" />
-        <p v-else class="courses-page__empty" role="status">No published courses are available on this page.</p>
+        <PublishedCourseCatalogList v-if="state.page.items.length" :courses="state.page.items" :copy="catalogCopy" :format-date="formatDate" />
+        <BtgPanel v-else variant="subtle" role="status">{{ t('courses.catalog.emptyPage') }}</BtgPanel>
         <PublishedCourseCatalogPagination
           :limit="state.page.limit"
           :offset="state.page.offset"
           :total="state.page.total"
           :pending="paginationPending"
+          :copy="paginationCopy"
           @previous="goToPreviousPage"
           @next="goToNextPage"
         />
@@ -34,13 +32,17 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import BtgButton from '../components/BtgButton.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import BtgPageTitle from '../components/BtgPageTitle.vue'
+import BtgPanel from '../components/BtgPanel.vue'
 import PublishedCourseCatalogList from '../components/PublishedCourseCatalogList.vue'
 import PublishedCourseCatalogPagination from '../components/PublishedCourseCatalogPagination.vue'
 import { catalogOffsetFromRoute, listPublishedCourseCatalog, publishedCatalogPageSize, type PublishedCourseCatalogPage } from '../courses/courses'
+import { useApplicationFormatters } from '../i18n/formatters'
 
 type State =
   | { kind: 'loading' }
@@ -49,6 +51,18 @@ type State =
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
+const { date, number } = useApplicationFormatters()
+const formatDate = (value: string) => date(value, 'date')
+const catalogCopy = computed(() => ({
+  listLabel: t('courses.catalog.listLabel'), version: t('courses.catalog.version'), language: t('courses.catalog.language'),
+  published: t('courses.catalog.published'), license: t('courses.catalog.license'), contributors: t('courses.catalog.contributors'),
+}))
+const paginationCopy = computed(() => ({
+  label: t('courses.catalog.paginationLabel'),
+  range: (start: number, end: number, total: number) => t('courses.catalog.range', { start: number(start, 'count'), end: number(end, 'count'), total: number(total, 'count') }),
+  previous: t('courses.catalog.previous'), next: t('courses.catalog.next'),
+}))
 const state = ref<State>({ kind: 'loading' })
 const paginationPending = ref(false)
 let requestVersion = 0

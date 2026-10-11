@@ -35,11 +35,18 @@ describe('Settings account', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Account' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: 'Current session' })).toBeTruthy()
     expect(screen.getByText('Session expires')).toBeTruthy()
+    expect(screen.getByText(/Oct 10, 2026/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Preferences' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Account' }).getAttribute('aria-current')).toBe('page')
     expect(screen.queryByText('Profile')).toBeNull()
     expect(screen.queryByText('Authentication')).toBeNull()
     expect(screen.queryByRole('button', { name: /save|change password/i })).toBeNull()
+  })
+
+  it('renders an intentional unavailable value instead of blank session metadata', async () => {
+    authMock.state.value = { status: 'authenticated', userId: '22222222-2222-4222-8222-222222222222', expiresAt: '' }
+    await renderPage()
+    expect(screen.getByText('Not available')).toBeTruthy()
   })
 
   it('localizes the account page in the pseudo-locale', async () => {

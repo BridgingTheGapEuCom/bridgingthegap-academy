@@ -1,68 +1,62 @@
 <template>
   <BtgPageContainer as="article" class="course-overview" aria-labelledby="course-title">
-    <div v-if="state.kind === 'loading'" class="course-overview__state" role="status">
-      <h1 id="course-title">Loading course…</h1>
-      <p>One moment while we load this course.</p>
-    </div>
+    <BtgPanel v-if="state.kind === 'loading'" class="course-overview__state" variant="subtle" role="status">
+      <BtgPageTitle id="course-title" :title="t('courses.overview.loadingTitle')" :description="t('courses.overview.loadingDescription')" />
+    </BtgPanel>
 
-    <div v-else-if="state.kind === 'not-found'" class="course-overview__state">
-      <h1 id="course-title">Course not found</h1>
-      <p>This course is not available.</p>
-      <RouterLink to="/courses">Browse courses</RouterLink>
-    </div>
+    <BtgPanel v-else-if="state.kind === 'not-found'" class="course-overview__state" variant="subtle">
+      <BtgPageTitle id="course-title" :title="t('courses.overview.notFoundTitle')" :description="t('courses.overview.notFoundDescription')" />
+      <RouterLink to="/courses">{{ t('courses.overview.browse') }}</RouterLink>
+    </BtgPanel>
 
-    <div v-else-if="state.kind === 'unavailable'" class="course-overview__state">
-      <h1 id="course-title">Course unavailable</h1>
-      <p>We couldn’t load this course right now. Please try again.</p>
-      <BtgButton variant="secondary" @click="load">Try again</BtgButton>
-    </div>
+    <BtgPanel v-else-if="state.kind === 'unavailable'" class="course-overview__state" variant="subtle" role="alert">
+      <BtgPageTitle id="course-title" :title="t('courses.overview.unavailableTitle')" :description="t('courses.overview.unavailableDescription')" />
+      <BtgButton variant="secondary" @click="load">{{ t('common.actions.tryAgain') }}</BtgButton>
+    </BtgPanel>
 
     <div v-else class="course-overview__content">
       <header class="course-overview__header">
-        <p class="course-overview__eyebrow">Bridging the Gap Academy</p>
-        <h1 id="course-title">{{ state.course.version.title }}</h1>
-        <p class="course-overview__description">{{ state.course.version.description }}</p>
-        <dl class="course-overview__metadata">
-          <div><dt>Version</dt><dd>{{ state.course.version.version }}</dd></div>
-          <div v-if="state.course.version.source_language"><dt>Source language</dt><dd>{{ languageLabel(state.course.version.source_language) }}</dd></div>
-        </dl>
-        <p v-if="state.course.version.status && state.course.version.status !== 'PUBLISHED'" class="course-overview__notice" role="status">This course version is {{ statusLabel(state.course.version.status) }}.</p>
+        <p class="course-overview__eyebrow">{{ t('courses.overview.eyebrow') }}</p>
+        <BtgPageTitle id="course-title" :title="state.course.version.title" :description="state.course.version.description" />
+        <BtgMetadataStrip :items="courseMetadata" />
+        <BtgBadge v-if="state.course.version.status && state.course.version.status !== 'PUBLISHED'" variant="warning">{{ statusLabel(state.course.version.status) }}</BtgBadge>
       </header>
 
       <section v-if="state.course.version.objectives?.length" aria-labelledby="objectives-title">
-        <h2 id="objectives-title">What you’ll learn</h2>
+        <h2 id="objectives-title">{{ t('courses.overview.objectives') }}</h2>
         <ul><li v-for="objective in state.course.version.objectives" :key="objective">{{ objective }}</li></ul>
       </section>
 
       <section aria-labelledby="outline-title">
-        <h2 id="outline-title">Course outline</h2>
+        <h2 id="outline-title">{{ t('courses.overview.outline') }}</h2>
         <div class="course-outline">
-          <section v-for="structure in state.course.modules" :key="structure.module.key" class="course-outline__module" :aria-labelledby="`module-${structure.module.key}`">
-            <h3 :id="`module-${structure.module.key}`">{{ structure.module.title }}</h3>
+          <BtgPanel v-for="structure in state.course.modules" :key="structure.module.key" as="section" class="course-outline__module" :aria-labelledby="`module-${structure.module.key}`">
+            <header class="course-outline__module-header"><BtgIcon name="module" decorative /><h3 :id="`module-${structure.module.key}`">{{ structure.module.title }}</h3><BtgBadge>{{ lessonCount(structure.lessons.length) }}</BtgBadge></header>
             <p v-if="structure.module.description" class="course-outline__module-description">{{ structure.module.description }}</p>
             <ol class="course-outline__lessons">
               <li v-for="lesson in structure.lessons" :key="lesson.key" class="course-outline__lesson">
                 <article>
                   <h4><RouterLink :to="lessonPath(state.course.course.slug, versionText, lesson.key)">{{ lesson.title }}</RouterLink></h4>
                   <p v-if="lesson.description">{{ lesson.description }}</p>
-                  <p v-if="formatDuration(lesson.estimated_duration_minutes)" class="course-outline__meta">Estimated duration: {{ formatDuration(lesson.estimated_duration_minutes) }}</p>
+                  <p v-if="durationText(lesson.estimated_duration_minutes)" class="course-outline__meta">{{ t('courses.overview.estimatedDuration', { duration: durationText(lesson.estimated_duration_minutes) }) }}</p>
                   <p v-if="lesson.recommended_prerequisite_keys.length" class="course-outline__prerequisites">
-                    Recommended before this lesson: {{ prerequisiteNames(lesson.recommended_prerequisite_keys).join(', ') }}
+                    {{ t('courses.overview.prerequisites', { lessons: prerequisiteNames(lesson.recommended_prerequisite_keys).join(', ') }) }}
                   </p>
                 </article>
               </li>
             </ol>
-          </section>
+            <p v-if="!structure.lessons.length" class="course-outline__empty">{{ t('courses.overview.noLessons') }}</p>
+          </BtgPanel>
         </div>
       </section>
 
       <footer class="course-overview__footer">
         <section v-if="state.course.version.contributors?.length" aria-labelledby="contributors-title">
-          <h2 id="contributors-title">Contributors</h2>
+          <h2 id="contributors-title">{{ t('courses.overview.contributors') }}</h2>
           <ul class="course-overview__contributors"><li v-for="contributor in state.course.version.contributors" :key="`${contributor.order}-${contributor.display_name}`">{{ contributor.display_name }} <span>({{ contributorRole(contributor.role) }})</span></li></ul>
         </section>
         <section v-if="state.course.version.license" aria-labelledby="license-title">
-          <h2 id="license-title">Course content license</h2>
+          <h2 id="license-title">{{ t('courses.overview.license') }}</h2>
           <p>
             <a v-if="safeLicenseURL(state.course.version.license.url)" :href="safeLicenseURL(state.course.version.license.url)">{{ state.course.version.license.display_name }}</a>
             <span v-else>{{ state.course.version.license.display_name }}</span>
@@ -76,18 +70,38 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import BtgButton from '../components/BtgButton.vue'
+import BtgBadge from '../components/BtgBadge.vue'
+import BtgIcon from '../components/BtgIcon.vue'
+import BtgMetadataStrip from '../components/BtgMetadataStrip.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import BtgPageTitle from '../components/BtgPageTitle.vue'
+import BtgPanel from '../components/BtgPanel.vue'
 import { languageLabel } from '../i18n/languages'
-import { formatDuration, getCourse, InvalidCourseSlugError, lessonPath, type CourseDetail } from '../courses/courses'
+import { getCourse, InvalidCourseSlugError, lessonPath, type CourseDetail } from '../courses/courses'
+import { useApplicationFormatters } from '../i18n/formatters'
 
 type State = { kind: 'loading' } | { kind: 'ready'; course: CourseDetail } | { kind: 'not-found' } | { kind: 'unavailable' }
 
 const route = useRoute()
+const { t } = useI18n()
+const { duration } = useApplicationFormatters()
 const state = ref<State>({ kind: 'loading' })
 const versionText = computed(() => state.value.kind === 'ready' ? state.value.course.version.version ?? '' : '')
+const courseMetadata = computed(() => {
+  if (state.value.kind !== 'ready') return []
+  const course = state.value.course
+  const lessons = course.modules.reduce((total, module) => total + module.lessons.length, 0)
+  return [
+    { label: t('courses.overview.version'), value: course.version.version },
+    ...(course.version.source_language ? [{ label: t('courses.overview.sourceLanguage'), value: languageLabel(course.version.source_language) }] : []),
+    { label: t('courses.overview.modulesLabel'), value: t('courses.overview.modules', { count: course.modules.length }, course.modules.length) },
+    { label: t('courses.overview.lessonsLabel'), value: lessonCount(lessons) },
+  ]
+})
 let requestVersion = 0
 let active = true
 
@@ -115,12 +129,15 @@ function prerequisiteNames(keys: string[]): string[] {
 }
 
 function contributorRole(role: 'AUTHOR' | 'MAINTAINER'): string {
-  return role === 'AUTHOR' ? 'Author' : 'Maintainer'
+  return role === 'AUTHOR' ? t('courses.overview.author') : t('courses.overview.maintainer')
 }
 
 function statusLabel(status: string | undefined): string {
-  return status === 'DEPRECATED' ? 'deprecated' : 'archived'
+  return status === 'DEPRECATED' ? t('courses.overview.deprecated') : t('courses.overview.archived')
 }
+
+function lessonCount(count: number): string { return t('courses.overview.lessons', { count }, count) }
+function durationText(minutes: number | null | undefined): string { return duration(minutes ?? 0) }
 
 function safeLicenseURL(value: string | undefined): string | undefined {
   if (!value) return undefined

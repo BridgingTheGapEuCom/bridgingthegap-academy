@@ -3,12 +3,12 @@
     <BtgPageContainer as="section" class="home-page__hero" spacing="section" aria-labelledby="home-title">
       <div class="home-page__hero-layout">
         <div class="home-page__hero-content">
-          <p class="home-page__eyebrow">Bridging the Gap Academy</p>
-          <h1 id="home-title">Learn integration architecture with structure and clarity.</h1>
-          <p class="home-page__intro">Practical, self-paced learning for integration architects and engineers.</p>
+          <p class="home-page__eyebrow">{{ t('courses.home.eyebrow') }}</p>
+          <h1 id="home-title">{{ t('courses.home.title') }}</h1>
+          <p class="home-page__intro">{{ t('courses.home.description') }}</p>
           <div class="home-page__actions">
-            <RouterLink class="btg-button btg-button--primary" to="/courses">Browse courses</RouterLink>
-            <RouterLink v-if="auth.state.value.status === 'unauthenticated'" class="btg-button btg-button--secondary" to="/login">Sign in</RouterLink>
+            <RouterLink class="btg-button btg-button--primary" to="/courses">{{ t('courses.home.browse') }}</RouterLink>
+            <RouterLink v-if="auth.state.value.status === 'unauthenticated'" class="btg-button btg-button--secondary" to="/login">{{ t('courses.home.signIn') }}</RouterLink>
           </div>
         </div>
         <svg class="home-page__hero-motif" aria-hidden="true" focusable="false" viewBox="0 0 360 240">
@@ -27,24 +27,24 @@
 
     <BtgPageContainer as="section" class="home-page__section home-page__topics" spacing="section" aria-labelledby="learning-areas-title">
       <header class="home-page__section-heading">
-        <p class="home-page__eyebrow">Core concepts</p>
-        <h2 id="learning-areas-title">What you can learn</h2>
+        <p class="home-page__eyebrow">{{ t('courses.home.conceptsEyebrow') }}</p>
+        <h2 id="learning-areas-title">{{ t('courses.home.conceptsTitle') }}</h2>
       </header>
       <ul class="home-page__topic-list">
         <li>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h7v6H4zM13 13h7v6h-7zM7.5 11v2h9" /></svg>
-          <h3>Integration Architecture</h3>
-          <p>Boundaries, coupling, integration styles, architecture.</p>
+          <BtgIcon name="layers" size="large" decorative />
+          <h3>{{ t('courses.home.topics.integrationTitle') }}</h3>
+          <p>{{ t('courses.home.topics.integrationDescription') }}</p>
         </li>
         <li>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="18" cy="18" r="2" /><path d="m8 11 8-4M8 13l8 4" /></svg>
-          <h3>Event-Driven Architecture</h3>
-          <p>Events, brokers, delivery semantics, event design.</p>
+          <BtgIcon name="move" size="large" decorative />
+          <h3>{{ t('courses.home.topics.eventsTitle') }}</h3>
+          <p>{{ t('courses.home.topics.eventsDescription') }}</p>
         </li>
         <li>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16v4H4zM4 14h16v4H4zM8 10v4M16 10v4" /></svg>
-          <h3>Messaging &amp; Integration Patterns</h3>
-          <p>Queues, topics, routing, orchestration, transformation.</p>
+          <BtgIcon name="module" size="large" decorative />
+          <h3>{{ t('courses.home.topics.messagingTitle') }}</h3>
+          <p>{{ t('courses.home.topics.messagingDescription') }}</p>
         </li>
       </ul>
     </BtgPageContainer>
@@ -53,65 +53,69 @@
       <BtgPageContainer spacing="section">
         <header class="home-page__section-heading home-page__section-heading--split">
           <div>
-            <p class="home-page__eyebrow">Start here</p>
-            <h2 id="featured-courses-title">Featured courses</h2>
+            <p class="home-page__eyebrow">{{ t('courses.home.featuredEyebrow') }}</p>
+            <h2 id="featured-courses-title">{{ t('courses.home.featuredTitle') }}</h2>
           </div>
-          <RouterLink to="/courses">View all <span aria-hidden="true">→</span></RouterLink>
+          <RouterLink to="/courses">{{ t('courses.home.viewAll') }} <BtgIcon name="next" size="small" decorative /></RouterLink>
         </header>
-        <p v-if="courses.kind === 'loading'" class="home-page__status" role="status">Loading published courses…</p>
+        <BtgPanel v-if="courses.kind === 'loading'" variant="subtle" role="status">{{ t('courses.home.loading') }}</BtgPanel>
         <div v-else-if="courses.kind === 'ready'" class="home-page__course-grid">
-          <article v-for="course in courses.items" :key="course.courseId" class="home-page__course-card">
-            <p class="home-page__course-meta">{{ languageLabel(course.sourceLanguage) }} · Version {{ course.version }}</p>
+          <BtgPanel v-for="course in courses.items" :key="course.courseId" as="article" class="home-page__course-card">
+            <p class="home-page__course-meta">{{ t('courses.home.courseMetadata', { language: languageLabel(course.sourceLanguage), version: course.version }) }}</p>
             <h3><RouterLink :to="publishedCoursePath(course.courseId)">{{ course.title }}</RouterLink></h3>
             <p v-if="course.description">{{ course.description }}</p>
-            <p class="home-page__course-published"><time :datetime="course.publishedAt">Published {{ publishedDate(course.publishedAt) }}</time></p>
-          </article>
+            <p class="home-page__course-published"><time :datetime="course.publishedAt">{{ t('courses.home.published', { date: publishedDate(course.publishedAt) }) }}</time></p>
+          </BtgPanel>
         </div>
-        <div v-else-if="courses.kind === 'empty'" class="home-page__empty" role="status">
-          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" /></svg>
+        <BtgPanel v-else-if="courses.kind === 'empty'" class="home-page__empty" variant="subtle" role="status">
+          <BtgIcon name="document" size="large" decorative />
           <div>
-            <p>Courses are being prepared.</p>
-            <p>Browse the catalog for newly published learning material.</p>
-            <RouterLink to="/courses">Browse courses <span aria-hidden="true">→</span></RouterLink>
+            <p>{{ t('courses.home.emptyTitle') }}</p>
+            <p>{{ t('courses.home.emptyDescription') }}</p>
+            <RouterLink to="/courses">{{ t('courses.home.browse') }} <BtgIcon name="next" size="small" decorative /></RouterLink>
           </div>
-        </div>
-        <div v-else class="home-page__course-error" role="alert">
-          <p>Published courses are unavailable right now.</p>
-          <BtgButton variant="secondary" @click="loadCourses">Try again</BtgButton>
-        </div>
+        </BtgPanel>
+        <BtgPanel v-else class="home-page__course-error" variant="subtle" role="alert">
+          <p>{{ t('courses.home.unavailable') }}</p>
+          <BtgButton variant="secondary" @click="loadCourses">{{ t('common.actions.tryAgain') }}</BtgButton>
+        </BtgPanel>
       </BtgPageContainer>
     </section>
 
     <BtgPageContainer as="section" class="home-page__section home-page__benefits" spacing="section" aria-labelledby="focused-learning-title">
       <header class="home-page__section-heading">
-        <p class="home-page__eyebrow">A calm way to learn</p>
-        <h2 id="focused-learning-title">Designed for focused learning</h2>
+        <p class="home-page__eyebrow">{{ t('courses.home.benefitsEyebrow') }}</p>
+        <h2 id="focused-learning-title">{{ t('courses.home.benefitsTitle') }}</h2>
       </header>
       <ul class="home-page__benefit-list">
-        <li><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" /></svg><h3>Structured</h3><p>Small, focused lessons</p></li>
-        <li><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="m8.5 12 2.25 2.25L15.5 9.5" /></svg><h3>Accessible</h3><p>Clear and inclusive by design</p></li>
-        <li><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.3 2.2 3.5 4.9 3.5 8S14.3 17.8 12 20M12 4C9.7 6.2 8.5 8.9 8.5 12s1.2 5.8 3.5 8" /></svg><h3>Vendor-neutral</h3><p>Concepts before products</p></li>
-        <li><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg><h3>Self-paced</h3><p>Learn on your own schedule</p></li>
+        <li><BtgIcon name="document" size="large" decorative /><h3>{{ t('courses.home.benefits.structuredTitle') }}</h3><p>{{ t('courses.home.benefits.structuredDescription') }}</p></li>
+        <li><BtgIcon name="target" size="large" decorative /><h3>{{ t('courses.home.benefits.accessibleTitle') }}</h3><p>{{ t('courses.home.benefits.accessibleDescription') }}</p></li>
+        <li><BtgIcon name="info" size="large" decorative /><h3>{{ t('courses.home.benefits.neutralTitle') }}</h3><p>{{ t('courses.home.benefits.neutralDescription') }}</p></li>
+        <li><BtgIcon name="content" size="large" decorative /><h3>{{ t('courses.home.benefits.pacedTitle') }}</h3><p>{{ t('courses.home.benefits.pacedDescription') }}</p></li>
       </ul>
     </BtgPageContainer>
 
     <BtgPageContainer as="section" class="home-page__final-cta" spacing="section" aria-labelledby="start-title">
       <div>
-        <h2 id="start-title">Ready to start?</h2>
-        <p>Browse the available courses and choose where to begin.</p>
+        <h2 id="start-title">{{ t('courses.home.finalTitle') }}</h2>
+        <p>{{ t('courses.home.finalDescription') }}</p>
       </div>
-      <RouterLink class="btg-button btg-button--primary" to="/courses">Browse courses</RouterLink>
+      <RouterLink class="btg-button btg-button--primary" to="/courses">{{ t('courses.home.browse') }}</RouterLink>
     </BtgPageContainer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuth } from '../auth/auth'
 import BtgButton from '../components/BtgButton.vue'
+import BtgIcon from '../components/BtgIcon.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import BtgPanel from '../components/BtgPanel.vue'
 import { listPublishedCourseCatalog, publishedCoursePath, type PublishedCourseCatalogItem } from '../courses/courses'
 import { languageLabel } from '../i18n/languages'
+import { useApplicationFormatters } from '../i18n/formatters'
 
 type CourseState =
   | { kind: 'loading' }
@@ -120,6 +124,8 @@ type CourseState =
   | { kind: 'unavailable' }
 
 const auth = useAuth()
+const { t } = useI18n()
+const { date } = useApplicationFormatters()
 const courses = ref<CourseState>({ kind: 'loading' })
 let active = true
 let requestVersion = 0
@@ -140,7 +146,6 @@ async function loadCourses() {
 }
 
 function publishedDate(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(date)
+  return date(value, 'date')
 }
 </script>

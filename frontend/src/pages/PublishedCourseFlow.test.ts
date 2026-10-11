@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -14,6 +14,7 @@ vi.mock('../courses/courses', async (importOriginal) => ({
 
 import CourseListPage from './CourseListPage.vue'
 import PublishedCourseReaderPage from './PublishedCourseReaderPage.vue'
+import { renderWithI18n } from '../test/i18n'
 
 const courseID = '10000000-0000-4000-8000-000000000001'
 const license = { kind: 'STANDARD', identifier: 'CC-BY-4.0', displayName: 'Creative Commons Attribution 4.0', url: 'https://creativecommons.org/licenses/by/4.0/', customText: '' }
@@ -51,7 +52,7 @@ async function renderFlow(path = '/courses') {
   })
   await router.push(path)
   await router.isReady()
-  return { ...render({ template: '<RouterView />' }, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n({ template: '<RouterView />' }, { global: { plugins: [router] } }), router }
 }
 
 describe('published course catalog to reader flow', () => {

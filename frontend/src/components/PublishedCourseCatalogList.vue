@@ -1,35 +1,45 @@
 <template>
-  <ol class="course-list" aria-label="Published courses">
+  <ol class="course-list" :aria-label="copy.listLabel">
     <li v-for="course in courses" :key="course.courseId" class="course-list__item">
-      <article>
+      <BtgPanel as="article" class="course-list__card">
         <h2><RouterLink :to="publishedCoursePath(course.courseId)">{{ course.title }}</RouterLink></h2>
         <p v-if="course.description">{{ course.description }}</p>
-        <dl class="course-list__metadata">
-          <div><dt>Version</dt><dd>{{ course.version }}</dd></div>
-          <div><dt>Language</dt><dd>{{ languageLabel(course.sourceLanguage) }}</dd></div>
-          <div><dt>Published</dt><dd><time :datetime="course.publishedAt">{{ publishedDate(course.publishedAt) }}</time></dd></div>
-          <div v-if="course.license?.displayName"><dt>License</dt><dd>{{ course.license.displayName }}</dd></div>
-        </dl>
-        <p v-if="contributorNames(course.contributors)" class="course-list__meta">{{ contributorNames(course.contributors) }}</p>
-      </article>
+        <BtgMetadataStrip :items="metadata(course)" />
+      </BtgPanel>
     </li>
   </ol>
 </template>
 
 <script setup lang="ts">
+import BtgMetadataStrip from './BtgMetadataStrip.vue'
+import BtgPanel from './BtgPanel.vue'
 import { publishedCoursePath, type PublishedCourseCatalogItem } from '../courses/courses'
 import { languageLabel } from '../i18n/languages'
 
-defineProps<{ courses: PublishedCourseCatalogItem[] }>()
-
-function contributorNames(contributors: PublishedCourseCatalogItem['contributors']): string | undefined {
-  if (!contributors?.length) return undefined
-  return contributors.map((contributor) => contributor.displayName).join(', ')
+export interface PublishedCourseCatalogListCopy {
+  listLabel: string
+  version: string
+  language: string
+  published: string
+  license: string
+  contributors: string
 }
 
-function publishedDate(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(date)
+const props = defineProps<{
+  courses: PublishedCourseCatalogItem[]
+  copy: PublishedCourseCatalogListCopy
+  formatDate: (value: string) => string
+}>()
+
+function metadata(course: PublishedCourseCatalogItem) {
+  const items = [
+    { label: props.copy.version, value: course.version },
+    { label: props.copy.language, value: languageLabel(course.sourceLanguage) },
+    { label: props.copy.published, value: props.formatDate(course.publishedAt) },
+  ]
+  if (course.license?.displayName) items.push({ label: props.copy.license, value: course.license.displayName })
+  const contributors = course.contributors?.map((contributor) => contributor.displayName).join(', ')
+  if (contributors) items.push({ label: props.copy.contributors, value: contributors })
+  return items
 }
 </script>

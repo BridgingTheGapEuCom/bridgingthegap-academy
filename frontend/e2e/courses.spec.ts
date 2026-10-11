@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { Buffer } from 'node:buffer'
+import { pseudoLocalize } from '../src/i18n/pseudo'
 
 const unauthenticated = { type: 'about:blank', title: 'Unauthenticated', status: 401, instance: '/api/auth/session', request_id: 'test-request' }
 const courseList = { courses: [{ slug: 'event-driven-architecture', version: { version: '1.10.0', status: 'PUBLISHED', title: 'Event-driven architecture', description: 'A practical course.', source_language: 'en-GB', contributors: [{ display_name: 'Ada Author', role: 'AUTHOR', order: 0 }] } }] }
@@ -105,9 +106,11 @@ async function servePublicCourses(page: Page) {
 }
 
 test('published course catalog and reader shell are accessible, navigable, and responsive', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
   await servePublicCourses(page)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/courses')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(page.getByRole('heading', { level: 1, name: 'Courses' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Event-driven architecture' })).toBeVisible()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
@@ -190,6 +193,49 @@ test('published course catalog and reader shell are accessible, navigable, and r
   await expect(page).toHaveURL('/courses?offset=20')
   await expect(page.getByRole('link', { name: 'Boundary design' })).toBeVisible()
 
+})
+
+test('course overview preserves authored long content with localized responsive chrome', async ({ page }) => {
+  const longCourse = {
+    ...courseDetail,
+    version: {
+      ...courseDetail.version,
+      title: 'A very long course title about distributed integration architecture, resilient boundaries, and dependable asynchronous collaboration',
+      description: 'A deliberately long authored description that remains fully readable while Academy-owned metadata and navigation reflow around it without clipping or horizontal overflow.',
+    },
+    modules: [{
+      ...courseDetail.modules[0],
+      module: { ...courseDetail.modules[0].module, title: 'A module with a very long title covering architecture boundaries and integration responsibilities' },
+      lessons: [{ ...courseDetail.modules[0].lessons[0], title: 'A lesson with a very long title that remains readable at narrow widths and enlarged text' }],
+    }],
+  }
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 401, contentType: 'application/problem+json', body: JSON.stringify(unauthenticated) }))
+  await page.route('**/api/courses/long-course', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(longCourse) }))
+  await page.goto('/courses/long-course')
+  await expect(page.getByRole('heading', { level: 1, name: longCourse.version.title })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Course outline' })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.locator('html').evaluate((element) => { element.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await expect(page.getByRole('link', { name: longCourse.modules[0].lessons[0].title })).toBeVisible()
+})
+
+test('catalog and course overview localize Academy chrome without changing authored content', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('btg.academy.application-locale', 'en-XA'))
+  await servePublicCourses(page)
+  await page.goto('/courses')
+  await expect(page.getByRole('heading', { level: 1, name: pseudoLocalize('Courses') })).toBeVisible()
+  await expect(page.getByRole('link', { name: catalogFirst.title })).toBeVisible()
+
+  await page.goto('/courses/event-driven-architecture')
+  await expect(page.getByRole('heading', { level: 2, name: pseudoLocalize('Course outline') })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: courseDetail.version.title })).toBeVisible()
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
 test('authenticated learner saves and submits a knowledge-check Attempt', async ({ page }) => {

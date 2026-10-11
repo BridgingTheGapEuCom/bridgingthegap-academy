@@ -1,62 +1,60 @@
 <template>
   <SettingsShell :title="t('settings.title')" title-id="settings-title" :navigation-label="t('settings.navigationLabel')" :items="navigationItems">
-      <div class="settings-page__content">
-        <BtgPageTitle id="settings-title" :title="t('settings.preferences')" :description="t('settings.preferencesDescription')" />
+    <BtgPageTitle id="settings-title" :title="t('settings.preferences')" :description="t('settings.preferencesDescription')" />
 
-        <BtgPanel v-if="preferences.state.value.loading && !stored" variant="subtle" role="status">
-          <p>{{ t('settings.loading') }}</p>
-        </BtgPanel>
-        <BtgPanel v-else-if="!stored" variant="subtle" role="alert">
-          <h2>{{ t('settings.loadErrorTitle') }}</h2>
-          <p>{{ t('settings.loadErrorDescription') }}</p>
-          <BtgButton variant="secondary" @click="reload">{{ t('common.actions.tryAgain') }}</BtgButton>
-        </BtgPanel>
+    <BtgPanel v-if="preferences.state.value.loading && !stored" variant="subtle" role="status">
+      <p>{{ t('settings.loading') }}</p>
+    </BtgPanel>
+    <BtgPanel v-else-if="!stored" variant="subtle" role="alert">
+      <h2>{{ t('settings.loadErrorTitle') }}</h2>
+      <p>{{ t('settings.loadErrorDescription') }}</p>
+      <BtgButton variant="secondary" @click="reload">{{ t('common.actions.tryAgain') }}</BtgButton>
+    </BtgPanel>
 
-        <form v-else @submit.prevent="save">
-          <BtgSection heading-id="settings-language-title">
-            <template #heading>{{ t('settings.language') }}</template>
-            <BtgFormField :label="t('settings.language')" :description="t('settings.languageDescription')">
-              <template #default="{ controlId, describedBy }">
-                <BtgSelect :id="controlId" v-model="draft.applicationLocale" :aria-describedby="describedBy" :disabled="saving">
-                  <option value="">{{ t('settings.automaticLanguage') }}</option>
-                  <option v-for="locale in productionLocales" :key="locale.id" :value="locale.id">{{ locale.nativeName }}</option>
-                </BtgSelect>
-              </template>
-            </BtgFormField>
-            <p class="settings-page__note">{{ t('settings.languageCourseNote') }}</p>
-          </BtgSection>
+    <form v-else class="settings-page__form" @submit.prevent="save">
+      <BtgSection heading-id="settings-language-title">
+        <template #heading>{{ t('settings.language') }}</template>
+        <BtgFormField :label="t('settings.language')" :description="t('settings.languageDescription')">
+          <template #default="{ controlId, describedBy }">
+            <BtgSelect :id="controlId" v-model="draft.applicationLocale" :aria-describedby="describedBy" :disabled="saving">
+              <option value="">{{ t('settings.automaticLanguage') }}</option>
+              <option v-for="locale in productionLocales" :key="locale.id" :value="locale.id">{{ locale.nativeName }}</option>
+            </BtgSelect>
+          </template>
+        </BtgFormField>
+        <p class="settings-page__note">{{ t('settings.languageCourseNote') }}</p>
+      </BtgSection>
 
-          <BtgSection heading-id="settings-appearance-title">
-            <template #heading>{{ t('settings.appearance') }}</template>
-            <p>{{ t('settings.appearanceDescription') }}</p>
-            <fieldset class="settings-page__appearance" :disabled="saving">
-              <legend class="sr-only">{{ t('settings.appearance') }}</legend>
-              <div v-for="option in appearanceOptions" :key="option.value" class="settings-page__appearance-option">
-                <BtgRadio v-model="draft.appearance" name="appearance" :value="option.value" :label="option.label" :aria-describedby="`settings-appearance-${option.value}`" />
-                <span :id="`settings-appearance-${option.value}`">{{ option.description }}</span>
-              </div>
-            </fieldset>
-          </BtgSection>
+      <BtgSection heading-id="settings-appearance-title">
+        <template #heading>{{ t('settings.appearance') }}</template>
+        <p>{{ t('settings.appearanceDescription') }}</p>
+        <fieldset class="settings-page__appearance" :disabled="saving">
+          <legend class="sr-only">{{ t('settings.appearance') }}</legend>
+          <div v-for="option in appearanceOptions" :key="option.value" class="settings-page__appearance-option">
+            <BtgRadio v-model="draft.appearance" name="appearance" :value="option.value" :label="option.label" :aria-describedby="`settings-appearance-${option.value}`" />
+            <span :id="`settings-appearance-${option.value}`">{{ option.description }}</span>
+          </div>
+        </fieldset>
+      </BtgSection>
 
-          <BtgPanel v-if="notice" variant="subtle" role="status"><p>{{ notice }}</p></BtgPanel>
-          <BtgPanel v-if="error" variant="subtle" role="alert">
-            <p>{{ error }}</p>
-            <BtgButton v-if="conflict" type="button" variant="secondary" @click="reload">{{ t('settings.reload') }}</BtgButton>
-          </BtgPanel>
+      <BtgPanel v-if="notice" variant="subtle" role="status"><p>{{ notice }}</p></BtgPanel>
+      <BtgPanel v-if="error" variant="subtle" role="alert">
+        <p>{{ error }}</p>
+        <BtgButton v-if="conflict" type="button" variant="secondary" @click="reload">{{ t('settings.reload') }}</BtgButton>
+      </BtgPanel>
 
-          <AuthoringDirtyActionBar
-            :show="dirty"
-            :busy="saving"
-            :disabled="saving"
-            :message="t('settings.dirty')"
-            :discard-label="t('settings.discard')"
-            :save-label="t('settings.save')"
-            :busy-label="t('settings.saving')"
-            :save-disabled="conflict"
-            @discard="discard"
-          />
-        </form>
-      </div>
+      <AuthoringDirtyActionBar
+        :show="dirty"
+        :busy="saving"
+        :disabled="saving"
+        :message="t('settings.dirty')"
+        :discard-label="t('settings.discard')"
+        :save-label="t('settings.save')"
+        :busy-label="t('settings.saving')"
+        :save-disabled="conflict"
+        @discard="discard"
+      />
+    </form>
   </SettingsShell>
 </template>
 
@@ -169,8 +167,7 @@ async function save() {
 </script>
 
 <style scoped>
-.settings-page__content, .settings-page__content form { display: grid; min-width: 0; gap: var(--academy-space-6); }
-.settings-page__content form { max-inline-size: 48rem; }
+.settings-page__form { display: grid; min-width: 0; max-inline-size: 48rem; gap: var(--academy-space-6); }
 .settings-page__note, .settings-page__appearance-option > span { margin: 0; color: var(--academy-text-secondary); }
 .settings-page__appearance { display: grid; gap: var(--academy-space-3); border: 0; margin: 0; padding: 0; }
 .settings-page__appearance-option { display: grid; gap: var(--academy-space-1); border: 1px solid var(--academy-border-default); background: var(--academy-surface-default); padding: var(--academy-space-4); }

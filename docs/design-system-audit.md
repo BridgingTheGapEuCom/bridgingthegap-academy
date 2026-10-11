@@ -10,7 +10,7 @@ Academy has the beginning of a design system, but not yet a consistently enforce
 
 The highest-value next step is not another page-level polish pass. It is to separate foundation values from semantic theme tokens, standardize the existing Lucide-backed icon abstraction, complete the core control set, and then extract repeated compositions. Draft Structure is the best reference migration because it exercises most of the required system; Dashboard should validate that the result is not Authoring-specific.
 
-Migration status (2026-10-06): Draft Structure, Dashboard, and the Lesson Details, Content, and Prerequisites workspace references are complete. The Lesson workspace now shares its shell, controls, localized copy contracts, and responsive/accessibility coverage; remaining stylesheet ownership in those routes is feature-specific layout.
+Migration status (2026-10-11): Draft Structure, Dashboard, the Draft and Lesson workspaces, Settings, and the learner Home/catalog/course-overview entry surfaces are complete. Home is the editorial learner reference, catalog is the learner list reference, and course overview is the learner detail reference. The lesson reader, learner progress/knowledge checks, authentication, Administration, Community, and Translation remain later migration work.
 
 ## Audit scope and method
 
@@ -208,8 +208,8 @@ Dashboard uses the canonical container and button but implements its own page he
 
 ### Additional coverage
 
-- Courses repeat list/card, metadata, pagination, empty, and status treatments.
-- Home has a deliberate editorial visual identity, but shared controls should still use common primitives under a theme; its hero artwork can remain bespoke.
+- Catalog and course overview now use shared list/detail panels, metadata, pagination, localized state treatment, semantic tokens, and centralized formatting. Course-authored copy remains unchanged.
+- Home retains its deliberate editorial identity and bespoke hero illustration while Academy UI icons, controls, localization, formatting, and theme behavior use shared boundaries.
 - Administration, Community, Translation, authentication, and course reading contain further form, table/list, dialog, status, and action variants to migrate later.
 
 ## Risks

@@ -8,6 +8,7 @@
     "build": "pnpm api:types && vue-tsc --noEmit && vite build",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:settings-integration": "playwright test --config playwright.settings-integration.config.ts",
     "test:openbadges-interop": "node tools/openbadges-interop.mjs tools/testdata/openbadges-interop-active.json",
     "api:types": "openapi-typescript api/openapi.yaml -o frontend/src/api/generated.ts"
   },

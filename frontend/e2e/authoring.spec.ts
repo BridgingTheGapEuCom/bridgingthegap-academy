@@ -1349,7 +1349,7 @@ test('Authoring Lesson prerequisites support grouped search, selection, ordered 
   await search.fill('Event-driven architecture')
   await expect(page.getByRole('checkbox', { name: 'Select Event contracts as a prerequisite' })).toBeVisible()
   await search.fill('')
-  const foundations = page.getByRole('button', { name: /Foundations/ })
+  const foundations = page.getByRole('button', { name: 'Module 01' })
   await foundations.click()
   await expect(page.getByRole('checkbox', { name: 'Select Introduction to EAI as a prerequisite' })).toHaveCount(0)
   await foundations.click()

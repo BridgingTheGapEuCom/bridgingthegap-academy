@@ -1,6 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { pseudoLocalize } from '../i18n/pseudo'
+import type { ApplicationLocale } from '../i18n/registry'
+import { renderWithI18n } from '../test/i18n'
 
 const listPublishedCourseCatalogMock = vi.hoisted(() => vi.fn())
 const authMock = vi.hoisted(() => ({ state: { value: { status: 'unauthenticated' as 'unauthenticated' | 'authenticated' } } }))
@@ -20,7 +23,7 @@ const thirdCourse = { ...firstCourse, courseId: '30000000-0000-4000-8000-0000000
 
 function catalog(items = [firstCourse, secondCourse, thirdCourse]) { return { items, limit: 2, offset: 0, total: items.length } }
 
-async function renderPage() {
+async function renderPage(locale: ApplicationLocale = 'en') {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/', component: HomePage },
     { path: '/courses', component: { template: '<main>Courses</main>' } },
@@ -29,7 +32,7 @@ async function renderPage() {
   ] })
   await router.push('/')
   await router.isReady()
-  return { ...render({ template: '<RouterView />' }, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n({ template: '<RouterView />' }, { global: { plugins: [router] } }, locale), router }
 }
 
 describe('HomePage', () => {
@@ -88,5 +91,11 @@ describe('HomePage', () => {
     await renderPage()
     await screen.findByRole('heading', { level: 1 })
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull()
+  })
+
+  it('localizes Academy-owned Home copy in the pseudo-locale', async () => {
+    await renderPage('en-XA')
+    expect(await screen.findByRole('heading', { level: 1, name: pseudoLocalize('Learn integration architecture with structure and clarity.') })).toBeTruthy()
+    expect(screen.queryByText('Core concepts')).toBeNull()
   })
 })

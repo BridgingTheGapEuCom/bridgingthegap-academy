@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
+import { pseudoLocalize } from '../i18n/pseudo'
+import type { ApplicationLocale } from '../i18n/registry'
+import { renderWithI18n } from '../test/i18n'
 
 const getCourseMock = vi.hoisted(() => vi.fn())
 vi.mock('../courses/courses', async (importOriginal) => ({ ...(await importOriginal<typeof import('../courses/courses')>()), getCourse: getCourseMock }))
@@ -25,11 +28,11 @@ const course = {
   ],
 }
 
-async function renderPage(slug = 'event-driven-architecture') {
+async function renderPage(slug = 'event-driven-architecture', locale: ApplicationLocale = 'en') {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/courses/:slug', component: CourseOverviewPage }, { path: '/courses', component: { template: '<main>Courses</main>' } }, { path: '/courses/:slug/versions/:version/lessons/:lessonKey', component: { template: '<main>Lesson</main>' } }] })
   await router.push(`/courses/${slug}`)
   await router.isReady()
-  return { ...render(CourseOverviewPage, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n(CourseOverviewPage, { global: { plugins: [router] } }, locale), router }
 }
 
 describe('CourseOverviewPage', () => {
@@ -72,5 +75,12 @@ describe('CourseOverviewPage', () => {
     await screen.findByRole('heading', { level: 1, name: 'Course unavailable' })
     await fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Event-driven architecture' })).toBeTruthy()
+  })
+
+  it('localizes overview chrome in the pseudo-locale while preserving authored titles', async () => {
+    getCourseMock.mockResolvedValue(course)
+    await renderPage('event-driven-architecture', 'en-XA')
+    expect(await screen.findByRole('heading', { level: 1, name: course.version.title })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: pseudoLocalize('Course outline') })).toBeTruthy()
   })
 })

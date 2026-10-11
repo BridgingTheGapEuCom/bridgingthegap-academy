@@ -1,6 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { pseudoLocalize } from '../i18n/pseudo'
+import type { ApplicationLocale } from '../i18n/registry'
+import { renderWithI18n } from '../test/i18n'
 
 const listPublishedCourseCatalogMock = vi.hoisted(() => vi.fn())
 vi.mock('../courses/courses', async (importOriginal) => ({ ...(await importOriginal<typeof import('../courses/courses')>()), listPublishedCourseCatalog: listPublishedCourseCatalogMock }))
@@ -20,14 +23,14 @@ function catalogPage(items = [firstCourse], offset = 0, total = items.length) {
   return { items, limit: 20, offset, total }
 }
 
-async function renderPage(path = '/courses') {
+async function renderPage(path = '/courses', locale: ApplicationLocale = 'en') {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/courses', component: CourseListPage },
     { path: '/courses/by-id/:courseId', component: { template: '<main>Published course</main>' } },
   ] })
   await router.push(path)
   await router.isReady()
-  return { ...render(CourseListPage, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n(CourseListPage, { global: { plugins: [router] } }, locale), router }
 }
 
 describe('CourseListPage', () => {
@@ -135,5 +138,12 @@ describe('CourseListPage', () => {
 
     expect(await screen.findByText('No published courses are available on this page.')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Previous' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('localizes catalog chrome in the pseudo-locale without changing course content', async () => {
+    listPublishedCourseCatalogMock.mockResolvedValue(catalogPage())
+    await renderPage('/courses', 'en-XA')
+    expect(await screen.findByRole('heading', { level: 1, name: pseudoLocalize('Courses') })).toBeTruthy()
+    expect(screen.getByRole('link', { name: firstCourse.title })).toBeTruthy()
   })
 })

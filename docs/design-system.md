@@ -412,8 +412,13 @@ The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and 
 
 ### M-UI.7 — remaining Academy pages
 
-- Migrate Dashboard, Courses, Home, authentication, Administration, Community, and Translation.
+- Dashboard and the learner entry surfaces (Home, catalog, and course overview) are migrated.
+- Migrate the learner reader/progress flow, authentication, Administration, Community, and Translation.
 - Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
+
+### Reference migration: learner entry surfaces
+
+Home is the editorial learner reference: it retains its hero, illustration, and section composition while shared buttons, Lucide-backed icons, localized chrome, application formatting, and semantic theme tokens own common UI behavior. The catalog is the learner list reference, composing shared page titles, panels, metadata, buttons, pagination, and state surfaces while retaining course-card layout. Course overview is the learner detail reference, composing shared page title, metadata, badges, panels, and icons around authored course, module, and lesson content. These routes localize Academy chrome only; published course content remains domain-owned.
 
 ### M-UI.8 — cleanup and enforcement
 

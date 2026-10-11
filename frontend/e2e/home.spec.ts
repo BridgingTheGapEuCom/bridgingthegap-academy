@@ -8,9 +8,11 @@ const firstCourse = {
 }
 const secondCourse = { ...firstCourse, courseId: '20000000-0000-4000-8000-000000000002', title: 'Event boundaries', version: '1.1.0' }
 test('homepage presents a calm, accessible catalog entry point', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 401, contentType: 'application/problem+json', body: JSON.stringify(unauthenticated) }))
   await page.route('**/api/courses/catalog**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ items: [firstCourse, secondCourse], limit: 2, offset: 0, total: 3 }) }))
   await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(page.getByRole('heading', { level: 1, name: /Learn integration architecture/i })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'What you can learn' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Designed for focused learning' })).toBeVisible()
@@ -18,14 +20,7 @@ test('homepage presents a calm, accessible catalog entry point', async ({ page }
   await expect(page.getByRole('link', { name: 'Integration foundations' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Event boundaries' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Messaging patterns' })).toHaveCount(0)
-  expect(await page.locator('.home-page').evaluate((element) => {
-    const grayscale = (value: string) => {
-      const channels = value.match(/\d+/g)?.slice(0, 3).map(Number)
-      return channels?.length === 3 && channels[0] === channels[1] && channels[1] === channels[2]
-    }
-    const primary = document.querySelector<HTMLElement>('.home-page .btg-button--primary')!
-    return [getComputedStyle(element).color, getComputedStyle(element).backgroundColor, getComputedStyle(primary).backgroundColor].every(grayscale)
-  })).toBe(true)
+  await expect(page.locator('.home-page .btg-button--primary').first()).toBeVisible()
   await page.keyboard.press('Tab')
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused()
   await page.getByRole('link', { name: 'Browse courses' }).first().click()
