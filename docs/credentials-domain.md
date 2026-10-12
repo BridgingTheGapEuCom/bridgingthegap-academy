@@ -49,6 +49,8 @@ Authenticated learners issue a certificate only for an exact published CourseVer
 
 Public verification is an opaque certificate-ID lookup. It exposes frozen achievement, issuer, issued time, and `ACTIVE` or `REVOKED` status, but deliberately omits every recipient identity field. It is a registry-status statement, not a cryptographic verification claim. Verification uses `no-store` caching because revocation can change. PDF rendering remains deferred.
 
+The learner certificate and anonymous verification pages share Academy metadata, status, state, and formatting primitives while preserving distinct API contracts. Their real-stack browser test completes the seeded published course through the product flow, issues through the authenticated endpoint, reloads the private record, verifies PostgreSQL ownership/state, and then checks the same opaque identifier through an anonymous public context. The public presentation never adds recipient identity absent from the verification contract.
+
 ## Open Badges 3.0 unsigned adapter
 
 `internal/modules/credentials/openbadges` is the only Open Badges/VC-aware

@@ -22,6 +22,9 @@ import {
   Ellipsis,
   Eye,
   EyeOff,
+  Award,
+  BadgeCheck,
+  ExternalLink,
   FileText,
   Folder,
   GripVertical,
@@ -85,6 +88,9 @@ const icons: Record<BtgIconName, typeof Plus> = {
   unlink: Unlink,
   show: Eye,
   hide: EyeOff,
+  certificate: Award,
+  verified: BadgeCheck,
+  external: ExternalLink,
 }
 
 const props = withDefaults(defineProps<{

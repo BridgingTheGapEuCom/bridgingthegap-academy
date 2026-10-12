@@ -207,7 +207,7 @@ async function retryLoad() {
 async function claimCertificate() {
   if (claiming.value || state.value.kind !== 'ready') return
   claiming.value = true; certificateMessage.value = ''
-  try { const certificate = await issueCertificate(state.value.course.courseId, state.value.course.version); await router.push(certificatePath(certificate.certificateId)) }
+  try { const certificate = await issueCertificate(state.value.course.courseId, state.value.course.version, auth); await router.push(certificatePath(certificate.certificateId)) }
   catch (error) { certificateMessage.value = error instanceof APIProblemError && error.problem?.code === 'certificate_not_eligible' ? t('learner.reader.certificateIncomplete') : t('learner.reader.certificateError') }
   finally { claiming.value = false }
 }

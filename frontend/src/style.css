@@ -1312,6 +1312,83 @@
 	}
 }
 
+/* Certificate records keep only their document-specific composition here;
+   controls, metadata, status, and state chrome remain shared primitives. */
+.certificate-page {
+	display: grid;
+	min-width: 0;
+	gap: var(--btg-space-6);
+	overflow-wrap: anywhere;
+}
+.certificate-page__state,
+.certificate-page__header,
+.certificate-page__result,
+.certificate-page__identifier {
+	display: grid;
+	min-width: 0;
+	justify-items: start;
+	gap: var(--btg-space-3);
+}
+.certificate-page__eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--btg-space-2);
+	margin: 0;
+	color: var(--btg-color-text-secondary);
+	font-size: var(--btg-font-size-small);
+	font-weight: var(--btg-font-weight-strong);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.certificate-page__header > p[role="status"],
+.certificate-page__result > p,
+.certificate-page__identifier > p,
+.certificate-page__identifier > code {
+	margin: 0;
+}
+.certificate-page__result > h2 {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.certificate-page__metadata {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	align-items: start;
+}
+.certificate-page__identifier code {
+	max-width: 100%;
+	user-select: all;
+	white-space: normal;
+	word-break: break-all;
+}
+.certificate-page__actions {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+	gap: var(--btg-space-3);
+}
+@media (max-width: 48rem) {
+	.certificate-page__metadata {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.certificate-page__metadata .btg-metadata-strip__item:nth-child(3) {
+		border-inline-start: 0;
+		padding-inline-start: 0;
+	}
+}
+@media (max-width: 24rem) {
+	.certificate-page__metadata {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.certificate-page__metadata .btg-metadata-strip__item + .btg-metadata-strip__item {
+		border-inline-start: 0;
+		padding-inline-start: 0;
+	}
+	.certificate-page__actions > * {
+		width: 100%;
+	}
+}
+
 /* Structure owns outline hierarchy, not control appearance. */
 .authoring-structure {
 	min-inline-size: 0;

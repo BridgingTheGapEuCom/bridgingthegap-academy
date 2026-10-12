@@ -5,6 +5,7 @@ export const btgIconNames = [
   'settings', 'objective', 'target', 'content', 'layers', 'chevronDown', 'chevronRight',
   'bold', 'italic', 'link', 'list', 'listOrdered', 'code', 'unlink',
   'show', 'hide',
+  'certificate', 'verified', 'external',
 ] as const
 
 export type BtgIconName = (typeof btgIconNames)[number]

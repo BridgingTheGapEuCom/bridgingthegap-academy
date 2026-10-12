@@ -412,7 +412,7 @@ The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and 
 
 ### M-UI.7 — remaining Academy pages
 
-- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, and Community are migrated.
+- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, Community, and certificates are migrated.
 - Migrate Administration and Translation.
 - Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
 
@@ -425,6 +425,10 @@ Login is the authentication-form reference: shared page titles, panels, form fie
 Community is the learner discussion/list-management reference. Shared page titles, sections, panels, fields, buttons, badges, icons, pagination, formatters, and state surfaces own generic presentation; feature CSS owns only discussion, post, action, and responsive layout. Moderation uses the same composition with server-authoritative permissions and friendly localized visibility states. User-authored content is never translated or silently truncated. Mocked tests cover edge states, while a seeded non-intercepted journey must verify create, reply, moderation, reload persistence, and PostgreSQL state.
 
 The shared icon map includes semantic show/hide actions for permission-sensitive visibility management; feature code should not substitute delete or navigation icons for moderation state changes.
+
+### Reference migration: certificates
+
+The authenticated certificate is the learner-achievement detail reference; public certificate verification is the anonymous registry-result reference. Both compose shared page titles, panels, metadata, badges, icons, state surfaces, and locale-aware dates while certificate CSS owns only document layout and long identifier containment. The public response remains recipient-free and status text never implies cryptographic verification. A seeded, non-intercepted journey must complete the actual course, issue the durable certificate, reload the private record, verify it anonymously, and confirm PostgreSQL persistence.
 
 ### Reference migration: learner entry surfaces
 

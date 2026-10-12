@@ -72,6 +72,9 @@ func main() {
 
 func resetLearnerState(ctx context.Context, pool *pgxpool.Pool, userID identity.UserID, courseVersionID courses.CourseVersionID) error {
 	statements := []string{
+		`DELETE FROM open_badges.signed_credential WHERE certificate_id IN (SELECT id FROM credentials.certificate WHERE learner_user_id = $1 AND course_version_id = $2)`,
+		`DELETE FROM open_badges.status_list_entry WHERE certificate_id IN (SELECT id FROM credentials.certificate WHERE learner_user_id = $1 AND course_version_id = $2)`,
+		`DELETE FROM credentials.certificate WHERE learner_user_id = $1 AND course_version_id = $2`,
 		`DELETE FROM assessments.assessment_attempt WHERE learner_user_id = $1 AND course_version_id = $2`,
 		`DELETE FROM progress.lesson_completion WHERE learner_user_id = $1 AND course_version_id = $2`,
 		`DELETE FROM progress.course_progress WHERE learner_user_id = $1 AND course_version_id = $2`,
