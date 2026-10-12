@@ -33,6 +33,19 @@ func (r *attemptRepositoryFake) GetAssessmentAttempt(_ context.Context, id Attem
 	return attempt, nil
 }
 
+func (r *attemptRepositoryFake) GetLatestAssessmentAttempt(_ context.Context, learnerUserID, courseVersionID string, assessmentKey AssessmentID) (AssessmentAttempt, error) {
+	var latest AssessmentAttempt
+	for _, attempt := range r.attempts {
+		if attempt.LearnerUserID == learnerUserID && attempt.CourseVersionID == courseVersionID && attempt.AssessmentKey == assessmentKey && (latest.ID == "" || attempt.CreatedAt.After(latest.CreatedAt) || attempt.CreatedAt.Equal(latest.CreatedAt) && attempt.ID > latest.ID) {
+			latest = attempt
+		}
+	}
+	if latest.ID == "" {
+		return AssessmentAttempt{}, ErrAttemptNotFound
+	}
+	return latest, nil
+}
+
 func (r *attemptRepositoryFake) UpdateAssessmentAttempt(_ context.Context, id AttemptID, expected int64, update AttemptUpdate) (AssessmentAttempt, error) {
 	attempt, err := r.GetAssessmentAttempt(context.Background(), id)
 	if err != nil {
@@ -102,6 +115,10 @@ func TestLearnerAttemptServiceUsesFrozenBindingAndOwnership(t *testing.T) {
 	attempt, err := service.Start(context.Background(), testLearnerID, "80000000-0000-4000-8000-000000000001", version, testAssessmentID)
 	if err != nil || attempt.State != AttemptInProgress || attempt.CourseVersionID != testCourseVersionID || attempt.LearnerUserID != testLearnerID {
 		t.Fatalf("start = %#v, %v", attempt, err)
+	}
+	latest, err := service.Latest(context.Background(), testLearnerID, "80000000-0000-4000-8000-000000000001", version, testAssessmentID)
+	if err != nil || latest.ID != attempt.ID {
+		t.Fatalf("latest = %#v, %v", latest, err)
 	}
 	if _, err := service.Update(context.Background(), "40000000-0000-4000-8000-000000000002", attempt.ID, attempt.Revision, completeCorrectResponses()); !errors.Is(err, ErrAttemptNotFound) {
 		t.Fatalf("foreign update = %v", err)

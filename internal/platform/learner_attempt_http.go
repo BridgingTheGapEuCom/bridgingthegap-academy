@@ -74,6 +74,23 @@ func (h *authHTTP) handleLearnerAttemptCreate(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusCreated, learnerAttemptDetail(attempt))
 }
 
+func (h *authHTTP) handleLearnerAttemptLatest(w http.ResponseWriter, r *http.Request) {
+	actor, ok := learnerActor(w, r)
+	if !ok {
+		return
+	}
+	courseID, version, assessmentKey, ok := learnerAttemptContext(w, r)
+	if !ok {
+		return
+	}
+	attempt, err := h.learnerAttempts.Latest(r.Context(), string(actor.UserID()), courseID, version, assessmentKey)
+	if err != nil {
+		learnerAttemptProblem(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, learnerAttemptDetail(attempt))
+}
+
 func (h *authHTTP) handleLearnerAttemptGet(w http.ResponseWriter, r *http.Request) {
 	actor, ok := learnerActor(w, r)
 	if !ok {

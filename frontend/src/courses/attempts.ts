@@ -15,6 +15,11 @@ export async function createLearnerAttempt(courseId: string, version: string, as
   return requestAttempt(client, `/api/courses/by-id/${encodeURIComponent(courseId)}/versions/${encodeURIComponent(version)}/assessments/${encodeURIComponent(assessmentKey)}/attempts`, { method: 'POST', cache: 'no-store' })
 }
 
+export async function getLatestLearnerAttempt(courseId: string, version: string, assessmentKey: string, client: APIClient): Promise<LearnerAssessmentAttempt> {
+  if (!isPublishedCourseID(courseId) || !isCourseVersion(version) || !isUUID(assessmentKey)) throw new InvalidCourseRouteError()
+  return requestAttempt(client, `/api/courses/by-id/${encodeURIComponent(courseId)}/versions/${encodeURIComponent(version)}/assessments/${encodeURIComponent(assessmentKey)}/attempts`, { cache: 'no-store' })
+}
+
 export async function getLearnerAttempt(attemptId: string, client: APIClient): Promise<LearnerAssessmentAttempt> {
   if (!isUUID(attemptId)) throw new InvalidCourseRouteError()
   return requestAttempt(client, `/api/learner/assessment-attempts/${encodeURIComponent(attemptId)}`, { cache: 'no-store' })
@@ -75,7 +80,7 @@ export type LearnerAttemptSession = {
   responses: Ref<LearnerAssessmentAttemptResponse[]>
   attempt: Ref<LearnerAssessmentAttempt | undefined>
   pending: Ref<'save' | 'submit' | undefined>
-  error: Ref<string | undefined>
+  error: Ref<LearnerAttemptError | undefined>
   conflict: Ref<boolean>
   dirty: ComputedRef<boolean>
   submitted: ComputedRef<boolean>
@@ -85,12 +90,14 @@ export type LearnerAttemptSession = {
   dispose: () => void
 }
 
+export type LearnerAttemptError = 'load' | 'unavailable' | 'save' | 'incomplete' | 'submit'
+
 export function createLearnerAttemptSession(context: { courseId: string; version: string; assessmentKey: string }, client: APIClient): LearnerAttemptSession {
   const responses = ref<LearnerAssessmentAttemptResponse[]>([])
   const saved = ref<LearnerAssessmentAttemptResponse[]>([])
   const attempt = ref<LearnerAssessmentAttempt>()
   const pending = ref<'save' | 'submit'>()
-  const error = ref<string>()
+  const error = ref<LearnerAttemptError>()
   const conflict = ref(false)
   let active = true
   let generation = 0
@@ -101,7 +108,7 @@ export function createLearnerAttemptSession(context: { courseId: string; version
   async function recoverConflict() {
     if (!attempt.value) return
     const local = responses.value
-    try { const value = await getLearnerAttempt(attempt.value.attemptId, client); if (current()) { accept(value); if (value.state === 'IN_PROGRESS') responses.value = local; conflict.value = true } } catch { if (current()) error.value = 'Your saved progress is unavailable. Please try again.' }
+    try { const value = await getLearnerAttempt(attempt.value.attemptId, client); if (current()) { accept(value); if (value.state === 'IN_PROGRESS') responses.value = local; conflict.value = true } } catch { if (current()) error.value = 'load' }
   }
   async function save(): Promise<boolean> {
     if (pending.value || submitted.value || !current()) return false
@@ -110,16 +117,32 @@ export function createLearnerAttemptSession(context: { courseId: string; version
       if (!attempt.value) { const created = await createLearnerAttempt(context.courseId, context.version, context.assessmentKey, client); if (!current() || version !== generation) return false; accept(created) }
       if (dirty.value && attempt.value) { const updated = await updateLearnerAttempt(attempt.value.attemptId, attempt.value.revision, responses.value, client); if (!current() || version !== generation) return false; accept(updated) }
       return current() && version === generation
-    } catch (cause) { if (current() && version === generation) { if (cause instanceof APIProblemError && cause.status === 409) { await recoverConflict() } else error.value = cause instanceof APIProblemError && cause.status === 404 ? 'Progress is unavailable.' : 'Progress could not be saved. Please try again.' } return false } finally { if (current() && version === generation) pending.value = undefined }
+    } catch (cause) { if (current() && version === generation) { if (cause instanceof APIProblemError && cause.status === 409) { await recoverConflict() } else error.value = cause instanceof APIProblemError && cause.status === 404 ? 'unavailable' : 'save' } return false } finally { if (current() && version === generation) pending.value = undefined }
   }
   async function submit(): Promise<boolean> {
     if (pending.value || submitted.value || !current()) return false
     if (!attempt.value || dirty.value) { const savedNow = await save(); if (!savedNow || !attempt.value) return false }
     pending.value = 'submit'; error.value = undefined; const version = ++generation
     try { const value = await submitLearnerAttempt(attempt.value.attemptId, attempt.value.revision, client); if (!current() || version !== generation) return false; accept(value); return true
-    } catch (cause) { if (current() && version === generation) { if (cause instanceof APIProblemError && cause.status === 409) await recoverConflict(); else error.value = cause instanceof APIProblemError && cause.status === 400 ? 'Please complete each question before submitting.' : cause instanceof APIProblemError && cause.status === 404 ? 'Progress is unavailable.' : 'Answers could not be submitted. Please try again.' } return false
+    } catch (cause) { if (current() && version === generation) { if (cause instanceof APIProblemError && cause.status === 409) await recoverConflict(); else error.value = cause instanceof APIProblemError && cause.status === 400 ? 'incomplete' : cause instanceof APIProblemError && cause.status === 404 ? 'unavailable' : 'submit' } return false
     } finally { if (current() && version === generation) pending.value = undefined }
   }
-  async function reload() { if (!attempt.value || pending.value || !current()) return; const version = ++generation; try { const value = await getLearnerAttempt(attempt.value.attemptId, client); if (current() && version === generation) accept(value) } catch { if (current() && version === generation) error.value = 'Your saved progress is unavailable. Please try again.' } }
+  async function reload() {
+    if (pending.value || !current()) return
+    const request = ++generation
+    try {
+      const value = attempt.value
+        ? await getLearnerAttempt(attempt.value.attemptId, client)
+        : await getLatestLearnerAttempt(context.courseId, context.version, context.assessmentKey, client)
+      if (current() && request === generation) accept(value)
+    } catch (cause) {
+      if (!current() || request !== generation) return
+      if (cause instanceof APIProblemError && cause.status === 404 && !attempt.value) {
+        error.value = undefined
+        return
+      }
+      error.value = 'load'
+    }
+  }
   return { responses, attempt, pending, error, conflict, dirty, submitted, save, submit, reload, dispose: () => { active = false; generation += 1 } }
 }

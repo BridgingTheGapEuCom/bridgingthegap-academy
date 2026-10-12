@@ -1,12 +1,13 @@
 import { cleanup, render, screen } from '@testing-library/vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import LessonBlockRenderer from './LessonBlockRenderer.vue'
+import { knowledgeCheckCopy, lessonBlockCopy } from '../test/learnerCopy'
 import type { RenderableBlock } from '../lesson/content'
 import type { PublishedAssessmentLearnerView } from '../courses/courses'
 
 const richText = { nodes: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'A safe paragraph', marks: [{ type: 'strong' as const }, { type: 'emphasis' as const }] }] }] }
 
-function renderBlock(block: RenderableBlock) { return render(LessonBlockRenderer, { props: { block } }) }
+function renderBlock(block: RenderableBlock) { return render(LessonBlockRenderer, { props: { block, copy: lessonBlockCopy, knowledgeCopy: knowledgeCheckCopy } }) }
 
 const learnerAssessment: PublishedAssessmentLearnerView = {
   assessmentKey: '10000000-0000-4000-8000-000000000001',
@@ -64,7 +65,7 @@ describe('LessonBlockRenderer', () => {
 
   it('resolves media through the supplied rendering context and otherwise fails closed', () => {
     const block: RenderableBlock = { key: 'image', type: 'IMAGE', payload: { asset: { assetKey: '55555555-5555-4555-8555-555555555555' }, decorative: false, altText: 'Event flow' } }
-    render(LessonBlockRenderer, { props: { block, assetContext: { kind: 'draft-preview', draftID: '11111111-1111-4111-8111-111111111111' } } })
+    render(LessonBlockRenderer, { props: { block, copy: lessonBlockCopy, knowledgeCopy: knowledgeCheckCopy, assetContext: { kind: 'draft-preview', draftID: '11111111-1111-4111-8111-111111111111' } } })
     expect(screen.getByRole('img', { name: 'Event flow' }).getAttribute('src')).toBe('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets/55555555-5555-4555-8555-555555555555/content')
     expect(document.body.innerHTML).not.toContain('storage')
     cleanup()
@@ -74,19 +75,19 @@ describe('LessonBlockRenderer', () => {
   })
 
   it('keeps published media on immutable Course delivery URLs', () => {
-    render(LessonBlockRenderer, { props: { block: { key: 'download', type: 'DOWNLOAD', payload: { asset: { assetKey: 'asset-key' }, label: 'Worksheet' } }, assetContext: { kind: 'published', courseID: 'course-id', version: '1.2.3' } } })
+    render(LessonBlockRenderer, { props: { block: { key: 'download', type: 'DOWNLOAD', payload: { asset: { assetKey: 'asset-key' }, label: 'Worksheet' } }, copy: lessonBlockCopy, knowledgeCopy: knowledgeCheckCopy, assetContext: { kind: 'published', courseID: 'course-id', version: '1.2.3' } } })
     expect(screen.getByRole('link', { name: 'Worksheet' }).getAttribute('href')).toBe('/api/courses/by-id/course-id/versions/1.2.3/assets/asset-key?download=1')
   })
 
   it('uses authenticated Draft URLs for video, audio, and downloads in Preview', () => {
     const assetContext = { kind: 'draft-preview' as const, draftID: '11111111-1111-4111-8111-111111111111' }
-    render(LessonBlockRenderer, { props: { block: { key: 'video', type: 'VIDEO', payload: { asset: { assetKey: 'video-asset' }, title: 'Walkthrough', transcript: 'Transcript', captionsAsset: { assetKey: 'captions-asset' } } }, assetContext } })
+    render(LessonBlockRenderer, { props: { block: { key: 'video', type: 'VIDEO', payload: { asset: { assetKey: 'video-asset' }, title: 'Walkthrough', transcript: 'Transcript', captionsAsset: { assetKey: 'captions-asset' } } }, copy: lessonBlockCopy, knowledgeCopy: knowledgeCheckCopy, assetContext } })
     expect(document.querySelector('video source')?.getAttribute('src')).toContain('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets/video-asset/content')
     cleanup()
-    render(LessonBlockRenderer, { props: { block: { key: 'audio', type: 'AUDIO', payload: { asset: { assetKey: 'audio-asset' }, title: 'Audio guide', transcript: 'Transcript' } }, assetContext } })
+    render(LessonBlockRenderer, { props: { block: { key: 'audio', type: 'AUDIO', payload: { asset: { assetKey: 'audio-asset' }, title: 'Audio guide', transcript: 'Transcript' } }, copy: lessonBlockCopy, knowledgeCopy: knowledgeCheckCopy, assetContext } })
     expect(document.querySelector('audio source')?.getAttribute('src')).toContain('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets/audio-asset/content')
     cleanup()
-    render(LessonBlockRenderer, { props: { block: { key: 'download', type: 'DOWNLOAD', payload: { asset: { assetKey: 'file-asset' }, label: 'Worksheet' } }, assetContext } })
+    render(LessonBlockRenderer, { props: { block: { key: 'download', type: 'DOWNLOAD', payload: { asset: { assetKey: 'file-asset' }, label: 'Worksheet' } }, copy: lessonBlockCopy, knowledgeCopy: knowledgeCheckCopy, assetContext } })
     expect(screen.getByRole('link', { name: 'Worksheet' }).getAttribute('href')).toBe('/api/authoring/drafts/11111111-1111-4111-8111-111111111111/assets/file-asset/content?download=1')
   })
 
@@ -107,7 +108,7 @@ describe('LessonBlockRenderer', () => {
   })
 
   it('renders a supplied immutable learner projection without exposing answer data', () => {
-    render(LessonBlockRenderer, { props: { block: { key: 'check', type: 'KNOWLEDGE_CHECK', payload: { assessmentKey: learnerAssessment.assessmentKey } }, publishedAssessment: learnerAssessment } })
+    render(LessonBlockRenderer, { props: { block: { key: 'check', type: 'KNOWLEDGE_CHECK', payload: { assessmentKey: learnerAssessment.assessmentKey } }, copy: lessonBlockCopy, knowledgeCopy: knowledgeCheckCopy, publishedAssessment: learnerAssessment } })
     expect(screen.getByRole('radio', { name: 'One' })).toBeTruthy()
     expect(screen.queryByText(/Interactive knowledge checks will be available/i)).toBeNull()
     expect(document.body.innerHTML).not.toMatch(/correctOption|correctPairs|answerKey/i)

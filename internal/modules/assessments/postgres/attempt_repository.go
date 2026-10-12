@@ -63,6 +63,26 @@ func (r *Repository) GetAssessmentAttempt(ctx context.Context, id assessments.At
 	return mapAttempt(row)
 }
 
+func (r *Repository) GetLatestAssessmentAttempt(ctx context.Context, learnerUserID, courseVersionID string, assessmentKey assessments.AssessmentID) (assessments.AssessmentAttempt, error) {
+	learner, err := uuid(learnerUserID)
+	if err != nil {
+		return assessments.AssessmentAttempt{}, assessments.ErrInvalidAttempt
+	}
+	version, err := uuid(courseVersionID)
+	if err != nil {
+		return assessments.AssessmentAttempt{}, assessments.ErrInvalidAttempt
+	}
+	assessment, err := uuid(string(assessmentKey))
+	if err != nil {
+		return assessments.AssessmentAttempt{}, assessments.ErrInvalidAttempt
+	}
+	row, err := r.q.GetLatestAssessmentAttempt(ctx, sqlc.GetLatestAssessmentAttemptParams{LearnerUserID: learner, CourseVersionID: version, AssessmentKey: assessment})
+	if err != nil {
+		return assessments.AssessmentAttempt{}, attemptStorageError(err)
+	}
+	return mapAttempt(row)
+}
+
 func (r *Repository) UpdateAssessmentAttempt(ctx context.Context, id assessments.AttemptID, expectedRevision int64, update assessments.AttemptUpdate) (assessments.AssessmentAttempt, error) {
 	if expectedRevision < 1 {
 		return assessments.AssessmentAttempt{}, assessments.ErrInvalidAttempt

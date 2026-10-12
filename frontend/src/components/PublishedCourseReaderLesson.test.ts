@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@testing-library/vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PublishedCourseVersionDetail } from '../courses/courses'
 import PublishedCourseReaderLesson from './PublishedCourseReaderLesson.vue'
+import { knowledgeCheckCopy, lessonBlockCopy, readerLessonCopy } from '../test/learnerCopy'
 
 type PublishedLesson = PublishedCourseVersionDetail['modules'][number]['lessons'][number]
 
@@ -19,7 +20,7 @@ function lesson(content: unknown): PublishedLesson {
 }
 
 function renderLesson(content: unknown) {
-  return render(PublishedCourseReaderLesson, { props: { lesson: lesson(content) } })
+  return render(PublishedCourseReaderLesson, { props: { lesson: lesson(content), copy: readerLessonCopy, blockCopy: lessonBlockCopy, knowledgeCopy: knowledgeCheckCopy, formatDuration: (minutes) => `${minutes} min` } })
 }
 
 describe('PublishedCourseReaderLesson', () => {
@@ -98,6 +99,10 @@ describe('PublishedCourseReaderLesson', () => {
         }),
         courseId: courseID,
         version: '1.2.3',
+        copy: readerLessonCopy,
+        blockCopy: lessonBlockCopy,
+        knowledgeCopy: knowledgeCheckCopy,
+        formatDuration: (minutes: number) => `${minutes} min`,
       },
     })
 

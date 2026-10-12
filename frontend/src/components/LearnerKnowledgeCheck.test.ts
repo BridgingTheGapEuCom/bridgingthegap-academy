@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import LearnerKnowledgeCheck from './LearnerKnowledgeCheck.vue'
+import { knowledgeCheckCopy } from '../test/learnerCopy'
 import type { PublishedAssessmentLearnerView } from '../courses/courses'
 
 const assessment: PublishedAssessmentLearnerView = {
@@ -16,7 +17,7 @@ describe('LearnerKnowledgeCheck', () => {
   afterEach(cleanup)
 
   it('renders native answer controls in frozen question and option order', async () => {
-    render(LearnerKnowledgeCheck, { props: { assessment } })
+    render(LearnerKnowledgeCheck, { props: { assessment, copy: knowledgeCheckCopy } })
     expect(screen.getAllByRole('group').map((element) => element.querySelector('legend')?.textContent)).toEqual(['1. Choose one', '2. Choose several', '3. Match these'])
     const radios = screen.getAllByRole('radio') as HTMLInputElement[]
     await fireEvent.click(radios[1])
@@ -30,7 +31,7 @@ describe('LearnerKnowledgeCheck', () => {
   })
 
   it('keeps answer keys and correctness data out of the rendered DOM', () => {
-    const { container } = render(LearnerKnowledgeCheck, { props: { assessment } })
+    const { container } = render(LearnerKnowledgeCheck, { props: { assessment, copy: knowledgeCheckCopy } })
     expect(container.innerHTML).not.toMatch(/correctOption|correctPairs|answerKey/i)
     expect(screen.getByText(/sign in to save and submit/i)).toBeTruthy()
   })

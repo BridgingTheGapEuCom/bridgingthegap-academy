@@ -1755,27 +1755,10 @@
 	max-width: 70ch;
 }
 
-.published-course-reader__metadata {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-	gap: var(--btg-space-3);
-	margin: var(--btg-space-5) 0;
-}
-
-.published-course-reader__metadata div {
-	border-inline-start: 2px solid var(--btg-color-border);
-	padding-inline-start: var(--btg-space-3);
-}
-
-.published-course-reader__metadata dt,
 .published-course-reader-navigation__duration,
 .published-course-reader-lesson__duration {
 	color: var(--btg-color-text-secondary);
 	font-size: var(--btg-font-size-small);
-}
-
-.published-course-reader__metadata dd {
-	margin: var(--btg-space-1) 0 0;
 }
 
 .published-course-reader__contributors,
@@ -1789,6 +1772,13 @@
 	gap: var(--btg-space-5);
 	margin-top: var(--btg-space-5);
 	align-items: start;
+}
+.published-course-reader__actions,
+.published-course-reader-lesson__completion {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--btg-space-3);
 }
 
 .published-course-reader :where(div, section, article, nav, ol, li) {
@@ -1812,13 +1802,22 @@
 	gap: var(--btg-space-2);
 }
 .published-course-reader-navigation__lessons a {
-	display: flex;
-	justify-content: space-between;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
 	gap: var(--btg-space-3);
 	padding: var(--btg-space-2) var(--btg-space-3);
 	border: 1px solid transparent;
 	border-radius: var(--btg-radius-control);
 	text-decoration: none;
+}
+.published-course-reader-navigation__lessons a > :first-child {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.published-course-reader-navigation__lessons a .btg-badge {
+	grid-column: 1 / -1;
+	justify-self: start;
 }
 .published-course-reader-navigation__lessons a[aria-current="page"] {
 	border-color: var(--btg-color-border-strong);
@@ -1844,6 +1843,10 @@
 }
 .published-course-reader-lesson__block {
 	min-width: 0;
+}
+.published-course-reader-lesson__completion {
+	border-top: var(--btg-border-width) solid var(--btg-color-border);
+	padding-top: var(--btg-space-5);
 }
 .published-course-reader__empty {
 	margin: 0;
@@ -1978,24 +1981,6 @@
 	color: var(--btg-color-text-secondary);
 	font-size: 1.125rem;
 }
-.lesson-page__metadata {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--btg-space-4);
-	margin: 0;
-	color: var(--btg-color-text-secondary);
-	font-size: var(--btg-font-size-small);
-}
-.lesson-page__metadata div {
-	display: flex;
-	gap: var(--btg-space-2);
-}
-.lesson-page__metadata dt {
-	font-weight: var(--btg-font-weight-strong);
-}
-.lesson-page__metadata dd {
-	margin: 0;
-}
 .lesson-page__notice {
 	border-inline-start: 0.25rem solid var(--btg-color-warning);
 	background: var(--btg-color-surface-muted);
@@ -2020,9 +2005,6 @@
 	display: inline-flex;
 	align-items: center;
 	gap: var(--btg-space-2);
-}
-.lesson-mode-control input {
-	min-height: auto;
 }
 .lesson-content {
 	display: grid;

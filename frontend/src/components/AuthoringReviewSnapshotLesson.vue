@@ -24,7 +24,7 @@
       <p v-else-if="content.kind === 'invalid-content'" role="note">{{ t('authoring.review.snapshot.invalidContent') }}</p>
       <p v-else-if="!content.blocks.length">{{ t('authoring.review.snapshot.emptyContent') }}</p>
       <div v-else v-for="block in content.blocks" :key="block.key" class="authoring-review-snapshot__block">
-        <LessonBlockRenderer :block="block" />
+        <LessonBlockRenderer :block="block" :copy="blockCopy" :knowledge-copy="knowledgeCopy" />
       </div>
     </div>
   </article>
@@ -36,12 +36,14 @@ import { useI18n } from 'vue-i18n'
 import type { AuthoringReviewSnapshotLesson } from '../authoring/authoring'
 import LessonBlockRenderer from './LessonBlockRenderer.vue'
 import { decodeLessonContent } from '../lesson/content'
+import { useLearnerContentCopy } from '../learner/copy'
 
 const props = defineProps<{
   lesson: AuthoringReviewSnapshotLesson
   lessonTitles: Readonly<Record<string, string>>
 }>()
 const { t } = useI18n()
+const { blockCopy, knowledgeCopy } = useLearnerContentCopy()
 
 const content = computed(() => decodeLessonContent(props.lesson.content))
 

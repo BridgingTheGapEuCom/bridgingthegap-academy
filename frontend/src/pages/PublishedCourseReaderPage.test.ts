@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { InvalidCourseRouteError } from '../courses/courses'
+import { createApplicationI18n } from '../i18n/application'
+import { pseudoLocalize } from '../i18n/pseudo'
 
 const getLatestPublishedCourseMock = vi.hoisted(() => vi.fn())
 const getPublishedCourseVersionByIDMock = vi.hoisted(() => vi.fn())
@@ -52,11 +54,12 @@ function routerFor(path: string) {
   ] })
 }
 
-async function renderPage(path = `/courses/by-id/${courseID}`) {
+async function renderPage(path = `/courses/by-id/${courseID}`, locale: 'en' | 'en-XA' = 'en') {
   const router = routerFor(path)
   await router.push(path)
   await router.isReady()
-  return { ...render(PublishedCourseReaderPage, { global: { plugins: [router] } }), router }
+  const i18n = await createApplicationI18n(locale)
+  return { ...render(PublishedCourseReaderPage, { global: { plugins: [router, i18n] } }), router }
 }
 
 function deferred<T>() {
@@ -71,6 +74,14 @@ describe('PublishedCourseReaderPage', () => {
     getPublishedCourseVersionByIDMock.mockReset()
   })
   afterEach(cleanup)
+
+  it('localizes reader chrome without changing authored course content', async () => {
+    getLatestPublishedCourseMock.mockResolvedValue(course)
+    await renderPage(`/courses/by-id/${courseID}`, 'en-XA')
+    expect(await screen.findByText(pseudoLocalize('Browse courses'))).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: course.title })).toBeTruthy()
+    expect(screen.getByText('Exact version one content')).toBeTruthy()
+  })
 
   it('loads the latest immutable version and renders only its canonical content in module and lesson order', async () => {
     getLatestPublishedCourseMock.mockResolvedValue(course)

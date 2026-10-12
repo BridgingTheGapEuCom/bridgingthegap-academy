@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { APIClient, APIRequestOptions } from '../api/client'
-import { createLearnerAttempt, submitLearnerAttempt, updateLearnerAttempt } from './attempts'
+import { createLearnerAttempt, getLatestLearnerAttempt, submitLearnerAttempt, updateLearnerAttempt } from './attempts'
 
 const attempt = {
   attemptId: '30000000-0000-4000-8000-000000000001', assessmentKey: '10000000-0000-4000-8000-000000000001', state: 'IN_PROGRESS' as const, revision: 1,
@@ -22,6 +22,11 @@ describe('learner attempt API', () => {
     expect(JSON.parse(String(fake.calls[0].options?.body))).toEqual({ expectedRevision: 1, responses })
     expect(JSON.parse(String(fake.calls[1].options?.body))).toEqual({ expectedRevision: 1 })
     expect(String(fake.calls[0].options?.body)).not.toMatch(/learnerId|answerKey|correct/i)
+  })
+  it('loads the latest persisted attempt through the assessment context', async () => {
+    const fake = client(attempt)
+    await getLatestLearnerAttempt('20000000-0000-4000-8000-000000000001', '1.2.3', attempt.assessmentKey, fake.client)
+    expect(fake.calls[0]).toEqual({ path: `/api/courses/by-id/20000000-0000-4000-8000-000000000001/versions/1.2.3/assessments/${attempt.assessmentKey}/attempts`, options: { cache: 'no-store' } })
   })
   it('rejects malformed successful attempt payloads', async () => {
     const fake = client({ ...attempt, result: { correctOptionKey: 'secret' } })

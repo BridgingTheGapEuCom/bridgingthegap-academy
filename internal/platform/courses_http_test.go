@@ -34,6 +34,17 @@ func TestPublishedCourseVersionDTOOmitsAssessmentAnswerDefinitions(t *testing.T)
 	}
 }
 
+func TestPublishedCourseVersionDTOUsesEmptyPrerequisiteList(t *testing.T) {
+	value := courses.PublishedCourseVersion{Modules: []courses.PublishedCourseModule{{Lessons: []courses.PublishedCourseLesson{{}}}}}
+	encoded, err := json.Marshal(publishedCourseVersion(value))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"prerequisiteStableKeys":[]`) {
+		t.Fatalf("expected an empty prerequisite list, got %s", encoded)
+	}
+}
+
 type publishedCourseHTTPRepository struct {
 	exact     courses.ImmutableCourseVersion
 	latest    courses.ImmutableCourseVersion

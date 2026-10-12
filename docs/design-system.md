@@ -412,13 +412,17 @@ The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and 
 
 ### M-UI.7 — remaining Academy pages
 
-- Dashboard and the learner entry surfaces (Home, catalog, and course overview) are migrated.
-- Migrate the learner reader/progress flow, authentication, Administration, Community, and Translation.
+- Dashboard, learner entry surfaces, and the learner reader/progress/assessment flow are migrated.
+- Migrate authentication, Administration, Community, and Translation.
 - Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
 
 ### Reference migration: learner entry surfaces
 
 Home is the editorial learner reference: it retains its hero, illustration, and section composition while shared buttons, Lucide-backed icons, localized chrome, application formatting, and semantic theme tokens own common UI behavior. The catalog is the learner list reference, composing shared page titles, panels, metadata, buttons, pagination, and state surfaces while retaining course-card layout. Course overview is the learner detail reference, composing shared page title, metadata, badges, panels, and icons around authored course, module, and lesson content. These routes localize Academy chrome only; published course content remains domain-owned.
+
+### Reference migration: learner reader
+
+The ID-based published-version route is the canonical reader composition; the slug lesson route remains a compatibility reader and shares its content renderer, navigation primitives, localized chrome, formatters, and semantic tokens. Reader progress is revisioned backend state and assessment attempts resume from backend truth after reload. `LearnerKnowledgeCheck` and `LessonBlockRenderer` remain independently reusable through typed caller-supplied copy rather than hidden application-i18n dependencies. A seeded, non-intercepted browser journey is required to cover login, catalog, reading, progress, grading, and reload persistence against PostgreSQL.
 
 ### M-UI.8 — cleanup and enforcement
 

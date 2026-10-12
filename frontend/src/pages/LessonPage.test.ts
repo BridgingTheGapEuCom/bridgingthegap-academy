@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { nextTick } from 'vue'
 import { APIProblemError } from '../api/client'
+import { createApplicationI18n } from '../i18n/application'
 
 const getLessonMock = vi.hoisted(() => vi.fn())
 const getCourseVersionMock = vi.hoisted(() => vi.fn())
@@ -46,7 +47,8 @@ async function renderPage(path = '/courses/event-driven-architecture/versions/1.
   ] })
   await router.push(path)
   await router.isReady()
-  return { ...render(LessonPage, { global: { plugins: [router] } }), router }
+  const i18n = await createApplicationI18n('en')
+  return { ...render(LessonPage, { global: { plugins: [router, i18n] } }), router }
 }
 
 describe('LessonPage', () => {
@@ -54,7 +56,7 @@ describe('LessonPage', () => {
   afterEach(cleanup)
 
   it('renders exact-version lesson metadata and all canonical blocks in continuous mode', async () => {
-    await renderPage()
+    const { router } = await renderPage()
     await screen.findByRole('heading', { level: 1, name: 'Synchronous and asynchronous' })
     expect(screen.getByText('This lesson is from a deprecated course version.')).toBeTruthy()
     expect(screen.getByText('Estimated duration')).toBeTruthy()
@@ -62,8 +64,8 @@ describe('LessonPage', () => {
     expect(await screen.findByText('What is EAI?')).toBeTruthy()
     expect(screen.getByText('Introduction')).toBeTruthy()
     expect(screen.getByText('fmt.Println("safe")')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Previous lesson' }).getAttribute('href')).toContain('/versions/1.10.0/')
-    expect(screen.getByRole('link', { name: 'Next lesson' }).getAttribute('href')).toContain('/versions/1.10.0/')
+    await fireEvent.click(screen.getByRole('button', { name: 'Previous lesson' }))
+    await waitFor(() => expect(router.currentRoute.value.params.lessonKey).toBe('what-is-eai'))
     expect(document.body.textContent).not.toContain('Progress')
     expect(document.body.textContent).not.toContain('Enrollment')
   })

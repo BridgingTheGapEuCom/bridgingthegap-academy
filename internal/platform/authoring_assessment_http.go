@@ -281,10 +281,7 @@ func assessmentPairsDTO(source []assessments.MatchingPair) []authoringAssessment
 }
 
 func nonNilStrings(values []string) []string {
-	if values == nil {
-		return []string{}
-	}
-	return append([]string(nil), values...)
+	return append([]string{}, values...)
 }
 
 func authoringAssessmentListQuery(r *http.Request) (int, int, error) {

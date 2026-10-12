@@ -6,6 +6,7 @@ import errors from './errors'
 import navigation from './navigation'
 import session from './session'
 import settings from './settings'
+import learner from './learner'
 import validation from './validation'
 
 export const englishMessages = {
@@ -13,6 +14,7 @@ export const englishMessages = {
   navigation,
   session,
   settings,
+  learner,
   authoring,
   courses,
   dashboard,

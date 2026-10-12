@@ -54,6 +54,10 @@ func testLearnerAssessmentAttemptAPI(t *testing.T, ctx context.Context, pool *pg
 	router := authTestRouter(&authHTTP{sessions: sessions, learnerAttempts: service})
 	assessmentKey := published.AssessmentBindings[0].AssessmentKey
 	base := "/api/courses/by-id/" + string(course.ID) + "/versions/1.0.0/assessments/" + assessmentKey + "/attempts"
+	missing := authRequest(router, http.MethodGet, base, "", &http.Cookie{Name: sessionCookieName, Value: learnerSession.Token.Value()})
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("missing latest response=%d body=%s", missing.Code, missing.Body.String())
+	}
 	created := authRequest(router, http.MethodPost, base, "", &http.Cookie{Name: sessionCookieName, Value: learnerSession.Token.Value()}, authTestCSRFToken().Value())
 	if created.Code != http.StatusCreated || created.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("create response=%d body=%s", created.Code, created.Body.String())
@@ -85,6 +89,11 @@ func testLearnerAssessmentAttemptAPI(t *testing.T, ctx context.Context, pool *pg
 	}
 	if err := json.Unmarshal(submitResponse.Body.Bytes(), &attempt); err != nil || attempt.State != assessments.AttemptSubmitted || attempt.Result == nil || attempt.Result.CorrectCount != 1 || attempt.Result.TotalCount != 1 || attempt.SubmittedAt == nil || attempt.SubmittedAt.Before(attempt.CreatedAt) {
 		t.Fatalf("submitted attempt=%#v err=%v", attempt, err)
+	}
+	latest := authRequest(router, http.MethodGet, base, "", &http.Cookie{Name: sessionCookieName, Value: learnerSession.Token.Value()})
+	var resumed learnerAttemptDTO
+	if latest.Code != http.StatusOK || json.Unmarshal(latest.Body.Bytes(), &resumed) != nil || resumed.AttemptID != attempt.AttemptID || resumed.State != assessments.AttemptSubmitted || resumed.Result == nil {
+		t.Fatalf("latest response=%d attempt=%#v body=%s", latest.Code, resumed, latest.Body.String())
 	}
 
 	foreign := authRequest(router, http.MethodGet, "/api/learner/assessment-attempts/"+attempt.AttemptID, "", &http.Cookie{Name: sessionCookieName, Value: otherSession.Token.Value()})

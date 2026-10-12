@@ -75,6 +75,42 @@ func (q *Queries) GetAssessmentAttempt(ctx context.Context, id pgtype.UUID) (Ass
 	return i, err
 }
 
+const getLatestAssessmentAttempt = `-- name: GetLatestAssessmentAttempt :one
+SELECT id, learner_user_id, course_version_id, assessment_key, state, revision, responses, created_at, updated_at, submitted_at, correct_count, total_count
+FROM assessments.assessment_attempt
+WHERE learner_user_id = $1
+  AND course_version_id = $2
+  AND assessment_key = $3
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
+type GetLatestAssessmentAttemptParams struct {
+	LearnerUserID   pgtype.UUID
+	CourseVersionID pgtype.UUID
+	AssessmentKey   pgtype.UUID
+}
+
+func (q *Queries) GetLatestAssessmentAttempt(ctx context.Context, arg GetLatestAssessmentAttemptParams) (AssessmentsAssessmentAttempt, error) {
+	row := q.db.QueryRow(ctx, getLatestAssessmentAttempt, arg.LearnerUserID, arg.CourseVersionID, arg.AssessmentKey)
+	var i AssessmentsAssessmentAttempt
+	err := row.Scan(
+		&i.ID,
+		&i.LearnerUserID,
+		&i.CourseVersionID,
+		&i.AssessmentKey,
+		&i.State,
+		&i.Revision,
+		&i.Responses,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SubmittedAt,
+		&i.CorrectCount,
+		&i.TotalCount,
+	)
+	return i, err
+}
+
 const submitAssessmentAttempt = `-- name: SubmitAssessmentAttempt :one
 UPDATE assessments.assessment_attempt
 SET state = 'SUBMITTED',

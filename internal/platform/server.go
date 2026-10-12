@@ -36,6 +36,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/portability"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/preferences"
 	preferencespostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/preferences/postgres"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress"
 	progresspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress/postgres"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
 	translationspostgres "github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations/postgres"
@@ -211,6 +212,7 @@ func Serve(ctx context.Context, cfg Config, log *slog.Logger) error {
 		authoringAssetDelivery:      authoring.NewDraftAssetReadService(assetRepository, authoringAuthorizer),
 		authoringAssessments:        authoring.NewAssessmentManagementService(assessmentRepository, authoringAuthorizer),
 		learnerAttempts:             assessments.NewLearnerAttemptService(assessmentRepository, coursesRepository, time.Now),
+		learnerProgress:             progress.NewService(progresspostgres.New(pool), coursesRepository),
 		community:                   community.NewService(communitypostgres.New(pool), coursesRepository),
 		translations:                translationApplication,
 		translationWorkspace:        translationWorkspace,
@@ -354,10 +356,15 @@ func newRouter(pool *pgxpool.Pool, log *slog.Logger, requests *prometheus.Counte
 					protected.Get("/learner/certificates/{certificateId}", auth.handleLearnerCertificateGet)
 				}
 				if auth.learnerAttempts != nil {
+					protected.Get("/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts", auth.handleLearnerAttemptLatest)
 					protected.Post("/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts", auth.handleLearnerAttemptCreate)
 					protected.Get("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptGet)
 					protected.Put("/learner/assessment-attempts/{attemptId}", auth.handleLearnerAttemptUpdate)
 					protected.Post("/learner/assessment-attempts/{attemptId}/submit", auth.handleLearnerAttemptSubmit)
+				}
+				if auth.learnerProgress != nil {
+					protected.Get("/courses/by-id/{courseId}/versions/{version}/progress", auth.handleLearnerProgressGet)
+					protected.Put("/courses/by-id/{courseId}/versions/{version}/progress/lessons/{lessonKey}", auth.handleLearnerProgressComplete)
 				}
 				if auth.translations != nil && auth.translationWorkspace != nil {
 					protected.Post("/courses/by-id/{courseId}/versions/{version}/translations", auth.handleTranslationCreate)

@@ -10,6 +10,7 @@ import (
 var ErrInvalidProgress = errors.New("invalid course progress")
 var ErrProgressNotFound = errors.New("course progress not found")
 var ErrRevisionMismatch = errors.New("course progress revision mismatch")
+var ErrProgressUnavailable = errors.New("course progress unavailable")
 
 type CourseProgress struct {
 	LearnerUserID       string `json:"-"`

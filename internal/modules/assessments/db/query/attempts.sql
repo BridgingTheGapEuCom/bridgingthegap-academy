@@ -8,6 +8,15 @@ SELECT *
 FROM assessments.assessment_attempt
 WHERE id = $1;
 
+-- name: GetLatestAssessmentAttempt :one
+SELECT *
+FROM assessments.assessment_attempt
+WHERE learner_user_id = $1
+  AND course_version_id = $2
+  AND assessment_key = $3
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
+
 -- name: UpdateAssessmentAttempt :one
 UPDATE assessments.assessment_attempt
 SET responses = $3,

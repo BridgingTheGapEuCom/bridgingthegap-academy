@@ -20,6 +20,7 @@ import (
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/credentials/openbadges/publication"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/identity"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/plugins"
+	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/progress"
 	"github.com/BridgingTheGapEuCom/bridgingthegap-academy/internal/modules/translations"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -92,6 +93,7 @@ type authHTTP struct {
 	authoringAssetDelivery      *authoring.DraftAssetReadService
 	authoringAssessments        *authoring.AssessmentManagementService
 	learnerAttempts             *assessments.LearnerAttemptService
+	learnerProgress             *progress.Service
 	community                   *community.Service
 	translations                *translations.ApplicationService
 	translationWorkspace        *translations.WorkspaceQueryService

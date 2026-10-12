@@ -941,6 +941,20 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '503': { $ref: '#/components/responses/Problem' }
   /api/courses/by-id/{courseId}/versions/{version}/assessments/{assessmentKey}/attempts:
+    get:
+      operationId: getLatestLearnerAssessmentAttempt
+      description: Returns the authenticated learner's latest private Attempt for the Assessment bound to this exact immutable PUBLISHED CourseVersion. Returns 404 when no Attempt exists.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CourseID' }
+        - { $ref: '#/components/parameters/CourseVersion' }
+        - { $ref: '#/components/parameters/LearnerAssessmentKey' }
+      responses:
+        '200': { description: Latest private learner Attempt, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttempt' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
     post:
       operationId: createLearnerAssessmentAttempt
       description: Creates a private IN_PROGRESS Attempt for the authenticated learner and an Assessment bound to this exact immutable PUBLISHED CourseVersion. Learner ownership comes exclusively from the session. Responses are private and not cacheable.
@@ -980,6 +994,40 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttemptUpdateRequest' } } }
       responses:
         '200': { description: Updated private IN_PROGRESS Attempt, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerAssessmentAttempt' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/versions/{version}/progress:
+    get:
+      operationId: getLearnerCourseProgress
+      description: Returns the authenticated learner's private completion facts for this immutable PUBLISHED CourseVersion, creating an empty aggregate on first use.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CourseID' }, { $ref: '#/components/parameters/CourseVersion' }]
+      responses:
+        '200': { description: Private learner course progress, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerCourseProgress' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /api/courses/by-id/{courseId}/versions/{version}/progress/lessons/{lessonKey}:
+    put:
+      operationId: completeLearnerCourseLesson
+      description: Idempotently records completion of one lesson in this immutable PUBLISHED CourseVersion using revision/CAS semantics.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CourseID' }
+        - { $ref: '#/components/parameters/CourseVersion' }
+        - { $ref: '#/components/parameters/LearnerLessonKey' }
+        - { $ref: '#/components/parameters/AuthoringOrigin' }
+        - { $ref: '#/components/parameters/AuthoringCSRFToken' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LearnerCourseProgressCompleteRequest' } } }
+      responses:
+        '200': { description: Updated private learner course progress, content: { application/json: { schema: { $ref: '#/components/schemas/LearnerCourseProgress' } } } }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
@@ -1309,6 +1357,7 @@ components:
     LearnerAttemptID: { name: attemptId, in: path, required: true, schema: { type: string, format: uuid } }
     CertificateID: { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
     LearnerAssessmentKey: { name: assessmentKey, in: path, required: true, schema: { type: string, format: uuid } }
+    LearnerLessonKey: { name: lessonKey, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } }
     CommunityThreadID: { name: threadId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringUserID: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
     AuthoringModuleID: { name: moduleId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1664,6 +1713,21 @@ components:
         expectedRevision: { type: integer, minimum: 1 }
         responses: { type: array, items: { $ref: '#/components/schemas/LearnerAssessmentAttemptResponse' }, maxItems: 100 }
     LearnerAssessmentAttemptSubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+    LearnerCourseProgress:
+      type: object
+      description: Private authenticated learner completion facts for one immutable CourseVersion.
+      additionalProperties: false
+      required: [revision, completedLessonKeys, updatedAt]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        completedLessonKeys: { type: array, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 160 } }
+        updatedAt: { type: string, format: date-time }
+    LearnerCourseProgressCompleteRequest:
       type: object
       additionalProperties: false
       required: [expectedRevision]

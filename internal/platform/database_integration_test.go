@@ -75,6 +75,7 @@ func TestPostgreSQLMigrationAndSchemaCompatibility(t *testing.T) {
 	t.Run("Open Badges status allocation and payload", func(t *testing.T) { testOpenBadgesStatus(t, ctx, pool) })
 	t.Run("signed Open Badges publication", func(t *testing.T) { testSignedOpenBadgesPublication(t, ctx, pool) })
 	t.Run("learner assessment attempt API", func(t *testing.T) { testLearnerAssessmentAttemptAPI(t, ctx, pool) })
+	t.Run("learner progress API", func(t *testing.T) { testLearnerProgressAPI(t, ctx, pool) })
 	t.Run("published asset binary delivery", func(t *testing.T) { testPublishedAssetBinaryDelivery(t, ctx, pool) })
 	t.Run("authoring publication API", func(t *testing.T) { testAuthoringPublicationAPI(t, ctx, pool) })
 	t.Run("course public read service", func(t *testing.T) { testCourseReadService(t, ctx, pool) })

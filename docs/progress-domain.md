@@ -13,6 +13,9 @@ ensures the lesson key belongs to the same published CourseVersion. Prerequisite
 remain advisory and Assessment Attempts remain separate facts.
 
 Course completion is a pure derived predicate: all version lesson keys must be
-completed. An empty CourseVersion is deliberately incomplete. There is no HTTP
-API, UI, enrollment side effect, version migration, reset, certificate, or
-stored percentage in this foundation.
+completed. An empty CourseVersion is deliberately incomplete. The authenticated
+learner API exposes the current user's progress for an exact published version
+and completes lessons with revision-based CAS. First access creates the durable
+empty aggregate; the reader reconciles API responses and never treats a failed
+write as completion. There is no enrollment side effect, version migration,
+reset, or stored percentage.

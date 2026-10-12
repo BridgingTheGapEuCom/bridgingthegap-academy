@@ -27,6 +27,7 @@ type Repository interface {
 type AttemptRepository interface {
 	CreateAssessmentAttempt(context.Context, AttemptInput) (AssessmentAttempt, error)
 	GetAssessmentAttempt(context.Context, AttemptID) (AssessmentAttempt, error)
+	GetLatestAssessmentAttempt(context.Context, string, string, AssessmentID) (AssessmentAttempt, error)
 	UpdateAssessmentAttempt(context.Context, AttemptID, int64, AttemptUpdate) (AssessmentAttempt, error)
 	SubmitAssessmentAttempt(context.Context, AttemptID, int64, AttemptResult, time.Time) (AssessmentAttempt, error)
 }

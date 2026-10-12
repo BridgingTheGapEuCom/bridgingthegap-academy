@@ -235,6 +235,11 @@ test('catalog and course overview localize Academy chrome without changing autho
   await page.goto('/courses/event-driven-architecture')
   await expect(page.getByRole('heading', { level: 2, name: pseudoLocalize('Course outline') })).toBeVisible()
   await expect(page.getByRole('heading', { level: 1, name: courseDetail.version.title })).toBeVisible()
+
+  await page.goto(`/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}`)
+  await expect(page.getByRole('navigation', { name: pseudoLocalize('Course lessons') })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: publishedCourse.modules[0].lessons[0].title })).toBeVisible()
+  await expect(page.getByText('Published canonical lesson content.')).toBeVisible()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
@@ -243,6 +248,7 @@ test('authenticated learner saves and submits a knowledge-check Attempt', async 
   await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, user_id: '90000000-0000-4000-8000-000000000001', csrf_token: 'csrf', expires_at: '2027-01-01T00:00:00Z' }) }))
   const attemptId = '80000000-0000-4000-8000-000000000001'
   const base = { attemptId, assessmentKey: '70000000-0000-4000-8000-000000000001', state: 'IN_PROGRESS', revision: 1, responses: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', submittedAt: null, result: null }
+  await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}/progress`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ revision: 1, completedLessonKeys: [], updatedAt: '2026-01-01T00:00:00Z' }) }))
   await page.route(`**/api/courses/by-id/${catalogFirst.courseId}/versions/${catalogFirst.version}/assessments/${base.assessmentKey}/attempts`, (route) => route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(base) }))
   await page.route(`**/api/learner/assessment-attempts/${attemptId}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...base, revision: 2, responses: [{ questionKey: 'single', type: 'SINGLE_CHOICE', selectedOptionKey: 'first', selectedOptionKeys: [], pairs: [] }] }) }))
   await page.route(`**/api/learner/assessment-attempts/${attemptId}/submit`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...base, state: 'SUBMITTED', revision: 3, responses: [{ questionKey: 'single', type: 'SINGLE_CHOICE', selectedOptionKey: 'first', selectedOptionKeys: [], pairs: [] }], submittedAt: '2026-01-01T00:01:00Z', result: { correctCount: 1, totalCount: 3, percentage: 33.3333333333 } }) }))

@@ -45,6 +45,20 @@ func (s *LearnerAttemptService) Start(ctx context.Context, learnerUserID string,
 	return s.attempts.CreateAssessmentAttempt(ctx, AttemptInput{LearnerUserID: learnerUserID, CourseVersionID: string(aggregate.ID), AssessmentKey: assessmentKey})
 }
 
+func (s *LearnerAttemptService) Latest(ctx context.Context, learnerUserID string, courseID courses.CourseID, version courses.Version, assessmentKey AssessmentID) (AssessmentAttempt, error) {
+	if s == nil || s.attempts == nil || s.courses == nil || !validUUID(learnerUserID) || !validUUID(string(assessmentKey)) || !version.Valid() {
+		return AssessmentAttempt{}, ErrAttemptUnavailable
+	}
+	aggregate, err := s.courses.GetPublishedImmutableCourseVersionByCourseAndVersion(ctx, courseID, version)
+	if err != nil {
+		return AssessmentAttempt{}, attemptContextError(err)
+	}
+	if _, ok := publishedAssessmentBinding(aggregate, assessmentKey); !ok {
+		return AssessmentAttempt{}, ErrAttemptUnavailable
+	}
+	return s.attempts.GetLatestAssessmentAttempt(ctx, learnerUserID, string(aggregate.ID), assessmentKey)
+}
+
 func (s *LearnerAttemptService) Get(ctx context.Context, learnerUserID string, id AttemptID) (AssessmentAttempt, error) {
 	attempt, err := s.owned(ctx, learnerUserID, id)
 	if err != nil {

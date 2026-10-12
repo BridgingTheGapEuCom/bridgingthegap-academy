@@ -154,7 +154,7 @@ func publishedCourseVersion(value courses.PublishedCourseVersion) publishedCours
 			publicModule.Lessons = append(publicModule.Lessons, publishedLessonDTO{
 				StableKey: lesson.StableKey, Title: lesson.Title, Description: lesson.Description,
 				Objectives: lesson.LearningObjectives, EstimatedDurationMinutes: lesson.EstimatedDurationMinutes,
-				Position: lesson.Position, PrerequisiteStableKeys: lesson.PrerequisiteStableKeys, Content: lesson.Content,
+				Position: lesson.Position, PrerequisiteStableKeys: nonNilStrings(lesson.PrerequisiteStableKeys), Content: lesson.Content,
 			})
 		}
 		result.Modules = append(result.Modules, publicModule)
