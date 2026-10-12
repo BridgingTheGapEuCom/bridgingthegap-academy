@@ -1,6 +1,7 @@
 import authoring from './authoring'
 import auth from './auth'
 import common from './common'
+import community from './community'
 import courses from './courses'
 import dashboard from './dashboard'
 import errors from './errors'
@@ -12,6 +13,7 @@ import validation from './validation'
 
 export const englishMessages = {
   common,
+  community,
   auth,
   navigation,
   session,

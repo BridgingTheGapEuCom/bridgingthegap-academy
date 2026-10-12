@@ -20,6 +20,8 @@ import {
   ChevronDown,
   ChevronRight,
   Ellipsis,
+  Eye,
+  EyeOff,
   FileText,
   Folder,
   GripVertical,
@@ -81,6 +83,8 @@ const icons: Record<BtgIconName, typeof Plus> = {
   listOrdered: ListOrdered,
   code: Code,
   unlink: Unlink,
+  show: Eye,
+  hide: EyeOff,
 }
 
 const props = withDefaults(defineProps<{

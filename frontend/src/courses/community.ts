@@ -38,14 +38,25 @@ export async function createCommunityPost(courseId: string, threadId: string, bo
 }
 export function communityModerationPath(courseId: string) { return `${communityPath(courseId)}/moderation` }
 export function communityModeratorThreadPath(courseId: string, threadId: string) { return `${communityModerationPath(courseId)}/threads/${encodeURIComponent(threadId)}` }
-export async function getCommunityModerationProbe(courseId:string,client:APIClient=apiClient):Promise<CommunityModerationProbe>{return request(client,courseId,'/moderation',isProbe)}
-export async function listCommunityThreadsForModeration(courseId:string,offset=0,client:APIClient=apiClient):Promise<CommunityModeratorThreadPage>{return request(client,courseId,`/moderation/threads?limit=${pageSize}&offset=${offset}`,isModeratorPage)}
-export async function getCommunityThreadForModeration(courseId:string,threadId:string,client:APIClient=apiClient):Promise<CommunityModeratorThread>{if(!isUUID(threadId))throw new InvalidCourseRouteError();return request(client,courseId,`/moderation/threads/${encodeURIComponent(threadId)}?limit=${pageSize}&offset=0`,isModeratorThread)}
-export async function hideCommunityThread(course:string,thread:string,client:APIClient=apiClient){return moderationMutation(course,thread,'', 'hide',client)}
-export async function unhideCommunityThread(course:string,thread:string,client:APIClient=apiClient){return moderationMutation(course,thread,'', 'unhide',client)}
-export async function hideCommunityPost(course:string,thread:string,post:string,client:APIClient=apiClient){return moderationMutation(course,thread,post,'hide',client)}
-export async function unhideCommunityPost(course:string,thread:string,post:string,client:APIClient=apiClient){return moderationMutation(course,thread,post,'unhide',client)}
-async function moderationMutation(course:string,thread:string,post:string,action:string,client:APIClient){if(!isPublishedCourseID(course)||!isUUID(thread)||(post&&!isUUID(post)))throw new InvalidCourseRouteError();return client.request<unknown>(`/api/courses/by-id/${encodeURIComponent(course)}/community/threads/${encodeURIComponent(thread)}${post?`/posts/${encodeURIComponent(post)}`:''}/${action}`,{method:'POST',cache:'no-store'})}
+export async function getCommunityModerationProbe(courseId: string, client: APIClient = apiClient): Promise<CommunityModerationProbe> {
+  return request(client, courseId, '/moderation', isProbe)
+}
+export async function listCommunityThreadsForModeration(courseId: string, offset = 0, client: APIClient = apiClient): Promise<CommunityModeratorThreadPage> {
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new InvalidCourseRouteError()
+  return request(client, courseId, `/moderation/threads?limit=${pageSize}&offset=${offset}`, isModeratorPage)
+}
+export async function getCommunityThreadForModeration(courseId: string, threadId: string, client: APIClient = apiClient, offset = 0): Promise<CommunityModeratorThread> {
+  if (!isUUID(threadId) || !Number.isSafeInteger(offset) || offset < 0) throw new InvalidCourseRouteError()
+  return request(client, courseId, `/moderation/threads/${encodeURIComponent(threadId)}?limit=${pageSize}&offset=${offset}`, isModeratorThread)
+}
+export async function hideCommunityThread(course: string, thread: string, client: APIClient = apiClient) { return moderationMutation(course, thread, '', 'hide', client) }
+export async function unhideCommunityThread(course: string, thread: string, client: APIClient = apiClient) { return moderationMutation(course, thread, '', 'unhide', client) }
+export async function hideCommunityPost(course: string, thread: string, post: string, client: APIClient = apiClient) { return moderationMutation(course, thread, post, 'hide', client) }
+export async function unhideCommunityPost(course: string, thread: string, post: string, client: APIClient = apiClient) { return moderationMutation(course, thread, post, 'unhide', client) }
+async function moderationMutation(course: string, thread: string, post: string, action: string, client: APIClient) {
+  if (!isPublishedCourseID(course) || !isUUID(thread) || (post && !isUUID(post))) throw new InvalidCourseRouteError()
+  return client.request<unknown>(`/api/courses/by-id/${encodeURIComponent(course)}/community/threads/${encodeURIComponent(thread)}${post ? `/posts/${encodeURIComponent(post)}` : ''}/${action}`, { method: 'POST', cache: 'no-store' })
+}
 async function request<T>(client: APIClient, courseId: string, suffix: string, validator: (value: unknown) => value is T, options: Parameters<APIClient['request']>[1] = { cache: 'no-store' }): Promise<T> {
   if (!isPublishedCourseID(courseId)) throw new InvalidCourseRouteError()
   try {

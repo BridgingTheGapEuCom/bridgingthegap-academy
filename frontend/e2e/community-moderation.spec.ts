@@ -26,6 +26,7 @@ async function serveCommunity(page: Page, mode: 'ENABLED' | 'DISABLED' = 'ENABLE
   const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
 
   await page.route('**/api/auth/session', (route) => json(route, session))
+  await page.route('**/api/me/preferences', (route) => json(route, { applicationLocale: null, appearance: 'SYSTEM', revision: 0, updatedAt: null }))
   await page.route(`**/api/courses/by-id/${courseId}/community**`, (route) => {
     const path = new URL(route.request().url()).pathname
     if (path.endsWith('/community')) return json(route, { courseId, mode })
@@ -113,4 +114,19 @@ test('participant has no moderation UI and disabled Community remains moderator-
   await expect(page.getByRole('link', { name: 'Moderated discussion' })).toBeVisible()
   await page.getByRole('link', { name: 'Moderated discussion' }).click()
   await expect(page.getByRole('button', { name: 'Hide thread' })).toBeVisible()
+})
+
+test('Community reflows in dark pseudo-locale without translating authored content', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('btg.academy.application-locale', 'en-XA'))
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await serveCommunity(page)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto(`/courses/by-id/${courseId}/community/threads/${threadId}`)
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en-XA')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.getByRole('heading', { name: 'Moderated discussion' })).toBeVisible()
+  await expect(page.getByText('Opening post')).toBeVisible()
+  await page.locator('html').evaluate((element) => { element.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

@@ -412,13 +412,19 @@ The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and 
 
 ### M-UI.7 — remaining Academy pages
 
-- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, and authentication are migrated.
-- Migrate Administration, Community, and Translation.
+- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, and Community are migrated.
+- Migrate Administration and Translation.
 - Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
 
 ### Reference migration: authentication
 
 Login is the authentication-form reference: shared page titles, panels, form fields, inputs, buttons, and status surfaces own the visual and accessibility behavior while the authentication service retains credential, rate-limit, CSRF, redirect, and session semantics. Authentication copy lives under `auth.*`; backend distinctions map to localized UI messages without exposing secrets or raw errors. Mocked tests cover deterministic failure states, while a seeded non-intercepted browser journey must verify login, protected-route reload, logout revocation, and backend-enforced expiry against PostgreSQL.
+
+### Reference migration: Community and moderation
+
+Community is the learner discussion/list-management reference. Shared page titles, sections, panels, fields, buttons, badges, icons, pagination, formatters, and state surfaces own generic presentation; feature CSS owns only discussion, post, action, and responsive layout. Moderation uses the same composition with server-authoritative permissions and friendly localized visibility states. User-authored content is never translated or silently truncated. Mocked tests cover edge states, while a seeded non-intercepted journey must verify create, reply, moderation, reload persistence, and PostgreSQL state.
+
+The shared icon map includes semantic show/hide actions for permission-sensitive visibility management; feature code should not substitute delete or navigation icons for moderation state changes.
 
 ### Reference migration: learner entry surfaces
 

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, screen, waitFor } from '@testing-library/vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,6 +12,7 @@ vi.mock('../courses/community', async (original) => ({
 }))
 
 import Page from './CourseCommunityPage.vue'
+import { renderWithI18n } from '../test/i18n'
 
 const courseId = '10000000-0000-4000-8000-000000000001'
 const secondCourseId = '10000000-0000-4000-8000-000000000002'
@@ -30,7 +31,7 @@ async function mount() {
   ] })
   await router.push(`/courses/by-id/${courseId}/community`)
   await router.isReady()
-  render(Page, { global: { plugins: [router] } })
+  renderWithI18n(Page, { global: { plugins: [router] } })
   await screen.findByRole('heading', { name: 'Course discussions' })
   return router
 }
@@ -82,9 +83,9 @@ describe('course community moderation entry', () => {
     probe.mockImplementationOnce(() => new Promise((resolve) => { resolveFirstProbe = resolve })).mockResolvedValueOnce({ canModerate: false })
     metadata.mockResolvedValueOnce({ courseId, mode: 'ENABLED' }).mockResolvedValueOnce({ courseId: secondCourseId, mode: 'ENABLED' })
     const router = await mount()
-    await waitFor(() => expect(probe).toHaveBeenCalledWith(courseId))
+    await waitFor(() => expect(probe).toHaveBeenCalledWith(courseId, expect.anything()))
     await router.push(`/courses/by-id/${secondCourseId}/community`)
-    await waitFor(() => expect(probe).toHaveBeenCalledWith(secondCourseId))
+    await waitFor(() => expect(probe).toHaveBeenCalledWith(secondCourseId, expect.anything()))
     resolveFirstProbe({ canModerate: true })
     await waitFor(() => expect(screen.queryByRole('link', { name: 'Moderation view' })).toBeNull())
   })

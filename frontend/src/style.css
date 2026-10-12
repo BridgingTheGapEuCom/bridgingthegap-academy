@@ -135,48 +135,85 @@
 	min-width: 0;
 }
 .community-page__back {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--btg-space-1);
 	inline-size: fit-content;
 }
-.community-page__empty {
-	padding: var(--btg-space-4);
-	background: var(--btg-color-surface-muted);
+.community-page__heading,
+.community-thread-card__heading,
+.community-post__heading {
+	display: flex;
+	min-width: 0;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--btg-space-3);
+	flex-wrap: wrap;
+}
+.community-page__management-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--btg-space-1);
+}
+.community-page__state {
+	display: grid;
+	justify-items: start;
+	gap: var(--btg-space-3);
 }
 .community-form {
 	display: grid;
-	gap: var(--btg-space-2);
+	gap: var(--btg-space-4);
 	max-inline-size: 48rem;
 }
-.community-form input,
-.community-form textarea {
-	inline-size: 100%;
-	box-sizing: border-box;
-	font: inherit;
-}
-.community-error {
-	color: var(--btg-color-danger);
-	font-weight: 600;
+.community-form__actions,
+.community-moderation-actions,
+.community-pagination__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--btg-space-2);
 }
 .community-threads,
 .community-posts {
 	display: grid;
-	gap: var(--btg-space-3);
+	gap: var(--btg-space-4);
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
-.community-threads li,
-.community-posts article {
-	border-block-start: 1px solid var(--btg-color-border);
-	padding-block-start: var(--btg-space-3);
+.community-thread-card,
+.community-post {
+	display: grid;
+	min-width: 0;
+	gap: var(--btg-space-2);
 }
-.community-threads p,
-.community-posts__meta {
+.community-thread-card__title {
+	font-weight: 700;
+	overflow-wrap: anywhere;
+}
+.community-thread-card__meta,
+.community-post__meta {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+	gap: var(--btg-space-1) var(--btg-space-3);
 	color: var(--btg-color-text-secondary);
-	margin-block: var(--btg-space-1) 0;
+	margin: 0;
 }
-.community-posts__body {
+.community-post__body {
+	margin: 0;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
+}
+.community-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--btg-space-3);
+	flex-wrap: wrap;
+}
+.community-pagination__summary {
+	margin: 0;
+	color: var(--btg-color-text-secondary);
 }
 
 /* Intrinsic grid/fieldset minima must not impose a viewport width when text grows. */

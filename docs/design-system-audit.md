@@ -10,7 +10,7 @@ Academy has the beginning of a design system, but not yet a consistently enforce
 
 The highest-value next step is not another page-level polish pass. It is to separate foundation values from semantic theme tokens, standardize the existing Lucide-backed icon abstraction, complete the core control set, and then extract repeated compositions. Draft Structure is the best reference migration because it exercises most of the required system; Dashboard should validate that the result is not Authoring-specific.
 
-Migration status (2026-10-12): Draft Structure, Dashboard, the Draft and Lesson workspaces, Settings, learner entry surfaces, the learner reader/progress/knowledge-check flow, and authentication are complete. The ID-based published route is the canonical learner reader; the slug lesson route remains a supported compatibility route using the shared learner presentation boundary. Administration, Community, and Translation remain later migration work.
+Migration status (2026-10-12): Draft Structure, Dashboard, the Draft and Lesson workspaces, Settings, learner entry surfaces, the learner reader/progress/knowledge-check flow, authentication, and Community/moderation are complete. The ID-based published route is the canonical learner reader; the slug lesson route remains a supported compatibility route using the shared learner presentation boundary. Administration and Translation remain later migration work.
 
 ## Audit scope and method
 
@@ -211,7 +211,8 @@ Dashboard uses the canonical container and button but implements its own page he
 - Catalog and course overview now use shared list/detail panels, metadata, pagination, localized state treatment, semantic tokens, and centralized formatting. Course-authored copy remains unchanged.
 - Home retains its deliberate editorial identity and bespoke hero illustration while Academy UI icons, controls, localization, formatting, and theme behavior use shared boundaries.
 - Learner readers now share localized content, navigation, progress, and knowledge-check patterns; durable happy-path coverage uses a seeded real backend and PostgreSQL without API interception.
-- Administration, Community, and Translation contain further form, table/list, dialog, status, and action variants to migrate later.
+- Community and moderation now use shared learner list/form/management patterns, localized visibility and feedback, centralized dates/counts, and a real PostgreSQL-backed lifecycle test.
+- Administration and Translation contain further form, table/list, dialog, status, and action variants to migrate later.
 
 ## Risks
 

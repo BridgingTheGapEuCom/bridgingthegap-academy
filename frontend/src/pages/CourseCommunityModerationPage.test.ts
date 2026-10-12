@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { list } = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('../courses/community', async (original) => ({ ...(await original<typeof import('../courses/community')>()), listCommunityThreadsForModeration: list }))
 import Page from './CourseCommunityModerationPage.vue'
+import { renderWithI18n } from '../test/i18n'
 
 const courseA = '10000000-0000-4000-8000-000000000001'
 const courseB = '10000000-0000-4000-8000-000000000002'
@@ -16,7 +17,7 @@ async function mount(course = courseA) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/courses/by-id/:courseId/community/moderation', component: Page }] })
   await router.push(`/courses/by-id/${course}/community/moderation`)
   await router.isReady()
-  render(Page, { global: { plugins: [router] } })
+  renderWithI18n(Page, { global: { plugins: [router] } })
   return router
 }
 
@@ -31,7 +32,7 @@ describe('community moderation list', () => {
     expect(screen.getAllByRole('link').map((link) => link.textContent)).toContain('Visible first')
     expect(screen.getByText(/Hidden from participants/)).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    await waitFor(() => expect(list).toHaveBeenLastCalledWith(courseA, 20))
+    await waitFor(() => expect(list).toHaveBeenLastCalledWith(courseA, 20, expect.anything()))
     expect(await screen.findByRole('link', { name: 'Hidden second' })).toBeTruthy()
   })
 
@@ -40,7 +41,7 @@ describe('community moderation list', () => {
     list.mockImplementationOnce(() => new Promise((resolve) => { resolveA = resolve })).mockResolvedValueOnce({ threads: [], total: 0, limit: 20, offset: 0 })
     const router = await mount()
     await router.push(`/courses/by-id/${courseB}/community/moderation`)
-    await waitFor(() => expect(list).toHaveBeenLastCalledWith(courseB, 0))
+    await waitFor(() => expect(list).toHaveBeenLastCalledWith(courseB, 0, expect.anything()))
     resolveA({ threads: [first], total: 1, limit: 20, offset: 0 })
     expect(await screen.findByText('No discussions to moderate.')).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Visible first' })).toBeNull()
