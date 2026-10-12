@@ -1,4 +1,4 @@
-import { createApp, nextTick } from 'vue'
+import { createApp, nextTick, watch } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import { auth } from './auth/auth'
@@ -105,6 +105,14 @@ router.beforeEach(async (to) => {
   // An unavailable session check should not render a protected page as though
   // authenticated. Login retains its existing retryable session state.
   return loginLocation(routeReturnPath(to))
+})
+
+watch(auth.state, (state) => {
+  if (state.status !== 'unauthenticated' || state.reason !== 'session-expired') return
+  const current = router.currentRoute.value
+  if (current.matched.some((record) => record.meta.requiresAuth)) {
+    void router.replace(loginLocation(routeReturnPath(current)))
+  }
 })
 
 // Give client-side navigation the same clear reading start as a new document.

@@ -412,9 +412,13 @@ The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and 
 
 ### M-UI.7 — remaining Academy pages
 
-- Dashboard, learner entry surfaces, and the learner reader/progress/assessment flow are migrated.
-- Migrate authentication, Administration, Community, and Translation.
+- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, and authentication are migrated.
+- Migrate Administration, Community, and Translation.
 - Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
+
+### Reference migration: authentication
+
+Login is the authentication-form reference: shared page titles, panels, form fields, inputs, buttons, and status surfaces own the visual and accessibility behavior while the authentication service retains credential, rate-limit, CSRF, redirect, and session semantics. Authentication copy lives under `auth.*`; backend distinctions map to localized UI messages without exposing secrets or raw errors. Mocked tests cover deterministic failure states, while a seeded non-intercepted browser journey must verify login, protected-route reload, logout revocation, and backend-enforced expiry against PostgreSQL.
 
 ### Reference migration: learner entry surfaces
 

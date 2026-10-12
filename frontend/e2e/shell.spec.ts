@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
 const unauthenticated = { type: 'about:blank', title: 'Unauthenticated', status: 401, instance: '/api/auth/session', request_id: 'test-request' }
-const authenticated = { authenticated: true, user_id: '22222222-2222-4222-8222-222222222222', expires_at: '2026-09-17T12:00:00Z', csrf_token: 'test-csrf-token' }
+const authenticated = { authenticated: true, user_id: '22222222-2222-4222-8222-222222222222', expires_at: '2099-09-17T12:00:00Z', csrf_token: 'test-csrf-token' }
 
 test('authenticated preferences apply locale and follow the system appearance', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
@@ -137,6 +137,7 @@ test('protected Authoring entry, expiry, and public Courses navigation remain pr
   await expect(page).toHaveURL('/authoring/new')
   await page.getByRole('button', { name: 'Cancel' }).click()
   await expect(page).toHaveURL(/\/login\?returnTo=\/authoring$/)
+  await expect(page.getByRole('heading', { level: 2, name: 'Your session expired' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Authoring' })).toHaveCount(0)
   await page.getByRole('link', { name: 'Courses' }).click()
   await expect(page).toHaveURL('/courses')

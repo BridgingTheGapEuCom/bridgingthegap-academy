@@ -12,7 +12,7 @@ const unauthenticated = {
 const authenticatedSession = {
   authenticated: true,
   user_id: '3c5e54ca-37fb-4af0-938d-694a1815d1ed',
-  expires_at: '2026-09-15T12:00:00Z',
+  expires_at: '2099-09-15T12:00:00Z',
   csrf_token: 'test-csrf-token',
 }
 

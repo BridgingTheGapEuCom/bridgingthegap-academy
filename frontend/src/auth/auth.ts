@@ -10,7 +10,7 @@ import {
 
 export type AuthenticationState =
   | { status: 'bootstrapping' }
-  | { status: 'unauthenticated' }
+  | { status: 'unauthenticated'; reason?: 'session-expired' }
   | { status: 'authenticated'; userId: string; expiresAt: string }
   | { status: 'unavailable' }
 
@@ -36,6 +36,9 @@ export interface AuthService {
 
 export interface AuthServiceOptions {
   fetcher?: typeof fetch
+  now?: () => number
+  setTimer?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>
+  clearTimer?: (timer: ReturnType<typeof setTimeout>) => void
 }
 
 export function createAuthService(options: AuthServiceOptions = {}): AuthService {
@@ -48,12 +51,21 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
   let sessionVersion = 0
   let logoutInFlight = 0
   let bootstrapInFlight: Promise<AuthenticationState> | undefined
+  let expiryTimer: ReturnType<typeof setTimeout> | undefined
+  const now = options.now ?? Date.now
+  const setTimer = options.setTimer ?? globalThis.setTimeout
+  const clearTimer = options.clearTimer ?? globalThis.clearTimeout
 
-  const transitionToUnauthenticated = () => {
+  const cancelExpiryTimer = () => {
+    if (expiryTimer !== undefined) clearTimer(expiryTimer)
+    expiryTimer = undefined
+  }
+  const transitionToUnauthenticated = (reason?: 'session-expired') => {
+    cancelExpiryTimer()
     operationVersion += 1
     sessionVersion += 1
     csrfToken = undefined
-    state.value = { status: 'unauthenticated' }
+    state.value = reason ? { status: 'unauthenticated', reason } : { status: 'unauthenticated' }
   }
   const transport = createAPIClient({
     fetcher: options.fetcher,
@@ -61,10 +73,22 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
   })
 
   const applyAuthenticatedSession = (session: AuthenticatedSessionResponse) => {
+    cancelExpiryTimer()
     operationVersion += 1
     sessionVersion += 1
     csrfToken = session.csrf_token
     state.value = { status: 'authenticated', userId: session.user_id, expiresAt: session.expires_at }
+    const expiresAt = Date.parse(session.expires_at)
+    const scheduleExpiry = () => {
+      const remaining = expiresAt - now()
+      if (remaining <= 0) {
+        transitionToUnauthenticated('session-expired')
+        return
+      }
+      expiryTimer = setTimer(scheduleExpiry, Math.min(remaining, 2_147_483_647))
+      ;(expiryTimer as unknown as { unref?: () => void }).unref?.()
+    }
+    scheduleExpiry()
   }
 
   return {
@@ -74,6 +98,7 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
       if (bootstrapInFlight) return bootstrapInFlight
       const version = ++operationVersion
       sessionVersion += 1
+      cancelExpiryTimer()
       state.value = { status: 'bootstrapping' }
       csrfToken = undefined
       const task = (async () => {
@@ -150,7 +175,7 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
         if (authenticated && state.value.status === 'authenticated' && sessionAtDispatch === sessionVersion
           && (version === operationVersion || logoutInFlight > 0)
           && requestOptions?.invalidateOnUnauthorized !== false && isStatus(error, 401)) {
-          transitionToUnauthenticated()
+          transitionToUnauthenticated('session-expired')
         }
         throw error
       }
@@ -166,7 +191,7 @@ export function createAuthService(options: AuthServiceOptions = {}): AuthService
         if (authenticated && state.value.status === 'authenticated' && sessionAtDispatch === sessionVersion
           && (version === operationVersion || logoutInFlight > 0)
           && requestOptions?.invalidateOnUnauthorized !== false && isStatus(error, 401)) {
-          transitionToUnauthenticated()
+          transitionToUnauthenticated('session-expired')
         }
         throw error
       }

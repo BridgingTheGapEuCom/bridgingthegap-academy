@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
-const session = { authenticated: true, user_id: '11111111-1111-4111-8111-111111111111', expires_at: '2026-09-26T12:00:00Z', csrf_token: 'test-csrf-token' }
+const session = { authenticated: true, user_id: '11111111-1111-4111-8111-111111111111', expires_at: '2099-09-26T12:00:00Z', csrf_token: 'test-csrf-token' }
 const release = { pluginId: 'com.example.widget', version: '1.0.0', artifactDigest: 'a'.repeat(64), name: 'Example widget', description: 'A deterministic package fixture', publisherName: 'Example', entrypoints: [{ id: 'dashboard', type: 'DASHBOARD_WIDGET', name: 'Dashboard widget' }], currentTrust: 'UNKNOWN', validationStatus: 'VALIDATED_AT_REGISTRATION', signatureStatus: 'UNSIGNED', approvalState: 'NONE', enabled: false, executionPermitted: false, installedAt: '2026-09-26T12:00:00Z' }
 const key = { keyId: 'approval-1', purpose: 'BTG_APPROVAL_SIGNING', allowedPluginIds: [], enabled: true, fingerprint: 'sha256:abc' }
 

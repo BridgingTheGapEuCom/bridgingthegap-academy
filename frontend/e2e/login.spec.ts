@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { pseudoLocalize } from '../src/i18n/pseudo'
 
 const unauthenticatedSession = {
   type: 'about:blank',
@@ -62,4 +63,30 @@ test('login reflows from tablet width down to a 320px CSS viewport', async ({ pa
     await expect(page.getByLabel(/^Password/)).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   }
+})
+
+test('login localizes rate limits and remains usable in dark mode at 200% text', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.addInitScript(() => localStorage.setItem('btg.academy.application-locale', 'en-XA'))
+  await serveUnauthenticatedSession(page)
+  await page.route('**/api/auth/login', (route) => route.fulfill({
+    status: 429,
+    headers: { 'Retry-After': '20' },
+    contentType: 'application/problem+json',
+    body: JSON.stringify({ ...unauthenticatedSession, status: 429, title: 'Too Many Requests', instance: '/api/auth/login' }),
+  }))
+  await page.goto('/login')
+
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.getByRole('heading', { level: 1, name: pseudoLocalize('Sign in') })).toBeVisible()
+  await page.getByLabel(pseudoLocalize('Email'), { exact: false }).fill('learner@example.com')
+  await page.getByLabel(pseudoLocalize('Password'), { exact: false }).fill('private password')
+  await page.getByRole('button', { name: pseudoLocalize('Sign in') }).click()
+  await expect(page.getByRole('alert')).toContainText('20')
+  await expect(page.getByRole('alert')).not.toContainText('Too many sign-in attempts.')
+
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.locator('html').evaluate((element) => { element.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

@@ -1,10 +1,13 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/vue'
+import { cleanup, fireEvent, screen } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { ApplicationLocale } from '../i18n/registry'
+import { pseudoLocalize } from '../i18n/pseudo'
+import { renderWithI18n } from '../test/i18n'
 
 type AuthenticationState =
   | { status: 'bootstrapping' }
-  | { status: 'unauthenticated' }
+  | { status: 'unauthenticated'; reason?: 'session-expired' }
   | { status: 'authenticated'; userId: string; expiresAt: string }
   | { status: 'unavailable' }
 
@@ -18,9 +21,9 @@ vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
 
 import LoginPage from './LoginPage.vue'
 
-const authenticatedState = { status: 'authenticated' as const, userId: '0c640c8d-50e2-4098-8b2a-8094c544c9d7', expiresAt: '2026-09-15T12:00:00Z' }
+const authenticatedState = { status: 'authenticated' as const, userId: '0c640c8d-50e2-4098-8b2a-8094c544c9d7', expiresAt: '2099-09-15T12:00:00Z' }
 
-async function renderLogin(state: AuthenticationState = { status: 'unauthenticated' }, path = '/login') {
+async function renderLogin(state: AuthenticationState = { status: 'unauthenticated' }, path = '/login', locale: ApplicationLocale = 'en') {
   authMock.state.value = state
   const router = createRouter({
     history: createMemoryHistory(),
@@ -32,7 +35,7 @@ async function renderLogin(state: AuthenticationState = { status: 'unauthenticat
   })
   await router.push(path)
   await router.isReady()
-  return { ...render(LoginPage, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n(LoginPage, { global: { plugins: [router] } }, locale), router }
 }
 
 async function submitCredentials(email = 'learner@example.com', password = 'correct horse battery staple') {
@@ -107,7 +110,7 @@ describe('LoginPage', () => {
     authMock.login.mockResolvedValueOnce({ kind: 'rate-limited', retryAfterSeconds: 20 })
     await renderLogin()
     await submitCredentials()
-    expect(screen.getByText('Too many sign-in attempts. Please try again in about 20 seconds.')).toBeTruthy()
+    expect(screen.getByText('Too many sign-in attempts. Please try again in 20 seconds.')).toBeTruthy()
 
     cleanup()
     authMock.login.mockResolvedValueOnce({ kind: 'unavailable' })
@@ -171,5 +174,13 @@ describe('LoginPage', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
     expect(authMock.bootstrapSession).toHaveBeenCalledOnce()
+  })
+
+  it('explains an expired session and localizes the full form in the pseudo-locale', async () => {
+    await renderLogin({ status: 'unauthenticated', reason: 'session-expired' }, '/login', 'en-XA')
+
+    expect(screen.getByRole('heading', { level: 1, name: pseudoLocalize('Sign in') })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: pseudoLocalize('Your session expired') })).toBeTruthy()
+    expect(screen.queryByText('Sign in again to continue securely.')).toBeNull()
   })
 })

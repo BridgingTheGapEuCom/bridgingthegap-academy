@@ -504,26 +504,28 @@
 .login-page__state,
 .login-page__form {
 	display: grid;
+	min-width: 0;
 	gap: var(--btg-space-5);
 }
-.login-page__eyebrow {
-	margin-bottom: calc(-1 * var(--btg-space-3));
-	color: var(--btg-color-text-secondary);
-	font-size: var(--btg-font-size-small);
-	font-weight: var(--btg-font-weight-strong);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
+.login-page__form {
+	width: 100%;
+	max-width: 100%;
+	grid-template-columns: minmax(0, 1fr);
 }
-.login-page__intro,
-.login-page__state > p {
-	color: var(--btg-color-text-secondary);
+.login-page__content,
+.login-page__state {
+	width: 100%;
+	min-width: 0;
+	max-inline-size: 42rem;
 }
-.login-page__form-error {
-	border-inline-start: 0.25rem solid var(--btg-color-danger);
-	background: var(--btg-color-surface-muted);
-	color: var(--btg-color-text);
-	font-weight: var(--btg-font-weight-medium);
-	padding: var(--btg-space-3) var(--btg-space-4);
+.login-page__content > *,
+.login-page__state > * {
+	min-width: 0;
+	max-width: 100%;
+}
+.login-page__session-expired {
+	display: grid;
+	gap: var(--btg-space-2);
 }
 .login-page__actions {
 	display: flex;

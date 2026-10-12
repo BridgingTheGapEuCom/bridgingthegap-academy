@@ -1,85 +1,101 @@
 <template>
   <BtgPageContainer as="section" class="login-page" aria-labelledby="login-title">
-    <div v-if="auth.state.value.status === 'bootstrapping'" class="login-page__state" role="status">
-      <h1 id="login-title">Checking your session</h1>
-      <p>One moment while we check whether you are already signed in.</p>
-    </div>
+    <BtgPanel v-if="auth.state.value.status === 'bootstrapping'" class="login-page__state" role="status">
+      <BtgPageTitle id="login-title" :title="t('auth.checking.title')" :description="t('auth.checking.description')" />
+    </BtgPanel>
 
-    <div v-else-if="auth.state.value.status === 'authenticated'" class="login-page__state">
-      <h1 id="login-title">You are already signed in.</h1>
-      <p>Continue to the Academy home page.</p>
-      <BtgButton variant="secondary" @click="continueHome">Continue to home</BtgButton>
-    </div>
+    <BtgPanel v-else-if="auth.state.value.status === 'authenticated'" class="login-page__state">
+      <BtgPageTitle id="login-title" :title="t('auth.authenticated.title')" :description="t('auth.authenticated.description')" />
+      <BtgButton variant="secondary" @click="continueHome">{{ t('auth.authenticated.action') }}</BtgButton>
+    </BtgPanel>
 
-    <div v-else-if="auth.state.value.status === 'unavailable'" class="login-page__state">
-      <h1 id="login-title">Sign in unavailable</h1>
-      <p>We couldn’t check your session right now. Please try again.</p>
-      <BtgButton variant="secondary" @click="retryBootstrap">Try again</BtgButton>
-    </div>
+    <BtgPanel v-else-if="auth.state.value.status === 'unavailable'" class="login-page__state">
+      <BtgPageTitle id="login-title" :title="t('auth.unavailable.title')" :description="t('auth.unavailable.description')" />
+      <BtgButton variant="secondary" @click="retryBootstrap">{{ t('auth.unavailable.retry') }}</BtgButton>
+    </BtgPanel>
 
     <div v-else class="login-page__content">
-      <p class="login-page__eyebrow">Bridging the Gap Academy</p>
-      <h1 id="login-title">Sign in</h1>
-      <p class="login-page__intro">Use your Academy email address and password to continue.</p>
+      <BtgPageTitle id="login-title" :title="t('auth.login.title')" :description="t('auth.login.description')" />
 
-      <form class="login-page__form" aria-labelledby="login-title" :aria-busy="submitting" novalidate @submit.prevent="submit">
-        <div v-if="formError" ref="formErrorElement" class="login-page__form-error" tabindex="-1">
-          {{ formError }}
-        </div>
+      <BtgPanel
+        v-if="auth.state.value.reason === 'session-expired'"
+        class="login-page__session-expired"
+        variant="subtle"
+        role="status"
+      >
+        <h2>{{ t('auth.sessionExpired.title') }}</h2>
+        <p>{{ t('auth.sessionExpired.description') }}</p>
+      </BtgPanel>
 
-        <BtgFormField label="Email" required :error="emailError" v-slot="{ controlId, describedBy, invalid }">
-          <BtgTextInput
-            ref="emailInput"
-            v-model="email"
-            :id="controlId"
-            :aria-describedby="describedBy"
-            :invalid="invalid"
-            type="email"
-            autocomplete="username"
-            required
-          />
-        </BtgFormField>
+      <BtgPanel as="section">
+        <form class="login-page__form" aria-labelledby="login-title" :aria-busy="submitting" novalidate @submit.prevent="submit">
+          <BtgPanel v-if="formError" variant="subtle" padding="compact" role="alert">
+            <p ref="formErrorElement" tabindex="-1">{{ formError }}</p>
+          </BtgPanel>
 
-        <BtgFormField label="Password" required :error="passwordError" v-slot="{ controlId, describedBy, invalid }">
-          <BtgTextInput
-            ref="passwordInput"
-            v-model="password"
-            :id="controlId"
-            :aria-describedby="describedBy"
-            :invalid="invalid"
-            type="password"
-            autocomplete="current-password"
-            required
-          />
-        </BtgFormField>
+          <BtgFormField :label="t('auth.login.email')" required :error="emailError" v-slot="{ controlId, describedBy, invalid }">
+            <BtgTextInput
+              ref="emailInput"
+              v-model="email"
+              :id="controlId"
+              :aria-describedby="describedBy"
+              :invalid="invalid"
+              type="email"
+              autocomplete="username"
+              required
+            />
+          </BtgFormField>
 
-        <div class="login-page__actions">
-          <BtgButton type="submit" :disabled="submitting">{{ submitting ? 'Signing in…' : 'Sign in' }}</BtgButton>
-        </div>
-      </form>
+          <BtgFormField :label="t('auth.login.password')" required :error="passwordError" v-slot="{ controlId, describedBy, invalid }">
+            <BtgTextInput
+              ref="passwordInput"
+              v-model="password"
+              :id="controlId"
+              :aria-describedby="describedBy"
+              :invalid="invalid"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </BtgFormField>
+
+          <div class="login-page__actions">
+            <BtgButton type="submit" :disabled="submitting">{{ submitting ? t('auth.login.submitting') : t('auth.login.submit') }}</BtgButton>
+          </div>
+        </form>
+      </BtgPanel>
     </div>
   </BtgPageContainer>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../auth/auth'
 import { safeInternalReturnPath } from '../auth/navigation'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import BtgPageTitle from '../components/BtgPageTitle.vue'
+import BtgPanel from '../components/BtgPanel.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
+import { useApplicationFormatters } from '../i18n/formatters'
 
 type FocusableInput = { focus: () => void }
+type ValidationCode = 'email-required' | 'password-required'
 
 const auth = useAuth()
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n()
+const { relativeTime } = useApplicationFormatters()
 const email = ref('')
 const password = ref('')
-const emailError = ref<string>()
-const passwordError = ref<string>()
+const emailErrorCode = ref<ValidationCode>()
+const passwordErrorCode = ref<ValidationCode>()
+const emailError = computed(() => emailErrorCode.value === 'email-required' ? t('auth.validation.emailRequired') : undefined)
+const passwordError = computed(() => passwordErrorCode.value === 'password-required' ? t('auth.validation.passwordRequired') : undefined)
 const formError = ref<string>()
 const submitting = ref(false)
 const emailInput = ref<FocusableInput>()
@@ -95,13 +111,13 @@ onBeforeUnmount(() => {
 async function submit() {
   if (submitting.value) return
 
-  emailError.value = undefined
-  passwordError.value = undefined
+  emailErrorCode.value = undefined
+  passwordErrorCode.value = undefined
   formError.value = undefined
 
   const submittedEmail = email.value.trim()
-  if (!submittedEmail) emailError.value = 'Enter your email address.'
-  if (!password.value) passwordError.value = 'Enter your password.'
+  if (!submittedEmail) emailErrorCode.value = 'email-required'
+  if (!password.value) passwordErrorCode.value = 'password-required'
   if (emailError.value || passwordError.value) {
     await nextTick()
     if (emailError.value) emailInput.value?.focus()
@@ -126,9 +142,9 @@ async function submit() {
     return
   }
 
-  if (outcome.kind === 'invalid-credentials') formError.value = 'The email or password is incorrect.'
+  if (outcome.kind === 'invalid-credentials') formError.value = t('auth.errors.invalidCredentials')
   else if (outcome.kind === 'rate-limited') formError.value = rateLimitMessage(outcome.retryAfterSeconds)
-  else formError.value = 'We couldn’t sign you in right now. Please try again.'
+  else formError.value = t('auth.errors.unavailable')
   await nextTick()
   formErrorElement.value?.focus()
 }
@@ -146,7 +162,9 @@ function returnPath(): string {
 }
 
 function rateLimitMessage(retryAfterSeconds?: number): string {
-  if (retryAfterSeconds && retryAfterSeconds > 0) return `Too many sign-in attempts. Please try again in about ${retryAfterSeconds} seconds.`
-  return 'Too many sign-in attempts. Please try again shortly.'
+  if (retryAfterSeconds && retryAfterSeconds > 0) {
+    return t('auth.errors.rateLimited', { time: relativeTime(retryAfterSeconds, 'second') })
+  }
+  return t('auth.errors.rateLimitedSoon')
 }
 </script>

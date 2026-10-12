@@ -4,7 +4,7 @@ import { auth, createAuthService, useAuth } from './auth'
 const session = {
   authenticated: true as const,
   user_id: '3c5e54ca-37fb-4af0-938d-694a1815d1ed',
-  expires_at: '2026-09-15T12:00:00Z',
+  expires_at: '2099-09-15T12:00:00Z',
   csrf_token: 'csrf-token-for-current-session',
 }
 
@@ -175,7 +175,7 @@ describe('authentication service operations', () => {
     await service.bootstrapSession()
 
     await expect(service.request('/api/admin/status')).rejects.toMatchObject({ status: 401 })
-    expect(service.state.value).toEqual({ status: 'unauthenticated' })
+    expect(service.state.value).toEqual({ status: 'unauthenticated', reason: 'session-expired' })
 
     await service.logout()
     expect(new Headers(requestInit(fetcher, 2).headers).get('X-CSRF-Token')).toBeNull()
@@ -190,6 +190,27 @@ describe('authentication service operations', () => {
     await expect(service.request('/api/authoring/drafts/hidden')).rejects.toMatchObject({ status: 404 })
     await expect(service.request('/api/authoring/drafts/current')).rejects.toMatchObject({ status: 409 })
     expect(service.state.value).toEqual({ status: 'authenticated', userId: session.user_id, expiresAt: session.expires_at })
+  })
+
+  it('expires authenticated state from the authoritative server timestamp', async () => {
+    let currentTime = 0
+    let expiryCallback: (() => void) | undefined
+    const expiringSession = { ...session, expires_at: new Date(1_000).toISOString() }
+    const service = createAuthService({
+      fetcher: responseFetcher(jsonResponse(expiringSession)),
+      now: () => currentTime,
+      setTimer: (callback) => {
+        expiryCallback = callback
+        return 1 as unknown as ReturnType<typeof setTimeout>
+      },
+      clearTimer: vi.fn(),
+    })
+
+    await service.bootstrapSession()
+    expect(service.state.value.status).toBe('authenticated')
+    currentTime = 1_000
+    expiryCallback?.()
+    expect(service.state.value).toEqual({ status: 'unauthenticated', reason: 'session-expired' })
   })
 
   it('ignores an old protected-request 401 after a newer login has replaced the session', async () => {
@@ -247,7 +268,7 @@ describe('authentication service operations', () => {
     await expect(pendingProtected).rejects.toMatchObject({ status: 401 })
     logoutRequest.resolve(jsonResponse(problem(500), 500))
     await expect(pendingLogout).resolves.toEqual({ kind: 'unavailable' })
-    expect(service.state.value).toEqual({ status: 'unauthenticated' })
+    expect(service.state.value).toEqual({ status: 'unauthenticated', reason: 'session-expired' })
   })
 
   it('does not persist authentication or CSRF state in browser storage', async () => {
