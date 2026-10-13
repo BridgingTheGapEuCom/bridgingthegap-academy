@@ -186,6 +186,7 @@ A component may choose one value within a range, then owns it for every consumer
 | `BtgRadio` | A single radio choice for feature-owned native groups | Native radio semantics and focus behavior | Recreate radio control chrome |
 | `BtgRadioGroup` | Radios or a deliberate segmented variant | Group label, keyboard/native semantics | Use buttons without selection semantics |
 | `BtgSearchField` | Search input with leading search icon and clear action where needed | Persistent or accessible label, native search semantics | Hand-position an icon over an input |
+| `BtgFileField` | Labelled native file selection with helper/error text and selected-file summary | Field association, filename exposure, clear/focus behavior | Rely on browser file-input text as the only label or state |
 | `BtgBadge` | Read-only status/category label | Text conveys state, not color alone | Use it as an interactive control |
 | `BtgChip` | Compact content/type value; optional removable variant | Removal has an explicit name | Create arbitrary badge dimensions |
 | `BtgTabs` | In-panel tab interface only | Tab roles, roving focus, arrows, selected state | Use for route navigation |
@@ -412,8 +413,8 @@ The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and 
 
 ### M-UI.7 — remaining Academy pages
 
-- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, Community, and certificates are migrated.
-- Migrate Administration and Translation.
+- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, Community, certificates, and Administration are migrated.
+- Migrate Translation.
 - Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
 
 ### Reference migration: authentication
@@ -429,6 +430,10 @@ The shared icon map includes semantic show/hide actions for permission-sensitive
 ### Reference migration: certificates
 
 The authenticated certificate is the learner-achievement detail reference; public certificate verification is the anonymous registry-result reference. Both compose shared page titles, panels, metadata, badges, icons, state surfaces, and locale-aware dates while certificate CSS owns only document layout and long identifier containment. The public response remains recipient-free and status text never implies cryptographic verification. A seeded, non-intercepted journey must complete the actual course, issue the durable certificate, reload the private record, verify it anonymously, and confirm PostgreSQL persistence.
+
+### Reference migration: Administration
+
+Administration is the permission-sensitive management reference. The landing, course import, and plugin lifecycle surfaces compose shared page titles, panels, sections, metadata, badges, buttons, dialogs, icons, state treatment, application formatters, and the labelled `BtgFileField`; feature CSS owns only management grids and wrapping action layout. Trust, signature validity, exact-release approval, stored enablement, and current execution eligibility remain visibly distinct server-authoritative states. Mocked tests cover security and transport failures, while a seeded non-intercepted browser journey must install, approve, enable, reload, disable, and verify a plugin release, then validate/import a real canonical course package and confirm both results in PostgreSQL.
 
 ### Reference migration: learner entry surfaces
 

@@ -37,6 +37,20 @@ export function formatApplicationRelativeTime(value: number, unit: Intl.Relative
   return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(value, unit)
 }
 
+export function formatApplicationBytes(value: number, locale: string): string {
+  if (!Number.isSafeInteger(value) || value < 0) return ''
+  const units: Array<{ unit: 'byte' | 'kilobyte' | 'megabyte' | 'gigabyte'; divisor: number }> = [
+    { unit: 'byte', divisor: 1 },
+    { unit: 'kilobyte', divisor: 1024 },
+    { unit: 'megabyte', divisor: 1024 ** 2 },
+    { unit: 'gigabyte', divisor: 1024 ** 3 },
+  ]
+  const selected = [...units].reverse().find((candidate) => value >= candidate.divisor) ?? units[0]!
+  return new Intl.NumberFormat(locale, {
+    style: 'unit', unit: selected.unit, unitDisplay: 'short', maximumFractionDigits: value / selected.divisor >= 10 ? 0 : 1,
+  }).format(value / selected.divisor)
+}
+
 export function useApplicationFormatters() {
   const { locale } = useI18n()
   return {
@@ -44,5 +58,6 @@ export function useApplicationFormatters() {
     number: (value: number, format?: ApplicationNumberFormat) => formatApplicationNumber(value, locale.value, format),
     duration: (minutes: number) => formatApplicationDuration(minutes, locale.value),
     relativeTime: (value: number, unit: Intl.RelativeTimeFormatUnit) => formatApplicationRelativeTime(value, unit, locale.value),
+    bytes: (value: number) => formatApplicationBytes(value, locale.value),
   }
 }

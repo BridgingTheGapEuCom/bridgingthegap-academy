@@ -1,5 +1,6 @@
 import authoring from './authoring'
 import auth from './auth'
+import admin from './admin'
 import common from './common'
 import community from './community'
 import certificates from './certificates'
@@ -13,6 +14,7 @@ import learner from './learner'
 import validation from './validation'
 
 export const englishMessages = {
+  admin,
   common,
   community,
   certificates,

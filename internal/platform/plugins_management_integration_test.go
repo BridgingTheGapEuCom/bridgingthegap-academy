@@ -488,7 +488,7 @@ func testPluginLifecycleHTTP(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 
 	listedKeys := authRequest(router, http.MethodGet, "/api/plugins/keys", "", cookie)
-	if listedKeys.Code != http.StatusOK || listedKeys.Header().Get("Cache-Control") != "no-store" || !strings.Contains(listedKeys.Body.String(), "lifecycle-http-approval-2026") || strings.Contains(listedKeys.Body.String(), "publicKey") || strings.Contains(listedKeys.Body.String(), base64.RawURLEncoding.EncodeToString(privateKey)) {
+	if listedKeys.Code != http.StatusOK || listedKeys.Header().Get("Cache-Control") != "no-store" || !strings.Contains(listedKeys.Body.String(), "lifecycle-http-approval-2026") || !strings.Contains(listedKeys.Body.String(), `"allowedPluginIds":[]`) || strings.Contains(listedKeys.Body.String(), "publicKey") || strings.Contains(listedKeys.Body.String(), base64.RawURLEncoding.EncodeToString(privateKey)) {
 		t.Fatalf("key list=%d %s", listedKeys.Code, listedKeys.Body.String())
 	}
 	var coursesAfter, dashboardAfter []byte

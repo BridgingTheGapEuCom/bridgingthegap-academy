@@ -242,7 +242,9 @@ func (h *pluginManagementAPI) setKeyState(w http.ResponseWriter, r *http.Request
 
 func verificationKeyResponse(key plugins.VerificationKey) pluginVerificationKeyResponse {
 	digest := sha256.Sum256(key.PublicKey)
-	return pluginVerificationKeyResponse{KeyID: key.ID, Purpose: key.Purpose, AllowedPluginIDs: append([]plugins.PluginID(nil), key.AllowedPluginIDs...), Enabled: key.Enabled, Fingerprint: "sha256:" + hex.EncodeToString(digest[:])}
+	allowedPluginIDs := make([]plugins.PluginID, len(key.AllowedPluginIDs))
+	copy(allowedPluginIDs, key.AllowedPluginIDs)
+	return pluginVerificationKeyResponse{KeyID: key.ID, Purpose: key.Purpose, AllowedPluginIDs: allowedPluginIDs, Enabled: key.Enabled, Fingerprint: "sha256:" + hex.EncodeToString(digest[:])}
 }
 
 func emptyPluginManagementBody(w http.ResponseWriter, r *http.Request) bool {

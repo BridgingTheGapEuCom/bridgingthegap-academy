@@ -159,7 +159,7 @@ locally. A failed download leaves the page intact and shows only a safe retry
 message.
 
 Administrators can open **Administration → Import course package**. The page
-uses a labelled native file input and one explicit **Validate package** action.
+uses the shared labelled file-field composition around the native file input and one explicit **Validate package** action.
 It sends the selected bytes as `application/zip`, then shows only the safe
 preview metadata: Course, license, public attribution, content counts, asset
 size, and translation languages. It never renders package Assessment answers
@@ -177,3 +177,5 @@ back/forward cannot execute an import. Request-generation guards discard late
 validation responses after the user selects another file or leaves the page.
 The UI deliberately provides no imported Course edit, ownership assignment,
 merge, overwrite, signing, or trust controls.
+
+The seeded Administration integration journey sends a canonical package to the real preview and execute endpoints, follows the resulting Course route across reload, and verifies the portable source/version mapping and imported Course identity in PostgreSQL. Mocked browser tests remain responsible for malformed archives, conflicts, expiry, and transport failures.

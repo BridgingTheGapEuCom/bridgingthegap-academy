@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { pseudoLocalize } from '../src/i18n/pseudo'
 
 const unauthenticated = {
   type: 'about:blank',
@@ -25,6 +26,7 @@ async function serveUnauthenticatedSession(page: Page) {
 }
 
 test('administrator journey uses backend access confirmation and signs out', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
   await page.setViewportSize({ width: 1440, height: 1000 })
   let signedIn = false
   await page.route('**/api/auth/session', (route) => route.fulfill(signedIn
@@ -55,13 +57,17 @@ test('administrator journey uses backend access confirmation and signs out', asy
 
   await page.goto('/admin')
   await expect(page.getByRole('heading', { level: 1, name: 'Administration' })).toBeVisible()
-  await expect(page.getByText('System status: OK')).toBeVisible()
+  await expect(page.getByText('System available')).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
   for (const width of [768, 390, 320]) {
     await page.setViewportSize({ width, height: 844 })
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   }
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  const overflow = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('body *')].filter((element) => element.getBoundingClientRect().right > window.innerWidth + 1).map((element) => ({ tag: element.tagName, className: element.className, right: element.getBoundingClientRect().right })))
+  expect(overflow).toEqual([])
 
   await page.getByRole('banner').getByRole('button', { name: 'Sign out' }).focus()
   await page.keyboard.press('Enter')
@@ -73,6 +79,15 @@ test('administrator journey uses backend access confirmation and signs out', asy
 
   await page.goto('/admin')
   await expect(page).toHaveURL(/\/login(?:\?returnTo=\/admin)?$/)
+})
+
+test('Administration landing copy is pseudo-localized', async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(authenticatedSession) }))
+  await page.route('**/api/admin/status', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok' }) }))
+  await page.addInitScript(() => localStorage.setItem('btg.academy.application-locale', 'en-XA'))
+  await page.goto('/admin')
+  await expect(page.getByRole('heading', { level: 1, name: pseudoLocalize('Administration') })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en-XA')
 })
 
 test('an authenticated non-administrator sees access denied and remains signed in', async ({ page }) => {

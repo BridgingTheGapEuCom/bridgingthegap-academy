@@ -572,19 +572,43 @@
 .admin-page__content,
 .admin-page__state {
 	display: grid;
+	min-width: 0;
 	gap: var(--btg-space-5);
 }
-.admin-page__eyebrow {
-	margin-bottom: calc(-1 * var(--btg-space-3));
-	color: var(--btg-color-text-secondary);
-	font-size: var(--btg-font-size-small);
-	font-weight: var(--btg-font-weight-strong);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
+.admin-page__destinations {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--btg-space-4);
 }
-.admin-page__intro,
-.admin-page__state > p {
-	color: var(--btg-color-text-secondary);
+.admin-page__destination {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	min-width: 0;
+	align-content: start;
+	gap: var(--btg-space-3);
+}
+.admin-page__destination > * {
+	min-width: 0;
+	max-width: 100%;
+}
+.admin-page__destination h2,
+.admin-page__destination p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.admin-page__destination > :is(.btg-icon, .btg-button) {
+	justify-self: start;
+}
+@media (min-width: 48rem) {
+	.admin-page__destinations {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+@media (max-width: 30rem) {
+	.admin-page__destination > .btg-button {
+		justify-self: stretch;
+		width: 100%;
+	}
 }
 .admin-page__actions {
 	display: flex;
@@ -599,64 +623,22 @@
 	gap: var(--btg-space-5);
 	overflow-wrap: anywhere;
 }
-.course-import > header,
-.course-import form,
-.course-import section,
-.course-import__summary {
+.course-import__form,
+.course-import__preview,
+.course-import__result {
 	display: grid;
 	min-width: 0;
 	gap: var(--btg-space-4);
 }
-.course-import__eyebrow {
-	margin: 0;
-	color: var(--btg-color-text-secondary);
-	font-size: var(--btg-font-size-small);
-	font-weight: var(--btg-font-weight-strong);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-}
-.course-import__selection,
-.course-import__notice {
-	color: var(--btg-color-text-secondary);
-}
-.course-import__summary {
+.course-import__preview {
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
 }
-.course-import__summary section {
-	border-inline-start: 0.25rem solid var(--btg-color-border);
-	padding-inline-start: var(--btg-space-3);
-}
-.course-import__summary h3 {
+.course-import__preview h3,
+.course-import__preview p {
 	margin: 0;
 }
-.course-import__summary dl {
-	display: grid;
-	gap: var(--btg-space-2);
+.course-import__preview ul {
 	margin: 0;
-}
-.course-import__summary dl div {
-	display: grid;
-	gap: var(--btg-space-1);
-}
-.course-import__summary dt {
-	color: var(--btg-color-text-secondary);
-	font-size: var(--btg-font-size-small);
-}
-.course-import__summary dd {
-	margin: 0;
-	font-weight: var(--btg-font-weight-strong);
-}
-.course-import__summary ul {
-	margin: 0;
-}
-.course-import__error {
-	border-inline-start: 0.25rem solid var(--btg-color-danger);
-	background: var(--btg-color-surface-muted);
-	padding: var(--btg-space-3) var(--btg-space-4);
-}
-.course-import__notice {
-	border-inline-start: 0.25rem solid var(--btg-color-border-strong);
-	padding-inline-start: var(--btg-space-3);
 }
 .course-import__actions,
 .course-package-export {
@@ -664,6 +646,70 @@
 	flex-wrap: wrap;
 	gap: var(--btg-space-3);
 	align-items: center;
+}
+
+.plugin-management {
+	display: grid;
+	min-width: 0;
+	gap: var(--btg-space-6);
+	overflow-wrap: anywhere;
+}
+.plugin-management__form,
+.plugin-management__key-form,
+.plugin-management__details {
+	display: grid;
+	min-width: 0;
+	gap: var(--btg-space-4);
+}
+.plugin-management__key-form {
+	max-width: 48rem;
+}
+.plugin-management__list {
+	display: grid;
+	min-width: 0;
+	gap: var(--btg-space-4);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.plugin-management__release {
+	display: grid;
+	min-width: 0;
+	gap: var(--btg-space-4);
+}
+.plugin-management__release-header {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--btg-space-3);
+}
+.plugin-management__release-header h3,
+.plugin-management__release-header p {
+	margin: 0;
+}
+.plugin-management__release-header h3 span {
+	font-size: var(--btg-font-size-small);
+	font-weight: var(--btg-font-weight-regular);
+}
+.plugin-management__badges,
+.plugin-management__actions {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--btg-space-2);
+}
+.plugin-management code {
+	overflow-wrap: anywhere;
+	user-select: all;
+}
+@media (max-width: 20rem) {
+	.plugin-management__actions > *,
+	.course-import__actions > * {
+		width: 100%;
+	}
 }
 .course-package-export__error {
 	color: var(--btg-color-danger);
@@ -1769,24 +1815,6 @@
 		max-width: none;
 	}
 }
-.admin-page__status {
-	border-inline-start: 0.25rem solid var(--btg-color-success);
-	background: var(--btg-color-surface-muted);
-	font-weight: var(--btg-font-weight-medium);
-	padding: var(--btg-space-3) var(--btg-space-4);
-}
-.admin-page__actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--btg-space-3);
-}
-.admin-page__error {
-	border-inline-start: 0.25rem solid var(--btg-color-danger);
-	background: var(--btg-color-surface-muted);
-	font-weight: var(--btg-font-weight-medium);
-	padding: var(--btg-space-3) var(--btg-space-4);
-}
-
 .courses-page__content,
 .courses-page__state,
 .course-overview__content,

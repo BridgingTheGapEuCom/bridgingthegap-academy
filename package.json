@@ -17,6 +17,8 @@
     "test:e2e:community-integration": "playwright test --config playwright.community-integration.config.ts",
     "inspect:e2e:certificate": "go run ./tools/certificate-e2e-seed",
     "test:e2e:certificate-integration": "playwright test --config playwright.certificates-integration.config.ts",
+    "seed:e2e:admin": "go run ./tools/admin-e2e-seed seed",
+    "test:e2e:admin-integration": "playwright test --config playwright.admin-integration.config.ts",
     "test:openbadges-interop": "node tools/openbadges-interop.mjs tools/testdata/openbadges-interop-active.json",
     "api:types": "openapi-typescript api/openapi.yaml -o frontend/src/api/generated.ts"
   },

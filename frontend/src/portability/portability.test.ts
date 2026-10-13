@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APIProblemError } from '../api/client'
-import { InvalidCoursePackageResponseError, classifyCoursePackageFailure, formatBytes, packageErrorMessage, previewCoursePackage } from './portability'
+import { InvalidCoursePackageResponseError, classifyCoursePackageFailure, coursePackageValidationError, previewCoursePackage } from './portability'
 
 const preview = { previewToken: 'a'.repeat(64), preview: { format: 'bridging-the-gap-course', formatVersion: 1, title: 'Course', version: '1.2.3', language: 'en', license: { kind: 'STANDARD', displayName: 'CC BY' }, attribution: [{ displayName: 'Author', role: 'AUTHOR', order: 0 }], moduleCount: 1, lessonCount: 2, assessmentCount: 1, assetCount: 1, assetBytes: 1536, translationLanguages: ['es'] } }
 
@@ -13,9 +13,9 @@ describe('course portability client', () => {
     await expect(previewCoursePackage(new File(['zip'], 'course.zip'), { request: async <T>() => ({ previewToken: 'bad' } as T) })).rejects.toBeInstanceOf(InvalidCoursePackageResponseError)
   })
 
-  it('maps safe parser and lifecycle failures without exposing API text', () => {
-    expect(formatBytes(1536)).toBe('1.5 KB')
-    expect(packageErrorMessage(new APIProblemError(422, { type: 'x', title: 'raw', status: 422, instance: '/', request_id: 'id', code: 'unsupported_package_version' }, undefined))).toContain('format version')
+  it('maps safe parser and lifecycle failures to stable UI codes', () => {
+    expect(coursePackageValidationError(new APIProblemError(422, { type: 'x', title: 'raw', status: 422, instance: '/', request_id: 'id', code: 'unsupported_package_version' }, undefined))).toBe('unsupportedVersion')
+    expect(coursePackageValidationError(new Error('secret'))).toBe('unavailable')
     expect(classifyCoursePackageFailure(new APIProblemError(404, undefined, undefined))).toBe('expired')
     expect(classifyCoursePackageFailure(new APIProblemError(409, { type: 'x', title: 'raw', status: 409, instance: '/', request_id: 'id', code: 'package_source_version_conflict' }, undefined))).toBe('conflict')
   })

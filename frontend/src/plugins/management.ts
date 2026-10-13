@@ -81,6 +81,21 @@ export async function setPluginKeyEnabled(keyID: string, enabled: boolean, clien
   return value
 }
 export function isPluginManagementForbidden(error: unknown): boolean { return error instanceof APIProblemError && (error.status === 401 || error.status === 403) }
-export function pluginManagementMessage(error: unknown, fallback: string): string {
-  return error instanceof APIProblemError && error.problem?.title ? error.problem.title : fallback
+export type PluginManagementError = 'invalidArchive' | 'tooLarge' | 'invalidManifest' | 'unsupportedFormat' | 'unsupportedVersion' | 'checksum' | 'invalidSignature' | 'releaseConflict' | 'lifecycleConflict' | 'enableDenied' | 'invalidKey' | 'unavailable'
+export function pluginManagementError(error: unknown): PluginManagementError {
+  if (!(error instanceof APIProblemError)) return 'unavailable'
+  switch (error.problem?.code) {
+    case 'invalid_archive': return 'invalidArchive'
+    case 'package_too_large': return 'tooLarge'
+    case 'invalid_manifest': return 'invalidManifest'
+    case 'unsupported_package_format': return 'unsupportedFormat'
+    case 'unsupported_package_version': return 'unsupportedVersion'
+    case 'checksum_mismatch': return 'checksum'
+    case 'invalid_signature': return 'invalidSignature'
+    case 'release_conflict': return 'releaseConflict'
+    case 'lifecycle_conflict': return 'lifecycleConflict'
+    case 'enable_denied': return 'enableDenied'
+    case 'invalid_key': return 'invalidKey'
+    default: return 'unavailable'
+  }
 }

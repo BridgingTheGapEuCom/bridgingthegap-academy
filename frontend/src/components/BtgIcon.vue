@@ -25,6 +25,10 @@ import {
   Award,
   BadgeCheck,
   ExternalLink,
+  KeyRound,
+  Power,
+  Puzzle,
+  Upload,
   FileText,
   Folder,
   GripVertical,
@@ -91,6 +95,10 @@ const icons: Record<BtgIconName, typeof Plus> = {
   certificate: Award,
   verified: BadgeCheck,
   external: ExternalLink,
+  import: Upload,
+  plugin: Puzzle,
+  key: KeyRound,
+  power: Power,
 }
 
 const props = withDefaults(defineProps<{

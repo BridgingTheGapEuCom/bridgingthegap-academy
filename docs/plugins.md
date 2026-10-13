@@ -441,7 +441,7 @@ enablement, and current execution eligibility as separate fields. In particular,
 approval; it is not an invalid package. A recognized signature failure is shown
 as `SIGNATURE_INVALID`, never as `UNKNOWN`.
 
-Administrators select a ZIP package with the native file input and explicitly
+Administrators select a ZIP package with the shared labelled file-field composition around the native input and explicitly
 install it as `application/zip`. The browser does not parse package identity or
 trust evidence. The server's canonical result determines the release shown, and
 the UI distinguishes a new `201` registration from an idempotent `200` replay.
@@ -457,11 +457,11 @@ need an explicit plugin allow-list, approval keys do not. The UI warns that raw
 32-byte Ed25519 seed bytes cannot be distinguished from public bytes by length,
 so administrators must never paste private seed or signing material.
 
-The interface uses responsive cards, semantic regions, labelled native controls,
-live status and error announcements, keyboard-accessible lifecycle actions, and
-wrapping identifiers/fingerprints for narrow screens. It has no uninstall,
+The interface uses shared responsive panels, metadata, badges, fields, buttons, and focus-managed dialogs, with live status and error announcements and wrapping identifiers/fingerprints for narrow screens. Destructive lifecycle confirmations never use browser `confirm()`. It has no uninstall,
 marketplace, automatic update, key deletion, private-key management, or browser
 signing capability.
+
+A seeded real-stack browser test uses a deterministic approval-signed package and the normal Administrator capability path. It installs the package, observes signature/trust state, approves and enables the exact release, verifies state across reload, disables it through the shared dialog, and checks the installation, approval, and enablement records in PostgreSQL. Runtime bearer tokens remain unable to authenticate any management endpoint.
 
 ## M10 v1 lifecycle closure
 

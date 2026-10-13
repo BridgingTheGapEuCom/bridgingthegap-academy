@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { shallowRef } from 'vue'
@@ -20,6 +20,7 @@ vi.mock('../auth/auth', () => ({ useAuth: () => authMock }))
 vi.mock('../admin/adminAccess', () => ({ checkAdminAccess: checkAdminAccessMock }))
 
 import AdminPage from './AdminPage.vue'
+import { renderWithI18n } from '../test/i18n'
 
 const authenticatedState = { status: 'authenticated' as const, userId: '0c640c8d-50e2-4098-8b2a-8094c544c9d7', expiresAt: '2026-09-15T12:00:00Z' }
 
@@ -35,7 +36,7 @@ async function renderAdmin(state: AuthenticationState = authenticatedState) {
   })
   await router.push('/admin')
   await router.isReady()
-  return { ...render(AdminPage, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n(AdminPage, { global: { plugins: [router] } }), router }
 }
 
 describe('AdminPage', () => {
@@ -55,14 +56,14 @@ describe('AdminPage', () => {
     await renderAdmin()
 
     expect(screen.getByRole('heading', { level: 1, name: 'Checking access…' })).toBeTruthy()
-    expect(screen.queryByText('System status: OK')).toBeNull()
+    expect(screen.queryByText('System available')).toBeNull()
     resolveAccess({ kind: 'authorized', status: 'ok' })
     await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Administration' })).toBeTruthy())
   })
 
   it('uses the backend result for authorized and forbidden states without showing role internals', async () => {
     await renderAdmin()
-    await waitFor(() => expect(screen.getByText('System status: OK')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('System available')).toBeTruthy())
     expect(screen.getByRole('status').textContent).toBe('Administration access confirmed.')
     expect(checkAdminAccessMock).toHaveBeenCalledWith(authMock)
     expect(document.body.textContent).not.toContain('ADMINISTRATOR')
@@ -74,7 +75,7 @@ describe('AdminPage', () => {
     await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Access denied' })).toBeTruthy())
     expect(screen.getByRole('status').textContent).toBe('Access denied.')
     expect(authMock.state.value).toEqual(authenticatedState)
-    expect(screen.queryByText('System status: OK')).toBeNull()
+    expect(screen.queryByText('System available')).toBeNull()
   })
 
   it('sends unauthenticated access checks to login instead of rendering denial', async () => {
@@ -123,7 +124,7 @@ describe('AdminPage', () => {
     authMock.state.value = { status: 'unauthenticated' }
     completeAccess({ kind: 'authorized', status: 'ok' })
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
-    expect(screen.queryByText('System status: OK')).toBeNull()
+    expect(screen.queryByText('System available')).toBeNull()
   })
 
   it('rechecks access when a different authenticated session replaces the current one', async () => {

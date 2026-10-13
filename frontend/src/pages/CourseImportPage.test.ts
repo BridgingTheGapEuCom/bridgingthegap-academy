@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -6,13 +6,14 @@ const previewCoursePackageMock = vi.hoisted(() => vi.fn())
 const executeCoursePackageMock = vi.hoisted(() => vi.fn())
 vi.mock('../portability/portability', async (original) => ({ ...(await original<typeof import('../portability/portability')>()), previewCoursePackage: previewCoursePackageMock, executeCoursePackage: executeCoursePackageMock }))
 import CourseImportPage from './CourseImportPage.vue'
+import { renderWithI18n } from '../test/i18n'
 
 const preview = { previewToken: 'a'.repeat(64), preview: { format: 'bridging-the-gap-course', formatVersion: 1, title: 'Imported course', version: '1.2.3', language: 'en', license: { kind: 'STANDARD', displayName: 'CC BY' }, attribution: [{ displayName: 'Public author', role: 'AUTHOR', order: 0 }], moduleCount: 1, lessonCount: 2, assessmentCount: 1, assetCount: 1, assetBytes: 1536, translationLanguages: ['es'] } }
 const imported = { importId: '11111111-1111-4111-8111-111111111111', courseId: '22222222-2222-4222-8222-222222222222', courseVersionId: '33333333-3333-4333-8333-333333333333', semVer: '1.2.3', status: 'IMPORTED', translationLanguages: ['es'] }
 
-async function renderPage() { const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/admin/course-import', component: CourseImportPage }, { path: '/courses/by-id/:courseId/versions/:version', component: { template: '<p>Course</p>' } }] }); await router.push('/admin/course-import'); await router.isReady(); return render({ template: '<RouterView />' }, { global: { plugins: [router] } }) }
+async function renderPage() { const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/admin/course-import', component: CourseImportPage }, { path: '/courses/by-id/:courseId/versions/:version', component: { template: '<p>Course</p>' } }] }); await router.push('/admin/course-import'); await router.isReady(); return renderWithI18n({ template: '<RouterView />' }, { global: { plugins: [router] } }) }
 async function choose(file = new File(['zip'], 'course.zip', { type: 'application/zip' })) {
-  const input = screen.getByLabelText('Course package') as HTMLInputElement
+  const input = screen.getByLabelText(/Course package/) as HTMLInputElement
   Object.defineProperty(input, 'files', { configurable: true, value: [file] })
   await fireEvent.change(input)
 }

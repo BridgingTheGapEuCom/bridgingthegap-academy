@@ -34,30 +34,21 @@ export function classifyCoursePackageFailure(error: unknown): CoursePackageFailu
   return 'unavailable'
 }
 
-export function packageErrorMessage(error: unknown): string {
-  if (!(error instanceof APIProblemError)) return 'We couldn’t complete this request right now. Please try again.'
+export type CoursePackageValidationError = 'tooLarge' | 'unsupportedFormat' | 'unsupportedVersion' | 'checksum' | 'invalidCourse' | 'invalidAssessment' | 'invalidAsset' | 'invalidTranslation' | 'invalidArchive' | 'validation' | 'unavailable'
+export function coursePackageValidationError(error: unknown): CoursePackageValidationError {
+  if (!(error instanceof APIProblemError)) return 'unavailable'
   switch (error.problem?.code) {
-    case 'package_too_large': return 'This package is too large for this Academy installation.'
-    case 'unsupported_package_format': return 'This is not a supported course package.'
-    case 'unsupported_package_version': return 'This package format version is not supported by this Academy installation.'
-    case 'checksum_mismatch': return 'This package appears to be damaged or changed.'
-    case 'invalid_course': return 'The package contains invalid course content.'
-    case 'invalid_assessment': return 'The package contains an invalid assessment.'
-    case 'invalid_asset': return 'The package contains an invalid asset.'
-    case 'invalid_translation': return 'The package contains an invalid translation.'
-    case 'invalid_archive': return 'This file is not a valid course package archive.'
-    default: return 'We couldn’t validate this package. Choose a course package and try again.'
+    case 'package_too_large': return 'tooLarge'
+    case 'unsupported_package_format': return 'unsupportedFormat'
+    case 'unsupported_package_version': return 'unsupportedVersion'
+    case 'checksum_mismatch': return 'checksum'
+    case 'invalid_course': return 'invalidCourse'
+    case 'invalid_assessment': return 'invalidAssessment'
+    case 'invalid_asset': return 'invalidAsset'
+    case 'invalid_translation': return 'invalidTranslation'
+    case 'invalid_archive': return 'invalidArchive'
+    default: return 'validation'
   }
-}
-
-export function formatBytes(value: number): string {
-  if (!Number.isSafeInteger(value) || value < 0) return 'Unknown size'
-  if (value < 1024) return `${value} bytes`
-  const units = ['KB', 'MB', 'GB']
-  let amount = value / 1024
-  let unit = 0
-  while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit += 1 }
-  return `${amount.toFixed(amount >= 10 ? 0 : 1)} ${units[unit]}`
 }
 
 function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
