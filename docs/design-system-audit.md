@@ -10,7 +10,7 @@ Academy has the beginning of a design system, but not yet a consistently enforce
 
 The highest-value next step is not another page-level polish pass. It is to separate foundation values from semantic theme tokens, standardize the existing Lucide-backed icon abstraction, complete the core control set, and then extract repeated compositions. Draft Structure is the best reference migration because it exercises most of the required system; Dashboard should validate that the result is not Authoring-specific.
 
-Migration status (2026-10-13): Draft Structure, Dashboard, the Draft and Lesson workspaces, Settings, learner entry surfaces, the learner reader/progress/knowledge-check flow, authentication, Community/moderation, learner/public certificates, and Administration are complete. The ID-based published route is the canonical learner reader; the slug lesson route remains a supported compatibility route using the shared learner presentation boundary. Translation remains later migration work.
+Migration status (2026-10-13): Draft Structure, Dashboard, the Draft and Lesson workspaces, Settings, learner entry surfaces, the learner reader/progress/knowledge-check flow, authentication, Community/moderation, learner/public certificates, Administration, and Authoring entry/create are complete. The Authoring landing is the Draft-discovery reference and Create Draft is the standard creation-form reference; their real-stack test verifies creator membership and persistence. The ID-based published route is the canonical learner reader; the slug lesson route remains a supported compatibility route using the shared learner presentation boundary. Translation remains later migration work.
 
 ## Audit scope and method
 
@@ -214,6 +214,7 @@ Dashboard uses the canonical container and button but implements its own page he
 - Community and moderation now use shared learner list/form/management patterns, localized visibility and feedback, centralized dates/counts, and a real PostgreSQL-backed lifecycle test.
 - Private certificates and public verification now use shared learner detail/status patterns, localized locale-aware presentation, strict recipient-free public validation, and a real completion-to-issuance-to-verification test.
 - Administration now uses shared management, file-field, metadata, status, and dialog patterns; a real authenticated PostgreSQL-backed flow covers plugin lifecycle and course import without API interception.
+- Authoring entry and Draft creation now use shared discovery, state, panel, form, textarea, language-picker, badge, and formatting patterns; a real authenticated PostgreSQL-backed flow covers creation, workspace reload, rediscovery, and creator membership.
 - Translation contains the remaining form, table/list, dialog, status, and action variants to migrate later.
 
 ## Risks

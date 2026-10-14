@@ -3,7 +3,7 @@
     <label :for="controlId" class="btg-form-field__label">
       {{ label }}
       <span v-if="required" class="btg-form-field__required" aria-hidden="true">*</span>
-      <span v-if="required" class="sr-only"> required</span>
+      <span v-if="required" class="sr-only"> {{ requiredLabel }}</span>
     </label>
     <slot :control-id="controlId" :described-by="describedBy" :invalid="Boolean(error)" />
     <p v-if="supportingText" :id="descriptionId" class="btg-form-field__description">
@@ -26,8 +26,9 @@ const props = withDefaults(
     helper?: string
     error?: string
     required?: boolean
+    requiredLabel?: string
   }>(),
-  { controlId: undefined, description: undefined, helper: undefined, error: undefined, required: false },
+  { controlId: undefined, description: undefined, helper: undefined, error: undefined, required: false, requiredLabel: 'required' },
 )
 
 const generatedID = `btg-field-${useId()}`

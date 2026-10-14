@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { shallowRef } from 'vue'
@@ -20,6 +20,8 @@ vi.mock('../authoring/authoring', async (importOriginal) => ({
 }))
 
 import AuthoringDraftCreatePage from './AuthoringDraftCreatePage.vue'
+import { pseudoLocalize } from '../i18n/pseudo'
+import { renderWithI18n } from '../test/i18n'
 
 const draftID = '11111111-1111-4111-8111-111111111111'
 const createdDraft = {
@@ -36,11 +38,11 @@ function routerFor() {
   ] })
 }
 
-async function renderPage() {
+async function renderPage(locale: 'en' | 'en-XA' = 'en') {
   const router = routerFor()
   await router.push('/authoring/new')
   await router.isReady()
-  return { ...render({ template: '<RouterView />' }, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n({ template: '<RouterView />' }, { global: { plugins: [router] } }, locale), router }
 }
 
 async function completeForm() {
@@ -90,6 +92,7 @@ describe('AuthoringDraftCreatePage', () => {
     await fireEvent.update(screen.getByRole('textbox', { name: /^Title required$/ }), 'Retained title')
     await fireEvent.click(screen.getByRole('button', { name: 'Create Draft' }))
     expect(await screen.findByText('Enter a description.')).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: /^Description required$/ }))
     expect((screen.getByRole('textbox', { name: /^Title required$/ }) as HTMLInputElement).value).toBe('Retained title')
     expect(createAuthoringDraftMock).not.toHaveBeenCalled()
   })
@@ -101,8 +104,8 @@ describe('AuthoringDraftCreatePage', () => {
     await completeForm()
     await fireEvent.click(screen.getByRole('button', { name: 'Create Draft' }))
     expect(screen.getByRole('status').textContent).toContain('Creating Draft')
-    expect((screen.getByRole('button', { name: 'Creating…' }) as HTMLButtonElement).disabled).toBe(true)
-    await fireEvent.click(screen.getByRole('button', { name: 'Creating…' }))
+    expect((screen.getByRole('button', { name: 'Creating Draft…' }) as HTMLButtonElement).disabled).toBe(true)
+    await fireEvent.click(screen.getByRole('button', { name: 'Creating Draft…' }))
     expect(createAuthoringDraftMock).toHaveBeenCalledTimes(1)
     resolveCreate(createdDraft)
     await waitFor(() => expect(createAuthoringDraftMock).toHaveBeenCalledTimes(1))
@@ -140,5 +143,12 @@ describe('AuthoringDraftCreatePage', () => {
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/login'))
     expect(router.currentRoute.value.query.returnTo).toBe('/authoring/new')
     expect(createAuthoringDraftMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('localizes the form while keeping the course source-language default independent', async () => {
+    await renderPage('en-XA')
+    expect(screen.getByRole('heading', { level: 1, name: pseudoLocalize('Create Draft') })).toBeTruthy()
+    expect(screen.getByRole('button', { name: pseudoLocalize('Create Draft') })).toBeTruthy()
+    expect((screen.getByRole('combobox', { name: `${pseudoLocalize('Source language')} ${pseudoLocalize('required')}` }) as HTMLInputElement).value).toContain('(en)')
   })
 })

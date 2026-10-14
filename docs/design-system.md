@@ -413,7 +413,7 @@ The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and 
 
 ### M-UI.7 — remaining Academy pages
 
-- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, Community, certificates, and Administration are migrated.
+- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, Community, certificates, Administration, and the Authoring entry/create flow are migrated.
 - Migrate Translation.
 - Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
 
@@ -434,6 +434,10 @@ The authenticated certificate is the learner-achievement detail reference; publi
 ### Reference migration: Administration
 
 Administration is the permission-sensitive management reference. The landing, course import, and plugin lifecycle surfaces compose shared page titles, panels, sections, metadata, badges, buttons, dialogs, icons, state treatment, application formatters, and the labelled `BtgFileField`; feature CSS owns only management grids and wrapping action layout. Trust, signature validity, exact-release approval, stored enablement, and current execution eligibility remain visibly distinct server-authoritative states. Mocked tests cover security and transport failures, while a seeded non-intercepted browser journey must install, approve, enable, reload, disable, and verify a plugin release, then validate/import a real canonical course package and confirm both results in PostgreSQL.
+
+### Reference migration: Authoring entry and creation
+
+The Authoring landing is the Draft-discovery reference, composing shared page titles, panels, badges, metadata, actions, state treatment, and locale-aware dates around membership-scoped Draft summaries. Create Draft is the standard creation-form reference, using shared labelled fields, textareas, the caller-localized language picker, sections, panels, and typed validation codes. Application locale never selects course source language. A seeded non-intercepted browser journey must create a Draft through the real API, reload its workspace, rediscover it, and confirm the Draft, course identity, and maintainer membership in PostgreSQL.
 
 ### Reference migration: learner entry surfaces
 

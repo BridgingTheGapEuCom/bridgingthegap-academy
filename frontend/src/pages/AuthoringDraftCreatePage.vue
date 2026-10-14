@@ -1,78 +1,74 @@
 <template>
   <BtgPageContainer as="section" class="authoring-create" aria-labelledby="authoring-create-title">
-    <RouterLink class="authoring-create__back" to="/authoring">Back to Authoring</RouterLink>
-    <div v-if="auth.state.value.status === 'bootstrapping'" class="authoring-create__state" role="status">
-      <h1 id="authoring-create-title">Checking your session</h1>
-      <p>One moment while we check whether you are signed in.</p>
-    </div>
-    <div v-else-if="auth.state.value.status === 'unavailable'" class="authoring-create__state" role="alert">
-      <h1 id="authoring-create-title">Authoring unavailable</h1>
-      <p>We couldn’t check your session right now. Please try again.</p>
-      <BtgButton variant="secondary" @click="retryBootstrap">Try again</BtgButton>
-    </div>
-    <div v-else-if="auth.state.value.status === 'unauthenticated'" class="authoring-create__state" role="status">
-      <h1 id="authoring-create-title">Sign in required</h1>
-      <p>Taking you to sign in.</p>
-    </div>
+    <RouterLink class="btg-button btg-button--tertiary authoring-create__back" to="/authoring">
+      <BtgIcon name="arrowLeft" decorative />{{ t('authoring.create.back') }}
+    </RouterLink>
+
+    <BtgPanel v-if="auth.state.value.status === 'bootstrapping'" class="authoring-create__state" variant="subtle" role="status">
+      <BtgPageTitle id="authoring-create-title" :title="t('authoring.create.checkingSession')" :description="t('authoring.create.checkingSessionDescription')" />
+    </BtgPanel>
+    <BtgPanel v-else-if="auth.state.value.status === 'unavailable'" class="authoring-create__state" variant="subtle" role="alert">
+      <BtgPageTitle id="authoring-create-title" :title="t('authoring.create.unavailable')" :description="t('authoring.create.sessionUnavailable')" />
+      <BtgButton variant="secondary" @click="retryBootstrap">{{ t('authoring.entry.tryAgain') }}</BtgButton>
+    </BtgPanel>
+    <BtgPanel v-else-if="auth.state.value.status === 'unauthenticated'" class="authoring-create__state" variant="subtle" role="status">
+      <BtgPageTitle id="authoring-create-title" :title="t('authoring.create.signInRequired')" :description="t('authoring.create.redirecting')" />
+    </BtgPanel>
     <div v-else class="authoring-create__content">
-      <header class="authoring-create__heading">
-        <p class="authoring-create__eyebrow">Bridging the Gap Academy</p>
-        <h1 id="authoring-create-title">Create Draft</h1>
-        <p class="authoring-create__intro">Start with the core course metadata. You can add structure and content in the Draft workspace.</p>
-      </header>
+      <BtgPageTitle id="authoring-create-title" :title="t('authoring.create.title')" :description="t('authoring.create.description')" />
 
       <form class="authoring-create__form" :aria-busy="creating || undefined" novalidate @submit.prevent="create">
         <p v-if="formError" class="authoring-metadata-form__error" role="alert">{{ formError }}</p>
-        <p v-if="creating" class="authoring-create__pending" role="status">Creating Draft…</p>
+        <p v-if="creating" class="authoring-create__pending" role="status">{{ t('authoring.create.submitting') }}</p>
 
-        <section class="authoring-create__panel" aria-labelledby="course-basics-title">
-          <header class="authoring-create__panel-header">
-            <h2 id="course-basics-title"><span aria-hidden="true">1.</span> Course basics</h2>
-            <p>Set the essential details for your course.</p>
-          </header>
-          <div class="authoring-create__panel-body">
-            <BtgFormField label="Title" required :error="errors.title" v-slot="{ controlId, describedBy, invalid }">
-              <BtgTextInput :id="controlId" v-model="form.title" :disabled="creating" :aria-describedby="describedBy" :invalid="invalid" placeholder="Enter a course title" required />
-            </BtgFormField>
-            <div class="authoring-create__basics-grid">
-              <BtgFormField label="Intended version" required description="Use a three-part version such as 0.1.0." :error="errors.intendedVersion" v-slot="{ controlId, describedBy, invalid }">
-                <BtgTextInput :id="controlId" v-model="form.intendedVersion" :disabled="creating" :aria-describedby="describedBy" :invalid="invalid" required />
+        <BtgPanel class="authoring-create__panel">
+          <BtgSection heading-id="course-basics-title">
+            <template #heading>{{ t('authoring.create.basics.title') }}</template>
+            <p class="authoring-create__section-description">{{ t('authoring.create.basics.description') }}</p>
+            <div class="authoring-create__section-fields">
+              <BtgFormField control-id="authoring-create-title-field" :label="t('authoring.create.basics.titleLabel')" required :required-label="t('authoring.create.required')" :error="fieldError('title')" v-slot="{ controlId, describedBy, invalid }">
+                <BtgTextInput :id="controlId" v-model="form.title" :disabled="creating" :aria-describedby="describedBy" :invalid="invalid" :placeholder="t('authoring.create.basics.titlePlaceholder')" required />
               </BtgFormField>
-              <BtgFormField label="Source language" required description="Language used by the original Course content." :error="errors.sourceLanguage" v-slot="{ controlId, describedBy, invalid }">
-                <LanguagePicker :id="controlId" v-model="form.sourceLanguage" :labels="languagePickerLabels" :disabled="creating" :described-by="describedBy" :invalid="invalid" />
+              <div class="authoring-create__basics-grid">
+                <BtgFormField control-id="authoring-create-version" :label="t('authoring.create.basics.version')" required :required-label="t('authoring.create.required')" :description="t('authoring.create.basics.versionHelp')" :error="fieldError('intendedVersion')" v-slot="{ controlId, describedBy, invalid }">
+                  <BtgTextInput :id="controlId" v-model="form.intendedVersion" :disabled="creating" :aria-describedby="describedBy" :invalid="invalid" required />
+                </BtgFormField>
+                <BtgFormField control-id="authoring-create-language" :label="t('authoring.create.basics.sourceLanguage')" required :required-label="t('authoring.create.required')" :description="t('authoring.create.basics.sourceLanguageHelp')" :error="fieldError('sourceLanguage')" v-slot="{ controlId, describedBy, invalid }">
+                  <LanguagePicker :id="controlId" v-model="form.sourceLanguage" :labels="languagePickerLabels" :disabled="creating" :described-by="describedBy" :invalid="invalid" />
+                </BtgFormField>
+              </div>
+            </div>
+          </BtgSection>
+        </BtgPanel>
+
+        <BtgPanel class="authoring-create__panel">
+          <BtgSection heading-id="learning-overview-title">
+            <template #heading>{{ t('authoring.create.learning.title') }}</template>
+            <p class="authoring-create__section-description">{{ t('authoring.create.learning.description') }}</p>
+            <div class="authoring-create__section-fields">
+              <BtgFormField control-id="authoring-create-description" :label="t('authoring.create.learning.descriptionLabel')" required :required-label="t('authoring.create.required')" :description="t('authoring.create.learning.descriptionHelp')" :error="fieldError('description')" v-slot="{ controlId, describedBy, invalid }">
+                <BtgTextarea class="authoring-create__description" :id="controlId" v-model="form.description" :disabled="creating" :aria-describedby="describedBy" :invalid="invalid" :placeholder="t('authoring.create.learning.descriptionPlaceholder')" required />
+              </BtgFormField>
+              <RepeatableObjectivesEditor v-model="form.objectives" :disabled="creating" :error="fieldError('objectives')" :required-label="t('authoring.create.required')" :label="t('authoring.create.learning.objectives')" :description="t('authoring.create.learning.objectivesHelp')" :item-label="t('authoring.create.learning.objective')" :placeholder="t('authoring.create.learning.objectivePlaceholder')" :add-label="t('authoring.create.learning.addObjective')" :reorder-label="(position) => t('authoring.create.learning.reorderObjective', { position })" :remove-label-for="(position) => t('authoring.create.learning.removeObjective', { position })" :remove-text="t('authoring.create.learning.remove')" :added-announcement="(position) => t('authoring.create.learning.addedObjective', { position })" :removed-announcement="() => t('authoring.create.learning.removedObjective')" :moved-announcement="(position, total) => t('authoring.create.learning.movedObjective', { position, total })" :reordering-announcement="(position) => t('authoring.create.learning.reorderingObjective', { position })" :finished-reordering-announcement="() => t('authoring.create.learning.finishedReorderingObjectives')" />
+            </div>
+          </BtgSection>
+        </BtgPanel>
+
+        <BtgPanel class="authoring-create__panel">
+          <BtgSection heading-id="release-notes-title">
+            <template #heading>{{ t('authoring.create.releaseNotes.title') }}</template>
+            <p class="authoring-create__section-description">{{ t('authoring.create.releaseNotes.description') }}</p>
+            <div class="authoring-create__section-fields">
+              <BtgFormField control-id="authoring-create-changelog" :label="t('authoring.create.releaseNotes.changelog')" required :required-label="t('authoring.create.required')" :description="t('authoring.create.releaseNotes.changelogHelp')" :error="fieldError('changelog')" v-slot="{ controlId, describedBy, invalid }">
+                <BtgTextarea class="authoring-create__changelog" :id="controlId" v-model="form.changelog" :disabled="creating" :aria-describedby="describedBy" :invalid="invalid" required />
               </BtgFormField>
             </div>
-          </div>
-        </section>
-
-        <section class="authoring-create__panel" aria-labelledby="learning-overview-title">
-          <header class="authoring-create__panel-header">
-            <h2 id="learning-overview-title"><span aria-hidden="true">2.</span> Learning overview</h2>
-            <p>Describe what the course is about and what learners will be able to do.</p>
-          </header>
-          <div class="authoring-create__panel-body">
-            <BtgFormField label="Description" required description="Summarize the purpose, scope, and audience for this course." :error="errors.description" v-slot="{ controlId, describedBy, invalid }">
-              <textarea class="authoring-create__description" :id="controlId" v-model="form.description" :disabled="creating" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" placeholder="Enter a brief description of the course." required />
-            </BtgFormField>
-            <RepeatableObjectivesEditor v-model="form.objectives" :disabled="creating" :error="errors.objectives" description="Add the learning outcomes learners should achieve." />
-          </div>
-        </section>
-
-        <section class="authoring-create__panel" aria-labelledby="release-notes-title">
-          <header class="authoring-create__panel-header">
-            <h2 id="release-notes-title"><span aria-hidden="true">3.</span> Release notes</h2>
-            <p>Document the changes in this initial version.</p>
-          </header>
-          <div class="authoring-create__panel-body">
-            <BtgFormField label="Changelog" required description="Describe the initial Draft version." :error="errors.changelog" v-slot="{ controlId, describedBy, invalid }">
-              <textarea class="authoring-create__changelog" :id="controlId" v-model="form.changelog" :disabled="creating" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" required />
-            </BtgFormField>
-          </div>
-        </section>
+          </BtgSection>
+        </BtgPanel>
 
         <div class="authoring-create__actions">
-          <BtgButton type="button" variant="secondary" :disabled="creating" @click="cancel">Cancel</BtgButton>
-          <BtgButton type="submit" :disabled="creating">{{ creating ? 'Creating…' : 'Create Draft' }}</BtgButton>
+          <BtgButton type="button" variant="secondary" :disabled="creating" @click="cancel">{{ t('authoring.create.cancel') }}</BtgButton>
+          <BtgButton type="submit" leading-icon="add" :loading="creating">{{ creating ? t('authoring.create.submitting') : t('authoring.create.submit') }}</BtgButton>
         </div>
       </form>
     </div>
@@ -80,7 +76,8 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { APIProblemError } from '../api/client'
 import { authoringDraftPath, createAuthoringDraft, type AuthoringDraftCreate } from '../authoring/authoring'
@@ -88,20 +85,30 @@ import { useAuth } from '../auth/auth'
 import { loginLocation, routeReturnPath } from '../auth/navigation'
 import BtgButton from '../components/BtgButton.vue'
 import BtgFormField from '../components/BtgFormField.vue'
+import BtgIcon from '../components/BtgIcon.vue'
 import BtgPageContainer from '../components/BtgPageContainer.vue'
+import BtgPageTitle from '../components/BtgPageTitle.vue'
+import BtgPanel from '../components/BtgPanel.vue'
+import BtgSection from '../components/BtgSection.vue'
 import BtgTextInput from '../components/BtgTextInput.vue'
+import BtgTextarea from '../components/BtgTextarea.vue'
 import LanguagePicker from '../components/LanguagePicker.vue'
 import RepeatableObjectivesEditor from '../components/RepeatableObjectivesEditor.vue'
 
 type Form = { title: string; intendedVersion: string; sourceLanguage: string; description: string; objectives: string[]; changelog: string }
+type Field = 'title' | 'intendedVersion' | 'sourceLanguage' | 'description' | 'objectives' | 'changelog'
+type ValidationCode = 'title_required' | 'version_invalid' | 'source_language_required' | 'description_required' | 'objectives_required' | 'changelog_required'
+
 const auth = useAuth()
 const router = useRouter()
 const route = useRoute()
-const form = reactive<Form>({ title: '', intendedVersion: '0.1.0', sourceLanguage: 'en', description: '', objectives: [''], changelog: 'Initial Draft.' })
-const errors = reactive<Record<string, string | undefined>>({})
+const { t } = useI18n()
+// Course language remains a course-domain default and never follows the application locale.
+const form = reactive<Form>({ title: '', intendedVersion: '0.1.0', sourceLanguage: 'en', description: '', objectives: [''], changelog: t('authoring.create.releaseNotes.initialChangelog') })
+const errors = reactive<Partial<Record<Field, ValidationCode>>>({})
 const formError = ref<string>()
 const creating = ref(false)
-const languagePickerLabels = { placeholder: 'Search by language or tag', close: 'Close language options', open: 'Show language options', options: 'Language options', empty: 'No matching languages.', useTag: (tag: string) => `Use language tag “${tag}”`, available: (count: number) => `${count} language options available.`, selected: (language: string) => `${language} selected.` }
+const languagePickerLabels = computed(() => ({ placeholder: t('authoring.languagePicker.placeholder'), close: t('authoring.languagePicker.close'), open: t('authoring.languagePicker.open'), options: t('authoring.languagePicker.options'), empty: t('authoring.languagePicker.empty'), useTag: (tag: string) => t('authoring.languagePicker.useTag', { tag }), available: (count: number) => t('authoring.languagePicker.available', { count }), selected: (language: string) => t('authoring.languagePicker.selected', { language }) }))
 let active = true
 let requestVersion = 0
 
@@ -116,16 +123,25 @@ watch(
 onBeforeUnmount(() => { active = false; requestVersion += 1 })
 
 function objectives() { return form.objectives.map((objective) => objective.trim()).filter(Boolean) }
-function clearErrors() { for (const key of Object.keys(errors)) delete errors[key]; formError.value = undefined }
+function fieldError(field: Field) { const code = errors[field]; return code ? t(`authoring.create.validation.${code}`) : undefined }
+function clearErrors() { for (const key of Object.keys(errors)) delete errors[key as Field]; formError.value = undefined }
 function validate(): boolean {
   clearErrors()
-  if (!form.title.trim()) errors.title = 'Enter a title.'
-  if (!/^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$/.test(form.intendedVersion)) errors.intendedVersion = 'Enter a version such as 0.1.0.'
-  if (!form.sourceLanguage.trim()) errors.sourceLanguage = 'Enter or select a source language.'
-  if (!form.description.trim()) errors.description = 'Enter a description.'
-  if (!objectives().length) errors.objectives = 'Enter at least one learning objective.'
-  if (!form.changelog.trim()) errors.changelog = 'Enter a changelog.'
-  return Object.keys(errors).length === 0
+  if (!form.title.trim()) errors.title = 'title_required'
+  if (!/^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$/.test(form.intendedVersion)) errors.intendedVersion = 'version_invalid'
+  if (!form.sourceLanguage.trim()) errors.sourceLanguage = 'source_language_required'
+  if (!form.description.trim()) errors.description = 'description_required'
+  if (!objectives().length) errors.objectives = 'objectives_required'
+  if (!form.changelog.trim()) errors.changelog = 'changelog_required'
+  if (Object.keys(errors).length) { void nextTick(focusFirstError); return false }
+  return true
+}
+function focusFirstError() {
+  const targets: Record<Field, string> = {
+    title: '#authoring-create-title-field', intendedVersion: '#authoring-create-version', sourceLanguage: '#authoring-create-language', description: '#authoring-create-description', objectives: '.authoring-create .objectives-editor input', changelog: '#authoring-create-changelog',
+  }
+  const first = (Object.keys(errors) as Field[])[0]
+  if (first) document.querySelector<HTMLElement>(targets[first])?.focus()
 }
 function input(): AuthoringDraftCreate {
   return { title: form.title, intendedVersion: form.intendedVersion, sourceLanguage: form.sourceLanguage, description: form.description, objectives: objectives(), changelog: form.changelog }
@@ -140,9 +156,7 @@ async function create() {
     await router.push(authoringDraftPath(draft.id))
   } catch (error) {
     if (!active || generation !== requestVersion) return
-    formError.value = error instanceof APIProblemError && error.status === 400
-      ? 'We couldn’t create this Draft. Check the fields and try again.'
-      : 'We couldn’t create this Draft right now. Please try again.'
+    formError.value = error instanceof APIProblemError && error.status === 400 ? t('authoring.create.invalid') : t('authoring.create.unavailableError')
   } finally {
     if (active && generation === requestVersion) creating.value = false
   }

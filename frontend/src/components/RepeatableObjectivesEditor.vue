@@ -1,6 +1,6 @@
 <template>
   <fieldset class="objectives-editor" :aria-describedby="describedBy">
-    <legend>{{ label }} <span aria-hidden="true">*</span><span class="sr-only"> required</span></legend>
+    <legend>{{ label }} <span aria-hidden="true">*</span><span class="sr-only"> {{ requiredLabel }}</span></legend>
     <p v-if="description" :id="descriptionID" class="objectives-editor__description">{{ description }}</p>
     <BtgOrderedList :aria-label="label">
       <BtgOrderedRow v-for="(_, index) in modelValue" :key="index" :index="index" :class="{ 'is-dragging': draggingIndex === index, 'is-drop-before': insertionIndex === index && draggingIndex !== index, 'is-drop-after': insertionIndex === index + 1 && draggingIndex !== index }" :data-objective-index="index">
@@ -23,8 +23,8 @@ import BtgDragHandle from './BtgDragHandle.vue'
 import BtgOrderedList from './BtgOrderedList.vue'
 import BtgOrderedRow from './BtgOrderedRow.vue'
 
-const props = withDefaults(defineProps<{ modelValue: string[]; label?: string; description?: string; error?: string; disabled?: boolean; itemLabel?: string; removeLabel?: string; addLabel?: string; removeText?: string; placeholder?: string; reorderLabel?: (position: number) => string; removeLabelFor?: (position: number) => string; addedAnnouncement?: (position: number) => string; removedAnnouncement?: () => string; movedAnnouncement?: (position: number, total: number) => string; reorderingAnnouncement?: (position: number) => string; finishedReorderingAnnouncement?: () => string }>(), {
-  label: 'Learning objectives', description: undefined, error: undefined, disabled: false, itemLabel: undefined, removeLabel: 'objective', addLabel: '+ Add objective', removeText: 'Remove', placeholder: 'Enter a learning objective', reorderLabel: undefined, removeLabelFor: undefined, addedAnnouncement: undefined, removedAnnouncement: undefined, movedAnnouncement: undefined, reorderingAnnouncement: undefined, finishedReorderingAnnouncement: undefined,
+const props = withDefaults(defineProps<{ modelValue: string[]; label?: string; description?: string; error?: string; disabled?: boolean; itemLabel?: string; removeLabel?: string; addLabel?: string; removeText?: string; placeholder?: string; requiredLabel?: string; reorderLabel?: (position: number) => string; removeLabelFor?: (position: number) => string; addedAnnouncement?: (position: number) => string; removedAnnouncement?: () => string; movedAnnouncement?: (position: number, total: number) => string; reorderingAnnouncement?: (position: number) => string; finishedReorderingAnnouncement?: () => string }>(), {
+  label: 'Learning objectives', description: undefined, error: undefined, disabled: false, itemLabel: undefined, removeLabel: 'objective', addLabel: '+ Add objective', removeText: 'Remove', placeholder: 'Enter a learning objective', requiredLabel: 'required', reorderLabel: undefined, removeLabelFor: undefined, addedAnnouncement: undefined, removedAnnouncement: undefined, movedAnnouncement: undefined, reorderingAnnouncement: undefined, finishedReorderingAnnouncement: undefined,
 })
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 const announcement = ref('')

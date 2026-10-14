@@ -49,6 +49,14 @@ describe('BtgFormField', () => {
     expect(document.activeElement).toBe(input)
   })
 
+  it('accepts caller-localized required copy', () => {
+    render({
+      components: { BtgFormField, BtgTextInput },
+      template: '<BtgFormField label="Título" required required-label="obligatorio" v-slot="{ controlId }"><BtgTextInput :id="controlId" required /></BtgFormField>',
+    })
+    expect(screen.getByRole('textbox', { name: 'Título obligatorio' })).toBeTruthy()
+  })
+
   it('generates distinct control IDs for separate fields', () => {
     render({
       components: { BtgFormField, BtgTextInput },

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { shallowRef } from 'vue'
@@ -19,6 +19,8 @@ vi.mock('../authoring/authoring', async (importOriginal) => ({
 }))
 
 import AuthoringHomePage from './AuthoringHomePage.vue'
+import { pseudoLocalize } from '../i18n/pseudo'
+import { renderWithI18n } from '../test/i18n'
 
 const draftID = '11111111-1111-4111-8111-111111111111'
 const secondDraftID = '33333333-3333-4333-8333-333333333333'
@@ -36,11 +38,11 @@ function routerFor() {
   ] })
 }
 
-async function renderPage() {
+async function renderPage(locale: 'en' | 'en-XA' = 'en') {
   const router = routerFor()
   await router.push('/authoring')
   await router.isReady()
-  return { ...render({ template: '<RouterView />' }, { global: { plugins: [router] } }), router }
+  return { ...renderWithI18n({ template: '<RouterView />' }, { global: { plugins: [router] } }, locale), router }
 }
 
 describe('AuthoringHomePage', () => {
@@ -60,6 +62,7 @@ describe('AuthoringHomePage', () => {
     expect(list.textContent?.indexOf('Integration foundations')).toBeLessThan(list.textContent?.indexOf('Messaging patterns') ?? 0)
     expect(screen.getByText('Active Draft')).toBeTruthy()
     expect(screen.getByText('Abandoned Draft')).toBeTruthy()
+    expect(screen.getAllByText('Last updated')).toHaveLength(2)
     expect(screen.getByRole('link', { name: 'Open Draft: Integration foundations' }).getAttribute('href')).toBe(`/authoring/drafts/${draftID}/overview`)
     expect(listAuthoringDraftsMock).toHaveBeenCalledTimes(1)
   })
@@ -67,7 +70,7 @@ describe('AuthoringHomePage', () => {
   it('uses an informative empty state with the same real creation path', async () => {
     listAuthoringDraftsMock.mockResolvedValueOnce({ drafts: [] })
     const { router } = await renderPage()
-    expect(await screen.findByText('You do not currently have any course Drafts.')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 3, name: 'No course Drafts yet' })).toBeTruthy()
     expect(screen.queryByRole('link', { name: /Open Draft/ })).toBeNull()
     await fireEvent.click(screen.getByRole('button', { name: 'Create Draft' }))
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/authoring/new'))
@@ -118,5 +121,12 @@ describe('AuthoringHomePage', () => {
     authMock.state.value = { status: 'unauthenticated' }
     resolveFirst(drafts())
     await waitFor(() => expect(screen.queryByText('Integration foundations')).toBeNull())
+  })
+
+  it('localizes Academy copy without changing authored Draft titles', async () => {
+    await renderPage('en-XA')
+    expect(await screen.findByRole('heading', { level: 1, name: pseudoLocalize('Authoring') })).toBeTruthy()
+    expect(screen.getByText('Integration foundations')).toBeTruthy()
+    expect(screen.getByRole('button', { name: pseudoLocalize('Create Draft') })).toBeTruthy()
   })
 })

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { pseudoLocalize } from '../src/i18n/pseudo'
 
 const draftID = '11111111-1111-4111-8111-111111111111'
 const session = { authenticated: true, user_id: '22222222-2222-4222-8222-222222222222', expires_at: '2027-01-01T00:00:00Z', csrf_token: 'test-csrf-token' }
@@ -221,12 +222,19 @@ test('Authoring creates a Draft from the accessible home flow and opens its work
   })
   await page.route(`**/api/authoring/drafts/${createdID}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(created) }))
   await page.route(`**/api/authoring/drafts/${createdID}/structure`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ modules: [] }) }))
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/authoring')
-  await expect(page.getByText('You do not currently have any course Drafts.')).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'No course Drafts yet' })).toBeVisible()
   await page.getByRole('button', { name: 'Create Draft' }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL('/authoring/new')
   await expect(page.getByRole('heading', { level: 1, name: 'Create Draft' })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.evaluate(() => { document.documentElement.style.fontSize = '' })
   await page.getByRole('textbox', { name: /^Title required$/ }).fill('First Draft')
   const languagePicker = page.getByRole('combobox', { name: /^Source language required$/ })
   await languagePicker.click()
@@ -243,6 +251,22 @@ test('Authoring creates a Draft from the accessible home flow and opens its work
   await page.goBack()
   await expect(page).toHaveURL('/authoring')
   await expect(page.getByRole('link', { name: `Open Draft: ${created.title}` })).toBeVisible()
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+})
+
+test('Authoring entry and creation chrome are pseudo-localized without changing Draft content', async ({ page }) => {
+  const longTitle = 'A deliberately long authored Draft title that must remain verbatim while the surrounding Academy interface expands in the pseudo locale'
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(session) }))
+  await page.route('**/api/authoring/drafts', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ drafts: [{ id: draftID, title: longTitle, intendedVersion: '1.0.0', status: 'ACTIVE', updatedAt: draft.updated_at }] }) }))
+  await page.addInitScript(() => localStorage.setItem('btg.academy.application-locale', 'en-XA'))
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/authoring')
+  await expect(page.getByRole('heading', { level: 1, name: pseudoLocalize('Authoring') })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: longTitle })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.getByRole('button', { name: pseudoLocalize('Create Draft') }).click()
+  await expect(page.getByRole('heading', { level: 1, name: pseudoLocalize('Create Draft') })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: `${pseudoLocalize('Description')} ${pseudoLocalize('required')}` })).toBeVisible()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })
 
