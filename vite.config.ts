@@ -3,7 +3,7 @@ import { loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig(({ mode }) => {
-  const backendOrigin = loadEnv(mode, '.', 'BTG_').BTG_LMS_DEV_BACKEND_ORIGIN ?? 'http://127.0.0.1:8080'
+  const backendOrigin = loadEnv(mode, '.', 'BTG_').BTG_LMS_DEV_BACKEND_ORIGIN ?? 'http://127.0.0.1:18080'
   return {
     plugins: [vue()],
     root: 'frontend',

@@ -413,9 +413,18 @@ The Draft workspace shares one `AuthoringDraftHeader`, tab set, outer grid, and 
 
 ### M-UI.7 — remaining Academy pages
 
-- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, Community, certificates, Administration, and the Authoring entry/create flow are migrated.
-- Migrate Translation.
+- Dashboard, learner entry surfaces, the learner reader/progress/assessment flow, authentication, Community, certificates, Administration, Authoring entry/create, and Translation are migrated.
 - Preserve intentional editorial differences through semantic themes/compositions rather than control forks.
+
+### Reference migration: Translation
+
+The exact-version Translation list is the translation discovery/create
+reference. The workspace composes the shared split workspace, panels, metadata,
+badges, fields, dialog, and dirty-action bar while retaining only source/target
+comparison geometry. Source content is read-only, target edits are explicit,
+and application locale never changes source or target language identity. A
+seeded non-intercepted browser test must verify save/reload persistence and the
+exact immutable source binding in PostgreSQL.
 
 ### Reference migration: authentication
 

@@ -91,6 +91,11 @@ const listboxID = `${props.id}-options`
 const options = computed<LanguageOption[]>(() => {
   const matches = filterLanguageOptions(query.value)
   const canonical = canonicalLanguageTag(query.value)
+  const exactIndex = canonical ? matches.findIndex((option) => option.tag === canonical) : -1
+  if (exactIndex > 0) {
+    const exact = matches[exactIndex]!
+    return [exact, ...matches.slice(0, exactIndex), ...matches.slice(exactIndex + 1)]
+  }
   if (canonical && !matches.some((option) => option.tag === canonical)) {
     return [...matches, { tag: canonical, label: props.labels.useTag(canonical), search: canonical.toLocaleLowerCase() }]
   }

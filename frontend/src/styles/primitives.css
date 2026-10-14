@@ -66,11 +66,11 @@
 .btg-select[data-invalid='true'] { border-color: var(--academy-border-danger); border-width: var(--academy-border-width-focus); }
 
 .btg-form-field { display: grid; min-width: 0; gap: var(--academy-space-2); }
-.btg-form-field__label { color: var(--academy-text-primary); font-size: var(--academy-font-size-label); font-weight: var(--academy-font-weight-strong); }
-.btg-form-field__description { color: var(--academy-text-helper); font-size: var(--academy-font-size-small); }
+.btg-form-field__label { min-width: 0; color: var(--academy-text-primary); font-size: var(--academy-font-size-label); font-weight: var(--academy-font-weight-strong); overflow-wrap: anywhere; }
+.btg-form-field__description { min-width: 0; color: var(--academy-text-helper); font-size: var(--academy-font-size-small); overflow-wrap: anywhere; }
 .btg-form-field__required,
 .btg-form-field__error { color: var(--academy-text-error); }
-.btg-form-field__error { font-weight: var(--academy-font-weight-medium); }
+.btg-form-field__error { min-width: 0; font-weight: var(--academy-font-weight-medium); overflow-wrap: anywhere; }
 
 .btg-file-field__control {
   min-width: 0;
@@ -131,7 +131,7 @@
 .btg-search-field__description { margin: 0; color: var(--academy-text-helper); font-size: var(--academy-font-size-small); }
 
 .btg-badge,
-.btg-chip { display: inline-flex; min-height: var(--academy-control-height-compact); align-items: center; gap: var(--academy-space-2); border: var(--academy-border-width-default) solid var(--academy-border-default); border-radius: var(--academy-radius-control); background: var(--academy-surface-subtle); color: var(--academy-text-primary); padding: var(--academy-space-1) var(--academy-space-3); font-size: var(--academy-font-size-small); font-weight: var(--academy-font-weight-medium); line-height: 1.25; }
+.btg-chip { display: inline-flex; min-width: 0; min-height: var(--academy-control-height-compact); max-width: 100%; align-items: center; gap: var(--academy-space-2); border: var(--academy-border-width-default) solid var(--academy-border-default); border-radius: var(--academy-radius-control); background: var(--academy-surface-subtle); color: var(--academy-text-primary); padding: var(--academy-space-1) var(--academy-space-3); font-size: var(--academy-font-size-small); font-weight: var(--academy-font-weight-medium); line-height: 1.25; overflow-wrap: anywhere; text-align: start; }
 .btg-badge--success { color: var(--academy-status-success); }
 .btg-badge--warning { color: var(--academy-status-warning); }
 .btg-badge--danger { border-color: var(--academy-border-danger); background: var(--academy-surface-danger-subtle); color: var(--academy-text-danger); }

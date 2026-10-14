@@ -53,6 +53,23 @@ type translationPublicationDTO struct {
 	SourceVersion         string    `json:"sourceVersion"`
 	PublishedAt           time.Time `json:"publishedAt"`
 }
+type translationSourceDTO struct {
+	CourseID        string `json:"courseId"`
+	CourseVersionID string `json:"courseVersionId"`
+	Version         string `json:"version"`
+	Language        string `json:"language"`
+}
+type translationWorkspaceDTO struct {
+	TranslationID  string                                   `json:"translationId"`
+	Revision       int64                                    `json:"revision"`
+	Lifecycle      translations.TranslationStatus           `json:"lifecycle"`
+	Source         translationSourceDTO                     `json:"source"`
+	TargetLanguage string                                   `json:"targetLanguage"`
+	Course         translations.TranslationCourseView       `json:"course"`
+	Modules        []translations.TranslationModuleView     `json:"modules"`
+	Assessments    []translations.TranslationAssessmentView `json:"assessments"`
+	Completeness   translations.Completeness                `json:"completeness"`
+}
 
 func (a *authHTTP) handleTranslationCreate(w http.ResponseWriter, r *http.Request) {
 	actor, courseID, version, ok := translationRouteContext(w, r)
@@ -115,7 +132,7 @@ func (a *authHTTP) handleTranslationWorkspace(w http.ResponseWriter, r *http.Req
 		translationProblem(w, r, err, false)
 		return
 	}
-	writeJSON(w, http.StatusOK, view)
+	writeJSON(w, http.StatusOK, translationWorkspace(view))
 }
 func (a *authHTTP) handleTranslationPatch(w http.ResponseWriter, r *http.Request) {
 	actor, id, ok := translationActorID(w, r)
@@ -211,6 +228,13 @@ func translationSummaryWithCompleteness(value translations.CourseTranslation, co
 }
 func translationPublication(value translations.TranslationPublication) translationPublicationDTO {
 	return translationPublicationDTO{PublicationID: string(value.ID), TranslationID: string(value.TranslationID), Revision: value.Revision, TargetLanguage: string(value.TargetLanguage), SourceCourseID: string(value.Source.CourseID), SourceCourseVersionID: string(value.Source.CourseVersionID), SourceVersion: value.Source.Version.String(), PublishedAt: value.PublishedAt}
+}
+func translationWorkspace(value translations.TranslationWorkspaceView) translationWorkspaceDTO {
+	return translationWorkspaceDTO{
+		TranslationID: string(value.TranslationID), Revision: value.Revision, Lifecycle: value.Lifecycle,
+		Source:         translationSourceDTO{CourseID: string(value.Source.CourseID), CourseVersionID: string(value.Source.CourseVersionID), Version: value.Source.Version.String(), Language: string(value.Source.Language)},
+		TargetLanguage: string(value.TargetLanguage), Course: value.Course, Modules: value.Modules, Assessments: value.Assessments, Completeness: value.Completeness,
+	}
 }
 func translationProblem(w http.ResponseWriter, r *http.Request, err error, sourceRoute bool) {
 	switch {

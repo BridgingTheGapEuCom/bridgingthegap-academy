@@ -1724,6 +1724,69 @@ export interface components {
             /** @enum {string} */
             state: "UNTRANSLATED" | "TRANSLATED";
         };
+        TranslationSource: {
+            /** Format: uuid */
+            courseId: string;
+            /** Format: uuid */
+            courseVersionId: string;
+            version: string;
+            language: components["schemas"]["LanguageTag"];
+        };
+        TranslationCourse: {
+            title: components["schemas"]["TranslationTextField"];
+            description: components["schemas"]["TranslationTextField"];
+            learningObjectives: components["schemas"]["TranslationTextField"][];
+        };
+        TranslationItem: {
+            sourceStableKey: string;
+            position: number;
+            text: components["schemas"]["TranslationTextField"];
+        };
+        TranslationQuestion: {
+            sourceStableKey: string;
+            type: string;
+            position: number;
+            prompt: components["schemas"]["TranslationTextField"];
+            options: components["schemas"]["TranslationItem"][];
+            leftItems: components["schemas"]["TranslationItem"][];
+            rightItems: components["schemas"]["TranslationItem"][];
+        };
+        TranslationAssessment: {
+            assessmentKey: string;
+            questions: components["schemas"]["TranslationQuestion"][];
+            completeness: components["schemas"]["TranslationCompleteness"];
+        };
+        TranslationContentBlock: {
+            sourceBlockKey: string;
+            type: string;
+            position: number;
+            fields: {
+                [key: string]: components["schemas"]["TranslationTextField"];
+            };
+            assetKeys: string[];
+            code: string;
+            tableHeaders: string[];
+            tableRows: string[][];
+            assessmentKey: string;
+        };
+        TranslationLesson: {
+            sourceStableKey: string;
+            position: number;
+            prerequisiteStableKeys: string[];
+            title: components["schemas"]["TranslationTextField"];
+            description: components["schemas"]["TranslationTextField"];
+            learningObjectives: components["schemas"]["TranslationTextField"][];
+            blocks: components["schemas"]["TranslationContentBlock"][];
+            completeness: components["schemas"]["TranslationCompleteness"];
+        };
+        TranslationModule: {
+            sourceStableKey: string;
+            position: number;
+            title: components["schemas"]["TranslationTextField"];
+            description: components["schemas"]["TranslationTextField"];
+            lessons: components["schemas"]["TranslationLesson"][];
+            completeness: components["schemas"]["TranslationCompleteness"];
+        };
         /** @description Private source-plus-override authoring view. Assessment correctness is excluded. */
         TranslationWorkspace: {
             /** Format: uuid */
@@ -1731,11 +1794,11 @@ export interface components {
             revision: number;
             /** @enum {string} */
             lifecycle: "DRAFT" | "PUBLISHED";
-            source: Record<string, never>;
-            targetLanguage: string;
-            course: Record<string, never>;
-            modules: Record<string, never>[];
-            assessments: Record<string, never>[];
+            source: components["schemas"]["TranslationSource"];
+            targetLanguage: components["schemas"]["LanguageTag"];
+            course: components["schemas"]["TranslationCourse"];
+            modules: components["schemas"]["TranslationModule"][];
+            assessments: components["schemas"]["TranslationAssessment"][];
             completeness: components["schemas"]["TranslationCompleteness"];
         };
         TranslationPublication: {

@@ -29,6 +29,15 @@ describe('LanguagePicker', () => {
     expect(screen.queryByText('Use another language tag')).toBeNull()
   })
 
+  it('prioritizes an exact language tag over incidental label matches', async () => {
+    const { emitted } = render(LanguagePicker, { props: { id: 'language', modelValue: '', labels } })
+    const picker = screen.getByRole('combobox')
+    await fireEvent.focus(picker)
+    await fireEvent.update(picker, 'es')
+    await fireEvent.keyDown(picker, { key: 'Enter' })
+    expect(emitted()['update:modelValue']).toEqual([['es']])
+  })
+
   it('closes when focus or a pointer moves outside the combobox', async () => {
     render(LanguagePicker, { props: { id: 'language', modelValue: '', labels } })
     const picker = screen.getByRole('combobox')

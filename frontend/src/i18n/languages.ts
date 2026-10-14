@@ -8,9 +8,9 @@ export const commonLanguageTags = [
   'uk', 'vi', 'zh-Hans', 'zh-Hant',
 ] as const
 
-function displayName(type: Intl.DisplayNamesType, value: string): string | undefined {
+function displayName(type: Intl.DisplayNamesType, value: string, locale?: string): string | undefined {
   try {
-    return new Intl.DisplayNames(undefined, { type }).of(value) ?? undefined
+    return new Intl.DisplayNames(locale, { type }).of(value) ?? undefined
   } catch {
     return undefined
   }
@@ -30,14 +30,14 @@ export function canonicalLanguageTag(value: string): string | undefined {
   }
 }
 
-export function languageLabel(value: string): string {
+export function languageLabel(value: string, displayLocale?: string): string {
   const tag = canonicalLanguageTag(value) ?? value
   try {
     const locale = new Intl.Locale(tag)
-    const language = displayName('language', locale.language)
+    const language = displayName('language', locale.language, displayLocale)
     if (!language) return tag
-    const script = locale.script ? displayName('script', locale.script) : undefined
-    const region = locale.region ? displayName('region', locale.region) : undefined
+    const script = locale.script ? displayName('script', locale.script, displayLocale) : undefined
+    const region = locale.region ? displayName('region', locale.region, displayLocale) : undefined
     const qualifier = [script, region].filter(Boolean).join(' — ')
     return qualifier ? `${language} — ${qualifier} (${tag})` : `${language} (${tag})`
   } catch {

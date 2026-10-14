@@ -40,10 +40,9 @@ the persisted exact source binding with a Course's latest version; no mutable
 `isStale` flag is stored.
 
 The module reads only immutable Courses data and owns only `translations.*`
-tables. It has no HTTP API, authoring/learner UI, language fallback, translation
-review/membership workflow, machine/AI translation, notification, diff,
-import/export, or translated certificate/Open Badge metadata. Those require
-later product slices.
+tables. It has no translation review/membership workflow, machine/AI
+translation, notification, diff, or translated certificate/Open Badge
+metadata. Those require later product slices.
 
 ## Authorization and translator workspace reads
 
@@ -108,14 +107,26 @@ version, never Authoring or a latest-version lookup.
 
 All authoring responses are `Cache-Control: no-store`. Session middleware
 requires authentication and enforces the existing Origin/CSRF protections for
-create, patch, and publication. Translation frontend and learner-facing
-translation reads remain deferred.
+create, patch, and publication.
 
 ## Translator authoring UI
 
 The private translator UI uses `/authoring/courses/{courseId}/versions/{version}/translations` for exact-source discovery and creation, and `/authoring/translations/{translationId}` for a reload-safe workspace. It always displays the bound source SemVer and language, never a latest-version claim. Translators compare read-only source text with editable translation values, save explicit source-keyed changes manually, and receive the server-authoritative completeness result after a save.
 
-An empty saved input is an intentional empty translation. The separate **Mark as untranslated** action sends `null`; it is the only UI action that clears an override. Save conflicts retain local text and offer a reload action. Publishing is available only when the server says the workspace is complete and requires a concise browser confirmation. The pages use grouped labels, semantic headings, native controls, textual status messages, and vertically stack naturally at narrow widths. Learner translation delivery, language selection, and source migration remain deferred.
+An empty saved input is an intentional empty translation. The separate **Mark
+as untranslated** action sends `null`; it is the only UI action that clears an
+override. Save conflicts retain local text and offer a reload action.
+Publishing is available only when the server says the workspace is complete
+and uses the shared accessible dialog pattern. The list and workspace compose
+Academy panels, metadata, badges, language picker, split workspace, fields,
+buttons, and dirty-action bar. Source regions remain read-only and target fields
+are visibly labelled; the split stacks deliberately at narrow widths.
+
+Application locale controls only Academy chrome and language display names. It
+never supplies or mutates the source or target tag. The non-intercepted
+translation integration journey creates an exact-source workspace, saves a
+target override, reloads it, and verifies the target value, unchanged source,
+and source-version binding directly in PostgreSQL.
 
 ## Immutable learner translated reads
 

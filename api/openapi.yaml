@@ -1550,7 +1550,104 @@ components:
     TranslationPublishRequest: { type: object, additionalProperties: false, required: [expectedRevision], properties: { expectedRevision: { type: integer, minimum: 1 } } }
     TranslationCompleteness: { type: object, additionalProperties: false, required: [totalTranslatableFields, translatedFields, untranslatedFields, complete], properties: { totalTranslatableFields: { type: integer, minimum: 0 }, translatedFields: { type: integer, minimum: 0 }, untranslatedFields: { type: integer, minimum: 0 }, complete: { type: boolean } } }
     TranslationTextField: { type: object, additionalProperties: false, required: [source, translated, state], properties: { source: { type: string }, translated: { type: [string, 'null'] }, state: { type: string, enum: [UNTRANSLATED, TRANSLATED] } } }
-    TranslationWorkspace: { type: object, description: Private source-plus-override authoring view. Assessment correctness is excluded., required: [translationId, revision, lifecycle, source, targetLanguage, course, modules, assessments, completeness], properties: { translationId: { type: string, format: uuid }, revision: { type: integer, minimum: 1 }, lifecycle: { type: string, enum: [DRAFT, PUBLISHED] }, source: { type: object }, targetLanguage: { type: string }, course: { type: object }, modules: { type: array, items: { type: object } }, assessments: { type: array, items: { type: object } }, completeness: { $ref: '#/components/schemas/TranslationCompleteness' } } }
+    TranslationSource:
+      type: object
+      additionalProperties: false
+      required: [courseId, courseVersionId, version, language]
+      properties:
+        courseId: { type: string, format: uuid }
+        courseVersionId: { type: string, format: uuid }
+        version: { type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$' }
+        language: { $ref: '#/components/schemas/LanguageTag' }
+    TranslationCourse:
+      type: object
+      additionalProperties: false
+      required: [title, description, learningObjectives]
+      properties:
+        title: { $ref: '#/components/schemas/TranslationTextField' }
+        description: { $ref: '#/components/schemas/TranslationTextField' }
+        learningObjectives: { type: array, items: { $ref: '#/components/schemas/TranslationTextField' } }
+    TranslationItem:
+      type: object
+      additionalProperties: false
+      required: [sourceStableKey, position, text]
+      properties:
+        sourceStableKey: { type: string }
+        position: { type: integer, minimum: 0 }
+        text: { $ref: '#/components/schemas/TranslationTextField' }
+    TranslationQuestion:
+      type: object
+      additionalProperties: false
+      required: [sourceStableKey, type, position, prompt, options, leftItems, rightItems]
+      properties:
+        sourceStableKey: { type: string }
+        type: { type: string }
+        position: { type: integer, minimum: 0 }
+        prompt: { $ref: '#/components/schemas/TranslationTextField' }
+        options: { type: array, items: { $ref: '#/components/schemas/TranslationItem' } }
+        leftItems: { type: array, items: { $ref: '#/components/schemas/TranslationItem' } }
+        rightItems: { type: array, items: { $ref: '#/components/schemas/TranslationItem' } }
+    TranslationAssessment:
+      type: object
+      additionalProperties: false
+      required: [assessmentKey, questions, completeness]
+      properties:
+        assessmentKey: { type: string }
+        questions: { type: array, items: { $ref: '#/components/schemas/TranslationQuestion' } }
+        completeness: { $ref: '#/components/schemas/TranslationCompleteness' }
+    TranslationContentBlock:
+      type: object
+      additionalProperties: false
+      required: [sourceBlockKey, type, position, fields, assetKeys, code, tableHeaders, tableRows, assessmentKey]
+      properties:
+        sourceBlockKey: { type: string }
+        type: { type: string }
+        position: { type: integer, minimum: 0 }
+        fields: { type: object, additionalProperties: { $ref: '#/components/schemas/TranslationTextField' } }
+        assetKeys: { type: array, items: { type: string } }
+        code: { type: string }
+        tableHeaders: { type: array, items: { type: string } }
+        tableRows: { type: array, items: { type: array, items: { type: string } } }
+        assessmentKey: { type: string }
+    TranslationLesson:
+      type: object
+      additionalProperties: false
+      required: [sourceStableKey, position, prerequisiteStableKeys, title, description, learningObjectives, blocks, completeness]
+      properties:
+        sourceStableKey: { type: string }
+        position: { type: integer, minimum: 0 }
+        prerequisiteStableKeys: { type: array, items: { type: string } }
+        title: { $ref: '#/components/schemas/TranslationTextField' }
+        description: { $ref: '#/components/schemas/TranslationTextField' }
+        learningObjectives: { type: array, items: { $ref: '#/components/schemas/TranslationTextField' } }
+        blocks: { type: array, items: { $ref: '#/components/schemas/TranslationContentBlock' } }
+        completeness: { $ref: '#/components/schemas/TranslationCompleteness' }
+    TranslationModule:
+      type: object
+      additionalProperties: false
+      required: [sourceStableKey, position, title, description, lessons, completeness]
+      properties:
+        sourceStableKey: { type: string }
+        position: { type: integer, minimum: 0 }
+        title: { $ref: '#/components/schemas/TranslationTextField' }
+        description: { $ref: '#/components/schemas/TranslationTextField' }
+        lessons: { type: array, items: { $ref: '#/components/schemas/TranslationLesson' } }
+        completeness: { $ref: '#/components/schemas/TranslationCompleteness' }
+    TranslationWorkspace:
+      type: object
+      description: Private source-plus-override authoring view. Assessment correctness is excluded.
+      additionalProperties: false
+      required: [translationId, revision, lifecycle, source, targetLanguage, course, modules, assessments, completeness]
+      properties:
+        translationId: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        lifecycle: { type: string, enum: [DRAFT, PUBLISHED] }
+        source: { $ref: '#/components/schemas/TranslationSource' }
+        targetLanguage: { $ref: '#/components/schemas/LanguageTag' }
+        course: { $ref: '#/components/schemas/TranslationCourse' }
+        modules: { type: array, items: { $ref: '#/components/schemas/TranslationModule' } }
+        assessments: { type: array, items: { $ref: '#/components/schemas/TranslationAssessment' } }
+        completeness: { $ref: '#/components/schemas/TranslationCompleteness' }
     TranslationPublication: { type: object, additionalProperties: false, required: [publicationId, translationId, revision, targetLanguage, sourceCourseId, sourceCourseVersionId, sourceVersion, publishedAt], properties: { publicationId: { type: string, format: uuid }, translationId: { type: string, format: uuid }, revision: { type: integer, minimum: 1 }, targetLanguage: { type: string }, sourceCourseId: { type: string, format: uuid }, sourceCourseVersionId: { type: string, format: uuid }, sourceVersion: { type: string }, publishedAt: { type: string, format: date-time } } }
     AuthoringAsset:
       type: object

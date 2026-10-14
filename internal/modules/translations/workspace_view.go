@@ -68,9 +68,9 @@ type TranslationLessonView struct {
 // table cells, and assessment references are read-only context; Fields are the
 // only values which participate in translation completeness.
 type TranslationContentBlockView struct {
-	SourceBlockKey string
-	Type           courses.BlockType `json:"type"`
-	Position       int
+	SourceBlockKey string                   `json:"sourceBlockKey"`
+	Type           courses.BlockType        `json:"type"`
+	Position       int                      `json:"position"`
 	Fields         map[string]TextFieldView `json:"fields"`
 	AssetKeys      []string                 `json:"assetKeys"`
 	Code           string                   `json:"code"`
@@ -81,16 +81,16 @@ type TranslationContentBlockView struct {
 type TranslationAssessmentView struct {
 	AssessmentKey string                    `json:"assessmentKey"`
 	Questions     []TranslationQuestionView `json:"questions"`
-	Completeness  Completeness
+	Completeness  Completeness              `json:"completeness"`
 }
 type TranslationQuestionView struct {
-	SourceStableKey string `json:"sourceStableKey"`
-	Type            courses.PublishedAssessmentQuestionType
-	Position        int                     `json:"position"`
-	Prompt          TextFieldView           `json:"prompt"`
-	Options         []TranslationOptionView `json:"options"`
-	LeftItems       []TranslationItemView   `json:"leftItems"`
-	RightItems      []TranslationItemView   `json:"rightItems"`
+	SourceStableKey string                                  `json:"sourceStableKey"`
+	Type            courses.PublishedAssessmentQuestionType `json:"type"`
+	Position        int                                     `json:"position"`
+	Prompt          TextFieldView                           `json:"prompt"`
+	Options         []TranslationOptionView                 `json:"options"`
+	LeftItems       []TranslationItemView                   `json:"leftItems"`
+	RightItems      []TranslationItemView                   `json:"rightItems"`
 }
 type TranslationOptionView struct {
 	SourceStableKey string        `json:"sourceStableKey"`
@@ -149,7 +149,7 @@ func buildWorkspaceView(translation CourseTranslation, source courses.ImmutableC
 		moduleView := TranslationModuleView{SourceStableKey: module.StableKey, Position: module.Position, Title: field(module.Title, translated.Title), Description: field(module.Description, translated.Description), Lessons: make([]TranslationLessonView, 0, len(module.Lessons))}
 		for j, lesson := range module.Lessons {
 			tLesson := translated.Lessons[j]
-			lessonView := TranslationLessonView{SourceStableKey: lesson.StableKey, Position: lesson.Position, PrerequisiteStableKeys: append([]string(nil), lesson.PrerequisiteStableKeys...), Title: field(lesson.Title, tLesson.Title), Description: field(lesson.Description, tLesson.Description), LearningObjectives: fields(lesson.LearningObjectives, tLesson.LearningObjectives), Blocks: buildBlocks(lesson.Content, tLesson.ContentBlocks)}
+			lessonView := TranslationLessonView{SourceStableKey: lesson.StableKey, Position: lesson.Position, PrerequisiteStableKeys: append([]string{}, lesson.PrerequisiteStableKeys...), Title: field(lesson.Title, tLesson.Title), Description: field(lesson.Description, tLesson.Description), LearningObjectives: fields(lesson.LearningObjectives, tLesson.LearningObjectives), Blocks: buildBlocks(lesson.Content, tLesson.ContentBlocks)}
 			lessonView.Completeness = complete(lessonFields(lessonView))
 			moduleView.Lessons = append(moduleView.Lessons, lessonView)
 		}
@@ -219,7 +219,7 @@ func fields(source []string, translated []*string) []TextFieldView {
 func buildBlocks(content courses.LessonContent, translated []TranslatedContentBlock) []TranslationContentBlockView {
 	result := make([]TranslationContentBlockView, 0, len(content.Blocks))
 	for i, block := range content.Blocks {
-		value := TranslationContentBlockView{SourceBlockKey: block.Key, Type: block.Type, Position: i, Fields: map[string]TextFieldView{}}
+		value := TranslationContentBlockView{SourceBlockKey: block.Key, Type: block.Type, Position: i, Fields: map[string]TextFieldView{}, AssetKeys: []string{}, TableHeaders: []string{}, TableRows: [][]string{}}
 		t := translated[i]
 		switch payload := block.Payload.(type) {
 		case courses.TextBlockPayload:

@@ -21,6 +21,8 @@
     "test:e2e:admin-integration": "playwright test --config playwright.admin-integration.config.ts",
     "seed:e2e:authoring": "go run ./tools/authoring-e2e-seed seed",
     "test:e2e:authoring-integration": "playwright test --config playwright.authoring-integration.config.ts",
+    "seed:e2e:translation": "go run ./tools/translation-e2e-seed seed",
+    "test:e2e:translation-integration": "playwright test --config playwright.translation-integration.config.ts",
     "test:openbadges-interop": "node tools/openbadges-interop.mjs tools/testdata/openbadges-interop-active.json",
     "api:types": "openapi-typescript api/openapi.yaml -o frontend/src/api/generated.ts"
   },

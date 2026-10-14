@@ -2231,29 +2231,161 @@
 	}
 }
 .translation-field {
-	margin: 1.25rem 0;
-	padding: 1rem;
-	border: 1px solid var(--color-border, #b8c0c5);
-	border-radius: 0.5rem;
+	min-width: 0;
+	margin: 0;
+	border: 0;
+	padding: 0;
+}
+.translation-field legend {
+	max-width: 100%;
+	margin-block-end: var(--btg-space-2);
+	font-weight: var(--btg-font-weight-strong);
+	overflow-wrap: anywhere;
+}
+.translation-field__pane {
+	display: grid;
+	align-content: start;
+	gap: var(--btg-space-3);
+	min-width: 0;
+	height: 100%;
+	border: var(--btg-border-width) solid var(--btg-color-border);
+	border-radius: var(--btg-radius-surface);
+	padding: var(--btg-space-4);
+}
+.translation-field__pane--source {
+	background: var(--btg-color-surface-muted);
+}
+.translation-field__pane--target {
+	background: var(--btg-color-surface);
+}
+.translation-field__pane header,
+.translation-list__item header,
+.translation-workspace__section-header {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+	align-items: start;
+	justify-content: space-between;
+	gap: var(--btg-space-2);
+}
+.translation-field__pane header strong {
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 .translation-field__source {
+	min-width: 0;
+	margin: 0;
 	white-space: pre-wrap;
-	color: inherit;
+	overflow-wrap: anywhere;
 }
-.translation-field textarea {
-	width: 100%;
+.translation-field__control .btg-textarea {
 	min-height: 7rem;
 }
-.translation-list {
-	padding-left: 1.25rem;
+.translation-list-page,
+.translation-workspace,
+.translation-workspace__form,
+.translation-workspace__fields {
+	display: grid;
+	min-width: 0;
+	gap: var(--btg-space-5);
 }
-.translation-list article {
-	padding: 1rem 0;
-	border-bottom: 1px solid var(--color-border, #b8c0c5);
+.translation-list-page__back,
+.translation-workspace__back {
+	width: fit-content;
+}
+.translation-list-page__metadata,
+.translation-workspace__metadata {
+	margin-block-start: var(--btg-space-4);
+}
+.translation-create {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: var(--btg-space-4);
+	max-width: var(--btg-width-form-editor);
+}
+.translation-list-page__message,
+.translation-workspace p {
+	overflow-wrap: anywhere;
+}
+.translation-list-page__empty {
+	display: flex;
+	align-items: center;
+	gap: var(--btg-space-4);
+}
+.translation-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+	gap: var(--btg-space-4);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.translation-list__item {
+	display: grid;
+	align-content: start;
+	gap: var(--btg-space-4);
+	height: 100%;
+}
+.translation-list__item h3,
+.translation-workspace .btg-page-header h1,
+.translation-workspace h2,
+.translation-workspace h3,
+.translation-workspace h4 {
+	min-width: 0;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.translation-workspace__metadata {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+}
+.translation-workspace__lesson,
+.translation-workspace__assessment,
+.translation-workspace__question,
+.translation-workspace__block {
+	display: grid;
+	min-width: 0;
+	gap: var(--btg-space-4);
+}
+.translation-workspace__question,
+.translation-workspace__block {
+	border-block-start: var(--btg-border-width) solid var(--btg-color-border);
+	padding-block-start: var(--btg-space-4);
+}
+.translation-workspace__readonly-context {
+	display: grid;
+	gap: var(--btg-space-2);
+	margin: 0;
+	color: var(--btg-color-text-secondary);
+}
+.translation-workspace__readonly-context code {
+	max-width: 100%;
+	overflow-x: auto;
+	white-space: pre;
+}
+.translation-workspace__conflict {
+	display: grid;
+	gap: var(--btg-space-3);
+}
+.translation-workspace__conflict .btg-button {
+	width: fit-content;
 }
 @media (max-width: 480px) {
-	.translation-field {
-		padding: 0.75rem;
+	.translation-list-page__metadata,
+	.translation-workspace__metadata {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.translation-create {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.translation-create .btg-button,
+	.translation-list__item > .btg-button,
+	.translation-workspace__conflict .btg-button {
+		width: 100%;
+	}
+	.translation-list-page__empty {
+		align-items: flex-start;
 	}
 }
 .authoring-structure-outline__header {
